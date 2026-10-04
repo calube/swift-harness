@@ -36,7 +36,8 @@ public enum RunViewBuilder {
     var view = RunView(
       run: RunView.Run(
         id: input.buildRun, plan: input.join?.plan, preset: input.join?.record?.presetName,
-        startedAt: startedAt, endedAt: runEnd, state: state),
+        startedAt: startedAt, endedAt: runEnd, state: state,
+        stallMin: input.join?.record?.preset.stallMin),
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,
       roles: roles(usage),

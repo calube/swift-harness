@@ -77,6 +77,77 @@ public struct RunViewReader: RunViewReading {
       workerGateRuns: workerGateRuns)
   }
 
+  /// The newest build run of any plan; `nil` when there is none. Run ids start with their UTC
+  /// start time, so the greatest id is the newest.
+  public func newestBuildRun() -> String? {
+    BuildJoinReader(commonDirectory: commonDirectory).read(buildRunID: nil).runs.map(\.runID).max()
+  }
+
+  /// What every file ``read(buildRun:)`` reads holds now: each event store's files, the run's
+  /// ledger log, returns and `run.json`, and the plan's ledger. Taken before a read, a moved
+  /// snapshot means the next read differs.
+  public func snapshot(buildRun: String) -> RunViewSnapshot {
+    var files: [String: RunViewSnapshot.Stamp] = [:]
+    Self.stamp(
+      stateRoot.url(RunLayout.eventsDirectory),
+      as: stateRoot.displayPath(RunLayout.eventsDirectory), into: &files)
+    guard let layout = try? PlanStateLayout(commonDirectory: commonDirectory.path),
+      let plan = plan(of: buildRun, under: layout), let paths = try? layout.plan(plan),
+      let run = try? paths.buildRun(buildRun)
+    else { return RunViewSnapshot(files: files) }
+    for path in [paths.ledgerFile, paths.planFile] {
+      Self.stamp(URL(filePath: path), as: display(path), into: &files)
+    }
+    // run.json, the ledger log and every return.
+    Self.stamp(URL(filePath: run.directory), as: display(run.directory), into: &files)
+    let ledger = (try? Data(contentsOf: URL(filePath: paths.ledgerFile)))
+      .flatMap { try? LedgerJSON.decode($0) }
+    if let ledger {
+      var ignored: [RunView.Damage] = []
+      for worktree in liveWorktrees(plan: plan, ledger: ledger, damage: &ignored) {
+        let state = StateRootResolver.resolve(worktree: worktree)
+        Self.stamp(
+          state.url(RunLayout.eventsDirectory),
+          as: "\(worktree.lastPathComponent)/\(RunLayout.eventsDirectory)", into: &files)
+      }
+    }
+    return RunViewSnapshot(files: files)
+  }
+
+  /// The plan whose state holds `buildRun`.
+  private func plan(of buildRun: String, under layout: PlanStateLayout) -> String? {
+    let plans = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    return plans.sorted().first { plan in
+      guard let run = try? layout.plan(plan).buildRun(buildRun) else { return false }
+      return FileManager.default.fileExists(atPath: run.directory)
+    }
+  }
+
+  /// Every regular file at or under `url`, keyed by `name` and its path below `url`.
+  private static func stamp(
+    _ url: URL, as name: String, into files: inout [String: RunViewSnapshot.Stamp]
+  ) {
+    let keys: [URLResourceKey] = [.isRegularFileKey, .fileSizeKey, .contentModificationDateKey]
+    func add(_ file: URL, _ key: String) {
+      guard let values = try? file.resourceValues(forKeys: Set(keys)),
+        values.isRegularFile == true
+      else { return }
+      let modified = values.contentModificationDate?.timeIntervalSince1970 ?? 0
+      files[key] = RunViewSnapshot.Stamp(
+        bytes: values.fileSize ?? 0, modifiedNanoseconds: Int(modified * 1_000_000_000))
+    }
+    add(url, name)
+    let base = url.standardizedFileURL.path
+    guard
+      let walk = FileManager.default.enumerator(
+        at: url, includingPropertiesForKeys: keys, options: [.skipsHiddenFiles])
+    else { return }
+    for case let file as URL in walk {
+      let path = file.standardizedFileURL.path
+      add(file, path.hasPrefix(base) ? name + path.dropFirst(base.count) : path)
+    }
+  }
+
   /// Each `gate.run` of a worker's store that nothing names, by run id, with the task whose
   /// window holds its end: from the task's move to `in-progress` until it is `done` or
   /// `abandoned`, or open. A run inside no window, or inside more than 1, stays out: a store copied

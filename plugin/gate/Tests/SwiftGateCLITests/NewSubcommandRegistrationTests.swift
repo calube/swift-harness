@@ -272,8 +272,9 @@ struct NewSubcommandRegistrationTests {
     "allow",
     "claude",
     "plan import",
-    "report --html", "report --json --out",
+    "report --html", "report --json --out", "view", "view --build-run --port",
     "events span start", "events span end",
+    "warmup",
   ]
 
   @Test(

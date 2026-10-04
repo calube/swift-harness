@@ -156,6 +156,44 @@ const tests = {
     assert.deepEqual(summary.files, ['Sources/A.swift', 'Tests/ATests.swift'])
     assert.equal(summary.droppedPaths, 1)
   },
+
+  'stalls flags a task whose last event is older than stall_min and not one with a fresh event — catches a stall measured from the span\'s start'() {
+    const view = runView({
+      run: { id: 'run-1', plan: 'sample', preset: 'default', startedAt: at(0), endedAt: null, state: 'running' },
+      tasks: [task('quiet', { status: 'in-progress' }), task('busy', { status: 'in-progress' }), task('merged')],
+      spans: [
+        span('t-quiet', null, 'task', 1, null, { task: 'quiet' }),
+        span('w-quiet', 't-quiet', 'worker', 2, null, { task: 'quiet' }),
+        span('t-busy', null, 'task', 1, null, { task: 'busy' }),
+        span('w-busy', 't-busy', 'worker', 2, 18, { task: 'busy' }),
+        span('g-busy', 't-busy', 'gate', 19, null, { task: 'busy' }),
+        span('t-merged', null, 'task', 1, 3, { task: 'merged' }),
+      ],
+    })
+    assert.deepEqual(M.stalls(view, Date.parse(at(20)), 5), ['quiet'])
+    assert.deepEqual(M.stalls(view, Date.parse(at(6)), 5), [], 'a task 4 minutes quiet is flagged before stall_min')
+  },
+
+  'a halt counts as open until its resume, and the now strip badges its task — catches a halt badge that outlives the resume'() {
+    const view = runView({
+      run: { id: 'run-1', plan: 'sample', preset: 'default', startedAt: at(0), endedAt: null, state: 'halted' },
+      tasks: [task('a', { status: 'in-progress' }), task('b', { status: 'in-progress' })],
+      spans: [
+        span('t-a', null, 'task', 1, null, { task: 'a' }),
+        span('r-a', 't-a', 'review', 3, null, { task: 'a' }),
+        span('t-b', null, 'task', 1, null, { task: 'b' }),
+      ],
+      halts: [
+        { task: 'a', reason: 'gate-red', at: at(4), answer: null, waitMs: null },
+        { task: 'b', reason: 'gate-red', at: at(2), answer: 'retry', waitMs: 30000 },
+      ],
+    })
+    assert.deepEqual(M.openHalts(view).map((h) => h.task), ['a'])
+    const cards = M.workers(view, Date.parse(at(5)), 10)
+    assert.deepEqual(cards.map((c) => [c.task, c.phase, c.halted, c.stalled]), [['a', 'review', true, false], ['b', 'task', false, false]])
+    assert.equal(cards[0].elapsedMs, 4 * 60000)
+    assert.equal(cards[0].lastEventMs, Date.parse(at(4)))
+  },
 }
 
 let failed = 0

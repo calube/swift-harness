@@ -33,6 +33,7 @@ may ask for an answer, and a headless session can't give one.
 | `<surface>` | the surface commit's full sha, `git rev-parse HEAD` just after committing it |
 | `<run id>` | a gate run's id: the word after `run` on the gate's first line |
 | `<run>` | the build run id the build skill reports |
+| `<span>` | the span id `events span start` printed for the `ship` phase |
 
 ## Stop and resume
 
@@ -177,14 +178,21 @@ no build run to name, so it isn't timed.
 
 ## 7. Report
 
-1. Publish the ledger page a last time: `"$SG" design-render --ledger <plan> --json`, then the
+The report is the `ship` phase, timed as a span inside the build run. Opening it with
+`events span start` prints the new span id alone on stdout: keep it as `<span>`. Empty output
+means telemetry is off and there is no span: skip its end. A span call never stops the report:
+any other non-zero exit of either prints 1 line, and the report goes on without that span.
+
+1. Open the phase: `"$SG" events span start --phase ship --build-run <run>`.
+2. Publish the ledger page a last time: `"$SG" design-render --ledger <plan> --json`, then the
    Artifact tool with its `output`, to the URL the plan and build skills used. When this session
    has no Artifact tool, don't publish: report the rendered page's path,
    `.harness/design-render/<plan>-ledger.html`, in its place and go on. The page is a view, never
    a gate.
-2. `"$SG" stats --build <run> --plan <plan>` for each task's wall time and the total against the
+3. `"$SG" stats --build <run> --plan <plan>` for each task's wall time and the total against the
    preset's budget.
-3. Record this session's usage, then print the build's summary:
+4. Close the phase, so the summary counts it: `"$SG" events span end <span> --outcome ok`.
+5. Record this session's usage, then print the build's summary:
    `"$SG" events ingest --session <session> --role orchestrator --build-run <run>`, then
    `"$SG" events summary --build-run <run>`, and print its output as it comes: the build's cost,
    gate time, stuck points and slot use. Telemetry never stops the report: an exit 2 that says

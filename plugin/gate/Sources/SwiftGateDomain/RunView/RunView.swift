@@ -36,10 +36,12 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var startedAt: Date?
     public var endedAt: Date?
     public var state: RunState
+    /// Minutes a worker may go quiet before the page flags it; `nil` when the preset doesn't say.
+    public var stallMin: Int?
 
     public init(
       id: String, plan: String? = nil, preset: String? = nil, startedAt: Date? = nil,
-      endedAt: Date? = nil, state: RunState = .running
+      endedAt: Date? = nil, state: RunState = .running, stallMin: Int? = nil
     ) {
       self.id = id
       self.plan = plan
@@ -47,6 +49,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.startedAt = startedAt
       self.endedAt = endedAt
       self.state = state
+      self.stallMin = stallMin
     }
   }
 
@@ -382,7 +385,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
 extension RunView.Run {
   private enum CodingKeys: String, CodingKey {
-    case id, plan, preset, startedAt, endedAt, state
+    case id, plan, preset, startedAt, endedAt, state, stallMin
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -393,6 +396,7 @@ extension RunView.Run {
     try c.encode(startedAt, forKey: .startedAt)
     try c.encode(endedAt, forKey: .endedAt)
     try c.encode(state, forKey: .state)
+    try c.encode(stallMin, forKey: .stallMin)
   }
 }
 
@@ -517,12 +521,21 @@ extension RunView.Halt {
 /// value, so the page reads 1 spelling of "not known".
 public enum RunViewJSON {
   public static func encode(_ view: RunView) throws -> Data {
+    try encoder.encode(view)
+  }
+
+  /// A live poll's answer, in the same spelling as a whole view.
+  public static func encode(_ changes: RunViewChanges) throws -> Data {
+    try encoder.encode(changes)
+  }
+
+  private static var encoder: JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .custom { date, encoder in
       var container = encoder.singleValueContainer()
       try container.encode(date.formatted(HarnessEventJSON.timeFormat))
     }
-    return try encoder.encode(view)
+    return encoder
   }
 }

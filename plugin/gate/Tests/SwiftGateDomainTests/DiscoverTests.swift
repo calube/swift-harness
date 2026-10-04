@@ -69,13 +69,14 @@ struct DiscoverTests {
     let proposal = Discover.propose(tree: tree, head: "abc", dirty: [], readers: [reader])
 
     let build = try #require(proposal.areas.first?.commands[.build])
-    #expect(build.value == "cd packages/api && pnpm build")
+    #expect(build.value == "pnpm build")
     #expect(build.source == ".github/workflows/check-generated-files.yml")
     #expect(build.confidence == .found)
     let table = ProposalTable.render(proposal, milliseconds: 12, appliedTo: nil)
     let row = try #require(table.split(separator: "\n").first { $0.hasPrefix("api ") })
     #expect(row.contains(".github/workflows/check-generated-files.yml"))
-    #expect(row.contains("cd packages/api && pnpm build"))
+    #expect(row.contains("pnpm build"))
+    #expect(!row.contains("cd packages/api"))
   }
 
   @Test(
@@ -108,8 +109,120 @@ struct DiscoverTests {
     #expect(
       ui.commands[.build]
         == Sourced(
-          value: "npm --prefix=./ui run build", source: ".github/workflows/release.yaml",
+          value: "npm run build", source: ".github/workflows/release.yaml",
           confidence: .found))
+  }
+
+  @Test(
+    "a CI command that changes into an area or points a directory flag at it is rebased onto the area root — catches mined commands that fail where the runner runs them"
+  )
+  func minedCommandsRebaseOntoAreaRoot() throws {
+    let tree = try fixtureTree("tauri-apps-tauri")
+    let areas = [
+      area(
+        name: "cli-js", root: "packages/cli", language: .javascript, kind: .node,
+        source: "packages/cli/package.json"),
+      area(
+        name: "tauri-cli", root: "crates/tauri-cli", language: .rust, kind: .cargo,
+        source: "crates/tauri-cli/Cargo.toml"),
+    ]
+
+    let mined = CICommandMining.commands(in: tree, areas: areas)
+
+    let cliTests = mined.filter {
+      $0.area == "cli-js" && $0.step == .test && $0.source == ".github/workflows/test-cli-js.yml"
+    }
+    #expect(cliTests.map(\.command) == ["pnpm test"])
+    #expect(cliTests.map(\.confidence) == [.found])
+    let cargoBuilds = mined.filter {
+      $0.area == "tauri-cli" && $0.source == ".github/workflows/docker.yml"
+    }
+    #expect(cargoBuilds.map(\.command) == ["cargo build"])
+    #expect(
+      mined.allSatisfy { !$0.command.hasPrefix("cd packages") && !$0.command.hasPrefix("cd ./") })
+  }
+
+  @Test(
+    "a CI command that reaches an area only by package name stays as run from the repository root, guessed, with a source note — catches a root command passed off as runnable in the area"
+  )
+  func unrebasableCommandStaysAtRepositoryRoot() throws {
+    let tree = try fixtureTree("pola-rs-polars")
+    let reader = ScriptedReader { _ in
+      [
+        area(
+          name: "polars", root: "crates/polars", language: .rust, kind: .cargo,
+          source: "crates/polars/Cargo.toml", missing: [.test: "none found"])
+      ]
+    }
+
+    let mined = CICommandMining.commands(in: tree, areas: reader.areas(in: tree))
+    let polars = try #require(
+      Discover.propose(tree: tree, head: "abc", dirty: [], readers: [reader]).areas.first)
+
+    let named = try #require(
+      mined.first { $0.command.hasSuffix("cargo test --all-features -p polars --test it") })
+    #expect(named.command == "cd ../.. && cargo test --all-features -p polars --test it")
+    #expect(named.confidence == .guessed)
+    #expect(
+      named.source == ".github/workflows/test-rust.yml (runs from the repository root)")
+    let test = try #require(polars.commands[.test])
+    #expect(test.confidence == .guessed)
+    #expect(test.value.hasPrefix("cd ../.. && "))
+    #expect(polars.missing[.test] == nil)
+  }
+
+  @Test(
+    "a workflow's defaults.run.working-directory is where its run steps execute — catches a pytest run in py-polars read as run from the repository root"
+  )
+  func workflowDefaultsWorkingDirectory() throws {
+    let tree = try fixtureTree("pola-rs-polars")
+    let reader = ScriptedReader { _ in
+      [
+        area(
+          name: "py-polars", root: "py-polars", language: .python, kind: .python,
+          source: "py-polars/pyproject.toml")
+      ]
+    }
+
+    let mined = CICommandMining.commands(in: tree, areas: reader.areas(in: tree))
+
+    let docs = try #require(
+      mined.first { $0.command.hasPrefix("pytest tests/docs/test_user_guide.py") })
+    #expect(docs.area == "py-polars")
+    #expect(docs.command == "pytest tests/docs/test_user_guide.py -m docs")
+    #expect(docs.source == ".github/workflows/test-python.yml")
+    #expect(docs.confidence == .found)
+  }
+
+  @Test(
+    "a job's defaults.run.working-directory applies to its own steps only, under a step's own working-directory — catches a job default leaking into the next job or overriding a step"
+  )
+  func jobDefaultsWorkingDirectory() throws {
+    let workflow = """
+      jobs:
+        web:
+          defaults:
+            run:
+              working-directory: web
+          steps:
+            - run: npm test
+            - working-directory: api
+              run: npm run lint
+        root:
+          steps:
+            - run: npm run build
+      """
+    let tree = TrackedTreeSnapshot(files: [".github/workflows/ci.yml": Data(workflow.utf8)])
+    let areas = ["web", "api", "."].map {
+      area(name: $0, root: $0, language: .typescript, kind: .node, source: "package.json")
+    }
+
+    let mined = CICommandMining.commands(in: tree, areas: areas)
+
+    #expect(
+      mined.map { "\($0.area) \($0.step.rawValue): \($0.command)" } == [
+        "web test: npm test", "api lint: npm run lint", ". build: npm run build",
+      ])
   }
 
   @Test(

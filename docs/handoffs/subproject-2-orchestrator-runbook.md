@@ -29,6 +29,19 @@ The maintainer chose build speed until a cleanup on 2026-10-04. Until this secti
 - Everything else stands: the push gate with `--prove` on every change, surface-first commits, tests that fail
   first, captured fixtures, and no push.
 
+## Merge lessons from the brownfield and run viewer waves (2026-10-04)
+
+- After every merge, run `swift build --package-path plugin/gate --build-tests` (under a minute) before the next
+  merge. Two branches each passed their own gate but broke main's compile together: one added an enum case, the
+  other had an exhaustive switch over it.
+- A conflict in a list, such as a registration list or a fixtures README section, is resolved by keeping both
+  sides. A conflict in code is resolved by hand, then the affected tests run before the commit.
+- Keep about 5 gates running at once. At load 70 to 120 a gate outruns a worker's background command limit and
+  dies with exit 144.
+- Check for orphaned `swift-build` processes (parent PID 1, no CPU) and kill them. They hold the build lock.
+- A worker whose gate fails only because main moved under it proves at its merge base, or at its surface commit
+  when that commit is the ancestor.
+
 ## New machine
 
 All build state lives in this repo: the plan and its RESUME header, this runbook, the worker brief, the

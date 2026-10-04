@@ -191,6 +191,8 @@ enum ChangedTestChecks {
     }
 
     var attempts: [String: [ProofRules.RevertedAttempt]] = [:]
+    // The last reverted run that ran a test decides its outcome, as it decides its verdict.
+    var proofs: [ChangedTest: ProvedTest] = [:]
     var pending = selection.packages
     let revertTargets = [selection.mergeBase] + proofBases
     for (index, revertTo) in revertTargets.enumerated() where !pending.isEmpty {
@@ -201,9 +203,14 @@ enum ChangedTestChecks {
         tried = try await runReverted(
           environment, pending, request: request, prefix: prefix,
           output: output.appending(path: index == 0 ? "reverted" : "reverted-\(index)")
-        ).map { package, run in
+        ).map { package, run, evidence in
           let result = ProofRules.judgeReverted(
             package.tests, run: run, testDirectories: package.testDirectories)
+          for test in package.tests {
+            proofs[test] = proved(
+              test, run: run, evidence: evidence, judgement: result.judgement, base: revertTo,
+              root: environment.root)
+          }
           return (
             package,
             ProofRules.RevertedAttempt(
@@ -234,6 +241,7 @@ enum ChangedTestChecks {
       proven += combined.proven.count
       provenAtProofBase += combined.provenAtProofBase
     }
+    context.proofs.record(selection.tests.compactMap { proofs[$0] })
     let total = selection.tests.count
     return SummarizedJudgement(
       judgement: judgement,
@@ -241,6 +249,31 @@ enum ChangedTestChecks {
         "\(proven) of \(total) new or changed host tests fail on an assertion with "
         + "the source change reverted"
         + (provenAtProofBase > 0 ? ", \(provenAtProofBase) of them at a proof base" : ""))
+  }
+
+  /// What 1 reverted run says about `test`, with where it first failed when it failed. The test
+  /// file is read from `root`, where the reverted run's copy came from, only to tell the
+  /// assertion's form.
+  private static func proved(
+    _ test: ChangedTest, run: SelectedTestRun, evidence: HostTestEvidence?,
+    judgement: ChangedTestJudgement, base: String, root: URL
+  ) -> ProvedTest? {
+    guard let outcome = ProvedTest.outcome(of: test, run: run, judgement: judgement) else {
+      return nil
+    }
+    let assertion =
+      outcome == .proven
+      ? evidence.flatMap { evidence in
+        ProveAssertionLocator.firstFailure(of: test, in: evidence) { file, line in
+          (try? String(contentsOf: root.appending(path: file), encoding: .utf8))?
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .dropFirst(line - 1).first.map(String.init)
+        }
+      } : nil
+    return ProvedTest(
+      test: TestCaseResult.identifier(
+        target: test.target, suites: test.suites, name: test.function),
+      target: test.target, outcome: outcome, proofBase: base, assertion: assertion)
   }
 
   /// Splits toplevel-relative `changed` paths into the production source `prove` reverts and the
@@ -268,15 +301,15 @@ enum ChangedTestChecks {
   static func runReverted(
     _ environment: Environment, _ packages: [PackageTests], request: ScratchTreeRequest,
     prefix: String, output: URL
-  ) async throws(ScratchWorktreeError) -> [(PackageTests, SelectedTestRun)] {
+  ) async throws(ScratchWorktreeError) -> [(PackageTests, SelectedTestRun, HostTestEvidence?)] {
     try await environment.scratch.withScratchTree(request) { toplevel in
       let root = prefix.isEmpty ? toplevel : toplevel.appending(path: prefix)
       let swiftPM = environment.scratchSwiftPM(root)
-      var runs: [(PackageTests, SelectedTestRun)] = []
+      var runs: [(PackageTests, SelectedTestRun, HostTestEvidence?)] = []
       for package in packages {
         let run = await runOnce(
           package, swiftPM: swiftPM, root: root, output: output, coverage: false)
-        runs.append((package, run.run))
+        runs.append((package, run.run, run.evidence))
       }
       return runs
     }
@@ -302,7 +335,7 @@ enum ChangedTestChecks {
         environment, pending, request: request, prefix: prefix,
         output: output.appending(path: "base-\(index)"))
       pending = []
-      for (package, run) in runs {
+      for (package, run, _) in runs {
         let outcome = ProofBaseTestBuild.outcome(of: run, testDirectories: package.testDirectories)
         last[package.packagePath] = (package, base, outcome)
         if outcome != .compiled { pending.append(package) }
@@ -432,13 +465,15 @@ enum ChangedTestChecks {
 
   private static func runOnce(
     _ package: PackageTests, swiftPM: any SwiftPM, root: URL, output: URL, coverage: Bool
-  ) async -> (run: SelectedTestRun, coverage: Data?) {
+  ) async -> (run: SelectedTestRun, coverage: Data?, evidence: HostTestEvidence?) {
     let result = await HostTestRunner(swiftPM: swiftPM, root: root).run(
       [package.selection], outputDirectory: output, readCoverage: coverage
     ).first
-    guard let result else { return (.noEvidence("swift test did not run"), nil) }
-    if case .ran(_, let export) = result { return (observe(package.tests, result), export) }
-    return (observe(package.tests, result), nil)
+    guard let result else { return (.noEvidence("swift test did not run"), nil, nil) }
+    if case .ran(let evidence, let export) = result {
+      return (observe(package.tests, result), export, evidence)
+    }
+    return (observe(package.tests, result), nil, nil)
   }
 
   private static func observe(_ tests: [ChangedTest], _ result: HostTestPackageResult)

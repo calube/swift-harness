@@ -81,13 +81,16 @@ public struct RunStore: Sendable {
   ///   - checkTier: the `check` tier the run gated at, as the events' source.
   ///   - testResults: each test case the run's tiers reported, 1 `test.result` apiece, in the
   ///     same batch as the run's other events.
+  ///   - proofs: each changed test `prove` ran, 1 `prove.result` apiece, beside the
+  ///     `test.result`s.
   /// - Throws: ``RunStoreError/eventsUnwritten(_:)`` when only the events failed, after the run
   ///   is recorded.
   public func record(
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
-    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = [], baselineCount: Int? = nil
+    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = [], baselineCount: Int? = nil,
+    proofs: [ProvedTest] = []
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now
@@ -123,18 +126,19 @@ public struct RunStore: Sendable {
         contentsOf: try gateEvents(
           report, finishedAt: finishedAt, command: command, headCommit: headCommit, base: base,
           treeHash: treeHash, dirty: dirty, steps: gateSteps + [recordStep],
-          checkTier: checkTier, testResults: testResults, baselineCount: baselineCount))
+          checkTier: checkTier, testResults: testResults, baselineCount: baselineCount,
+          proofs: proofs))
     } catch {
       throw .eventsUnwritten(error)
     }
   }
 
-  /// The run's `gate.run`, then each step's `gate.step` and each case's `test.result` pointing
-  /// at it.
+  /// The run's `gate.run`, then each step's `gate.step`, each case's `test.result` and each
+  /// proof's `prove.result` pointing at it.
   private func gateEvents(
     _ report: RunReport, finishedAt: Date, command: String?, headCommit: String?, base: String?,
     treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?,
-    testResults: [TestCaseResult], baselineCount: Int?
+    testResults: [TestCaseResult], baselineCount: Int?, proofs: [ProvedTest]
   ) throws(HarnessEventWriteError) -> [HarnessEvent] {
     let payload: GateRunEvent
     do {
@@ -156,6 +160,7 @@ public struct RunStore: Sendable {
     }
     return [run] + steps.map { child(.gateStep(GateStepEvent($0))) }
       + testResults.map { child(.testResult(TestResultEvent($0))) }
+      + proofs.map { child(.proveResult(ProveResultEvent($0))) }
   }
 
   public func readHistory() throws(RunStoreError) -> (

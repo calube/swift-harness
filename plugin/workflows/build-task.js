@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun?: "<build run id>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
@@ -77,7 +77,7 @@ const SEVERITY_RANK = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun']
 // A brownfield worktree keeps its state in its git dir's `swift-harness/`, never in the tree.
 const GIT_DIR_STATE = '/swift-harness'
 
@@ -85,6 +85,8 @@ const GIT_DIR_STATE = '/swift-harness'
 const SPEC_PAGE_SECTIONS = ['slices', 'surface', 'modules']
 // `plan.json`'s `surfaceCommit`: a hex sha, never a ref name that could move.
 const SHA = /^[0-9a-f]{7,40}$/
+// A build run id goes into a shell command, so only id characters pass.
+const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
 const stringArray = value => Array.isArray(value) && value.every(nonEmptyString)
@@ -162,7 +164,11 @@ function validateArgs(a) {
     }
     pluginRoot = a.pluginRoot.replace(/\/+$/, '')
   }
-  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main' }
+  // The build run the stage spans belong to; with none, the task records no span.
+  if (a.buildRun !== undefined && !(typeof a.buildRun === 'string' && BUILD_RUN.test(a.buildRun))) {
+    invalid(`buildRun must be a build run id, got ${JSON.stringify(a.buildRun)}`)
+  }
+  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main', buildRun: a.buildRun ?? null }
 }
 
 const A = validateArgs(ARGS)
@@ -562,10 +568,92 @@ function verifyPrompt(reviewer, commits, findings) {
 
 const failure = error => (error && error.message ? error.message : String(error))
 
+// Stage spans: `swiftgate events span start|end` marks each worker, review, verify and fix stage
+// for the run viewer. A workflow script can't run a command, so 1 plain agent runs a batch of span
+// commands in order and reports each exit status and stdout. Telemetry never decides a task: a
+// failed call is logged and the stage goes on with no span.
+const spanSwiftgate = A.pluginRoot === null ? 'swiftgate' : `${A.pluginRoot}/bin/swiftgate`
+const SPAN_ID = /^[0-9a-f]{16}$/
+const SPAN_AGENT = 'general-purpose'
+const SPAN_MODEL = 'haiku'
+const SPAN_SCHEMA = {
+  type: 'object',
+  required: ['results'],
+  additionalProperties: false,
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['exitStatus', 'stdout'],
+        additionalProperties: false,
+        properties: { exitStatus: { type: 'integer' }, stdout: { type: 'string', description: 'stdout, trimmed' } },
+      },
+    },
+  },
+}
+const shellWord = value => `'${String(value).replace(/'/g, `'\\''`)}'`
+let spansOn = A.buildRun !== null
+const spanCommand = op =>
+  op.end
+    ? `${spanSwiftgate} events span end ${op.end.id} --outcome ${op.end.outcome}`
+    : [
+        `${spanSwiftgate} events span start --phase ${op.start.phase} --build-run ${A.buildRun}`,
+        `--task ${shellWord(A.task)} --role ${op.start.role}`,
+        ...(op.start.parent ? [`--parent ${op.start.parent}`] : []),
+      ].join(' ')
+
+// Runs `ops` in order, each `{end: {id, outcome}}` or `{start: {phase, role, parent}}`, and returns
+// the started span id, or null, per op. An end with no id is skipped.
+async function spans(ops) {
+  const ids = ops.map(() => null)
+  const live = ops.map((op, at) => ({ op, at })).filter(({ op }) => op.start || op.end.id)
+  if (!spansOn || live.length === 0) return ids
+  const commands = live.map(({ op }) => spanCommand(op))
+  let answer
+  try {
+    answer = await agent(
+      `Run each of these ${commands.length} commands once, in order, from ${A.worktree}; change nothing and run nothing else. ` +
+        'Return 1 result per command, in order: its exit status and its stdout, trimmed. ' +
+        'If a command fails, record its status and go on to the next.\nCommands:\n' +
+        commands.map((c, i) => `${i + 1}. ${c}`).join('\n'),
+      { agentType: SPAN_AGENT, model: SPAN_MODEL, effort: 'low', label: `span:${A.task}`, schema: SPAN_SCHEMA },
+    )
+  } catch (error) {
+    log(`span: the span agent failed (${failure(error)}); these stages record no span`)
+    return ids
+  }
+  const results = answer && Array.isArray(answer.results) ? answer.results : []
+  live.forEach(({ op, at }, i) => {
+    const r = results[i]
+    const what = op.end ? `end of span ${op.end.id}` : `start of the ${op.start.phase} span`
+    if (!r || typeof r !== 'object') return log(`span: ${what} returned no result`)
+    const stdout = typeof r.stdout === 'string' ? r.stdout.trim() : ''
+    if (r.exitStatus !== 0) return log(`span: ${what} failed with exit ${r.exitStatus}`)
+    if (op.end) return
+    if (SPAN_ID.test(stdout)) ids[at] = stdout
+    else if (stdout === '') {
+      // Exit 0 with no id is telemetry off: no later span would record either.
+      spansOn = false
+      log('span: telemetry is off, so this task records no stage spans')
+    } else log(`span: ${what} printed ${JSON.stringify(stdout)}, not a span id`)
+  })
+  return ids
+}
+const startSpan = async (phase, role, parent, endFirst) =>
+  (await spans([...(endFirst ? [{ end: endFirst }] : []), { start: { phase, role, parent } }])).at(-1)
+const endSpan = (id, outcome) => spans([{ end: { id, outcome } }])
+// How a worker's return ends its span.
+const workerOutcome = w => (w.defect || w.value.outcome === 'gate-red' ? 'red' : w.value.outcome === 'design-conflict' ? 'abandoned' : 'ok')
+
 // One reviewer, then its own verifier as soon as it finishes. Returns {findings} or {failed}: a
 // reviewer or verifier that returned nothing usable, or a finding no verifier entry matched,
 // leaves the focus unreviewed.
-async function reviewAndVerify(reviewer, commits) {
+async function reviewAndVerify(reviewer, commits, reviewSpan) {
+  const done = async (result, outcome, span) => {
+    await endSpan(span, outcome)
+    return { ...result, span }
+  }
   let value
   try {
     value = await agent(reviewPrompt(reviewer, commits), {
@@ -576,14 +664,15 @@ async function reviewAndVerify(reviewer, commits) {
       schema: REVIEW_SCHEMA,
     })
   } catch (error) {
-    return { failed: `${reviewer} returned no findings (${failure(error)})` }
+    return done({ failed: `${reviewer} returned no findings (${failure(error)})` }, 'red', reviewSpan)
   }
-  if (!value || !Array.isArray(value.findings)) return { failed: `${reviewer} returned no findings` }
+  if (!value || !Array.isArray(value.findings)) return done({ failed: `${reviewer} returned no findings` }, 'red', reviewSpan)
   const bad = value.findings.map(findingDefect).find(Boolean)
-  if (bad) return { failed: `${reviewer} returned a malformed finding (${bad})` }
+  if (bad) return done({ failed: `${reviewer} returned a malformed finding (${bad})` }, 'red', reviewSpan)
   const findings = value.findings.map(reviewerFinding)
-  if (findings.length === 0) return { findings }
+  if (findings.length === 0) return done({ findings }, 'ok', reviewSpan)
 
+  const verifySpan = await startSpan('verify', 'review', reviewSpan, { id: reviewSpan, outcome: 'ok' })
   let checked
   try {
     checked = await agent(verifyPrompt(reviewer, commits, findings), {
@@ -594,27 +683,34 @@ async function reviewAndVerify(reviewer, commits) {
       schema: VERIFY_SCHEMA,
     })
   } catch (error) {
-    return { failed: `the verifier of ${reviewer} failed; its findings are unverified (${failure(error)})` }
+    return done({ failed: `the verifier of ${reviewer} failed; its findings are unverified (${failure(error)})` }, 'red', verifySpan)
   }
   if (!checked || !Array.isArray(checked.findings)) {
-    return { failed: `the verifier of ${reviewer} returned nothing; its findings are unverified` }
+    return done({ failed: `the verifier of ${reviewer} returned nothing; its findings are unverified` }, 'red', verifySpan)
   }
   const reconciled = reconcile(findings, checked.findings)
   const unmatched = reconciled.filter(f => f.unmatched).length
   if (unmatched) {
-    return { findings: reconciled, failed: `the verifier of ${reviewer} returned no entry for ${unmatched} finding(s)` }
+    return done({ findings: reconciled, failed: `the verifier of ${reviewer} returned no entry for ${unmatched} finding(s)` }, 'red', verifySpan)
   }
-  return { findings: reconciled }
+  const blocks = reconciled.some(f => f.verified === true && BLOCKING.includes(f.severity))
+  return done({ findings: reconciled }, blocks ? 'red' : 'ok', verifySpan)
 }
 
 // One review round. `failed` names each focus left unreviewed: it can't pass the review contract,
-// so it blocks the task. Only a verified blocker or major is blocking.
-async function runReview(commits) {
-  const results = await Promise.all(reviewers.map(reviewer => reviewAndVerify(reviewer, commits)))
+// so it blocks the task. Only a verified blocker or major is blocking. `prior` is the stage span
+// the round follows: it ends first and parents every review span. `span` is the stage span a fix
+// pass follows: the first red one in reviewer order, else the last.
+async function runReview(commits, prior) {
+  const reviewSpans = await spans([{ end: prior }, ...reviewers.map(() => ({ start: { phase: 'review', role: 'review', parent: prior.id } }))])
+  const results = await Promise.all(reviewers.map((reviewer, i) => reviewAndVerify(reviewer, commits, reviewSpans[i + 1])))
   const findings = results.flatMap(r => r.findings ?? [])
   const failed = results.filter(r => r.failed).map(r => r.failed)
   for (const reason of failed) log(`review: ${reason}`)
-  return { findings, failed, blocking: findings.filter(f => f.verified === true && BLOCKING.includes(f.severity)) }
+  const blocking = findings.filter(f => f.verified === true && BLOCKING.includes(f.severity))
+  const blocked = results.find(r => r.span && (r.failed || (r.findings ?? []).some(f => blocking.includes(f))))
+  const span = blocked ? blocked.span : results.map(r => r.span).filter(Boolean).at(-1) ?? prior.id
+  return { findings, failed, blocking, span }
 }
 
 const union = (a, b) => [...a, ...b.filter(x => !a.includes(x))]
@@ -690,22 +786,32 @@ async function decideDepth() {
 const reviewNote = note => (classified ? [classified.note, note].filter(Boolean).join('\n') : note)
 
 // Attempt 1.
+const workerSpan = await startSpan('worker', 'build-worker', null)
 const first = await runWorker(null)
 const firstAttempt = first.value ?? first.salvage ?? null
 let fix
 let lastFindings = []
+// The stage span the fix pass follows, and the outcome it still has to end with.
+let fixParent = { id: workerSpan, outcome: workerOutcome(first) }
 if (first.defect) {
   log(`build-worker for ${A.task} was unusable: ${first.defect}`)
   fix = { reason: `the earlier worker's return was unusable: ${first.defect}`, earlier: first.salvage ?? null, findings: [] }
 } else {
   const w = first.value
-  if (w.outcome === 'design-conflict') return taskReturn('design-conflict', w, [], [], [])
+  if (w.outcome === 'design-conflict') {
+    await endSpan(workerSpan, 'abandoned')
+    return taskReturn('design-conflict', w, [], [], [])
+  }
   if (w.outcome === 'gate-red') {
     fix = { reason: `${gateFinding(w.gate)}; the earlier worker stopped there (${w.notes})`, earlier: w, findings: [] }
   } else {
     await decideDepth()
-    if (!reviewed) return taskReturn('ready-to-merge', w, [], [], [], reviewNote())
-    const review = await runReview(w.commits)
+    if (!reviewed) {
+      await endSpan(workerSpan, 'ok')
+      return taskReturn('ready-to-merge', w, [], [], [], reviewNote())
+    }
+    const review = await runReview(w.commits, fixParent)
+    fixParent = { id: review.span, outcome: null }
     lastFindings = review.findings
     // A fix pass can't make a dead reviewer review, so a failed reviewer returns at once.
     if (review.failed.length) {
@@ -721,23 +827,28 @@ if (first.defect) {
 }
 
 // The fix pass: one fresh worker, never a second.
+const fixSpan = await startSpan('fix', 'build-worker', fixParent.id, fixParent.outcome ? fixParent : null)
 const second = await runWorker(fix)
 if (second.defect) {
+  await endSpan(fixSpan, 'halted')
   throw new Error(`build-task: the fix-pass build-worker for ${A.task} was unusable: ${second.defect}`)
 }
 const earlierCommits = firstAttempt ? firstAttempt.commits : []
 const earlierTests = firstAttempt ? firstAttempt.testsAdded : []
 const w2 = second.value
+const fixEnd = { id: fixSpan, outcome: workerOutcome(second) }
+// The depth decides whether a review ends the fix span, so it is known before that.
+if (w2.outcome !== 'design-conflict' && w2.outcome !== 'gate-red') await decideDepth()
+if (!reviewed || fixEnd.outcome !== 'ok') await endSpan(fixSpan, fixEnd.outcome)
 if (w2.outcome === 'design-conflict') return taskReturn('design-conflict', w2, earlierCommits, earlierTests, lastFindings)
 if (w2.outcome === 'gate-red') {
   log(`${A.task}: the task gate is still red after the fix pass`)
   return taskReturn('gate-red', w2, earlierCommits, earlierTests, lastFindings)
 }
-await decideDepth()
 if (!reviewed) return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, [], reviewNote())
 
 const commits = union(earlierCommits, w2.commits)
-const review = await runReview(commits)
+const review = await runReview(commits, fixEnd)
 if (review.failed.length) {
   return taskReturn('review-blocked', w2, earlierCommits, earlierTests, review.findings, reviewNote(`review not complete: ${review.failed.join('; ')}`))
 }

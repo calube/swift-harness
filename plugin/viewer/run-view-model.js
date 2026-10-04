@@ -240,8 +240,45 @@
     return { calls: sorted, otherCount, ms: total, files, droppedPaths };
   }
 
+  // Halts with no resume yet: the builder fills `answer` and `waitMs` only from a `build.resume`.
+  const openHalts = (view) => (view.halts || []).filter((h) => h.answer == null && h.waitMs == null);
+
+  // The newest time anything of a task happened: a span starting or ending, a halt or its resume.
+  function lastTaskEventMs(view, id) {
+    const times = [];
+    (view.spans || []).filter((s) => s.task === id).forEach((s) => times.push(ms(s.start), ms(s.end)));
+    (view.halts || []).filter((h) => h.task === id).forEach((h) => {
+      times.push(ms(h.at));
+      if (h.waitMs != null) times.push(ms(h.at) + h.waitMs);
+    });
+    const known = times.filter((t) => t != null && !Number.isNaN(t));
+    return known.length ? Math.max.apply(null, known) : null;
+  }
+
+  // The now strip: 1 card per task with an open task span, naming its newest open stage.
+  function workers(view, nowMs, stallMin) {
+    const spans = view.spans || [];
+    const halted = {};
+    openHalts(view).forEach((h) => { if (h.task != null) halted[h.task] = h; });
+    return spans.filter((s) => s.phase === "task" && s.task != null && s.end == null).map((ts) => {
+      const stages = spans.filter((s) => s.task === ts.task && s.id !== ts.id && s.end == null)
+        .sort((a, b) => ms(b.start) - ms(a.start));
+      const stage = stages[0] || null;
+      const last = lastTaskEventMs(view, ts.task);
+      return {
+        task: ts.task, phase: stage ? stage.phase : "task", gateRun: stage ? stage.gateRun : null,
+        elapsedMs: nowMs - ms(ts.start), lastEventMs: last,
+        stalled: last != null && nowMs - last > stallMin * 60000, halted: !!halted[ts.task],
+        halt: halted[ts.task] || null
+      };
+    });
+  }
+
+  // Tasks whose open span has had no event of that task for `stallMin` minutes at `nowMs`.
+  const stalls = (view, nowMs, stallMin) => workers(view, nowMs, stallMin).filter((w) => w.stalled).map((w) => w.task);
+
   root.RunViewModel = {
-    apply, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
+    apply, stalls, openHalts, workers, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

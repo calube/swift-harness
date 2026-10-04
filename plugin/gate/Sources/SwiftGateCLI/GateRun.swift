@@ -26,6 +26,8 @@ enum GateRun {
     /// Each test tier hands its parsed cases here, for the run's `test.result` events. They never
     /// enter the report.
     var tests = TestResultCollector()
+    /// `prove` hands each changed test it ran here, for the run's `prove.result` events.
+    var proofs = ProveResultCollector()
   }
 
   /// - Parameters:
@@ -62,7 +64,8 @@ enum GateRun {
     let headCommit = await headCommit(git: git)
     let resolvedBase = await resolved(base: base, git: git)
     let telemetry = await telemetry(root: root, events: events, workingTree: workingTree)
-    let context = Context(runID: runID, directory: directory)
+    let context = Context(
+      runID: runID, directory: directory, steps: GateStepCollector(startedAt: start))
     var parts = try await body(context)
     let resolvedFilesAfter = await ResolvedFileGuard.snapshot(root: root, git: git)
     if let finding = try ResolvedFileGuard.finding(
@@ -78,7 +81,8 @@ enum GateRun {
         report, finishedAt: Date(), command: command, steps: steps, proofBases: proofBases,
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
-        testResults: context.tests.cases, baselineCount: parts.baselineCount)
+        testResults: context.tests.cases, baselineCount: parts.baselineCount,
+        proofs: context.proofs.results)
     }
     Console.write(
       try ReportRenderer.render(
@@ -178,6 +182,19 @@ final class TestResultCollector: Sendable {
   }
 
   var cases: [TestCaseResult] { results.withLock { $0 } }
+}
+
+/// The changed tests 1 gate run's `prove` ran, in the order it handed them over.
+final class ProveResultCollector: Sendable {
+  private let proved = Mutex<[ProvedTest]>([])
+
+  init() {}
+
+  func record(_ results: [ProvedTest]) {
+    proved.withLock { $0.append(contentsOf: results) }
+  }
+
+  var results: [ProvedTest] { proved.withLock { $0 } }
 }
 
 /// Paths changed since a ref, relative to this project's root (which may sit inside a larger

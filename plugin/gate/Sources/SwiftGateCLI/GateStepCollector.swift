@@ -6,16 +6,26 @@ import Synchronization
 /// `gate.step` events. Steps of a run can finish on several tasks, so recording is locked.
 final class GateStepCollector: Sendable {
   private let timings = Mutex<[GateStepTiming]>([])
+  private let start: ContinuousClock.Instant
+  private let elapsed: (@Sendable () -> Int)?
 
-  init() {}
+  /// - Parameters:
+  ///   - start: when the gate started.
+  ///   - elapsed: milliseconds since the gate started, in place of reading the clock from `start`.
+  init(startedAt start: ContinuousClock.Instant = .now, elapsed: (@Sendable () -> Int)? = nil) {
+    self.start = start
+    self.elapsed = elapsed
+  }
 
   func record(
     _ step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
     derivedData: GateDerivedData = .none, area: String? = nil
   ) {
+    // A step records when it ends, so its start is its duration back from now.
     let timing = GateStepTiming(
       step: step, tier: tier, milliseconds: milliseconds, verdict: verdict,
-      derivedData: derivedData, area: area)
+      derivedData: derivedData, area: area,
+      startMs: max(0, (elapsed?() ?? GateRun.milliseconds(.now - start)) - milliseconds))
     timings.withLock { $0.append(timing) }
   }
 

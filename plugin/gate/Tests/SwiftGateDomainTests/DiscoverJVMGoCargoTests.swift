@@ -71,7 +71,7 @@ struct DiscoverJVMGoCargoTests {
   }
 
   @Test(
-    "a crate outside any workspace runs from its own directory — catches a standalone crate given a workspace's -p"
+    "a crate outside any workspace runs from its own directory with no cd — catches a standalone crate given a workspace's -p and a cd the area root already is"
   )
   func cargoStandaloneCrate() {
     let tree = TrackedTreeSnapshot(files: [
@@ -80,8 +80,8 @@ struct DiscoverJVMGoCargoTests {
     let gen = CargoReader().areas(in: tree)
 
     #expect(gen.map(\.name) == ["gen"])
-    #expect(gen.first?.commands[.test]?.value == "cd tools/gen && cargo test")
-    #expect(gen.first?.commands[.testFiles]?.value == "cd tools/gen && cargo test -- {tests}")
+    #expect(gen.first?.commands[.test]?.value == "cargo test")
+    #expect(gen.first?.commands[.testFiles]?.value == "cargo test -- {tests}")
   }
 
   @Test(
@@ -106,7 +106,7 @@ struct DiscoverJVMGoCargoTests {
   }
 
   @Test(
-    "a Go module with no linter config says lint is missing — catches a guessed golangci-lint"
+    "a Go module with no linter config says lint is missing and runs from its root with no cd — catches a guessed golangci-lint and a cd the area root already is"
   )
   func goWithoutLinter() {
     let tree = TrackedTreeSnapshot(files: [
@@ -115,13 +115,13 @@ struct DiscoverJVMGoCargoTests {
     let svc = GoReader().areas(in: tree)
 
     #expect(svc.map(\.name) == ["svc"])
-    #expect(svc.first?.commands[.test]?.value == "cd svc && go test ./...")
+    #expect(svc.first?.commands[.test]?.value == "go test ./...")
     #expect(svc.first?.commands[.lint] == nil)
     #expect(svc.first?.missing[.lint] != nil)
   }
 
   @Test(
-    "each included Gradle module is 1 area with the wrapper and its configured ktlint — catches the root project read as the only module"
+    "each included Gradle module is 1 area with the wrapper reached from its root and its configured ktlint — catches the root project read as the only module and a ./gradlew the module directory lacks"
   )
   func gradleModules() throws {
     let tree = try capturedTree("touchlab-KaMPKit")
@@ -132,18 +132,18 @@ struct DiscoverJVMGoCargoTests {
     #expect(app.kind == .jvm)
     #expect(app.language == .kotlin)
     #expect(app.source == "app/build.gradle.kts")
-    #expect(app.commands[.test]?.value == "./gradlew :app:testDebugUnitTest")
-    #expect(app.commands[.testFiles]?.value == "./gradlew :app:testDebugUnitTest --tests {tests}")
+    #expect(app.commands[.test]?.value == "../gradlew :app:testDebugUnitTest")
+    #expect(app.commands[.testFiles]?.value == "../gradlew :app:testDebugUnitTest --tests {tests}")
     #expect(
-      app.commands[.lint] == sourced("./gradlew :app:ktlintCheck", "build.gradle.kts", .found))
+      app.commands[.lint] == sourced("../gradlew :app:ktlintCheck", "build.gradle.kts", .found))
     let shared = try area("shared", in: areas)
-    #expect(shared.commands[.test]?.value == "./gradlew :shared:allTests")
+    #expect(shared.commands[.test]?.value == "../gradlew :shared:allTests")
     #expect(shared.commands[.testFiles] == nil)
     #expect(shared.missing[.testFiles] != nil)
   }
 
   @Test(
-    "a Gradle build without a wrapper runs gradle and says so in the source column — catches ./gradlew proposed where none is tracked"
+    "a Gradle build without a wrapper runs gradle from its root and says so in the source column — catches ./gradlew proposed where none is tracked and a cd the area root already is"
   )
   func gradleWithoutWrapper() throws {
     let tree = try capturedTree("tauri-apps-tauri")
@@ -151,7 +151,7 @@ struct DiscoverJVMGoCargoTests {
 
     let android = try #require(areas.first { $0.root == "crates/tauri/mobile/android" })
     let test = try #require(android.commands[.test])
-    #expect(test.value.hasPrefix("cd crates/tauri/mobile/android && gradle "))
+    #expect(test.value.hasPrefix("gradle "))
     #expect(test.source == "crates/tauri/mobile/android/build.gradle.kts (no Gradle wrapper)")
     #expect(test.confidence == .guessed)
     #expect(!areas.contains { $0.root.split(separator: "/").contains("templates") })
@@ -174,6 +174,48 @@ struct DiscoverJVMGoCargoTests {
   }
 
   @Test(
+    "a Maven module under an aggregator runs its reactor from the module root through -f — catches a cd the area root already is and a ./mvnw the module directory lacks"
+  )
+  func mavenModuleRunsFromItsRoot() throws {
+    let tree = TrackedTreeSnapshot(files: [
+      "pom.xml": Data(
+        "<project><artifactId>parent</artifactId><modules><module>core</module></modules></project>\n"
+          .utf8),
+      "mvnw": Data("#!/bin/sh\n".utf8),
+      "core/pom.xml": Data("<project><artifactId>core</artifactId></project>\n".utf8),
+    ])
+    let core = try area("core", in: JVMReader().areas(in: tree))
+
+    #expect(core.root == "core")
+    #expect(
+      core.commands[.test] == sourced("../mvnw -f ../pom.xml -pl core test", "core/pom.xml", .found)
+    )
+    #expect(
+      core.commands[.testFiles]
+        == sourced("../mvnw -f ../pom.xml -pl core test -Dtest={tests}", "core/pom.xml", .found))
+  }
+
+  @Test(
+    "no reader proposes a command that changes into its own area root — catches a cd prefix the area command runner would apply twice"
+  )
+  func noReaderChangesDirectory() throws {
+    for name in [
+      "tauri-apps-tauri", "pola-rs-polars", "touchlab-KaMPKit", "pocketbase-pocketbase",
+      "jhipster-jhipster-sample-app", "phoenixframework-phoenix", "mitmproxy-mitmproxy",
+      "hotwired-turbo-rails", "Alamofire-Alamofire", "yonaskolb-XcodeGen",
+    ] {
+      let proposal = Discover.propose(tree: try capturedTree(name), head: "abc", dirty: [])
+      for area in proposal.areas {
+        for (step, command) in area.commands where area.root != "." {
+          #expect(
+            !command.value.hasPrefix("cd \(area.root) "),
+            "\(name) \(area.name) \(step): \(command.value)")
+        }
+      }
+    }
+  }
+
+  @Test(
     "each mix project is an area whose commands come from CI — catches a guessed command for a build file discover can't run"
   )
   func mixProjectsTakeCICommands() throws {
@@ -190,7 +232,7 @@ struct DiscoverJVMGoCargoTests {
     #expect(phoenix.commands[.test] == sourced("mix test", ".github/workflows/ci.yml", .found))
     let installer = try area("phx_new", in: proposal.areas)
     #expect(installer.root == "installer")
-    #expect(installer.commands[.test]?.value == "cd installer && mix test")
+    #expect(installer.commands[.test]?.value == "mix test")
   }
 
   @Test(
