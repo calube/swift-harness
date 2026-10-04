@@ -721,6 +721,20 @@ export function buildGateBaseProblems(files) {
 }
 
 /**
+ * The environment for a walk whose push gate builds and tests a temp package: git identity, the
+ * coverage profile kept in `dir`, and the Swift driver's dSYM step pointed at `true`. Every debug
+ * link on the machine queues on `dsymutil`; under load it has sat in uninterruptible wait for 30s
+ * with 1s of CPU, longer than the rest of the walk. The walk judges verdicts, which come from the
+ * coverage map and test results, never from a dSYM.
+ */
+function buildingWalkEnvironment(dir) {
+  return {
+    ...process.env, LLVM_PROFILE_FILE: join(dir, 'gate-%p.profraw'), SWIFT_DRIVER_DSYMUTIL_EXEC: '/usr/bin/true',
+    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
+  }
+}
+
+/**
  * Runs the build skill's green-main and merge gate lines for a plan (`gates`, from
  * `buildGatesFor`) through the real binary in a temp repository where `main` just moved to a
  * surface commit that adds an untested module, as `plan surface` leaves it, and `origin/main` is
@@ -732,10 +746,7 @@ export function buildGateWalk(gates) {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
   const dir = mkdtempSync(join(tmpdir(), 'skill-commands-build-gates-'))
-  const env = {
-    ...process.env, LLVM_PROFILE_FILE: join(dir, 'gate-%p.profraw'),
-    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
-  }
+  const env = buildingWalkEnvironment(dir)
   const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
   const write = (path, text) => {
     mkdirSync(dirname(join(dir, path)), { recursive: true })
@@ -862,10 +873,7 @@ export function surfaceBaselineWalk(gates, rule) {
   const binary = swiftgateBinary()
   assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
   const dir = mkdtempSync(join(tmpdir(), 'skill-commands-baseline-'))
-  const env = {
-    ...process.env, LLVM_PROFILE_FILE: join(dir, 'gate-%p.profraw'),
-    GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com',
-  }
+  const env = buildingWalkEnvironment(dir)
   const run = (file, args) => execFileSync(file, args, { encoding: 'utf8', cwd: dir, env })
   const write = (path, text) => {
     mkdirSync(dirname(join(dir, path)), { recursive: true })
