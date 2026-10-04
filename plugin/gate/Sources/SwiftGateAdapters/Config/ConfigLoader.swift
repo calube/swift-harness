@@ -40,12 +40,15 @@ public enum LoadedConfig: Sendable, Equatable {
 public enum ProfileLoadError: Error, Sendable, Equatable, CustomStringConvertible {
   /// Both configs exist, so the clone's profile is ambiguous.
   case conflict(committed: String, common: String)
+  /// The committed `.swiftgate.toml` failed to load.
   case config(ConfigLoadError)
+  /// The common dir's `config.toml` at `path` failed to load.
+  case brownfield(path: String, ConfigLoadError)
 
   public var verdict: Verdict {
     switch self {
     case .conflict: .red
-    case .config(let error): error.verdict
+    case .config(let error), .brownfield(_, let error): error.verdict
     }
   }
 
@@ -54,6 +57,11 @@ public enum ProfileLoadError: Error, Sendable, Equatable, CustomStringConvertibl
     case .conflict(let committed, let common):
       "\(committed) and \(common) both exist; a clone runs 1 profile, so delete one"
     case .config(let error): error.description
+    case .brownfield(let path, .syntax(let line, let column, let message)):
+      "\(path):\(line):\(column): \(message)"
+    case .brownfield(let path, .invalid(let error)):
+      error.issues.map { "\(path): \($0)" }.joined(separator: "\n")
+    case .brownfield(_, let error): error.description
     }
   }
 }
