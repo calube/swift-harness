@@ -139,6 +139,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   public let buildOnlyAreas: Section<String>
   public let droppedSteps: Section<DroppedStep>
   public let reviewFallbacks: Section<String>
+  /// 1 line per reviewed task: the depth its classified review ran at and what set it.
+  public let reviewDepths: Section<String>
   /// Every ledger task not `done`, in ledger order. Its note says why the ledger couldn't be read,
   /// so whether the run finished is unknown.
   public let unfinishedTasks: Section<UnfinishedTask>
@@ -147,7 +149,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     plan: String, planBranch: String, planBranchHead: String?, final: Final?, finalNote: String?,
     assumptions: Section<String>, baselineFailures: Section<BaselineFailureLine>,
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
-    reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>
+    reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>,
+    reviewDepths: Section<String> = Section(items: [], note: nil)
   ) {
     self.plan = plan
     self.planBranch = planBranch
@@ -159,6 +162,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.buildOnlyAreas = buildOnlyAreas
     self.droppedSteps = droppedSteps
     self.reviewFallbacks = reviewFallbacks
+    self.reviewDepths = reviewDepths
     self.unfinishedTasks = unfinishedTasks
   }
 
