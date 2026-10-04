@@ -141,6 +141,9 @@ if ! ready && [ "${1:-}" = "hook" ]; then
   rm -f "${pending:-}"
   if previous="$(previous_binary)"; then
     export SWIFTGATE_HARNESS_ROOT="$root"
+    # Events name the binary that ran, and this one is cached under its own hash.
+    SWIFTGATE_SOURCE_HASH="$(basename "$(dirname "$previous")")"
+    export SWIFTGATE_SOURCE_HASH
     exec "$previous" "$@"
   fi
   if [ "${2:-}" = "session-start" ] && in_project "$PWD"; then
@@ -251,4 +254,6 @@ fi
 
 # `bootstrap` finds its templates, and `self-test` its fixtures, in the plugin this shim belongs to.
 export SWIFTGATE_HARNESS_ROOT="$root"
+# The binary reads its own hash from here to name itself in the events it writes.
+export SWIFTGATE_SOURCE_HASH="$hash"
 exec "$binary" "$@"

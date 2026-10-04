@@ -214,6 +214,64 @@ import Testing
     #expect(full.reviewFallbacks == .init(items: [], note: nil))
   }
 
+  @Test(
+    "a test 2 baseline records both fail, under 2 commands for 1 step, is 1 line — catches a duplicated baseline line"
+  )
+  func baselineLinesDedupe() {
+    let test = "github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot"
+    let file = BaselineFile(
+      tree: "abc123",
+      records: [
+        BaselineRecord(
+          key: BaselineStepKey(area: "memos", step: .test, command: "go test -json ./..."),
+          result: .failedTests([test])),
+        BaselineRecord(
+          key: BaselineStepKey(
+            area: "memos", step: .test, command: "DRIVER=sqlite go test -json ./..."),
+          result: .failedTests([test, "store.TestMemoShare"])),
+        BaselineRecord(
+          key: BaselineStepKey(area: "web", step: .test, command: "pnpm test"), result: .failed),
+      ])
+    let report = BrownfieldRunReport.make(Self.inputs(baseline: .read(file)))
+    #expect(
+      report.baselineFailures.items
+        == [
+          .init(area: "memos", step: .test, test: test),
+          .init(area: "memos", step: .test, test: "store.TestMemoShare"),
+          .init(area: "web", step: .test, test: nil),
+        ].sorted { ($0.area, $0.test ?? "") < ($1.area, $1.test ?? "") })
+    #expect(lines("Baseline failures", in: report.text).filter { $0.hasSuffix(test) }.count == 1)
+  }
+
+  @Test(
+    "classified review's fallback names a reviewed task the run blocked as well as a merged one, and leaves out a task landed with no review — catches fallbacks counted over merged tasks only"
+  )
+  func reviewFallbackCountsUnmergedTasks() throws {
+    let started = { (task: String) in
+      BuildEvent.transition(.init(task: task, from: .pending, to: .inProgress, at: Self.at))
+    }
+    let report = BrownfieldRunReport.make(
+      Self.inputs(
+        build: .read(
+          Self.build(events: [
+            started("contract"),
+            .transition(.init(task: "contract", from: .inProgress, to: .done, at: Self.at)),
+            started("store"), started("web"), started("api"),
+            .transition(.init(task: "web", from: .inProgress, to: .blocked, at: Self.at)),
+            .merge(.init(task: "api", preCommit: "a", postCommit: "b", at: Self.at)),
+            .transition(.init(task: "api", from: .inProgress, to: .done, at: Self.at)),
+            .transition(.init(task: "store", from: .inProgress, to: .blocked, at: Self.at)),
+          ]))))
+    let line = try #require(report.reviewFallbacks.items.first)
+    #expect(report.reviewFallbacks.items.count == 1)
+    #expect(line.contains("3 task(s)"), "\(line)")
+    #expect(line.contains("web (blocked)"), "\(line)")
+    #expect(line.contains("api (merged)"), "\(line)")
+    #expect(line.contains("store (blocked)"), "\(line)")
+    #expect(!line.contains("contract"), "\(line)")
+    #expect(lines("Review fallbacks", in: report.text) == [line])
+  }
+
   @Test("the plan branch to merge is named with its head, or as missing — catches a dangling name")
   func planBranch() {
     let present = BrownfieldRunReport.make(Self.inputs()).text

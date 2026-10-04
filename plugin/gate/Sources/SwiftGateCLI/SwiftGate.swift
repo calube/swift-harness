@@ -40,15 +40,25 @@ struct SwiftGate: AsyncParsableCommand {
 
   /// Every command runs under a judge event scope naming no route, so a judge call from a route
   /// that never names itself is still recorded, and counted as unattributed.
+  /// Every event names the binary `bin/swiftgate` exec'd, read here once. The hash is cleared
+  /// from the environment after, since it names this binary and not one a child process runs.
   static func main() async {
+    let binary = GateBinaryReader.read(environment: ProcessInfo.processInfo.environment)
+    unsetenv(GateBinary.sourceHashVariable)
+    for problem in binary.problems {
+      FileHandle.standardError.write(Data("swiftgate: \(problem)\n".utf8))
+    }
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let scope = JudgeEventScope(
-      log: StderrReportingLog(inner: HarnessEventFiles(root: root)), now: { Date() },
-      newID: { UUID().uuidString.lowercased() }, source: HarnessEventSource(route: nil),
+      log: StderrReportingLog(inner: HarnessEventFiles(root: root, binary: binary.binary)),
+      now: { Date() }, newID: { UUID().uuidString.lowercased() },
+      source: HarnessEventSource(route: nil),
       secrets: JudgeBackend.allCases.compactMap {
         $0.keyVariable.flatMap { ProcessInfo.processInfo.environment[$0] }
       })
-    await JudgeEventScope.bind(scope) { await Self.main(nil) }
+    await GateBinaryScope.$current.withValue(binary.binary) {
+      await JudgeEventScope.bind(scope) { await Self.main(nil) }
+    }
   }
 }
 
