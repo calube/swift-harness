@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -170,6 +171,47 @@ struct WarmupTests {
   }
 
   @Test(
+    "a step whose tool isn't on PATH is not-installed, not failed — catches a missing tool read as the base tree failing"
+  )
+  func missingToolIsNotInstalled() async throws {
+    let missing = try Fixture.areaRun("swift/lint-not-installed")
+    let result = await Warmup.run(
+      area: area("web"),
+      dependencies: dependencies { request in request.step == .test ? missing : .passed })
+
+    #expect(outcomes(result) == [.build: .passed, .test: .notInstalled])
+    #expect(result.baseline.map(\.result) == [.passed, .notInstalled])
+    #expect(result.record.warmTestMilliseconds == nil)
+  }
+
+  @Test(
+    "a failed test step gives no warm test time, so slice builds — catches a 2 s failure read as a test run that fits the budget"
+  )
+  func failedTestGivesNoWarmTime() async throws {
+    let result = await Warmup.run(
+      area: area("web"),
+      dependencies: dependencies { request in
+        request.step == .test ? .failed(exit: 65, tail: "** TEST FAILED **", junit: nil) : .passed
+      })
+
+    #expect(outcomes(result) == [.build: .passed, .test: .failed])
+    #expect(result.record.warmTestMilliseconds == nil)
+    var file = WarmupTimesFile(tree: "t1")
+    file.merge(area: "web", record: result.record)
+    #expect(file.buildsOnly("web", budgetSeconds: 30))
+
+    // An iOS brownfield trial's warm-up: build and test both failed on plugin validation, the
+    // test in 2455 ms, and slice read that time as fitting the 30 s budget.
+    let trial = WarmupAreaRecord(
+      coldMilliseconds: 23_590, testMilliseconds: 2_455, steps: [.build: .failed, .test: .failed])
+    #expect(trial.warmTestMilliseconds == nil)
+    let passed = WarmupAreaRecord(
+      coldMilliseconds: 8_112, testMilliseconds: 106_954,
+      steps: [.build: .passed, .test: .passed])
+    #expect(passed.warmTestMilliseconds == 106_954)
+  }
+
+  @Test(
     "the build and test answers are baseline records keyed as gates key them — catches a warm-up that fills no baseline"
   )
   func fillsTheBaseline() async {
@@ -283,7 +325,7 @@ struct WarmupTimesFileTests {
       area: "web",
       record: WarmupAreaRecord(
         coldMilliseconds: 61_000, testMilliseconds: 45_000,
-        steps: [.build: .passed, .test: .failed]))
+        steps: [.build: .passed, .test: .passed]))
     file.merge(
       area: "api",
       record: WarmupAreaRecord(

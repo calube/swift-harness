@@ -117,7 +117,7 @@ struct DiscoverSwiftXcodeTests {
     let build = try #require(buy.commands[.build])
     #expect(
       build.value
-        == "xcodebuild build -project Buy.xcodeproj -scheme Buy -destination 'generic/platform=iOS Simulator' -skipMacroValidation"
+        == "xcodebuild build -project Buy.xcodeproj -scheme Buy -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
     )
     #expect(build.source == "Buy.xcodeproj/xcshareddata/xcschemes/Buy.xcscheme")
     let test = try #require(buy.commands[.test])
@@ -137,6 +137,28 @@ struct DiscoverSwiftXcodeTests {
         $0.root == "Tests/Fixtures/scheme_test"
       })
     #expect(schemeTest.xcode?.value.schemes == ["ExternalTarget", "Shared_TargetScheme"])
+  }
+
+  @Test(
+    "a project that depends on a package plugin gets build and test commands that skip plugin validation — catches a headless build that stops at the plugin trust prompt"
+  )
+  func packagePluginValidationSkipped() throws {
+    let tree = try capturedTree("Xcode/xcodegen")
+    let pbxproj = "Tests/Fixtures/SPM/SPM.xcodeproj/project.pbxproj"
+    let project = try #require(tree.read(pbxproj).map { String(decoding: $0, as: UTF8.self) })
+    #expect(project.contains("productName = \"plugin:PrefirePlaybookPlugin\";"))
+
+    let area = try #require(XcodeReader().areas(in: tree).only)
+    let build = try #require(area.commands[.build]?.value)
+    #expect(build.hasPrefix("xcodebuild build "))
+    #expect(build.contains(" -skipMacroValidation"))
+    #expect(build.hasSuffix(" -skipPackagePluginValidation"))
+    #expect(area.commands[.test] == nil, "no shared scheme here has a test target")
+
+    let buy = try #require(try xcodeAreas("Discover/Shopify-mobile-buy-sdk-ios").only)
+    let test = try #require(buy.commands[.test]?.value)
+    #expect(test.hasPrefix("xcodebuild test "))
+    #expect(test.hasSuffix(" -skipMacroValidation -skipPackagePluginValidation"))
   }
 
   @Test(
