@@ -325,16 +325,20 @@ struct RunCommandTests {
   }
 
   @Test(
-    "the live spawner returns while the warm-up still runs and the warm-up's output reaches the log — catches a spawn that waits on the warm-up"
+    "the live spawner returns while the warm-up still runs and the warm-up's output reaches the log — catches a spawn that waits on the warm-up",
+    .timeLimit(.minutes(1))
   )
   func liveSpawnerDetaches() async throws {
     let clone = try await RunClone(files: ["README": "x\n"])
     defer { clone.remove() }
     let gate = clone.base.appending(path: "gate.fifo").path
     #expect(mkfifo(gate, 0o600) == 0)
+    let finished = clone.base.appending(path: "finished.fifo").path
+    #expect(mkfifo(finished, 0o600) == 0)
     let fake = clone.base.appending(path: "fake-swiftgate")
     try Data(
-      "#!/bin/sh\nread line < \"\(gate)\"\necho \"started $1 in $(pwd -P)\"\n".utf8
+      "#!/bin/sh\nread line < \"\(gate)\"\necho \"started $1 in $(pwd -P)\"\necho done > \"\(finished)\"\n"
+        .utf8
     ).write(to: fake)
     #expect(chmod(fake.path, 0o755) == 0)
     let log = clone.base.appending(path: "logs/warmup.log")
@@ -349,11 +353,12 @@ struct RunCommandTests {
     #expect(writer >= 0)
     _ = "go\n".withCString { write(writer, $0, 3) }
     close(writer)
-    var text = ""
-    for _ in 0..<200 where !text.contains("\n") {
-      text = (try? String(contentsOf: log, encoding: .utf8)) ?? ""
-      if !text.contains("\n") { try await Task.sleep(for: .milliseconds(25)) }
-    }
+    // Opening the fifo blocks until the warm-up opens it to write, which it does only after its
+    // line reached the log.
+    let signal = try FileHandle(forReadingFrom: URL(filePath: finished))
+    #expect(try signal.readToEnd() == Data("done\n".utf8))
+    try signal.close()
+    let text = try String(contentsOf: log, encoding: .utf8)
     #expect(text == "started warmup in \(clone.root.path(percentEncoded: false).dropLast())\n")
   }
 }
