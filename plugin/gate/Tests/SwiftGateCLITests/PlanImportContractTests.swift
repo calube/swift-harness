@@ -26,16 +26,14 @@ private struct ContractClone {
   let checkout: URL
   let runner = LiveProcessRunner(baseEnvironment: [
     "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
-    "HOME": FileManager.default.temporaryDirectory.path,
+    "HOME": TestTemporaryDirectory.sharedHome.path,
     "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
   ])
 
   init() async throws {
-    parent = FileManager.default.temporaryDirectory
-      .appending(path: "swiftgate-contract-\(UUID().uuidString)", directoryHint: .isDirectory)
-      .resolvingSymlinksInPath()
+    parent = try TestTemporaryDirectory.make("swiftgate-contract").resolvingSymlinksInPath()
     root = parent.appending(path: "memos", directoryHint: .isDirectory)
     checkout = parent.appending(path: "memos-\(Self.slug)", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -55,7 +53,7 @@ private struct ContractClone {
     try await git(in: root, "worktree", "add", "-q", checkout.path, Self.planBranch)
   }
 
-  func remove() { try? FileManager.default.removeItem(at: parent) }
+  func remove() { TestTemporaryDirectory.remove(parent) }
 
   var gitClient: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
 
