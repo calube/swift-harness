@@ -155,7 +155,7 @@ struct WarmupTests {
   }
 
   @Test("the first run's cold cost and test time are recorded — catches a record with no times")
-  func firstRunRecordsTimes() async {
+  func firstRunRecordsTimes() async throws {
     let result = await Warmup.run(
       area: area("web"),
       dependencies: dependencies { request in
@@ -163,9 +163,9 @@ struct WarmupTests {
         return .passed
       })
 
-    let test = try? #require(result.record.testMilliseconds)
-    #expect((test ?? 0) >= 30)
-    #expect(result.record.coldMilliseconds >= (test ?? 0))
+    let test = try #require(result.record.testMilliseconds)
+    #expect(test >= 30)
+    #expect(result.record.coldMilliseconds >= test)
     #expect(result.record.steps == [.build: .passed, .test: .passed])
   }
 
