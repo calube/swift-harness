@@ -165,7 +165,8 @@ public enum ConfigSchema {
     }
   }
 
-  private static func readJudge(_ reader: inout Reader, _ root: [String: ConfigValue])
+  /// `[judge]`, which the brownfield profile spells the same way.
+  static func readJudge(_ reader: inout Reader, _ root: [String: ConfigValue])
     -> JudgeConfig
   {
     let path = "judge"

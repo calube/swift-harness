@@ -357,7 +357,7 @@ struct JudgeCommand: AsyncParsableCommand {
     abstract: "Ask the configured judge about changed tests, or any question set.",
     subcommands: [
       JudgeTestsCommand.self, JudgeAskCommand.self, JudgeBenchCommand.self,
-      JudgeBenchRenderCommand.self, JudgeEventsCommand.self,
+      JudgeBenchRenderCommand.self, JudgeEventsCommand.self, JudgeDiffRiskCommand.self,
     ],
     defaultSubcommand: JudgeTestsCommand.self)
 }

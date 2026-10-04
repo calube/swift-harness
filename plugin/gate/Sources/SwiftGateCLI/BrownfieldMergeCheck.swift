@@ -232,7 +232,8 @@ enum BrownfieldMergeCheck {
     if !proved.isEmpty {
       let config = BrownfieldConfig(
         brownfield: dependencies.config.brownfield, areas: proved,
-        allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets)
+        allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
+        judge: dependencies.config.judge)
       let (judgement, milliseconds) = await GateRun.timed {
         await BrownfieldProve.run(
           root: root, base: base, config: config,

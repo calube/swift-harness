@@ -204,6 +204,24 @@ struct BrownfieldConfigTests {
   }
 
   @Test(
+    "a [judge] table reads as the owned profile's judge config, and its absence as disabled — catches a brownfield clone that can never name a judge"
+  )
+  func readsJudge() throws {
+    guard case .table(var root) = BrownfieldConfigSample.document() else {
+      Issue.record("the sample document is not a table")
+      return
+    }
+    #expect(try BrownfieldConfigSchema.config(from: .table(root)).judge == .disabled)
+    root["judge"] = .table(["backend": .string("claude"), "block_threshold": .float(0.8)])
+    #expect(
+      try BrownfieldConfigSchema.config(from: .table(root)).judge
+        == .enabled(
+          backend: .claude, thresholds: JudgeThresholds(advisory: 0.6, block: 0.8), model: nil))
+    root["judge"] = .table(["backend": .string("gpt")])
+    #expect(issues(.table(root)) == [.unknownJudgeBackend(path: "judge.backend", value: "gpt")])
+  }
+
+  @Test(
     "an unknown language fails naming areas[0].language and the allowed list — catches an open string"
   )
   func unknownLanguage() {

@@ -82,9 +82,14 @@ enum StopHook {
       let report = try RunReport(
         runID: runID, durationMilliseconds: GateRun.milliseconds(clock.now - start),
         tiers: parts.tiers, findings: parts.findings, allowances: parts.allowances)
-      try? runs.record(
-        report, finishedAt: Date(), command: command, gateSteps: context.steps.steps,
-        checkTier: .slice, baselineCount: parts.baselineCount, proofs: context.proofs.results)
+      let telemetry = await GateRun.telemetry(root: root, events: nil, workingTree: nil)
+      GateRun.record { () throws(RunStoreError) in
+        try RunStore(worktreeRoot: root, events: telemetry.events).record(
+          report, finishedAt: Date(), command: command, treeHash: telemetry.tree?.treeHash,
+          dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: .slice,
+          testResults: context.tests.cases, baselineCount: parts.baselineCount,
+          proofs: context.proofs.results)
+      }
       return (report.verdict, ReportRenderer.human(report))
     } catch {
       return (.blocked, "swiftgate check --tier slice could not run: \(error)")

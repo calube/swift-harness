@@ -50,9 +50,8 @@ enum BrownfieldSliceCheck {
         warmTestMilliseconds: { [layout = merge.layout] area, tree in
           WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?.testMilliseconds
         },
-        judgeAssertion: { _, _ in
-          .unanswered("no judge backend is wired for the brownfield profile")
-        },
+        judgeAssertion: BrownfieldJudge.assertionJudge(
+          BrownfieldJudge.live(merge.config.judge, root: root)),
         deadline: liveDeadline)
     }
   }
@@ -494,7 +493,8 @@ enum BrownfieldSliceCheck {
 
     let config = BrownfieldConfig(
       brownfield: dependencies.config.brownfield, areas: [area],
-      allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets)
+      allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
+      judge: dependencies.config.judge)
     let (judgement, proveMilliseconds) = await GateRun.timed {
       await BrownfieldProve.run(
         root: root, base: base, config: config,

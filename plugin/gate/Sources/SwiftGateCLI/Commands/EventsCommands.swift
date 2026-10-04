@@ -241,13 +241,13 @@ enum EventsIngestRun {
     func refused(_ why: String, stderr: String = "") -> EventsCommandOutput {
       EventsCommandOutput(stdout: "", stderr: stderr + "\(command): \(why)\n", status: 2)
     }
-    switch StaticCheckInputs.loadConfig(root: root) {
+    switch TelemetryOptIn.enabled(root: root) {
     case .success(nil):
       return refused("no .swiftgate.toml here; ingest records events only in a project")
     case .failure(let failure):
       return refused("the config can't be read: \(failure.outcome)")
-    case .success(let config?):
-      guard config.telemetry.enabled else {
+    case .success(let enabled?):
+      guard enabled else {
         return refused(
           "telemetry is off ([telemetry] enabled = false); set telemetry.enabled to true to "
             + "record agent usage")

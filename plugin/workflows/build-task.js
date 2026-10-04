@@ -6,7 +6,7 @@ export const meta = {
     'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun?: "<build run id>"}. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
-    { title: 'Review', detail: 'full review only: architecture and test-quality in parallel' },
+    { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
     { title: 'Verify', detail: 'one verifier per reviewer with findings, starting as each reviewer finishes' },
     { title: 'Fix', detail: 'at most one fresh build-worker, handed the red gate or verified blocking findings' },
   ],
@@ -58,6 +58,9 @@ const VERDICTS = ['GREEN', 'RED', 'BLOCKED']
 // finding that could block.
 const CLASSIFIED_REVIEWERS = { low: [], medium: ['test-quality'], high: ['architecture', 'test-quality'] }
 const CLASSIFIED_REVIEWER_MODEL = 'claude-sonnet-5-5'
+const DIFF_RISK_LEVELS = ['low', 'medium', 'high']
+// Runs 1 command and reports its output; it reads and judges nothing itself.
+const CLASSIFIER_AGENT = 'general-purpose'
 const CLASSIFIED_VERIFIER_MODEL = 'claude-opus-5-5'
 // Every task gate judges impact and diff coverage over its change and compiles the app target, so
 // what the merge gate would catch after a merge, and a view the host build compiles out, fail here.
@@ -731,15 +734,55 @@ function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, ext
 const gateFinding = gate =>
   `gate run ${gate.runId} (swiftgate check --tier ${gate.tier}) is ${gate.verdict}; read it in ${stateDir}/runs/`
 
-// Classified review's depth. The judge's diff-risk answer never reaches this script, so the
-// review runs at medium and the return's notes and the log say why: never a silent depth.
-const classified =
-  A.review === 'classified'
-    ? { level: 'medium', note: 'review: classified at medium, because no diff-risk answer reached the build-task workflow' }
-    : null
-if (classified) log(classified.note)
-const reviewers = classified ? CLASSIFIED_REVIEWERS[classified.level] : A.reviewers
-const reviewed = A.review !== 'gate' && reviewers.length > 0
+// Classified review's depth comes from `swiftgate judge diff-risk` over the task's change, which a
+// workflow script can't run itself, so 1 agent runs it and hands back its JSON. Asked once, after
+// the first worker's gate: the fix pass changes the same task. Any answer that isn't a level runs
+// at medium, and the return's notes and the log say why: never a silent depth.
+const swiftgate = A.pluginRoot === null ? 'swiftgate' : `${A.pluginRoot}/bin/swiftgate`
+const DIFF_RISK_COMMAND = `cd ${A.worktree} && ${swiftgate} judge diff-risk --base ${A.base} --json`
+const DIFF_RISK_SCHEMA = {
+  type: 'object',
+  required: ['level', 'reason', 'exitStatus'],
+  additionalProperties: false,
+  properties: {
+    level: { type: ['string', 'null'], enum: [...DIFF_RISK_LEVELS, null], description: 'the "level" the command printed' },
+    reason: { type: ['string', 'null'], description: 'the "reason" it printed, or what went wrong running it; null with a level' },
+    exitStatus: { type: 'integer', description: "the command's exit status" },
+  },
+}
+let classified = null
+async function classify() {
+  if (A.review !== 'classified' || classified) return classified
+  const fallback = why => ({ level: 'medium', note: `review: classified at medium, because diff-risk gave no level (${why})` })
+  let answer
+  try {
+    answer = await agent(
+      'Run exactly this command once and report what it printed; change nothing, run nothing else:\n' +
+        `${DIFF_RISK_COMMAND}\n` +
+        'It prints 1 JSON object with "level" (low, medium, high or null) and, without a level, "reason". ' +
+        'Return its level, its reason and the exit status. If it fails to run or prints something else, ' +
+        'return level null and the error as reason.',
+      { agentType: CLASSIFIER_AGENT, model: CLASSIFIED_REVIEWER_MODEL, effort: 'low', label: `diff-risk:${A.task}`, phase: 'Review', schema: DIFF_RISK_SCHEMA },
+    )
+  } catch (error) {
+    answer = { level: null, reason: `the diff-risk agent failed: ${failure(error)}`, exitStatus: -1 }
+  }
+  if (!answer || typeof answer !== 'object') classified = fallback('the diff-risk agent returned nothing')
+  else if (DIFF_RISK_LEVELS.includes(answer.level) && answer.exitStatus === 0) {
+    classified = { level: answer.level, note: `review: classified at ${answer.level} by swiftgate judge diff-risk` }
+  } else classified = fallback(answer.reason || `exit ${answer.exitStatus}, level ${JSON.stringify(answer.level)}`)
+  log(classified.note)
+  return classified
+}
+let reviewers = A.reviewers
+let reviewed = A.review === 'full' && reviewers.length > 0
+async function decideDepth() {
+  const depth = await classify()
+  if (depth) {
+    reviewers = CLASSIFIED_REVIEWERS[depth.level]
+    reviewed = reviewers.length > 0
+  }
+}
 const reviewNote = note => (classified ? [classified.note, note].filter(Boolean).join('\n') : note)
 
 // Attempt 1.
@@ -761,7 +804,12 @@ if (first.defect) {
   }
   if (w.outcome === 'gate-red') {
     fix = { reason: `${gateFinding(w.gate)}; the earlier worker stopped there (${w.notes})`, earlier: w, findings: [] }
-  } else if (reviewed) {
+  } else {
+    await decideDepth()
+    if (!reviewed) {
+      await endSpan(workerSpan, 'ok')
+      return taskReturn('ready-to-merge', w, [], [], [], reviewNote())
+    }
     const review = await runReview(w.commits, fixParent)
     fixParent = { id: review.span, outcome: null }
     lastFindings = review.findings
@@ -775,9 +823,6 @@ if (first.defect) {
       earlier: w,
       findings: review.blocking,
     }
-  } else {
-    await endSpan(workerSpan, 'ok')
-    return taskReturn('ready-to-merge', w, [], [], [], reviewNote())
   }
 }
 
@@ -792,6 +837,8 @@ const earlierCommits = firstAttempt ? firstAttempt.commits : []
 const earlierTests = firstAttempt ? firstAttempt.testsAdded : []
 const w2 = second.value
 const fixEnd = { id: fixSpan, outcome: workerOutcome(second) }
+// The depth decides whether a review ends the fix span, so it is known before that.
+if (w2.outcome !== 'design-conflict' && w2.outcome !== 'gate-red') await decideDepth()
 if (!reviewed || fixEnd.outcome !== 'ok') await endSpan(fixSpan, fixEnd.outcome)
 if (w2.outcome === 'design-conflict') return taskReturn('design-conflict', w2, earlierCommits, earlierTests, lastFindings)
 if (w2.outcome === 'gate-red') {

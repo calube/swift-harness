@@ -41,7 +41,8 @@ struct ViewCommand: AsyncParsableCommand {
     }
     let reader = RunViewReader(
       commonDirectory: URL(filePath: common, directoryHint: .isDirectory),
-      stateRoot: StateRootResolver.resolve(worktree: root))
+      stateRoot: StateRootResolver.resolve(worktree: root),
+      profile: BuildPresetCatalog.profile(root: root))
     guard let id = buildRun ?? reader.newestBuildRun() else {
       throw blocked("no plan holds a build run to view")
     }

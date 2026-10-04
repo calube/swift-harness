@@ -13,7 +13,8 @@ public enum BrownfieldConfigSchema {
     }
     var reader = Reader()
     reader.rejectUnknownKeys(
-      in: root, at: "", allowed: ["schema", "harness", "brownfield", "areas", "allow", "build"])
+      in: root, at: "",
+      allowed: ["schema", "harness", "brownfield", "areas", "allow", "judge", "build"])
     if let schema = reader.integer(root, "schema", at: "", required: true),
       schema != BrownfieldConfig.supportedSchema
     {
@@ -23,11 +24,12 @@ public enum BrownfieldConfigSchema {
     let settings = readSettings(&reader, root)
     let areas = readAreas(&reader, root)
     let allow = readAllow(&reader, root)
+    let judge = ConfigSchema.readJudge(&reader, root)
     let buildPresets = ConfigSchema.readBuild(&reader, root, profile: .brownfield)
     let issues = reader.issues + Config.presetIssues(buildPresets)
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
     return BrownfieldConfig(
-      brownfield: settings, areas: areas, allow: allow, buildPresets: buildPresets)
+      brownfield: settings, areas: areas, allow: allow, buildPresets: buildPresets, judge: judge)
   }
 
   private static func readHarness(_ reader: inout Reader, _ root: [String: ConfigValue]) {
