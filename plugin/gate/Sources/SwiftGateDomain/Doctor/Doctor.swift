@@ -78,13 +78,18 @@ public struct DoctorFacts: Sendable {
   /// The names of the judge backends' key variables set to a non-empty value in doctor's
   /// environment, never their values; `nil` when not gathered.
   public let judgeKeysSet: Set<String>?
+  /// `agent-device --version`, trimmed; `nil` when it could not run.
+  public let agentDeviceVersion: String?
+  /// The `agent-device` version simulator QA drives; `nil` when not gathered.
+  public let agentDevicePin: ToolPin?
 
   public init(
     config: Config, xcodeVersionOutput: String?, swiftVersionOutput: String?,
     devices: Result<[SimulatorDevice], ProbeFailure>, freeBytes: Int64?, shim: ShimStatus,
     swiftLintInstalled: Bool, packages: [PackageManifest], resolvedVersions: [String: String],
     architectureFindings: [Finding], mermaidCLIInstalled: Bool,
-    pluginSession: PluginSessionFacts? = nil, judgeKeysSet: Set<String>? = nil
+    pluginSession: PluginSessionFacts? = nil, judgeKeysSet: Set<String>? = nil,
+    agentDeviceVersion: String? = nil, agentDevicePin: ToolPin? = nil
   ) {
     self.config = config
     self.xcodeVersionOutput = xcodeVersionOutput
@@ -99,6 +104,19 @@ public struct DoctorFacts: Sendable {
     self.mermaidCLIInstalled = mermaidCLIInstalled
     self.pluginSession = pluginSession
     self.judgeKeysSet = judgeKeysSet
+    self.agentDeviceVersion = agentDeviceVersion
+    self.agentDevicePin = agentDevicePin
+  }
+}
+
+/// A tool version the harness requires, and the command that installs it.
+public struct ToolPin: Sendable, Equatable {
+  public let version: String
+  public let installCommand: String
+
+  public init(version: String, installCommand: String) {
+    self.version = version
+    self.installCommand = installCommand
   }
 }
 
@@ -203,6 +221,8 @@ public enum Doctor {
   public static let sessionRecordRuleID = "doctor.session-record"
   /// `[judge] backend` names a backend whose key variable isn't set.
   public static let judgeKeyRuleID = "doctor.judge-key"
+  /// `agent-device` is missing or isn't the pinned version.
+  public static let agentDeviceRuleID = "doctor.agent-device"
 
   /// A committed `.swiftgate.toml` and a common-dir `config.toml` in 1 clone.
   public static let configConflictRuleID = BrownfieldRuleID.doctorConfigConflict.rawValue
