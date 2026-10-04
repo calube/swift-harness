@@ -1,13 +1,13 @@
 # swift-harness: the brownfield profile
 
 <!-- RESUME
-Status: DRAFT 2026-10-03. The user's 8 decisions of 2026-10-03 are in §17; the open questions in §15 wait on the user.
+Status: APPROVED DRAFT 2026-10-03: all questions decided; next is a plan.
 Why: the harness assumes it owns the repository. Bootstrap writes `.swiftgate.toml` and git hooks into the tree,
 the default rules assume TCA, `@Dependency` and module kinds, and every change passes through design, plan and
 build stages. None of that fits a repository someone else owns, with several languages and its own commands.
 Builds on: the config loader, `ScratchWorktrees` and `prove`, the build executor, the judge cascade and the
 telemetry envelope.
-Read first: this header, §3, §5, §8 and §15.
+Read first: this header, §3, §5, §8 and §17.
 -->
 
 ## 1. Purpose
@@ -147,7 +147,7 @@ inclusion = "xcodegen"       # synchronized | xcodegen | tuist | explicit
 spec = "ios/project.yml"
 schemes = ["App"]
 
-[[allow]]                    # §15 question 1
+[[allow]]                    # an inline swiftgate:allow still counts (§17 decision 9)
 rule = "neutral.unsafe-shortcut"
 path = "server/src/x.ts"
 line_sha = "<sha256 of the line>"
@@ -202,6 +202,12 @@ Prove reverts the task's non-test changes in a scratch worktree and reruns its c
 `test_files`. After a crash it reruns each test alone, so 1 trap doesn't mark its siblings. `fast`, `push` and
 `ready` stay for owned repositories.
 
+When an area's smallest test run can't fit 30 s, such as app-hosted Xcode tests, `slice` runs the selected tests
+if a warm run fits. Otherwise it only builds; those tests and their prove move to `merge`, and the report says so.
+
+Worktrees share the package stores: the pnpm store, the Gradle cache and a per-area DerivedData seed. Each area's
+cold cost is a `gate.step` measurement.
+
 ## 10. Baseline
 
 A gate that sees a failing test or command reruns it at the merge base in a scratch worktree and caches the
@@ -218,6 +224,9 @@ gates. Discovery records files already modified in the tree, and workers never s
 | explorer | Sonnet 5.5, pinned by id | 1 per area the brief touches, read-only |
 | worker, QA | Sonnet 5.5, pinned by id | builds 1 task in its worktree; QA drives the app when the risk class asks for it |
 | classifier | Jev | test quality at gates through the built cascade to Claude; each slice's diff risk; pre-sorting review findings by severity |
+
+The orchestrator makes routine operational choices, such as git hook use or the trial repositories, without
+asking the user.
 
 ### 11.2 Research to plan, about 8 minutes
 
@@ -243,7 +252,8 @@ tests, working commands, risks and unknowns in 300 words or fewer. Opus drops a 
 The first commit holds the new types and signatures, compiles in every touched area, and changes no behavior.
 Write sets come from the target graph: Xcode membership, `swift package describe`, Gradle and workspace
 dependencies. A task that changes a target's types owns every target that reads them, unless the contract commit
-landed them. Each removal has an owning task.
+landed them. Each removal has an owning task. Workers commit through the repository's own git hooks and never
+use `--no-verify`; our commit-msg comments check doesn't run in this profile.
 
 ### 11.4 The plan file
 
@@ -295,16 +305,12 @@ A `--preset` from another profile fails and names the profile.
 | per-slice gate | 30 s or less, p95 | `gate.run` with `command = slice` |
 | real change | 1 built end to end per repository | the plan's tasks merged, `merge` GREEN |
 
+The orchestrator picks the 3 repositories itself: public, more than 1 language, none tied to any practice task.
+
 
 ## 15. Open questions
 
-| # | Question | Recommendation |
-|---|---|---|
-| 1 | Where does an escape-hatch allow live, when the team didn't ask for our comments in its code? | In `config.toml` as `[[allow]]`, keyed by rule, path and the line's hash; an inline `swiftgate:allow` still counts |
-| 2 | What does `slice` do for an area whose smallest test run exceeds 30 s, such as app-hosted Xcode tests? | Build-for-testing and run the selected tests when a warm run fits; otherwise build only, and move those tests to `merge` with a report line |
-| 3 | Do worktrees install dependencies (`pnpm install`, Gradle sync) per task? | Share the package stores (pnpm store, Gradle cache, a per-area DerivedData seed) and measure the cold cost per area in `gate.step` |
-| 4 | Do workers run the repository's own git hooks? | Yes, never `--no-verify`; our commit-msg comments check doesn't run in this profile |
-| 5 | Which 3 public repositories form the trial? | The user picks; the orchestrator proposes 5 that match the class, none tied to any practice task |
+The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 
 ## 16. Practice feedback
 
@@ -333,7 +339,7 @@ A `--preset` from another profile fails and names the profile.
 | docs-lint skipped prose on a new router | §6: no docs rules in this profile |
 | budget clock starts at `build start` | §5.3: the clock starts at the brief |
 | AppCore and AppUI split into 2 tasks | §11.3: a task owns every target that reads its types |
-| 230 s merge gate after a new dependency | partly, §15 question 3 |
+| 230 s merge gate after a new dependency | §9: shared package stores, cold cost measured (§17 decision 11) |
 | starter script's macro trust | not addressed: a practice script, not the harness |
 | stray `grep`; the Sonnet 5.5 doubt | not addressed: assistant mistakes |
 | session id change mid-run; background-session edit rule | not addressed: Claude Code behavior |
@@ -353,6 +359,11 @@ A `--preset` from another profile fails and names the profile.
 | 6 | How are Xcode projects handled? | Discovery records inclusion; the gate checks every new Swift file is in a target; a helper regenerates or adds files; no restructuring | user, 2026-10-03 |
 | 7 | What is the pass bar? | 3 unfamiliar public repositories with more than 1 language: under 3 min to first gate, 0 findings on untouched code, slice gate of 30 s or less, 1 real change each | user, 2026-10-03 |
 | 8 | What is the workflow? | Opus orchestrates and plans; Sonnet 5.5 explores, builds and does QA; Jev classifies; about 8 minutes to a plan; contract commit, then workers with disjoint write sets; 1 live `PLAN.md`; no design doc, ledger page or approval stage beyond "go" | user, 2026-10-03 |
+| 9 | Where does an escape-hatch allow live, when the team didn't ask for our comments in its code? | In `config.toml` as `[[allow]]` entries keyed by rule, path and the line's hash, each with a reason; an inline `swiftgate:allow` still counts | user, 2026-10-03 |
+| 10 | What does `slice` do for an area whose smallest test run can't fit 30 s? | Run the selected tests when a warm run fits; otherwise build only, move those tests and their prove to `merge`, and add a report line | user, 2026-10-03 |
+| 11 | Do worktrees install dependencies per task? | They share package stores: the pnpm store, the Gradle cache, a per-area DerivedData seed; each area's cold cost is measured in `gate.step` | user, 2026-10-03 |
+| 12 | Do workers run the repository's own git hooks? | Yes, never with `--no-verify`; our commit-msg comments check doesn't run in this profile | user, 2026-10-03 |
+| 13 | Which 3 public repositories form the trial? | The orchestrator picks them with no user step: public, more than 1 language, none tied to any practice task | user, 2026-10-03 |
 
 ## 18. Tasks for a later plan
 
