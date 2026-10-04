@@ -183,7 +183,7 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
         GateRunTier(tier: $0.tier, verdict: $0.verdict, milliseconds: $0.durationMilliseconds)
       },
       ruleCounts: ruleCounts, findingPaths: paths, findingPathsTruncated: paths.count < files.count,
-      allowanceCounts: allowanceCounts, testCounts: testCounts)
+      allowanceCounts: allowanceCounts, testCounts: testCounts, baselineCount: baselineCount)
   }
 
   /// A path the payload guard keeps: relative, 1 line, short.

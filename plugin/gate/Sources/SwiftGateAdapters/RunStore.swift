@@ -123,7 +123,7 @@ public struct RunStore: Sendable {
         contentsOf: try gateEvents(
           report, finishedAt: finishedAt, command: command, headCommit: headCommit, base: base,
           treeHash: treeHash, dirty: dirty, steps: gateSteps + [recordStep],
-          checkTier: checkTier, testResults: testResults))
+          checkTier: checkTier, testResults: testResults, baselineCount: baselineCount))
     } catch {
       throw .eventsUnwritten(error)
     }
@@ -134,11 +134,13 @@ public struct RunStore: Sendable {
   private func gateEvents(
     _ report: RunReport, finishedAt: Date, command: String?, headCommit: String?, base: String?,
     treeHash: String?, dirty: Bool?, steps: [GateStepTiming], checkTier: CheckTier?,
-    testResults: [TestCaseResult]
+    testResults: [TestCaseResult], baselineCount: Int?
   ) throws(HarnessEventWriteError) -> [HarnessEvent] {
     let payload: GateRunEvent
     do {
-      payload = try GateRunEvent(report: report, command: command, treeHash: treeHash, dirty: dirty)
+      payload = try GateRunEvent(
+        report: report, command: command, treeHash: treeHash, dirty: dirty,
+        baselineCount: baselineCount)
     } catch {
       throw HarnessEventWriteError(
         path: state.displayPath(RunLayout.eventsFile(.gate)), reason: "gate.run: \(error)")

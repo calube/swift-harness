@@ -167,19 +167,46 @@ struct BrownfieldProfileCommandTests {
   }
 
   @Test(
-    "in a brownfield clone SessionStart answers with no state in the tree, while Stop and PostToolUse stay silent — catches the owned fast tier or formatter run on a team's code"
+    "in a brownfield clone SessionStart answers with no state in the tree, while PostToolUse stays silent — catches the owned formatter run on a team's code"
   )
   func hooksFollowTheProfile() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.root) }
 
     let start = try await hook(.sessionStart, "session-start", in: clone)
-    let stop = try await hook(.stop, "stop", in: clone)
     let post = try await hook(.postToolUse, "post-tool-use-edit-swift", in: clone)
 
     #expect(start.stdout?.contains("hookSpecificOutput") == true)
     #expect(!FileManager.default.fileExists(atPath: clone.root.appending(path: ".harness").path))
-    #expect(stop == .silent)
     #expect(post == .silent)
+  }
+
+  @Test(
+    "in a brownfield clone Stop gates at slice and blocks a RED slice, while an owned project's Stop never runs it — catches the owned fast tier on a team's code, or a brownfield stop that checks nothing"
+  )
+  func stopRunsSlice() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.root) }
+    var harness = try HookHarness()
+    defer { harness.repository.remove() }
+    harness.environment = ["HOME": clone.root.path]
+    let ran = RecordedStrings()
+    var dependencies = harness.dependencies
+    dependencies.brownfieldSlice = { root in
+      ran.append(root.lastPathComponent)
+      return (.red, "slice: neutral.unsafe-shortcut on an added line")
+    }
+    let slice = dependencies
+
+    let stop = await HookRunner.run(.stop, input: try harness.payload("stop", cwd: clone.root)) {
+      _ in slice
+    }
+
+    #expect(ran.all == [clone.root.lastPathComponent])
+    #expect(stop.stdout?.contains("neutral.unsafe-shortcut") == true)
+    #expect(stop.stdout?.contains("block") == true)
+
+    _ = await HookRunner.run(.stop, input: try harness.payload("stop")) { _ in slice }
+    #expect(ran.all.count == 1, "an owned project's Stop runs the fast tier")
   }
 }

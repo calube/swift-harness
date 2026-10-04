@@ -200,9 +200,9 @@ enum HookRunner {
     return result
   }
 
-  /// The events a brownfield clone answers. Stop runs the owned `fast` tier, which that profile
-  /// rejects, and PostToolUse formats Swift to this harness's style rather than the team's.
-  static let brownfieldEvents: Set<HookEvent> = [.sessionStart, .preToolUse]
+  /// The events a brownfield clone answers. PostToolUse formats Swift to this harness's style
+  /// rather than the team's, so it stays silent there.
+  static let brownfieldEvents: Set<HookEvent> = [.sessionStart, .preToolUse, .stop]
 
   private static func dispatch(
     _ event: HookEvent, _ payload: HookPayload, project: HookProject,
@@ -222,7 +222,10 @@ enum HookRunner {
       return .output(
         await PostToolUseHook.run(payload, root: root, dependencies: dependencies))
     case .stop:
-      return await StopHook.run(payload, root: root, dependencies: dependencies)
+      var brownfield = false
+      if case .brownfield = project { brownfield = true }
+      return await StopHook.run(
+        payload, root: root, dependencies: dependencies, brownfield: brownfield)
     }
   }
 }
