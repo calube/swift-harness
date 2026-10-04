@@ -95,6 +95,19 @@ extension ConfigLoader {
     }
   }
 
+  /// ``loadProfile(repositoryRoot:commonDir:)`` with the common dir of the git worktree holding
+  /// `repositoryRoot`; outside a git worktree only `.swiftgate.toml` can exist.
+  public func loadProfile(repositoryRoot: URL) throws(ProfileLoadError) -> LoadedConfig? {
+    if let common = Self.commonDirectory(enclosing: repositoryRoot) {
+      return try loadProfile(repositoryRoot: repositoryRoot, commonDir: common)
+    }
+    do {
+      return try load(repositoryRoot: repositoryRoot).map(LoadedConfig.owned)
+    } catch {
+      throw .config(error)
+    }
+  }
+
   /// The git common dir of the worktree at or above `directory`, from git's own pointer files;
   /// `nil` outside a git worktree.
   public static func commonDirectory(enclosing directory: URL) -> URL? {

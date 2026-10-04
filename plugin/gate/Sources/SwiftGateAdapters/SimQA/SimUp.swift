@@ -13,7 +13,7 @@ public struct SimUp: Sendable {
   public struct Request: Sendable {
     /// The worktree root: the holder's working directory and where the app container is found.
     public var worktree: URL
-    public var config: Config
+    public var target: SimTarget
     public var scenario: String?
     public var runID: String
     /// The run's `sim/` folder, created if missing.
@@ -24,16 +24,27 @@ public struct SimUp: Sendable {
     public var swiftgateExecutable: String
 
     public init(
-      worktree: URL, config: Config, scenario: String?, runID: String, simDirectory: URL,
+      worktree: URL, target: SimTarget, scenario: String?, runID: String, simDirectory: URL,
       derivedDataPath: String, swiftgateExecutable: String
     ) {
       self.worktree = worktree
-      self.config = config
+      self.target = target
       self.scenario = scenario
       self.runID = runID
       self.simDirectory = simDirectory
       self.derivedDataPath = derivedDataPath
       self.swiftgateExecutable = swiftgateExecutable
+    }
+
+    /// An owned repository's request, from its `.swiftgate.toml`.
+    public init(
+      worktree: URL, config: Config, scenario: String?, runID: String, simDirectory: URL,
+      derivedDataPath: String, swiftgateExecutable: String
+    ) {
+      self.init(
+        worktree: worktree, target: SimTarget(owned: config), scenario: scenario, runID: runID,
+        simDirectory: simDirectory, derivedDataPath: derivedDataPath,
+        swiftgateExecutable: swiftgateExecutable)
     }
   }
 
@@ -126,11 +137,11 @@ public struct SimUp: Sendable {
         installCommand: AgentDevicePin.installCommand)
     }
     if let failure = SimUpFailure.scenarioCheck(
-      request.scenario, declared: request.config.scenarios)
+      request.scenario, declared: request.target.scenarios)
     {
       throw failure
     }
-    let container = try Self.container(in: request.worktree)
+    let container = try Self.container(request.target.container, in: request.worktree)
     let startedAt = dependencies.now()
     let headCommit = try await head(runID: request.runID)
     let log = request.simDirectory.appending(path: SimSession.logFileName)
@@ -176,7 +187,7 @@ public struct SimUp: Sendable {
     // `xcodebuild` refuses to overwrite a result bundle.
     try? FileManager.default.removeItem(at: resultBundle)
     let build = AppBuild.Request(
-      container: container, scheme: request.config.appScheme,
+      container: container, scheme: request.target.scheme,
       derivedDataPath: request.derivedDataPath, resultBundlePath: resultBundle.path)
     let status: ExitStatus
     do {
@@ -188,7 +199,7 @@ public struct SimUp: Sendable {
       throw SimUpFailure(
         rule: .appBuildFailed,
         message:
-          "app scheme \(request.config.appScheme) failed to build (\(status)); read \(buildLog.path)",
+          "app scheme \(request.target.scheme) failed to build (\(status)); read \(buildLog.path)",
         runID: runID)
     }
 
@@ -225,7 +236,7 @@ public struct SimUp: Sendable {
       try record(session: session, runID: runID, log: log)
       let runtime = try await runtime(of: lease.udid, runID: runID)
       let file = SimSession(
-        agentDeviceVersion: version, udid: lease.udid, deviceType: request.config.simulator.device,
+        agentDeviceVersion: version, udid: lease.udid, deviceType: request.target.device,
         runtime: runtime, bundleID: app.bundleID, scenario: request.scenario,
         headCommit: headCommit, startedAt: startedAt)
       let path = request.simDirectory.appending(path: SimSession.fileName)
@@ -243,7 +254,25 @@ public struct SimUp: Sendable {
       runID: runID, udid: lease.udid, session: session, scenario: request.scenario)
   }
 
-  private static func container(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer {
+  private static func container(_ named: SimTarget.Container, in worktree: URL)
+    throws(SimUpFailure) -> XcodebuildContainer
+  {
+    let path: String
+    switch named {
+    case .worktreeRoot: return try rootContainer(in: worktree)
+    case .project(let relative), .workspace(let relative): path = relative
+    }
+    guard FileManager.default.fileExists(atPath: worktree.appending(path: path).path) else {
+      throw SimUpFailure(
+        rule: .appBuildFailed, message: "\(path), which the config names, is not in the worktree")
+    }
+    let absolute = worktree.appending(path: path).path
+    if case .workspace = named { return .workspace(path: absolute) }
+    return .project(path: absolute)
+  }
+
+  private static func rootContainer(in worktree: URL) throws(SimUpFailure) -> XcodebuildContainer
+  {
     let entries = (try? FileManager.default.contentsOfDirectory(atPath: worktree.path)) ?? []
     switch AppContainer.choose(among: entries) {
     case .failure(let error):
