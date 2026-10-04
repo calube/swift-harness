@@ -32,7 +32,12 @@ enum RunCheckoutRun {
     } catch {
       return context.report(.blocked, .blocked, "\(error)")
     }
-    return context.report(.created, .green, "created \(context.path) on \(context.branch)")
+    let installed = await WorktreeNodeInstall.run(worktree: context.path, dependencies: install)
+    var report = context.report(
+      .created, .green, "created \(context.path) on \(context.branch)" + installed.message)
+    report.installs = installed.installs.isEmpty ? nil : installed.installs
+    report.installNotes = installed.notes.isEmpty ? nil : installed.notes
+    return report
   }
 
   /// Copies the checkout's gate reports, and any events it kept itself, into the user's
@@ -173,7 +178,9 @@ struct RunCheckoutCreateCommand: AsyncParsableCommand {
     abstract: "Check out a brownfield plan's branch in the plan's own checkout.",
     discussion:
       "Adds the worktree build merge lands merges in, on the plan branch swift-harness/<plan>, "
-      + "and prints its path. Gates there write their events to the clone's shared store. Exits "
+      + "and prints its path, then installs each node area's dependencies there once, frozen to "
+      + "its lockfile; a failed install is a report line and leaves the checkout created. Gates "
+      + "there write their events to the clone's shared store. Exits "
       + "0 when created; 1 when this session doesn't hold the plan's lock, the checkout exists "
       + "or the plan branch doesn't; 2 for a missing --session, a clone that isn't brownfield, or "
       + "a failed git step.")
