@@ -2,7 +2,8 @@
 
 <!-- RESUME
 Status: APPROVED 2026-10-03: the user's 15 decisions in §3 (5 at drafting, 4 answers to the open questions, 6 from
-the mock review). §10 records the answered questions.
+the mock review). §10 records the answered questions. 2026-10-04: the user replaced §7's 1 page of regions with
+tabs (§3 decision 18).
 Why: a build run spreads across skills, workflows, worktrees and shell commands. Nobody can see it as 1 thing,
 either while it runs or after. Telemetry records most of it, but only as JSON lines and a text summary.
 Builds on: the telemetry store and its guard, `EventStoreReader`, `BuildJoinReader`, the ledger, and the brownfield
@@ -63,6 +64,7 @@ them how the harness works.
 | 15 | Does live mode show the plan's progress at a glance? | A kanban board: 1 card per task in the columns queued, building, gating, review and merged, plus a blocked or halted lane, derived from the ledger and events. A card shows the task id, its worker, elapsed time, the last gate verdict and the spec ids it covers. Cards move on the same 1 s poll. The report shows the final state. A trailing addition: it never blocks the report or the live view | user, 2026-10-03 |
 | 16 | How does the page show the plan's shape? | A dependency graph of the tasks, drawn as inline SVG with a layered layout, waves left to right, nodes coloured by state and edges for deps. Hovering or clicking a node opens the timeline's popover with the task's write set, spec ids and gate. No graph library. A trailing addition, like decision 15 | user, 2026-10-03 |
 | 17 | What opens from a board card or a graph node? | A task drawer that reads like an issue-tracker ticket: the title (the task's 1-line goal) with its id and status; Why, with the design § it implements; Scope; Acceptance (the tests that must fail first, and the gate); Out of scope; Properties (status, worker model, wave, spec ids as label chips, write set, created, merged, id); Links (blocked by and blocks, from the deps); Activity (worker start, gates with verdicts and rules, fixes, review, merge with commits); tool activity, collapsed at the bottom. Timeline bars keep the span popover | user, 2026-10-03 |
+| 18 | How does the page lay out its regions? | Tabs, in place of §7's 1 page of regions: Overview (header, stats, now strip, a row per task), Timeline, Board, Graph, Spec, Gates (gate runs and proof) and Tokens. The URL's bare `#token` picks a tab, Overview by default. Each label carries badges counted from the view, so state reads from any tab. A card, node or task row opens a task popover whose Open task opens the drawer of decision 17. A module adds a tab through `runViewer.addTab`; Validation comes that way with the QA work | user, 2026-10-04 |
 
 ## 4. Spans and proof: the data gap
 
@@ -202,6 +204,8 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
 - **Damage.** An unreadable file shows in `damage` and in the page footer, never as a silent gap.
 
 ## 7. Layout
+
+Decision 18 replaced this 1 page with tabs; the regions below are what each tab holds.
 
 ```
 +---------------------------------------------------------------+

@@ -86,7 +86,7 @@
     cards.clear();
     board.addEventListener("click", (e) => {
       const c = e.target.closest(".card");
-      if (c) runViewer.openTaskDrawer(c.dataset.task, c);
+      if (c) runViewer.openTaskPopover(c.dataset.task, c);
     });
   }
 
@@ -102,8 +102,8 @@
       cards.set(c.id, el);
     }
     el.style.setProperty("--c", `var(${laneColour[c.lane]})`);
-    el.setAttribute("aria-label", `${c.id}, ${c.lane}, ${c.model}, ${c.elapsed}, last gate ${c.lastGate || "none"}`);
-    el.innerHTML = `<span class="card-top"><span class="card-id">${esc(c.id)}</span><span class="chip plain">${esc(c.model)}</span></span>
+    el.setAttribute("aria-label", [c.id, c.lane, c.model, c.elapsed, `last gate ${c.lastGate || "none"}`].filter(Boolean).join(", "));
+    el.innerHTML = `<span class="card-top"><span class="card-id">${esc(c.id)}</span>${c.model ? `<span class="chip plain">${esc(c.model)}</span>` : ""}</span>
       <span class="card-meta"><span class="num">${esc(c.elapsed)}</span>${c.lastGate ? verdictChip(c.lastGate) : `<span class="chip plain">no gate yet</span>`}</span>
       <span class="tags">${c.covers.length ? c.covers.map((t) => `<span class="tag">${esc(t)}</span>`).join("") : `<span class="sub card-none">no spec id</span>`}</span>`;
     return el;

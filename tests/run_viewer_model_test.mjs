@@ -194,6 +194,77 @@ const tests = {
     assert.equal(cards[0].elapsedMs, 4 * 60000)
     assert.equal(cards[0].lastEventMs, Date.parse(at(4)))
   },
+
+  'latestGate picks the gate run whose span ended last, not the last gate record — catches a latest gate read in array order'() {
+    const gateRow = (runId, verdict) => ({ runId, task: 'a', command: 'check --tier push', verdict, ms: 60000, tests: null, ruleCounts: {}, steps: [] })
+    const view = runView({
+      tasks: [task('a'), task('b')],
+      spans: [
+        span('gate:g2', null, 'gate', 9, 10, { task: 'a', gateRun: 'g2', outcome: 'ok' }),
+        span('gate:g1', null, 'gate', 4, 5, { task: 'a', gateRun: 'g1', outcome: 'red' }),
+      ],
+      gates: [gateRow('g2', 'GREEN'), gateRow('g1', 'RED')],
+    })
+    assert.equal(M.latestGate(view, 'a')?.runId, 'g2')
+    assert.equal(M.latestGate(view, 'b'), null)
+  },
+
+  'tabBadges counts what each tab hides: failed spans, blocked tasks, RED gates and retries, unproven tests, uncovered requirements and pending tokens — catches a badge that drifts from the view'() {
+    const gateRow = (runId, taskID, verdict) => ({ runId, task: taskID, command: 'check --tier push', verdict, ms: 60000, tests: null, ruleCounts: {}, steps: [] })
+    const view = runView({
+      spec: [{ id: 'req-a', title: 'A', tasks: ['a'] }, { id: 'req-b', title: 'B', tasks: [] }],
+      tasks: [
+        task('a', { status: 'done', tokens: { input: 1, output: 1, cacheRead: 1, cacheWrite: 1 } }),
+        task('b', { status: 'blocked' }),
+        task('c', { status: 'in-progress' }),
+        task('d', { status: 'in-progress' }),
+        task('e', { status: 'pending' }),
+      ],
+      spans: [
+        span('run', null, 'run', 0, 40),
+        span('gate:g1', 'run', 'gate', 4, 5, { task: 'a', gateRun: 'g1', outcome: 'red' }),
+        span('tier:g1:T1', 'gate:g1', 'tier', 4, 5, { task: 'a', gateRun: 'g1', outcome: 'red' }),
+        span('step:g1:1', 'tier:g1:T1', 'step', 4, 5, { task: 'a', gateRun: 'g1', outcome: 'red' }),
+        span('gate:g2', 'run', 'gate', 6, 7, { task: 'a', gateRun: 'g2', outcome: 'ok' }),
+        span('gate:g3', 'run', 'gate', 8, 9, { task: 'a', gateRun: 'g3', outcome: 'ok' }),
+        span('gate:g4', 'run', 'gate', 1, 2, { task: 'b', gateRun: 'g4', outcome: 'ok' }),
+        span('t-b', 'run', 'task', 1, 12, { task: 'b', outcome: 'halted' }),
+        span('w-c', 'run', 'worker', 2, null, { task: 'c' }),
+      ],
+      gates: [gateRow('g3', 'a', 'GREEN'), gateRow('g1', 'a', 'RED'), gateRow('g2', 'a', 'GREEN'), gateRow('g4', 'b', 'GREEN')],
+      proofs: [
+        { gateRun: 'g2', task: 'a', test: 'A/one()', outcome: 'proven', proofBase: null, assertion: null },
+        { gateRun: 'g2', task: 'a', test: 'A/two()', outcome: 'passes-reverted', proofBase: null, assertion: null },
+      ],
+      halts: [{ task: 'd', reason: 'question', at: at(11), answer: null, waitMs: null }],
+    })
+    const counts = (badges) => Object.fromEntries(badges.map((b) => [b.key, b.n]))
+    const b = M.tabBadges(view, {})
+    assert.deepEqual(counts(b.overview), { halted: 1 })
+    // The RED gate counts once, not once per tier and step it holds.
+    assert.deepEqual(counts(b.timeline), { failed: 2, unended: 1 })
+    assert.deepEqual(counts(b.board), { blocked: 2, active: 1 })
+    assert.deepEqual(counts(b.graph), { merged: 1 })
+    assert.match(b.graph[0].text, /1\/5/)
+    assert.deepEqual(counts(b.spec), { uncovered: 1 })
+    // g2 and g3 ran after a's RED g1; b's single run is no retry.
+    assert.deepEqual(counts(b.gates), { red: 1, retries: 2, unproven: 1 })
+    assert.deepEqual(counts(b.tokens), { pending: 4 })
+    assert.equal(b.gates.find((x) => x.key === 'red').kind, 'bad')
+    for (const list of Object.values(b)) for (const badge of list) assert.ok(badge.n > 0, `${badge.key} shows a zero badge`)
+  },
+
+  'in live mode tabBadges counts stalled tasks against the clock and no open span as never ended — catches a live run read as a finished report'() {
+    const view = runView({
+      run: { id: 'run-1', plan: 'sample', preset: 'default', startedAt: at(0), endedAt: null, state: 'running' },
+      tasks: [task('quiet', { status: 'in-progress' })],
+      spans: [span('t-quiet', null, 'task', 1, null, { task: 'quiet' }), span('w-quiet', 't-quiet', 'worker', 2, null, { task: 'quiet' })],
+    })
+    const keys = (badges) => Object.fromEntries(badges.map((x) => [x.key, x.n]))
+    assert.deepEqual(keys(M.tabBadges(view, { now: Date.parse(at(20)), stallMin: 5 }).timeline), { stalled: 1 })
+    assert.deepEqual(keys(M.tabBadges(view, { now: Date.parse(at(4)), stallMin: 5 }).timeline), {})
+    assert.deepEqual(keys(M.tabBadges(view, { now: Date.parse(at(20)), stallMin: null }).timeline), {}, 'a stall counted with no stall_min')
+  },
 }
 
 let failed = 0
