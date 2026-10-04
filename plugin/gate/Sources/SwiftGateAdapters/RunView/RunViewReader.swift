@@ -211,28 +211,51 @@ public struct RunViewReader: RunViewReading {
   /// window holds its end: from the task's move to `in-progress` until it is `done` or
   /// `abandoned`, or open. A run inside no window, or inside more than 1, stays out: a store copied
   /// into the main checkout no longer says which task's worktree it came from.
+  ///
+  /// A fix window, from a task's `build merge --undo` until its next merge or its task's window
+  /// ends, wins over those: the task's fixer runs then, while every task still in progress beside
+  /// it holds the run too. A run inside more than 1 fix window stays out.
   static func workerGateRuns(
     _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>
   ) -> [String: String] {
-    var windows: [(task: String, start: Date, end: Date?)] = []
+    typealias Window = (task: String, start: Date, end: Date?)
+    var windows: [Window] = []
+    var fixes: [Window] = []
     for event in events {
-      guard case .transition(let move) = event else { continue }
-      if move.to == .inProgress, !windows.contains(where: { $0.task == move.task }) {
-        windows.append((move.task, move.at, nil))
-      } else if move.to == .done || move.to == .abandoned,
-        let index = windows.firstIndex(where: { $0.task == move.task && $0.end == nil })
-      {
-        windows[index].end = move.at
+      switch event {
+      case .transition(let move):
+        if move.to == .inProgress, !windows.contains(where: { $0.task == move.task }) {
+          windows.append((move.task, move.at, nil))
+        } else if move.to == .done || move.to == .abandoned,
+          let index = windows.firstIndex(where: { $0.task == move.task && $0.end == nil })
+        {
+          windows[index].end = move.at
+        }
+        if move.to == .done || move.to == .abandoned,
+          let index = fixes.firstIndex(where: { $0.task == move.task && $0.end == nil })
+        {
+          fixes[index].end = move.at
+        }
+      case .undo(let undo):
+        fixes.append((undo.task, undo.at, nil))
+      case .merge(let merge):
+        if let index = fixes.firstIndex(where: { $0.task == merge.task && $0.end == nil }) {
+          fixes[index].end = merge.at
+        }
+      case .gate:
+        continue
       }
+    }
+    func holding(_ windows: [Window], _ time: Date) -> [Window] {
+      windows.filter { $0.start <= time && $0.end.map { time <= $0 } ?? true }
     }
     var tasks: [String: String] = [:]
     for event in workerEvents {
       guard case .gateRun = event.payload, let runID = event.runID, !named.contains(runID)
       else { continue }
-      let holding = windows.filter {
-        $0.start <= event.time && $0.end.map { event.time <= $0 } ?? true
-      }
-      if holding.count == 1, let window = holding.first { tasks[runID] = window.task }
+      let fixing = holding(fixes, event.time)
+      let holds = fixing.isEmpty ? holding(windows, event.time) : fixing
+      if holds.count == 1, let window = holds.first { tasks[runID] = window.task }
     }
     return tasks
   }
