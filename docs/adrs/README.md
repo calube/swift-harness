@@ -12,5 +12,6 @@ number and title, never by number alone.
 | [0005](0005-simulator-qa-drives-agent-device.md) | Simulator QA drives agent-device |
 | [0006](0006-profiling-wraps-xctrace-report-only-first.md) | Profiling wraps xctrace, and reports before it blocks |
 | [0007](0007-jev-is-an-opt-in-second-judge-backend.md) | Jev is an opt-in second judge backend |
+| [0008](0008-simulator-qa-layered-validation.md) | Simulator QA validates in layers, and keeps flows in XCUITest |
 
 See [`../index.md`](../index.md) for the full doc router.
