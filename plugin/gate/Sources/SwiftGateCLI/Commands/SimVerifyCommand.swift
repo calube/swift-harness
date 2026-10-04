@@ -57,6 +57,11 @@ struct SimVerifyCommand: AsyncParsableCommand {
     if verdict != .green { throw ExitCode(verdict.exitCode) }
   }
 
+  /// The audit scope of a run `sim verify` judges with no flow, in the worktree at `root`.
+  static func audit(root: URL) -> SimAuditScope {
+    .everyControl
+  }
+
   /// What `sim verify` prints for `result`.
   static func output(_ result: Result<SimVerified, SimVerifyFailure>, json: Bool) -> String {
     switch result {
