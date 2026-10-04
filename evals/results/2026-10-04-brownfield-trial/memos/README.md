@@ -4,9 +4,9 @@ The first of the 3 brownfield trials (design §14). Repository `usememos/memos` 
 `0d989707f82c33f74bb852edd8965ec88fcf041b`, cloned fresh on 2026-10-04 under a `trials/` directory outside every
 harness checkout. The harness ran from this branch's `plugin/bin/swiftgate`.
 
-**Verdict: the one-shot run is BLOCKED.** `swiftgate run` prepared the clone and the orchestrator landed a GREEN
-contract commit, then the harness's own plan-state guard refused every write of `PLAN.md`. Nothing was imported,
-built, merged or gated at `final`. The other 3 measures pass, with the caveats below.
+**Verdict: the one-shot run BLOCKED.** `swiftgate run` prepared the clone and the orchestrator landed a GREEN
+contract commit, then the harness's own plan-state guard refused every write of `PLAN.md`. The run imported,
+built and merged nothing, and never reached `final`. Clone to first gate and the untouched-code findings pass; the `slice` p95 is inconclusive.
 
 ## Measures
 
@@ -35,8 +35,8 @@ Other numbers from the run:
 3. The orchestrator read the spec. It replaced the test commands with
    `discover --apply --set memos.test=DRIVER=sqlite go test ./...` (`discover.run` with `edited: 2`), regenerated
    the protos with `buf generate`, landed the contract commit and gated it at `slice`, which came back GREEN.
-4. It tried to write `<common>/swift-harness/plans/spec/PLAN.md` with the Write tool and was denied by
-   `guard.plan-state`. It tried a shell heredoc and was denied again. It tried `plan claim`, which requires
+4. It tried to write `<common>/swift-harness/plans/spec/PLAN.md` with the Write tool, and
+   `guard.plan-state` denied it. It tried a shell heredoc, and the guard denied that too. It tried `plan claim`, which requires
    `--design` or `--spec-page`, and neither fits a live plan. It then stopped and reported BLOCKED instead of
    working around the guard. Its draft plan is `PLAN-draft.md`: 3 tasks (store, API, web) and 9 assumptions.
 
@@ -54,7 +54,7 @@ Other numbers from the run:
    - Test: a prepared run's launched session id passes `EditGuard` for `plans/<slug>/PLAN.md`.
 2. **Brownfield gates write no `gate.run` events.** `gate.run`, which §14 names as its source, is absent. Only
    `discover.run` and `warmup.run` reach `events list` (`events.jsonl`, 6 events). This is the open item that
-   `brownfield-gates-record-and-judge` closes, so every gate measure here is read from `runs/history.jsonl`.
+   `brownfield-gates-record-and-judge` closes, so this README reads every gate measure from `runs/history.jsonl`.
 3. **Discover drops the `web/` area.** `web/pnpm-workspace.yaml` holds only pnpm settings (`allowBuilds`,
    `patchedDependencies`) and no `packages:` key.
    - In `SwiftGateDomain/Brownfield/Discover/Readers/NodeReader.swift`, `workspaceGlobs` returns `[]`, not `nil`,
@@ -62,7 +62,7 @@ Other numbers from the run:
    - Suggested fix: a `pnpm-workspace.yaml` with no `packages` list doesn't make a workspace root. Capture this
      repository's `web/` as a discover fixture.
    - Effect: the orchestrator planned the web task with hand-run `pnpm lint` and `pnpm test`, outside any gate.
-4. **CI env isn't mined.** CI sets `DRIVER: sqlite` at step level, and the found `go test ./...` without it makes
+4. **Discover doesn't mine CI env.** CI sets `DRIVER: sqlite` at step level, and the found `go test ./...` without it makes
    the store tests start MySQL and Postgres. The orchestrator fixed this through `--set`, as §11.2 intends.
    - Suggested fix: carry a job's `env:` into mined commands in `CICommandMining`.
 5. **The SessionStart context describes the owned profile in a brownfield clone.** It says "active in memos
@@ -93,7 +93,7 @@ Other numbers from the run:
   404s), and buf 1.73.0 for proto regeneration.
 - **Environment.** I exported `DRIVER=sqlite` into the run's environment, as the trial asks.
 - **Attempt 1.** I cleared attempt 1's plan dir and branch and stopped its warm-up before relaunching. Its partial
-  Go caches stayed under `.git/swift-harness/caches`, so attempt 2's warm-up isn't a fully cold start, though it
+  Go caches stayed under `.git/swift-harness/caches`, so attempt 2's warm-up isn't a true cold start, though it
   labels itself `cold`.
 - **No run past the blocker.** As the task asks, I didn't resume the session with `SWIFT_HARNESS_ORCHESTRATOR=1`.
 

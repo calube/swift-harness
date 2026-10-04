@@ -36,10 +36,12 @@ reason = "test doubles shared by the gate's own tests"
 managed_files = ["docs/index.md", "AGENTS.md"]
 # Plans, handoffs, agent prompts and skills are working files for agents, not reader docs: prose
 # and word budgets skip them, while links, ids and router reachability still cover them. Eval
-# cases and sessions are prompts too, and the corpora are deliberately bad inputs.
+# cases and sessions are prompts too, and the corpora are deliberately bad inputs. A trial's
+# spec and its orchestrator's plan are a run's input and output, kept byte for byte.
 prose_exclude = [
   "docs/plans/**", "docs/handoffs/**", "plugin/agents/**", "plugin/skills/**", "evals/cases/**",
   "evals/sessions/**", "evals/corpora/**", "plugin/gate/Tests/Fixtures/RunView/**",
+  "evals/results/*-brownfield-trial/*/spec.md", "evals/results/*-brownfield-trial/*/PLAN*.md",
 ]
 
 [[docs.banned_phrases]]
