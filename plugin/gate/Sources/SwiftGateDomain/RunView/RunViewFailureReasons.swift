@@ -42,6 +42,8 @@ public enum RunViewFailureReasons {
     switch (run.step, baseline) {
     case (.generate, _):
       return ("Project generation failed at the base commit.", false)
+    case (.install, _):
+      return ("Dependency install failed.", false)
     case (.build, .failed?), (.build, .failedTests?):
       return ("Base commit doesn't build; failure recorded as baseline.", true)
     case (.build, .passed?):
@@ -246,7 +248,7 @@ public enum RunViewWarmupBaselines {
         switch run.step {
         case .build: step = .build
         case .test: step = .test
-        case .generate: continue
+        case .generate, .install: continue
         }
         // The config may have changed the command since; records that disagree match none.
         let results = Set(

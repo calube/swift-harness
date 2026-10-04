@@ -76,6 +76,9 @@ struct RunViewFailureReasonTests {
       RunViewFailureReasons.warmup(warmupRun(.generate, .failed), baseline: nil).reason
         == "Project generation failed at the base commit.")
     #expect(
+      RunViewFailureReasons.warmup(warmupRun(.install, .failed), baseline: nil).reason
+        == "Dependency install failed.")
+    #expect(
       RunViewFailureReasons.warmup(warmupRun(.test, .dropped), baseline: nil).reason
         == "Step dropped before it ran.")
     #expect(
