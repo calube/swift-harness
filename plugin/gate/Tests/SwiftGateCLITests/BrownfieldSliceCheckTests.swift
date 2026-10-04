@@ -61,6 +61,9 @@ struct BrownfieldSliceCheckTests {
   private static func run(
     _ clone: Clone, areas: [BrownfieldArea], changes: [Change],
     runner: any AreaCommandRunning, warm: [String: Int] = [:],
+    history: [CommitTree] = [CommitTree(commit: "base0", tree: "tree0")],
+    warmByTree: [String: [String: Int]] = [:],
+    changedSince: [String: [String]] = [:],
     judge:
       @escaping @Sendable (AssertionCandidate, String) async
       -> BrownfieldSliceCheck.AssertionJudgement = { _, _ in .asserts },
@@ -86,8 +89,12 @@ struct BrownfieldSliceCheckTests {
         git: git, scratch: scratch, runner: runner,
         readFile: { known[clone.relative($0)] }, deadline: .seconds(5)),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      warmTestMilliseconds: { area, _ in warm[area.name] }, judgeAssertion: judge,
-      deadline: .seconds(5))
+      warmTestMilliseconds: { area, tree in
+        tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]
+      },
+      history: { _ in history },
+      changedBetween: { from, _ in changedSince[from] ?? [] },
+      judgeAssertion: judge, deadline: .seconds(5))
     return try await BrownfieldSliceCheck.run(
       root: clone.root, base: "main",
       context: context ?? GateRun.Context(runID: "run", directory: clone.base),
@@ -245,6 +252,90 @@ struct BrownfieldSliceCheckTests {
       buildOnly.first { $0.file == "cli" }?.message.contains("no warm-up") == true,
       "an unmeasured area says why it only builds")
     #expect(Self.verdict(parts) == .green)
+  }
+
+  /// A task branched from a plan branch: its merge base `base0` is a merge after the contract
+  /// `contract0`, and only the run's base `start0` was warmed.
+  private static let planHistory = [
+    CommitTree(commit: "base0", tree: "tree0"), CommitTree(commit: "contract0", tree: "tree1"),
+    CommitTree(commit: "start0", tree: "treeW"),
+  ]
+
+  @Test(
+    "a task slice whose merge base descends from the warmed tree runs an unchanged area's changed tests and their prove — catches a slice that finds the warm-up only at its exact merge-base tree"
+  )
+  func descendantReusesWarmup() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let scratch = clone.scratch.path(percentEncoded: false)
+    let runner = FakeAreaCommandRunner { request in
+      request.step == .testFiles && request.workingDirectory.hasPrefix(scratch)
+        ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: [Self.area("api"), Self.area("web")],
+      changes: [
+        Change(path: "api/src/load.py", text: "x = 1\n", added: [1...1]),
+        Change(
+          path: "api/tests/test_load.py", text: "def test_load():\n    assert load() == 2\n",
+          added: [2...2]),
+      ],
+      runner: runner, history: Self.planHistory, warmByTree: ["treeW": ["api": 1000]],
+      changedSince: ["start0": ["web/src/contract.ts"]], context: context)
+
+    #expect(
+      runner.requests.contains { $0.area == "api" && $0.step == .testFiles && !clone.inScratch($0) }
+    )
+    #expect(
+      context.proofs.results.map { "\($0.target) \($0.test) \($0.outcome.rawValue)" }
+        == ["api tests/test_load.py proven"])
+    #expect(!parts.findings.contains { $0.ruleID == BrownfieldRuleID.buildOnly.rawValue })
+    #expect(Self.verdict(parts) == .green)
+  }
+
+  @Test(
+    "an area changed since the warmed ancestor builds before its changed tests, and runs none when that build fails — catches stale warm state reused without bringing the area's build up to date"
+  )
+  func changedAreaBuildsFirst() async throws {
+    let changes = [
+      Change(path: "api/src/load.py", text: "x = 1\n", added: [1...1]),
+      Change(
+        path: "api/tests/test_load.py", text: "def test_load():\n    assert load() == 2\n",
+        added: [2...2]),
+    ]
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let scratch = clone.scratch.path(percentEncoded: false)
+    let passing = FakeAreaCommandRunner { request in
+      request.step == .testFiles && request.workingDirectory.hasPrefix(scratch)
+        ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
+    }
+
+    let built = try await Self.run(
+      clone, areas: [Self.area("api")], changes: changes, runner: passing,
+      history: Self.planHistory, warmByTree: ["treeW": ["api": 1000]],
+      changedSince: ["start0": ["api/src/contract.py"]])
+
+    let steps = passing.requests.filter { $0.area == "api" && !clone.inScratch($0) }.map(\.step)
+    #expect(steps.prefix(2) == [.build, .testFiles], "the build runs, then the changed tests")
+    #expect(Self.verdict(built) == .green)
+
+    let breaking = FakeAreaCommandRunner { request in
+      request.step == .build ? .failed(exit: 2, tail: "compile error", junit: nil) : .passed
+    }
+    let broken = try await Self.run(
+      clone, areas: [Self.area("api")], changes: changes, runner: breaking,
+      history: Self.planHistory, warmByTree: ["treeW": ["api": 1000]],
+      changedSince: ["start0": ["api/src/contract.py"]])
+
+    #expect(
+      !breaking.requests.contains { $0.step == .testFiles },
+      "a failed build leaves the warm-up's state behind, so no test runs on it")
+    let buildOnly = broken.findings.filter { $0.ruleID == BrownfieldRuleID.buildOnly.rawValue }
+    #expect(buildOnly.count == 1)
+    #expect(buildOnly.first?.message.contains("start0") == true, "\(buildOnly.map(\.message))")
   }
 
   /// Holds each command, yielding, until `expected` are in flight at once or it has yielded

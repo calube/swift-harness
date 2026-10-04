@@ -28,6 +28,11 @@ enum BrownfieldSliceCheck {
     /// The area's warm test time at the base tree `tree`, in milliseconds; `nil` when no warm-up
     /// measured it.
     let warmTestMilliseconds: @Sendable (_ area: BrownfieldArea, _ tree: String) async -> Int?
+    /// `commit`'s first-parent history with each tree, `commit` first, at most
+    /// ``WarmReuse/historyDepth`` entries.
+    let history: @Sendable (_ commit: String) async throws -> [CommitTree]
+    /// The paths that differ between 2 commits.
+    let changedBetween: @Sendable (_ from: String, _ to: String) async throws -> [String]
     /// The judge cascade for 1 candidate, given its file's text.
     let judgeAssertion:
       @Sendable (_ candidate: AssertionCandidate, _ source: String) async -> AssertionJudgement
@@ -50,9 +55,38 @@ enum BrownfieldSliceCheck {
         warmTestMilliseconds: { [layout = merge.layout] area, tree in
           WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?.testMilliseconds
         },
+        history: { commit in try await firstParentHistory(of: commit, root: root) },
+        changedBetween: { [git = merge.git] from, to in
+          try await git.changedFiles(from: from, to: to)
+        },
         judgeAssertion: BrownfieldJudge.assertionJudge(
           BrownfieldJudge.live(merge.config.judge, root: root)),
         deadline: liveDeadline)
+    }
+  }
+
+  /// `git log --first-parent` from `commit`, each line `<commit> <tree>`.
+  private static func firstParentHistory(of commit: String, root: URL) async throws
+    -> [CommitTree]
+  {
+    let output = try await LiveProcessRunner().run(
+      ProcessInvocation(
+        executable: "git",
+        arguments: [
+          "log", "--first-parent", "--format=%H %T", "-n", "\(WarmReuse.historyDepth)", commit,
+        ],
+        workingDirectory: root.path(percentEncoded: false), timeout: .seconds(60)))
+    guard output.status.isSuccess else {
+      throw BrownfieldCheckSetupError(
+        reason: "git log --first-parent \(commit): \(output.stderr.text)")
+    }
+    return try output.stdout.text.split(separator: "\n").map { line in
+      let fields = line.split(separator: " ")
+      guard fields.count == 2 else {
+        throw BrownfieldCheckSetupError(
+          reason: "git log --first-parent \(commit) printed `\(line)`, not a commit and a tree")
+      }
+      return CommitTree(commit: String(fields[0]), tree: String(fields[1]))
     }
   }
 
@@ -115,6 +149,12 @@ enum BrownfieldSliceCheck {
     var findings: [Finding] = []
     var runs: [StepRun] = []
     var blocked = false
+
+    mutating func add(_ other: AreaResult) {
+      findings += other.findings
+      runs += other.runs
+      blocked = blocked || other.blocked
+    }
   }
 
   /// The change as the steps see it: what it touched since the merge base.
@@ -173,12 +213,14 @@ enum BrownfieldSliceCheck {
       return blocked("can't read the merge base \(mergeBase): \(error)")
     }
 
+    let (warm, warmNotes) = await warmTimes(touched, change: change, dependencies: dependencies)
+    outcome.findings += warmNotes
     let results = await withTaskGroup(of: AreaResult.self) { group in
       for area in touched {
         group.addTask {
           await run(
-            area, change: change, root: root, base: base, context: context,
-            dependencies: dependencies)
+            area, warm: warm[area.name] ?? .unmeasured, change: change, root: root, base: base,
+            context: context, dependencies: dependencies)
         }
       }
       var all: [AreaResult] = []
@@ -230,11 +272,37 @@ enum BrownfieldSliceCheck {
     return outcome
   }
 
+  /// Each touched area's warm test time, from the nearest warm-up on the merge base's
+  /// first-parent history: a task branched from a plan branch sits on its contract or a merge,
+  /// which no warm-up measured.
+  private static func warmTimes(
+    _ touched: [BrownfieldArea], change: Change, dependencies: Dependencies
+  ) async -> (times: [String: WarmTestTime], notes: [Finding]) {
+    var notes: [Finding] = []
+    let history: [CommitTree]
+    do {
+      history = try await dependencies.history(change.mergeBase)
+    } catch {
+      history = [CommitTree(commit: change.mergeBase, tree: change.tree)]
+      notes += note(
+        "can't read the first-parent history of \(change.mergeBase), so only a warm-up at its own "
+          + "tree counts: \(error)")
+    }
+    let areas = dependencies.config.areas
+    let resolution = await WarmReuse.resolve(
+      touched, mergeBase: change.mergeBase, history: history,
+      owner: { BrownfieldMergeCheck.owner(of: $0, in: areas)?.name },
+      warmTest: dependencies.warmTestMilliseconds, changed: dependencies.changedBetween)
+    return (resolution.times, notes + resolution.notes.flatMap { note($0) })
+  }
+
   /// 1 touched area: the neutral rules, Xcode membership and lint on its changed files, then its
-  /// changed tests and their prove when a warm test run fits the budget, else its build.
+  /// changed tests and their prove when a warm test run fits the budget, else its build. An area
+  /// changed since the warm-up that measured it builds first, so its tests never run on caches
+  /// the warm-up left behind its code.
   private static func run(
-    _ area: BrownfieldArea, change: Change, root: URL, base: String, context: GateRun.Context,
-    dependencies: Dependencies
+    _ area: BrownfieldArea, warm: WarmTestTime, change: Change, root: URL, base: String,
+    context: GateRun.Context, dependencies: Dependencies
   ) async -> AreaResult {
     let areas = dependencies.config.areas
     let added = change.added.filter {
@@ -273,41 +341,76 @@ enum BrownfieldSliceCheck {
     }
 
     let budget = dependencies.config.brownfield.sliceBudgetSeconds * 1000
-    let warm = await dependencies.warmTestMilliseconds(area, change.tree)
-    if let warm, warm <= budget {
-      let tests = await tests(
-        area, change: change, root: root, base: base, context: context,
-        dependencies: dependencies)
-      result.findings += tests.findings
-      result.runs += tests.runs
-      result.blocked = result.blocked || tests.blocked
+    let why: String
+    switch warm {
+    case .current(let milliseconds, _) where milliseconds <= budget:
+      result.add(
+        await tests(
+          area, change: change, root: root, base: base, context: context,
+          dependencies: dependencies))
+      return result
+    case .stale(let milliseconds, let at, _) where milliseconds <= budget:
+      guard let build = await build(area, root: root, context: context, dependencies: dependencies)
+      else {
+        result.findings += buildOnly(
+          area,
+          because: "its files changed since the warm-up at \(at.commit) measured its tests, and it "
+            + "has no build command to bring its build up to date")
+        result.findings += stepDropped(area)
+        return result
+      }
+      result.runs.append(build.run)
+      if build.run.outcome != .passed {
+        why =
+          "its build failed, and its files changed since the warm-up at \(at.commit) measured its "
+          + "tests, so no test runs on the stale build"
+      } else if build.milliseconds + milliseconds > budget {
+        why =
+          "its build took \(seconds(build.milliseconds)) s and its warm test run, measured at "
+          + "\(at.commit) before its files changed, takes \(seconds(milliseconds)) s: together "
+          + "over the \(budget / 1000) s slice budget"
+      } else {
+        result.add(
+          await tests(
+            area, change: change, root: root, base: base, context: context,
+            dependencies: dependencies))
+        return result
+      }
+      result.findings += buildOnly(area, because: why)
+      return result
+    case .current(let milliseconds, let at), .stale(let milliseconds, let at, _):
+      let measured = at.commit == change.mergeBase ? "" : ", measured at \(at.commit),"
+      why =
+        "its warm test run\(measured) takes \(seconds(milliseconds)) s, over the "
+        + "\(budget / 1000) s slice budget"
+    case .unmeasured:
+      why =
+        "no warm-up on the first-parent history of the merge base \(change.mergeBase) measured "
+        + "its tests"
+    }
+    result.findings += buildOnly(area, because: why)
+    if let build = await build(area, root: root, context: context, dependencies: dependencies) {
+      result.runs.append(build.run)
     } else {
-      let why =
-        warm.map {
-          "its warm test run takes \(seconds($0)) s, over the \(budget / 1000) s slice budget"
-        }
-        ?? "no warm-up measured its tests at the base tree \(change.tree)"
-      if let finding = try? Finding(
-        ruleID: BrownfieldRuleID.buildOnly.rawValue, severity: .nit, file: area.root, line: nil,
-        message:
-          "\(area.name): \(why), so slice only builds it; its changed tests and their prove run "
-          + "at merge",
-        failureScenario: nil)
-      {
-        result.findings.append(finding)
-      }
-      if let build = await build(area, root: root, context: context, dependencies: dependencies) {
-        result.runs.append(build)
-      } else if let dropped = try? Finding(
-        ruleID: BrownfieldRuleID.stepDropped.rawValue, severity: .nit, file: area.root,
-        line: nil,
-        message: "\(area.name) has no build command, so slice runs nothing for it",
-        failureScenario: nil)
-      {
-        result.findings.append(dropped)
-      }
+      result.findings += stepDropped(area)
     }
     return result
+  }
+
+  private static func buildOnly(_ area: BrownfieldArea, because why: String) -> [Finding] {
+    (try? Finding(
+      ruleID: BrownfieldRuleID.buildOnly.rawValue, severity: .nit, file: area.root, line: nil,
+      message:
+        "\(area.name): \(why), so slice only builds it; its changed tests and their prove run "
+        + "at merge",
+      failureScenario: nil)).map { [$0] } ?? []
+  }
+
+  private static func stepDropped(_ area: BrownfieldArea) -> [Finding] {
+    (try? Finding(
+      ruleID: BrownfieldRuleID.stepDropped.rawValue, severity: .nit, file: area.root, line: nil,
+      message: "\(area.name) has no build command, so slice runs nothing for it",
+      failureScenario: nil)).map { [$0] } ?? []
   }
 
   /// The neutral rules over `added`, with each judge candidate sent through the cascade.
@@ -419,10 +522,10 @@ enum BrownfieldSliceCheck {
     return result
   }
 
-  /// The area's `build`; `nil` when it has none.
+  /// The area's `build` and how long it took; `nil` when it has none.
   private static func build(
     _ area: BrownfieldArea, root: URL, context: GateRun.Context, dependencies: Dependencies
-  ) async -> StepRun? {
+  ) async -> (run: StepRun, milliseconds: Int)? {
     guard let template = area.build,
       let prepared = prepare(
         area, step: .build, repositoryRoot: root.path(percentEncoded: false), files: [],
@@ -434,11 +537,12 @@ enum BrownfieldSliceCheck {
     context.steps.record(
       .areaBuild, tier: nil, milliseconds: milliseconds,
       verdict: outcome == .passed ? .green : .red, area: area.name)
-    return StepRun(
+    let run = StepRun(
       area: area, step: .build, template: template, selection: [], outcome: outcome,
       rerun: { scratch in
         rerunRequest(area, step: .build, scratch: scratch, files: [], dependencies: dependencies)
       }, lintUnread: false)
+    return (run, milliseconds)
   }
 
   /// The area's changed tests at the head, then their prove.
