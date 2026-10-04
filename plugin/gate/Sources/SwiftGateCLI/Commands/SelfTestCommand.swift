@@ -408,6 +408,7 @@ private enum SeedFamily: String, Sendable {
   case buildCheckReturn = "build-check-return"
   case buildMerge = "build-merge"
   case buildPresets = "build-presets"
+  case simVerify = "sim-verify"
 
   func run(caseDirectory: URL, harnessRoot: URL, buildChecks: BuildSeedChecks) async
     -> SeedRunOutcome
@@ -432,6 +433,7 @@ private enum SeedFamily: String, Sendable {
       await BuildSeedRunners.merge(caseDirectory: caseDirectory, checks: buildChecks)
     case .buildPresets:
       BuildSeedRunners.presets(caseDirectory: caseDirectory, checks: buildChecks)
+    case .simVerify: SeedRunners.simVerify(caseDirectory: caseDirectory)
     }
   }
 }
@@ -890,6 +892,24 @@ private enum SeedRunners {
     case .checked(let result):
       return .ruleIDs(Set(result.findings.filter(\.severity.failsGate).map(\.ruleID)))
     }
+  }
+
+  // MARK: sim verify
+
+  /// `sim verify`'s evidence rules over the case's `sim/` folder, a real run's, read in place.
+  /// No checkout HEAD is read, so `sim.stale-head` isn't judged.
+  static func simVerify(caseDirectory: URL) -> SeedRunOutcome {
+    let evidence: SimEvidence
+    do throws(SimRunStoreError) {
+      evidence = try SimVerify.evidence(
+        runID: caseDirectory.lastPathComponent,
+        simDirectory: caseDirectory.appending(
+          path: SimSession.directoryName, directoryHint: .isDirectory))
+    } catch {
+      return .blocked(error.message)
+    }
+    return .ruleIDs(
+      Set(SimEvidenceRules.findings(evidence, checkoutHead: nil).map(\.rule.rawValue)))
   }
 
   // MARK: comments

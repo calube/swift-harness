@@ -282,6 +282,40 @@ Observed behavior the adapter relies on:
   `Keyboard` and `Key`, and any other type as `Element(<raw value>)`. The snapshot engine in
   `dist/src/ios-snapshot-engine.js` also rewrites some `Other` nodes to `Heading`.
 
+### AgentDevice/seeded
+
+Two real `sim up` and `sim snap` runs against `examples/SampleApp` on 2026-10-04, with `agent-device`
+0.21.18 on a clone `sim up` made from the configured iPhone 17 (iOS 26.2). The seeded run had this
+local diff applied to `Packages/CounterFeature/Sources/CounterUI/CounterView.swift`, below the
+`counter.fact` button; it was never committed, and `git checkout -- Packages` removed it after the
+capture:
+
+```swift
+      Button("Share") {}
+
+      Button {} label: { Circle().frame(width: 44, height: 44) }
+        .accessibilityIdentifier("counter.dot")
+```
+
+The clean run used the app as committed. Each run, from `examples/SampleApp`, with the worktree's
+`swift build --product swiftgate`:
+
+```
+../../plugin/gate/.build/debug/swiftgate sim up --json
+../../plugin/gate/.build/debug/swiftgate sim snap "counter screen" --assert "Cat fact" --json
+agent-device close --udid <udid> --session <session> --json
+rm <lock dir>/sim-leases/<runID>.json
+```
+
+Removing the lease makes the holder delete the clone and free its slot. Nothing was scrubbed: no
+file holds a local path.
+
+| Files | From |
+|---|---|
+| `AgentDevice/seeded/unlabeled-controls.tree.json` | the seeded run's `sim/steps/001.tree.json`: a `Button` labelled `Share` with no identifier, and a `Button` with identifier `counter.dot` and no label |
+| `AgentDevice/seeded/clean.tree.json` | the clean run's `sim/steps/001.tree.json` |
+| `gate/Fixtures/seeds/sim-verify/unlabeled-controls/sim/`, `gate/Fixtures/seeds/sim-verify/valid/sim/` | each run's `session.json`, `steps.ndjson`, `steps/001.png` and `steps/001.tree.json`, unmodified |
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's

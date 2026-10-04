@@ -11,6 +11,10 @@ public enum SimEvidenceRule: String, Sendable, Equatable, CaseIterable {
   case assertAbsent = "sim.assert-absent"
   /// The checkout's HEAD isn't the commit `sim up` built.
   case staleHead = "sim.stale-head"
+  /// An interactive element in a step's tree has no accessibility identifier.
+  case a11yIdentifier = "sim.a11y-identifier"
+  /// An interactive element in a step's tree has no readable label.
+  case a11yLabel = "sim.a11y-label"
 
   public var verdict: Verdict { .red }
 }
@@ -154,6 +158,7 @@ public enum SimEvidenceRules {
           rule: .assertAbsent, step: step.n, path: step.tree,
           message: "\(name): no element's label or value is \"\(assert)\" in \(step.tree)"))
     }
+    findings += SimAccessibilityRules.findings(tree, step: step)
     return findings
   }
 }

@@ -131,14 +131,27 @@ public struct SimVerify: Sendable {
   private func judge(runID: String, store: SimRunStore, checkoutHead: SimCheckoutHead)
     -> SimVerifyReport
   {
-    let session: SimSession
-    let steps: [SimStep]
-    do {
-      session = try store.session()
-      steps = try store.steps()
+    do throws(SimRunStoreError) {
+      return .judged(
+        try Self.evidence(runID: runID, store: store), checkoutHead: checkoutHead)
     } catch {
       return .unreadable(runID: runID, reason: error.message, checkoutHead: checkoutHead)
     }
+  }
+
+  /// The run's `sim/` folder at `simDirectory`, loaded: its session, its step log, and each file
+  /// a step names inside the folder. A file that isn't on disk has no entry.
+  public static func evidence(runID: String, simDirectory: URL) throws(SimRunStoreError)
+    -> SimEvidence
+  {
+    try evidence(runID: runID, store: SimRunStore(simDirectory: simDirectory))
+  }
+
+  private static func evidence(runID: String, store: SimRunStore) throws(SimRunStoreError)
+    -> SimEvidence
+  {
+    let session = try store.session()
+    let steps = try store.steps()
     var files: [String: SimEvidenceFile] = [:]
     for path in steps.flatMap({ [$0.screenshot, $0.tree] }) where SimEvidence.isInsideRun(path) {
       do {
@@ -149,9 +162,7 @@ public struct SimVerify: Sendable {
         files[path] = .unreadable(error.localizedDescription)
       }
     }
-    return .judged(
-      SimEvidence(runID: runID, session: session, steps: steps, files: files),
-      checkoutHead: checkoutHead)
+    return SimEvidence(runID: runID, session: session, steps: steps, files: files)
   }
 
   /// Writes `sim/report.json` and appends the history line; returns 1 line per failure. The run's
