@@ -90,10 +90,14 @@ const SHA = /^[0-9a-f]{7,40}$/
 const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/
 // A build run id goes into a shell command, so only id characters pass.
 const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+// The span id `swiftgate events span start` prints: 16 lowercase hex, never wrapped in quotes.
+const SPAN_ID = /^[0-9a-f]{16}$/
 // Every stage agent returns the id of the span it opened; the workflow strips it from what it keeps.
+// The pattern makes the runtime send a quoted id back to the agent, as it does a quoted commit sha.
 const SPAN_PROPERTY = {
   type: ['string', 'null'],
-  description: 'the span id `events span start` printed; null when it printed nothing or failed',
+  pattern: SPAN_ID.source,
+  description: 'the span id `events span start` printed, as 16 hex characters with no quotes; null when it printed nothing or failed',
 }
 
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
@@ -601,7 +605,6 @@ const failure = error => (error && error.message ? error.message : String(error)
 // first and `end` last, from the 2 lines its prompt carries, and returns the span id it got. The
 // workflow spawns no agent for a span, and a span never decides a task: a stage with no usable
 // id is logged, and the next stage starts without a parent.
-const SPAN_ID = /^[0-9a-f]{16}$/
 // How each stage ends its own span, from what it returns.
 const SPAN_END_RULES = {
   worker: '`ok` when you return ready-to-merge, `red` when you return gate-red, and `abandoned` when you return design-conflict',
@@ -725,10 +728,13 @@ const gateFinding = gate =>
 const DIFF_RISK_COMMAND = `cd ${A.worktree} && ${SG} judge diff-risk --base ${A.base} --json`
 const DIFF_RISK_SCHEMA = {
   type: 'object',
-  required: ['level', 'reason', 'exitStatus'],
+  required: ['level', 'by', 'path', 'glob', 'reason', 'exitStatus'],
   additionalProperties: false,
   properties: {
     level: { type: ['string', 'null'], enum: [...DIFF_RISK_LEVELS, null], description: 'the "level" the command printed' },
+    by: { type: ['string', 'null'], enum: ['judge', 'sensitive', null], description: 'the "by" it printed; null without a level' },
+    path: { type: ['string', 'null'], description: 'the "path" it printed with "by": "sensitive"; else null' },
+    glob: { type: ['string', 'null'], description: 'the "glob" it printed with "by": "sensitive"; else null' },
     reason: { type: ['string', 'null'], description: 'the "reason" it printed, or what went wrong running it; null with a level' },
     exitStatus: { type: 'integer', description: "the command's exit status" },
   },
@@ -736,24 +742,29 @@ const DIFF_RISK_SCHEMA = {
 let classified = null
 async function classify() {
   if (A.review !== 'classified' || classified) return classified
-  // `swiftgate run report` reads both notes' wording back to name each task's depth and why.
+  // `swiftgate run report` reads each note's wording back to name each task's depth and what set it.
   const fallback = why => ({ level: 'medium', note: `review: classified at medium, because diff-risk gave no level (${why})` })
   let answer
   try {
     answer = await agent(
       'Run exactly this command once and report what it printed; change nothing, run nothing else:\n' +
         `${DIFF_RISK_COMMAND}\n` +
-        'It prints 1 JSON object with "level" (low, medium, high or null) and, without a level, "reason". ' +
-        'Return its level, its reason and the exit status. If it fails to run or prints something else, ' +
-        'return level null and the error as reason.',
+        'It prints 1 JSON object with "level" (low, medium, high or null), "by" ("judge" or "sensitive") with a level, ' +
+        '"path" and "glob" when "by" is "sensitive", and "reason" without a level. ' +
+        'Return its level, by, path, glob and reason (null for any it left out) and the exit status. ' +
+        'If it fails to run or prints something else, return level null and the error as reason.',
       { agentType: CLASSIFIER_AGENT, model: CLASSIFIED_REVIEWER_MODEL, effort: 'low', label: `diff-risk:${A.task}`, phase: 'Review', schema: DIFF_RISK_SCHEMA },
     )
   } catch (error) {
     answer = { level: null, reason: `the diff-risk agent failed: ${failure(error)}`, exitStatus: -1 }
   }
   if (!answer || typeof answer !== 'object') classified = fallback('the diff-risk agent returned nothing')
-  else if (DIFF_RISK_LEVELS.includes(answer.level) && answer.exitStatus === 0) {
+  else if (DIFF_RISK_LEVELS.includes(answer.level) && answer.exitStatus === 0 && answer.by === 'judge') {
     classified = { level: answer.level, note: `review: classified at ${answer.level} by swiftgate judge diff-risk` }
+  } else if (answer.level === 'high' && answer.exitStatus === 0 && answer.by === 'sensitive' && nonEmptyString(answer.path) && nonEmptyString(answer.glob)) {
+    classified = { level: 'high', note: `review: classified at high because the sensitive glob ${answer.glob} matches ${answer.path}` }
+  } else if (DIFF_RISK_LEVELS.includes(answer.level) && answer.exitStatus === 0) {
+    classified = fallback(`it rated ${answer.level} but named its source as ${JSON.stringify(answer.by)}`)
   } else classified = fallback(answer.reason || `exit ${answer.exitStatus}, level ${JSON.stringify(answer.level)}`)
   log(classified.note)
   return classified

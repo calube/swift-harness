@@ -2272,6 +2272,27 @@ for line in open(sys.argv[1]):
 
 `grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-4/*` matched nothing.
 
+## Build returns: classified reviews diff-risk rated
+
+`BuildReturn/memos-5/share-view-limit-{store,web,api}.json` are the 3 task returns the fifth brownfield trial on
+`usememos/memos` got from its `build-task` workflows. Each return's `notes` end with the workflow's line
+`review: classified at <level> by swiftgate judge diff-risk`: `high`, `medium` and `high`. Each is the `result` of
+1 line of the trial's committed `worker-journals.jsonl`. From this directory:
+
+```sh
+J=../../../../evals/results/2026-10-04-brownfield-trial/memos-5/worker-journals.jsonl
+mkdir -p BuildReturn/memos-5
+python3 -c "
+import json,sys
+for line in open(sys.argv[1]):
+    r=json.loads(line)['result']
+    r=r if isinstance(r,str) else json.dumps(r)
+    open('BuildReturn/memos-5/'+json.loads(r)['task']+'.json','w').write(r)
+" $J
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
+
 ## Brownfield trial: a contract landed before import
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
