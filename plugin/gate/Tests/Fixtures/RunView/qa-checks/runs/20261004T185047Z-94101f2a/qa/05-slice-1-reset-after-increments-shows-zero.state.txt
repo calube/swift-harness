@@ -1,0 +1,8 @@
+$ reset.state.sh
+QA_PORT=62318
+exit: 0
+--- stdout ---
+count is 0
+
+--- stderr ---
+

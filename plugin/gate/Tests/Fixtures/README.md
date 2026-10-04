@@ -2124,6 +2124,45 @@ unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
 matched nothing.
 
+## Run view: validation rows
+
+`RunView/qa-checks/` is a real `swiftgate qa run` sequence over a 5-row validation table, for the
+run view's Validation tab, its reader and the report. The table names the plan and tasks of
+`RunView/build-run-1/`, and its ledger is that run's, so a test seeds that plan state beside it:
+`counter-core-reset-and-decrement-floor` and `counter-ui-reset-button` are `done`, and
+`counter-ui-reset-button-snapshot` is `abandoned`. Captured 2026-10-04 from a `swiftgate` debug
+build of this commit's sources, in a `mktemp -d` copy of `examples/SampleApp`, whose
+`.swiftgate.toml` loads, so telemetry writes the `qa` stream. From `plugin/gate` after
+`swift build`, with `<harness>` this checkout:
+
+```sh
+SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1
+T=$(mktemp -d) && cd $T && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null
+rsync -a --exclude .build --exclude .harness --exclude DerivedData <harness>/examples/SampleApp/ app/ && cd app
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
+mkdir -p $P && cp $F/ledger.json $P/ledger.json
+cp <fixtures>/RunView/qa-checks/validation.json $P/validation.json
+printf 'echo "count file missing" >&2\nexit 1\n' > $P/floor.state.sh
+printf 'echo "count is 0"\n' > $P/reset.state.sh
+$SG qa run --at-base      # exit 1, RED: 1 pass, 3 red, 1 unverified
+sleep 1; $SG qa run       # exit 1, RED: 1 pass, 1 red, 2 unverified, 1 waiting
+sleep 1; $SG qa run --after counter-core-reset-and-decrement-floor   # exit 0, GREEN: 1 pass, 1 waiting
+cp .harness/events/qa.jsonl <fixtures>/RunView/qa-checks/events/qa.jsonl
+for r in .harness/runs/*/; do mkdir -p <fixtures>/RunView/qa-checks/runs/$(basename $r); cp -R $r/qa <fixtures>/RunView/qa-checks/runs/$(basename $r)/; done
+```
+
+`validation.json` was written by hand as the capture's input, the way a plan's validation task
+writes it; everything else is `qa run`'s output, unedited. Row 1's check, `/bin/test -d .git`,
+starts with `/`, so the run view's payload guard rejects it; it fails at the merge base, where
+`.git` is a file. Row 2 always exits 1, so its saved output carries the failure. Row 3 is a flow
+row, which reads `unverified` until the flow runner exists. Row 4 runs after the abandoned task, so
+it reads `waiting` on it. Row 5 reads `unverified` behind row 2. The copy leaves out each run's
+`events/qa.jsonl`, which repeats its lines of the main stream.
+`grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/qa-checks`
+matched nothing.
+
 ## Run report: a run that left tasks unfinished
 
 `RunReport/memos-2/{ledger.json,build-events.jsonl}` are the final `ledger.json` and the build run's

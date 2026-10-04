@@ -1,0 +1,57 @@
+{
+  "after" : "counter-core-reset-and-decrement-floor",
+  "atBase" : false,
+  "commit" : "bc2474c1d23a1642f65c269504d1c73e066733c8",
+  "findings" : [
+
+  ],
+  "message" : "2 rows: 1 pass, 0 red, 0 unverified, 1 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "2026-10-03-counter-reset-and-floor",
+  "rows" : [
+    {
+      "check" : "/bin/test -d .git",
+      "evidence" : [
+        "qa/01-slice-2-decrement-at-zero-stays-zero.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 3,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "floor.state.sh",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "state",
+      "message" : "waiting on counter-ui-reset-button-snapshot",
+      "ms" : 0,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor",
+        "counter-ui-reset-button-snapshot"
+      ],
+      "waitingOn" : [
+        "counter-ui-reset-button-snapshot"
+      ]
+    }
+  ],
+  "runID" : "20261004T185049Z-a14503a3",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}
