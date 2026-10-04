@@ -790,3 +790,12 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `sim.driver-failed` | simulator QA §9; `agent-device open <bundle id> --udid <udid> --session <session> --launch-args -harness-scenario --launch-args <name> --json` failed, such as `DEVICE_IN_USE` or an unknown device. BLOCKED (exit 3), with the failure appended to `sim/agent-device.log`. After any failure once the holder has started, `sim up` removes the run's lease, so the holder frees the device and the slot. In `sim snap`, any `snapshot` or `screenshot` failure but an unknown device is this rule too, and writes no step |
 | `sim.not-owner` | simulator QA §4, §7.5; `swiftgate sim snap <label> [--assert "<text>"] [<runID>] [--json]` names a run whose lease belongs to another worktree. RED (exit 1), naming that worktree, before any device call or write. Without `<runID>`, `snap` takes this worktree's newest lease whose holder is alive |
 | `sim.session-gone` | simulator QA §4, §5.1; `sim snap` found no lease for the run (or, without `<runID>`, no live lease of this worktree), a holder that has exited, a lease with no session yet, or `agent-device` reported the device unknown (`DEVICE_NOT_FOUND`). RED (exit 1). It writes no step line and leaves no PNG or tree behind. A snap that passes appends 1 line to `sim/steps.ndjson` (`n`, `label`, `assert` only when given, `screenshot`, `tree`, `settled` only when both snapshots parse, `elapsedMs`) and writes `steps/<NNN>.png` and the `snapshot --json` bytes unmodified as `steps/<NNN>.tree.json` |
+
+### Simulator QA evidence ([`sim verify`](simulator-qa.md#sim-verify))
+
+| Rule id | Section |
+|---|---|
+| `sim.no-steps` | simulator QA §5.2; the run's step log holds no step (major) |
+| `sim.evidence-missing` | simulator QA §5.2; a step names a screenshot or tree that isn't on disk, is empty, can't be read, lies outside the run's `sim/` folder, or a tree that doesn't parse or holds a role the pin can't name (major). The message names the step, the file and why |
+| `sim.assert-absent` | simulator QA §5.2; no element's label or value in the step's tree equals its `--assert` text (major) |
+| `sim.stale-head` | simulator QA §5.2; the checkout's HEAD isn't the commit `sim up` recorded (major), naming both |
