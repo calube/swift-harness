@@ -105,9 +105,29 @@ public enum RunLaunch {
       + "Plan branch: \(planBranch)."
   }
 
-  /// `claude`'s argv: the clone's hook settings, the pinned model, the prompt, then `extra`
-  /// unchanged. The prompt comes before `extra` so a variadic option there can't swallow it.
-  public static func arguments(settings: String, prompt: String, extra: [String]) -> [String] {
-    ["--settings", settings, "--model", model, prompt] + extra
+  /// Options that would start `claude` under a session id other than the one `run` minted, so
+  /// the session would no longer hold the plan's lock.
+  public static let sessionOptions: Set<String> = [
+    "--session-id", "--resume", "-r", "--continue", "-c", "--fork-session",
+  ]
+
+  /// The first of `extra`'s options that ``sessionOptions`` names, as `--name` or `--name=value`.
+  /// Arguments after `--` are positional, so none of them counts.
+  public static func conflictingOption(in extra: [String]) -> String? {
+    for argument in extra {
+      if argument == "--" { return nil }
+      let name = argument.split(separator: "=", maxSplits: 1).first.map(String.init) ?? argument
+      if sessionOptions.contains(name) { return name }
+    }
+    return nil
+  }
+
+  /// `claude`'s argv: the clone's hook settings, the pinned model, the session id the plan's lock
+  /// holds, the prompt, then `extra` unchanged. The prompt comes before `extra` so a variadic
+  /// option there can't swallow it.
+  public static func arguments(
+    settings: String, session: String, prompt: String, extra: [String]
+  ) -> [String] {
+    ["--settings", settings, "--model", model, "--session-id", session, prompt] + extra
   }
 }
