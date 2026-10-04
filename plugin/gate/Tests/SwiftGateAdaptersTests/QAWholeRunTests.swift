@@ -9,8 +9,7 @@ import Testing
 struct QAWholeRunTests {
   /// A runs folder holding each captured report under its own run id.
   static func runs(_ names: [String]) throws -> URL {
-    let directory = FileManager.default.temporaryDirectory
-      .appending(path: "swiftgate-qa-runs-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let directory = try TestTemporaryDirectory.make("swiftgate-qa-runs")
     for name in names {
       let data = try Fixture.data("QA/aidoku-validation/\(name)")
       let runID = try #require(try QAReportJSON.decode(data).runID)
@@ -26,9 +25,9 @@ struct QAWholeRunTests {
   )
   func picksTheWholeRun() throws {
     let all = try Self.runs(["at-base-report.json", "after-report.json", "final-report.json"])
-    defer { try? FileManager.default.removeItem(at: all) }
+    defer { TestTemporaryDirectory.remove(all) }
     let partial = try Self.runs(["at-base-report.json", "after-report.json"])
-    defer { try? FileManager.default.removeItem(at: partial) }
+    defer { TestTemporaryDirectory.remove(partial) }
 
     guard case .read(let report) = QAFiles.newestWholeRun(plan: "spec", runsDirectory: all) else {
       Issue.record("no whole run read")

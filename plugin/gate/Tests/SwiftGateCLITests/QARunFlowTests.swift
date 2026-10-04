@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
@@ -228,7 +229,11 @@ struct QARunFlowTests {
     defer { repo.remove() }
     try Self.plan(repo)
     let simulator = try await Self.simulator(repo, batch: "pass") { sim in
-      try? FileManager.default.removeItem(at: sim.appending(path: SimStep.treePath(n: 1)))
+      do {
+        try FileManager.default.removeItem(at: sim.appending(path: SimStep.treePath(n: 1)))
+      } catch {
+        Issue.record(error)
+      }
     }
 
     let report = await Self.run(repo, simulator)
@@ -313,13 +318,37 @@ struct LiveQAFlowSimulatorTests {
         executable: "/usr/bin/true", arguments: [], workingDirectory: directory.path,
         logPath: directory.appending(path: "holder.log").path))
 
-    let deadline = ContinuousClock.now + .seconds(20)
-    var alive = true
-    while alive, ContinuousClock.now < deadline {
-      alive = LiveQAFlowSimulator.isAlive(pid)
-      if alive { try await Task.sleep(for: .milliseconds(50)) }
+    let exited = try await OffPool.run { () throws(POSIXError) in
+      try Self.awaitExit(of: pid, within: .seconds(20))
     }
 
-    #expect(!alive)
+    #expect(exited)
+    #expect(!LiveQAFlowSimulator.isAlive(pid))
+  }
+
+  /// Blocks on kqueue until `pid` exits, without reaping it, or `deadline` passes. True once it
+  /// has exited.
+  static func awaitExit(of pid: pid_t, within deadline: Duration) throws(POSIXError) -> Bool {
+    let queue = kqueue()
+    guard queue >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    defer { close(queue) }
+    var change = kevent(
+      ident: UInt(pid), filter: Int16(EVFILT_PROC), flags: UInt16(EV_ADD | EV_ONESHOT),
+      fflags: UInt32(NOTE_EXIT), data: 0, udata: nil)
+    // ESRCH: it had already exited before the registration.
+    guard kevent(queue, &change, 1, nil, 0, nil) == 0 else { return errno == ESRCH }
+    let clock = ContinuousClock()
+    let end = clock.now.advanced(by: deadline)
+    while true {
+      let left = clock.now.duration(to: end)
+      guard left > .zero else { return false }
+      var timeout = timespec(
+        tv_sec: Int(left.components.seconds),
+        tv_nsec: Int(left.components.attoseconds / 1_000_000_000))
+      var event = kevent()
+      let received = kevent(queue, nil, 0, &event, 1, &timeout)
+      if received > 0 { return true }
+      if received < 0, errno != EINTR { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    }
   }
 }

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -12,10 +13,8 @@ struct GCLeaseSweepTests {
     "gc sweeps leases before orphan clones, lists each released run, and makes each lease problem an error — catches gc skipping a killed holder's lease, or sweeping clones first so the session can't be closed on its device"
   )
   func sweepsLeasesFirst() async throws {
-    let root = FileManager.default.temporaryDirectory.appending(
-      path: "gc-leases-\(UUID().uuidString)", directoryHint: .isDirectory)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: root) }
+    let root = try TestTemporaryDirectory.make("gc-leases")
+    defer { TestTemporaryDirectory.remove(root) }
     let order = Mutex<[String]>([])
 
     let summary = await GCRun.run(
