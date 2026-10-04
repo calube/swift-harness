@@ -62,6 +62,11 @@ managed_files = ["docs/index.md", "AGENTS.md"]
 # [telemetry]
 # enabled = false
 
+# Simulator QA: `swiftgate sim up` holds its device until `sim down`, the agent-device session
+# ends, or this many minutes pass (1 to 240).
+# [qa]
+# session_timeout_minutes = 30
+
 # Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
 # [plan]
 # max_parallel = 3
@@ -85,6 +90,7 @@ time_budget_min = 0        # 0: no budget
 stop_starts_before_min = 0
 on_design_conflict = "amend"   # amend: full --amend flow; block: D14
 task_proof = "per-task"    # per-task: each task gate runs --prove --mutate; final: only the final ready gate does
+sim_qa = "changed"         # changed: drive the changed screens in a simulator after the final gate; off: skip
 
 [build.presets.interview]
 design_tier = "sketch"
@@ -97,3 +103,4 @@ time_budget_min = 38
 stop_starts_before_min = 8
 on_design_conflict = "block"
 task_proof = "final"
+sim_qa = "changed"
