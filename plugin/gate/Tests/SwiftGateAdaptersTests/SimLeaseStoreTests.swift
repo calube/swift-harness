@@ -72,7 +72,7 @@ struct SimLeaseStoreTests {
   }
 
   @Test(
-    "readers racing many rewriters of one lease always see a whole lease, and the last write wins — catches a lease written in place that a reader catches half-written"
+    "readers racing many rewriters of one lease always see a whole lease and no temporary file is left — catches a lease written in place that a reader catches half-written"
   )
   func atomicRewrites() async throws {
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -94,11 +94,8 @@ struct SimLeaseStoreTests {
         group.addTask {
           var failures = 0
           for _ in 0..<200 {
-            do {
-              if try store.read(runID: "r") == nil { failures += 1 }
-            } catch {
-              failures += 1
-            }
+            let read = Result { () throws(SimLeaseStoreError) in try store.read(runID: "r") }
+            if case .success(.some) = read {} else { failures += 1 }
           }
           return failures
         }

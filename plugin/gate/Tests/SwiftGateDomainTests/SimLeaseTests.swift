@@ -43,24 +43,24 @@ struct SimLeaseTests {
   @Test(
     "a lease with an unknown key, a missing key, an empty session or a zero PID fails naming it — catches a half-written or foreign lease read as valid"
   )
-  func closedDecoding() {
-    func decode(_ json: String) -> SimLeaseDecodingError? {
-      do {
-        _ = try SimLease.decode(Data(json.utf8))
-        return nil
-      } catch {
-        return error
-      }
+  func closedDecoding() throws {
+    func decode(_ json: String) -> Result<SimLease, SimLeaseDecodingError> {
+      Result { () throws(SimLeaseDecodingError) in try SimLease.decode(Data(json.utf8)) }
+    }
+    func failure(_ json: String) -> SimLeaseDecodingError? {
+      if case .failure(let error) = decode(json) { error } else { nil }
     }
     let base = #""runID":"r1","worktree":"/w","udid":"U","holderPID":7"#
-    #expect(decode("{\(base),\"owner\":\"x\"}") == .unknownKey("owner"))
-    #expect(decode(#"{"runID":"r1","worktree":"/w","holderPID":7}"#) == .missingKey("udid"))
-    #expect(decode("{\(base),\"session\":\"\"}") == .invalidValue(key: "session", value: ""))
+    #expect(failure("{\(base),\"owner\":\"x\"}") == .unknownKey("owner"))
+    #expect(failure(#"{"runID":"r1","worktree":"/w","holderPID":7}"#) == .missingKey("udid"))
+    #expect(failure("{\(base),\"session\":\"\"}") == .invalidValue(key: "session", value: ""))
     #expect(
-      decode(#"{"runID":"r1","worktree":"/w","udid":"U","holderPID":0}"#)
+      failure(#"{"runID":"r1","worktree":"/w","udid":"U","holderPID":0}"#)
         == .invalidValue(key: "holderPID", value: "0"))
-    #expect(decode("[]").map { if case .malformed = $0 { true } else { false } } == true)
-    #expect(decode("{\(base)}") == nil)
+    #expect(failure("[]").map { if case .malformed = $0 { true } else { false } } == true)
+    #expect(
+      try decode("{\(base)}").get()
+        == SimLease(runID: "r1", worktree: "/w", udid: "U", holderPID: 7, session: nil))
   }
 
   @Test(

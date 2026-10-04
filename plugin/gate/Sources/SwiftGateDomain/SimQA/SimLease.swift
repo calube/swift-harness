@@ -28,20 +28,67 @@ public struct SimLease: Sendable, Equatable {
   /// the worktree that took it and no other, so `sim snap`, `verify` and `down` from a sibling
   /// worktree are refused.
   public static func owner(of lease: SimLease, callerWorktree: String) -> SimLeaseOwnership {
-    .owner
+    trimmed(callerWorktree) == trimmed(lease.worktree)
+      ? .owner : .otherWorktree(leaseWorktree: lease.worktree)
   }
 
-  /// A run id names a file, so it is one non-empty path component that does not start with `.`.
-  public static func isValidRunID(_ runID: String) -> Bool {
-    !runID.isEmpty
+  private static func trimmed(_ path: String) -> Substring {
+    var path = Substring(path)
+    while path.count > 1 && path.hasSuffix("/") { path = path.dropLast() }
+    return path
   }
+
+  /// A run id names a file, so it is letters, digits, `-`, `_` and `.`, and does not start with `.`.
+  public static func isValidRunID(_ runID: String) -> Bool {
+    guard let first = runID.unicodeScalars.first, first != "." else { return false }
+    return runID.unicodeScalars.allSatisfy { scalar in
+      ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar)
+        || ("0"..."9").contains(scalar) || "-_.".unicodeScalars.contains(scalar)
+    }
+  }
+
+  static let keys: Set<String> = ["runID", "worktree", "udid", "holderPID", "session"]
 
   public static func decode(_ data: Data) throws(SimLeaseDecodingError) -> SimLease {
-    throw .malformed("not implemented")
+    let parsed: Any
+    do {
+      parsed = try JSONSerialization.jsonObject(with: data)
+    } catch {
+      throw .malformed("not JSON")
+    }
+    guard let object = parsed as? [String: Any] else { throw .malformed("not a JSON object") }
+    if let unknown = object.keys.sorted().first(where: { !keys.contains($0) }) {
+      throw .unknownKey(unknown)
+    }
+    func text(_ key: String) throws(SimLeaseDecodingError) -> String? {
+      guard let value = object[key] else { return nil }
+      guard let string = value as? String else { throw .malformed("\"\(key)\" is not a string") }
+      guard !string.isEmpty else { throw .invalidValue(key: key, value: string) }
+      return string
+    }
+    func required(_ key: String) throws(SimLeaseDecodingError) -> String {
+      guard let value = try text(key) else { throw .missingKey(key) }
+      return value
+    }
+    let runID = try required("runID")
+    let worktree = try required("worktree")
+    let udid = try required("udid")
+    guard let pidValue = object["holderPID"] else { throw .missingKey("holderPID") }
+    guard let number = pidValue as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID(),
+      let pid = Int32(exactly: number.doubleValue)
+    else { throw .malformed("\"holderPID\" is not an integer") }
+    guard pid > 0 else { throw .invalidValue(key: "holderPID", value: "\(pid)") }
+    return SimLease(
+      runID: runID, worktree: worktree, udid: udid, holderPID: pid, session: try text("session"))
   }
 
   public func encoded() -> Data {
-    Data()
+    var object: [String: Any] = [
+      "runID": runID, "worktree": worktree, "udid": udid, "holderPID": Int(holderPID),
+    ]
+    if let session { object["session"] = session }
+    // Every value is a string or an integer, which JSONSerialization always encodes.
+    return (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
   }
 }
 
@@ -97,6 +144,10 @@ public enum SimHoldWatch {
   public static func end(
     lease: SimLease?, liveSessions: Set<String>?, elapsed: Duration, timeout: Duration
   ) -> SimHoldEnd? {
-    nil
+    guard let lease else { return .released }
+    if let session = lease.session, let liveSessions, !liveSessions.contains(session) {
+      return .sessionGone(session: session)
+    }
+    return elapsed >= timeout ? .timedOut(after: timeout) : nil
   }
 }

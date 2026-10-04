@@ -277,6 +277,7 @@ struct NewSubcommandRegistrationTests {
     "events span start", "events span end",
     "warmup",
     "xcode add-file",
+    "sim hold",
   ]
 
   @Test(
