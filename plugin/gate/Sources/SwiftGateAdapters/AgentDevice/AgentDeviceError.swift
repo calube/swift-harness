@@ -7,6 +7,7 @@ public enum AgentDeviceErrorCode: String, Sendable, Equatable, CaseIterable {
   case commandFailed = "COMMAND_FAILED"
   case deviceInUse = "DEVICE_IN_USE"
   case deviceNotFound = "DEVICE_NOT_FOUND"
+  case sessionNotFound = "SESSION_NOT_FOUND"
   case invalidArgs = "INVALID_ARGS"
 }
 
