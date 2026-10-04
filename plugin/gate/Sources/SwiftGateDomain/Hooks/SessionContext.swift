@@ -159,13 +159,28 @@ public enum SessionContext {
   }
 
   public static func render(_ inputs: Inputs) -> String {
-    var lines = [
-      "swift-harness is active in \(inputs.projectName) (.swiftgate.toml). Gate commands go "
-        + "through `swiftgate`; the Stop hook runs `swiftgate check --tier fast` and blocks a RED "
-        + "result. Raw xcodebuild, `simctl erase|delete all`, snapshot recording, global "
-        + "DerivedData deletion and hand edits to snapshots, Package.resolved or .xcresult are "
-        + "denied."
-    ]
+    let denied =
+      "Raw xcodebuild, `simctl erase|delete all`, snapshot recording, global DerivedData "
+      + "deletion and hand edits to snapshots, Package.resolved or .xcresult are denied."
+    var lines: [String]
+    switch inputs.profile {
+    case .owned:
+      lines = [
+        "swift-harness is active in \(inputs.projectName) (.swiftgate.toml). Gate commands go "
+          + "through `swiftgate`; the Stop hook runs `swiftgate check --tier fast` and blocks a "
+          + "RED result. " + denied
+      ]
+    case .brownfield(let config):
+      lines = [
+        "swift-harness is active in \(inputs.projectName) as a brownfield clone, configured by "
+          + "\(config) under the git common dir, never by a file in the tree. Gate commands go "
+          + "through `swiftgate` at 3 tiers: `slice` gates each task, and the Stop hook runs "
+          + "`swiftgate check --tier slice` and blocks a RED result; `merge` runs each touched "
+          + "area's test, lint and build after each merge on the plan branch; `final` runs "
+          + "every area at the end of the run. " + denied
+          + " Staging a file that held uncommitted work before discovery is denied too."
+      ]
+    }
     if !inputs.sessionID.isEmpty {
       lines.append(
         "Session id: \(inputs.sessionID) (pass as `--session` to `swiftgate plan claim`/`plan "
