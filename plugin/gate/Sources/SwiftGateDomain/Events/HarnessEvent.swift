@@ -36,6 +36,11 @@ public struct HarnessEvent: Sendable, Equatable {
   }
 
   public var kind: HarnessEventKind { payload.kind }
+
+  /// This event with `binary` in its source, unless its source already names one.
+  public func stamped(_ binary: GateBinary?) -> HarnessEvent {
+    self
+  }
 }
 
 public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
@@ -133,11 +138,17 @@ public struct HarnessEventSource: Sendable, Equatable, Codable {
   public let route: HarnessRoute?
   public let tier: CheckTier?
   public let hook: HarnessHook?
+  /// The binary that wrote the event; `nil` when it ran without `bin/swiftgate`.
+  public let binary: GateBinary?
 
-  public init(route: HarnessRoute?, tier: CheckTier? = nil, hook: HarnessHook? = nil) {
+  public init(
+    route: HarnessRoute?, tier: CheckTier? = nil, hook: HarnessHook? = nil,
+    binary: GateBinary? = nil
+  ) {
     self.route = route
     self.tier = tier
     self.hook = hook
+    self.binary = binary
   }
 }
 

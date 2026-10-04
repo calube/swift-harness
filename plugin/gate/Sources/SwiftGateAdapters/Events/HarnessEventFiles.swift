@@ -55,17 +55,21 @@ public struct HarnessEventFiles: HarnessEventWriting, HarnessEventReading {
   public let root: URL
   public let rotationBytes: @Sendable (HarnessEventStream) -> Int
   public let guardPolicy: @Sendable (HarnessEventStream) -> EventPayloadGuard.Policy
+  /// Named in the source of every event written that names no binary of its own.
+  public let binary: GateBinary?
 
   public init(
     root: URL,
     rotationBytes: @escaping @Sendable (HarnessEventStream) -> Int = { $0.rotationBytes },
     guardPolicy: @escaping @Sendable (HarnessEventStream) -> EventPayloadGuard.Policy = {
       EventPayloadGuard.policy(for: $0)
-    }
+    },
+    binary: GateBinary? = GateBinaryScope.current
   ) {
     self.root = root
     self.rotationBytes = rotationBytes
     self.guardPolicy = guardPolicy
+    self.binary = binary
   }
 
   private var store: EventSegmentStore {
