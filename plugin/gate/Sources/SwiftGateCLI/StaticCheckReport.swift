@@ -34,9 +34,12 @@ enum StaticCheckReport {
   static let environmentRuleID = "swiftgate.environment"
   static let configRuleID = "swiftgate.config"
 
-  static func make(runID: String, durationMilliseconds: Int, outcome: StaticCheckOutcome)
-    throws(ReportContractViolation) -> RunReport
-  {
+  /// - Parameter blockingRuleIDs: rule ids whose finding leaves a checked run BLOCKED when no
+  ///   finding gates: the check couldn't reach a verdict, and that finding says why.
+  static func make(
+    runID: String, durationMilliseconds: Int, outcome: StaticCheckOutcome,
+    blockingRuleIDs: Set<String> = []
+  ) throws(ReportContractViolation) -> RunReport {
     let findings: [Finding]
     let verdict: Verdict
     var allowances: [AllowanceCount] = []
@@ -47,7 +50,14 @@ enum StaticCheckReport {
       allowances = try perRule.map { ruleID, waived throws(ReportContractViolation) in
         try AllowanceCount(ruleID: ruleID, count: waived.count)
       }
-      verdict = result.findings.contains { $0.severity.failsGate } ? .red : .green
+      verdict =
+        if result.findings.contains(where: \.severity.failsGate) {
+          .red
+        } else if result.findings.contains(where: { blockingRuleIDs.contains($0.ruleID) }) {
+          .blocked
+        } else {
+          .green
+        }
     case .blocked(let reason):
       findings = [
         try Finding(

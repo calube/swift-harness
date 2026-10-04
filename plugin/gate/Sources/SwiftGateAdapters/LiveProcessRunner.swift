@@ -89,7 +89,7 @@ public struct LiveProcessRunner: ProcessRunner {
         return Self.skippingXcrunShim(candidate, environment: environment)
       }
     }
-    throw .launchFailed(executable: executable, reason: "not found on PATH \(searchPath)")
+    throw .launchFailed(executable: executable, reason: "not found on PATH")
   }
 
   /// `/usr/bin/git` is an `xcrun` shim, byte-identical to `/usr/bin/swift`: it picks the tool to

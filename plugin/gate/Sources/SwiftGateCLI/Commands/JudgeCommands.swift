@@ -82,16 +82,20 @@ enum TestJudgeCheck {
     let secrets: [String]
     /// Where the judge's events go; `nil` writes none.
     let events: JudgeEventScope?
+    /// What the `ready` cascade waits on before it asks Jev again.
+    let retryClock: any RetryClock
 
     init(
       makeJudge: @escaping @Sendable (JudgeConfig) -> (any Judge)?, diff: any DiffReading,
-      reasonJudge: (any Judge)? = nil, secrets: [String] = [], events: JudgeEventScope? = nil
+      reasonJudge: (any Judge)? = nil, secrets: [String] = [], events: JudgeEventScope? = nil,
+      retryClock: any RetryClock = LiveRetryClock()
     ) {
       self.makeJudge = makeJudge
       self.diff = diff
       self.reasonJudge = reasonJudge
       self.secrets = secrets
       self.events = events
+      self.retryClock = retryClock
     }
 
     static func live(root: URL, git: LiveGit) -> Dependencies {
@@ -196,7 +200,8 @@ enum TestJudgeCheck {
     let questions = JudgeQuestionSet.testsJev
     let cascade = CascadingJudge(
       jev: jev, claude: dependencies.reasonJudge, base: .tests,
-      policy: CascadingJudge.Policy(thresholds: thresholds, atReadyTier: atReadyTier))
+      policy: CascadingJudge.Policy(thresholds: thresholds, atReadyTier: atReadyTier),
+      clock: dependencies.retryClock)
     let bands = JudgeCascade.bands(for: questions.versionedID)
     let secrets = dependencies.secrets
     // An escalation's failure can echo what Claude's process saw, so it's redacted like a reason.
@@ -306,6 +311,14 @@ enum TestJudgeCheck {
     return findings.contains { $0.ruleID == JudgeCascade.blockedRuleID } ? .blocked : .green
   }
 
+  /// The findings that leave `judge tests` BLOCKED when nothing gates.
+  static let blockingRuleIDs: Set<String> = [JudgeCascade.blockedRuleID]
+
+  /// What `judge tests` reports for the step's findings, under ``blockingRuleIDs``.
+  static func outcome(_ findings: [Finding]) -> StaticCheckOutcome {
+    .checked(RuleRunResult(findings: findings, allowances: []))
+  }
+
   /// A judge that can't run is reported, never gating: it says nothing about the code.
   static func note(_ message: String) -> [Finding] {
     (try? Finding(
@@ -370,7 +383,10 @@ struct JudgeTestsCommand: AsyncParsableCommand {
     let git = LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let swiftPM = ScopeResolution.liveSwiftPM(root: root)
     let runID = RunID.make(startedAt: Date(), suffix: UInt32.random(in: .min ... .max))
-    try await StaticCheckRun.execute(root: root, format: output.format, runID: runID) {
+    try await StaticCheckRun.execute(
+      root: root, format: output.format, runID: runID,
+      blockingRuleIDs: TestJudgeCheck.blockingRuleIDs
+    ) {
       let config: Config
       switch StaticCheckInputs.loadConfig(root: root) {
       case .failure(let failure): return failure.outcome
@@ -392,12 +408,7 @@ struct JudgeTestsCommand: AsyncParsableCommand {
       let findings = await TestJudgeCheck.run(
         .live(root: root, git: git, swiftPM: swiftPM), graph: graph, config: config, base: base,
         atReadyTier: ready, dependencies: .live(root: root, git: git), runID: runID)
-      if TestJudgeCheck.verdict(findings) == .blocked {
-        return .blocked(
-          reason: findings.filter { $0.ruleID == JudgeCascade.blockedRuleID }
-            .map { "\($0.file):\($0.line ?? 0) \($0.message)" }.joined(separator: "\n"))
-      }
-      return .checked(RuleRunResult(findings: findings, allowances: []))
+      return TestJudgeCheck.outcome(findings)
     }
   }
 }

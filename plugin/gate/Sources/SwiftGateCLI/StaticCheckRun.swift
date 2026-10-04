@@ -10,9 +10,11 @@ enum StaticCheckRun {
   ///   - command: the command that ran, for its `gate.run` event.
   ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
   ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
+  ///   - blockingRuleIDs: see ``StaticCheckReport/make(runID:durationMilliseconds:outcome:blockingRuleIDs:)``.
   static func execute(
     root: URL, format: OutputFormat, runID: String? = nil, command: String? = nil,
     events: (any HarnessEventWriting)? = nil, workingTree: (any WorkingTreeReading)? = nil,
+    blockingRuleIDs: Set<String> = [],
     check: () async -> StaticCheckOutcome
   ) async throws {
     let clock = ContinuousClock()
@@ -26,7 +28,8 @@ enum StaticCheckRun {
       + Int(elapsed.components.attoseconds / 1_000_000_000_000_000)
     let runID = runID ?? RunID.make(startedAt: startedAt, suffix: UInt32.random(in: .min ... .max))
     let report = try StaticCheckReport.make(
-      runID: runID, durationMilliseconds: milliseconds, outcome: outcome)
+      runID: runID, durationMilliseconds: milliseconds, outcome: outcome,
+      blockingRuleIDs: blockingRuleIDs)
     // History is diagnostics; failing to write it must not flip a verdict about the code.
     GateRun.record { () throws(RunStoreError) in
       try RunStore(worktreeRoot: root, events: telemetry.events).record(
