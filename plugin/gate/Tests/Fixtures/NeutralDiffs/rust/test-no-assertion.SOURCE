@@ -1,0 +1,4 @@
+repo: https://github.com/clap-rs/clap
+sha: dc953e95d0bdbfa0763a39f386a2406695ed7d81
+path: clap_complete/tests/testsuite/bash.rs
+command: git show --format= dc953e95d0bdbfa0763a39f386a2406695ed7d81 -- clap_complete/tests/testsuite/bash.rs

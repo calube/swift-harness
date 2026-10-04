@@ -1,0 +1,4 @@
+repo: https://github.com/heartcombo/devise
+sha: eb9db7ba3a552ed410b20f1040e167569838b068
+path: test/integration/timeoutable_test.rb
+command: git show --format= eb9db7ba3a552ed410b20f1040e167569838b068 -- test/integration/timeoutable_test.rb

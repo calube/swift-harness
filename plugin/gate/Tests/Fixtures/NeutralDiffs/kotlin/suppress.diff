@@ -1,0 +1,12 @@
+diff --git a/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt b/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt
+index ce605b6ea..6247d4853 100644
+--- a/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt
++++ b/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt
+@@ -28,6 +28,7 @@ import okhttp3.internal.SuppressSignatureCheck
+  *
+  * This may also be used for Android tests with Robolectric.
+  */
++@Suppress("NewApi")
+ open class Jdk9Platform : Platform() {
+   @SuppressSignatureCheck
+   override fun configureTlsExtensions(

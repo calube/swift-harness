@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: ff021e53459d43c0b00212e59c1c633e4accc985
+path: src/playground.ts
+command: git show --format= ff021e53459d43c0b00212e59c1c633e4accc985 -- src/playground.ts

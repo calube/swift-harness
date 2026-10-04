@@ -1,0 +1,4 @@
+repo: https://github.com/heartcombo/devise
+sha: f964ea526bd31a69ab1543a636976d382cee7299
+path: test/models/token_authenticatable_test.rb
+command: git show --format= f964ea526bd31a69ab1543a636976d382cee7299 -- test/models/token_authenticatable_test.rb

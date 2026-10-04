@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: b07752c676a10f8713a301bf4a272092c1d1b6ca
+path: Tests/NIOCoreTests/UtilitiesTest.swift
+command: git show --format= b07752c676a10f8713a301bf4a272092c1d1b6ca -- Tests/NIOCoreTests/UtilitiesTest.swift

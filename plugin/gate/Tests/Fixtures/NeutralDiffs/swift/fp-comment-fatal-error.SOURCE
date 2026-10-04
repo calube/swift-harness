@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: 68631de6d8c66a1acd38fc888125bacc9626f1d9
+path: Sources/NIOCrashTester/main.swift
+command: git show --format= 68631de6d8c66a1acd38fc888125bacc9626f1d9 -- Sources/NIOCrashTester/main.swift

@@ -1,0 +1,4 @@
+repo: https://github.com/BurntSushi/ripgrep
+sha: 1035f6b1ff502eb5b1a5fc49a79f45971c772d47
+path: crates/regex/src/matcher.rs
+command: git show --format= 1035f6b1ff502eb5b1a5fc49a79f45971c772d47 -- crates/regex/src/matcher.rs

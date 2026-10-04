@@ -1,0 +1,12 @@
+diff --git a/clap_builder/src/builder/command.rs b/clap_builder/src/builder/command.rs
+index 70861ee4..b0d5bebd 100644
+--- a/clap_builder/src/builder/command.rs
++++ b/clap_builder/src/builder/command.rs
+@@ -618,6 +618,7 @@ impl Command {
+     ///     println!("{}", m.get_flag("bar"));
+     /// }
+     /// ```
++    #[allow(clippy::test_attr_in_doctest)]
+     pub fn debug_assert(mut self) {
+         self.build();
+     }

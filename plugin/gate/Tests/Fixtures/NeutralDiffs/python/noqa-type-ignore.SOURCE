@@ -1,0 +1,4 @@
+repo: https://github.com/encode/httpx
+sha: 8fd5b71016c10dd266a058966f3ff3843e3ce9c6
+path: httpx/_compat.py
+command: git show --format= 8fd5b71016c10dd266a058966f3ff3843e3ce9c6 -- httpx/_compat.py

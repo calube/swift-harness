@@ -1,0 +1,4 @@
+repo: https://github.com/vitest-dev/vitest
+sha: 2d053600efa0a646150e755bcc3745c5d1fded43
+path: test/ui/fixtures/main/node/skipped.test.ts
+command: git show --format= 2d053600efa0a646150e755bcc3745c5d1fded43 -- test/ui/fixtures/main/node/skipped.test.ts

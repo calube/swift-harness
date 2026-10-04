@@ -1,0 +1,4 @@
+repo: https://github.com/urfave/cli
+sha: 94ba4f70bac1b65753ede0d2411d73022f44b2cd
+path: args_test.go
+command: git show --format= 94ba4f70bac1b65753ede0d2411d73022f44b2cd -- args_test.go

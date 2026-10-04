@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: b802056b6f21b0557cb352fa48cd90c2557af262
+path: packages/server/src/adapters/node-http/incomingMessageToRequest.ts
+command: git show --format= b802056b6f21b0557cb352fa48cd90c2557af262 -- packages/server/src/adapters/node-http/incomingMessageToRequest.ts

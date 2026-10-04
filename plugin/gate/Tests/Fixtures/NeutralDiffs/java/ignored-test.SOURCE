@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: 7f4b8b657b8be4d41f99e682a582b0133ea92576
+path: okhttp-tests/src/test/java/okhttp3/EventListenerTest.java
+command: git show --format= 7f4b8b657b8be4d41f99e682a582b0133ea92576 -- okhttp-tests/src/test/java/okhttp3/EventListenerTest.java

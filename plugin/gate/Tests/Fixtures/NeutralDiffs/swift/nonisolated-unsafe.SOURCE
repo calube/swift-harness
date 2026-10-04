@@ -1,0 +1,4 @@
+repo: https://github.com/pointfreeco/swift-composable-architecture
+sha: 5660c58164fbd7f8814899fd8d20e76f8398b563
+path: Tests/ComposableArchitectureTests/CurrentValueRelayTests.swift
+command: git show --format= 5660c58164fbd7f8814899fd8d20e76f8398b563 -- Tests/ComposableArchitectureTests/CurrentValueRelayTests.swift

@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: 286623ac57f39cf5809882f6b6cd09cb61532636
+path: okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt
+command: git show --format= 286623ac57f39cf5809882f6b6cd09cb61532636 -- okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt

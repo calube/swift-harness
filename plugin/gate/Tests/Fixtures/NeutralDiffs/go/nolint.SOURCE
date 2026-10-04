@@ -1,0 +1,4 @@
+repo: https://github.com/spf13/cobra
+sha: f2878bab8c96afd6e36968af96343b35dbb82a82
+path: completions.go
+command: git show --format= f2878bab8c96afd6e36968af96343b35dbb82a82 -- completions.go

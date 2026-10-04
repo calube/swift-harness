@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: ac6d905654609e50f10fb1ffcf680697303a0f60
+path: Sources/NIOPosix/BaseStreamSocketChannel.swift
+command: git show --format= ac6d905654609e50f10fb1ffcf680697303a0f60 -- Sources/NIOPosix/BaseStreamSocketChannel.swift

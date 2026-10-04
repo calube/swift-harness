@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: 590dd7b4bc222700b429aebb86945d2cd0dddadd
+path: Sources/NIOFS/Internal/SystemFileHandle.swift
+command: git show --format= 590dd7b4bc222700b429aebb86945d2cd0dddadd -- Sources/NIOFS/Internal/SystemFileHandle.swift

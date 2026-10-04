@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: 02be63c7f450147bc9d4825e86e1b9b97a081fda
+path: Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift
+command: git show --format= 02be63c7f450147bc9d4825e86e1b9b97a081fda -- Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift

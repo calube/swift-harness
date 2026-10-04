@@ -1,0 +1,19 @@
+diff --git a/src/playground.ts b/src/playground.ts
+index e69de29bb..c394ad1f6 100644
+--- a/src/playground.ts
++++ b/src/playground.ts
+@@ -0,0 +1,14 @@
++// type asdf = typeof import('./dryrun').rootRouter;
++// import { trpc } from '.';
++
++// const sdk = trpc.sdk<asdf>({
++//   url: 'asdf',
++//   getContext: async () => ({}),
++//   handler(_url, _data) {
++//     return 'asdf' as any;
++//   },
++// });
++
++// const run = async () => {
++//   const asdf = await sdk.user.testEndpoint('12');
++// };

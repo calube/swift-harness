@@ -1,0 +1,18 @@
+diff --git a/packages/openapi/test/nodeModulesJsDoc.test.ts b/packages/openapi/test/nodeModulesJsDoc.test.ts
+index 503b6c9fb..bc1054cee 100644
+--- a/packages/openapi/test/nodeModulesJsDoc.test.ts
++++ b/packages/openapi/test/nodeModulesJsDoc.test.ts
+@@ -86,4 +86,13 @@ describe('JSDoc source filtering', () => {
+ 
+     expect(aliasOptionsSchema.description).toBeUndefined();
+   });
++
++  it('closes a third-party shape whose properties are all callable', () => {
++    // vite's `ResolverObject` is `{ buildStart?, resolveId }` — both hooks, so
++    // nothing survives serialisation and the shape must not claim open keys.
++    expect(doc.components?.schemas?.['ResolverObject']).toEqual({
++      type: 'object',
++      additionalProperties: false,
++    });
++  });
+ });

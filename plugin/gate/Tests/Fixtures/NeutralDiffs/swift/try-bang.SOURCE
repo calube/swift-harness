@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: 0ee0fd1b383a082f088bc799898a0df977b8e8f7
+path: Sources/NIOMulticastChat/main.swift
+command: git show --format= 0ee0fd1b383a082f088bc799898a0df977b8e8f7 -- Sources/NIOMulticastChat/main.swift

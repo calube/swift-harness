@@ -1,0 +1,4 @@
+repo: https://github.com/pallets/flask
+sha: 1af8f95785b85d0937153ee63d504c0b51934d80
+path: tests/test_cli.py
+command: git show --format= 1af8f95785b85d0937153ee63d504c0b51934d80 -- tests/test_cli.py

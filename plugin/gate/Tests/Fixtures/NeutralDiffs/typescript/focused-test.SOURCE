@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: 2a284167b37bb4fd699eb650e31afba304d1ba9a
+path: packages/tests/server/websockets.test.ts
+command: git show --format= 2a284167b37bb4fd699eb650e31afba304d1ba9a -- packages/tests/server/websockets.test.ts

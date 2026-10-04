@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: b7290e4db29daf8e314b6f4254106e1b844a1f68
+path: mockwebserver-junit5/src/main/java9/module-info.java
+command: git show --format= b7290e4db29daf8e314b6f4254106e1b844a1f68 -- mockwebserver-junit5/src/main/java9/module-info.java

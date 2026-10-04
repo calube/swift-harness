@@ -1,0 +1,17 @@
+diff --git a/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt b/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt
+index e1d0f53d6..b3a217df8 100644
+--- a/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt
++++ b/okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/http2/Http2ExchangeCodec.kt
+@@ -67,6 +67,12 @@ class Http2ExchangeCodec(
+   override val isResponseComplete: Boolean
+     get() = stream?.isSourceComplete == true
+ 
++  override val socketSink
++    get() = stream!!.sink
++
++  override val socketSource
++    get() = stream!!.source
++
+   override fun createRequestBody(
+     request: Request,
+     contentLength: Long,

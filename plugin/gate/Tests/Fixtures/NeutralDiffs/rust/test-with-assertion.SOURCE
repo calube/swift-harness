@@ -1,0 +1,4 @@
+repo: https://github.com/BurntSushi/ripgrep
+sha: 80e91a1f1d725eb8e331f3613a352edb8b13677b
+path: ignore/src/overrides.rs
+command: git show --format= 80e91a1f1d725eb8e331f3613a352edb8b13677b -- ignore/src/overrides.rs

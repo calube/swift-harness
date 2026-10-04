@@ -1046,3 +1046,43 @@ cp .harness/runs/<run id>/report.json ../../plugin/gate/Tests/Fixtures/GateRun/r
 The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target selected with
 `--base HEAD`, and 7 findings across 7 rules naming the files `.`, `.swiftgate.toml` and `docs`.
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' GateRun/report.json` printed 0.
+
+## Neutral diffs
+
+`NeutralDiffs/<language>/<case>.diff` is one file's diff from a real commit in a public, permissively
+licensed repository (Apache-2.0, MIT or BSD). The `<case>.SOURCE` beside it records the repository,
+the commit sha, the file path and the exact command. Each capture runs in a full clone of the
+repository's default branch (`git clone --single-branch https://github.com/<repo>.git`) with no
+diff settings in the git config:
+
+```sh
+git show --format= <sha> -- <path> > NeutralDiffs/<language>/<case>.diff
+```
+
+Commits were found with `git log -G'<token regex>' --format=%H -- '<glob>'` in each clone, keeping
+small single-file diffs whose added lines carry the token. The case name says what the added lines
+hold:
+
+- An unsafe shortcut, lint suppression, or skipped or focused test: `try-bang`, `as-bang`,
+  `fatal-error`, `unchecked-sendable`, `nonisolated-unsafe`, `bang-bang`, `as-any`, `ts-ignore`,
+  `ts-expect-error`, `swiftlint-disable`, `suppress`, `suppress-warnings`, `eslint-disable`,
+  `noqa-type-ignore`, `nolint`, `clippy-allow`, `rubocop-disable`, `disabled-test`,
+  `xctskip-test`, `ignored-test`, `skipped-test`, `focused-test`.
+- `test-no-assertion`: a new test whose added lines hold no assertion. The Go, Python, Ruby and
+  Swift cases run code and check nothing; the TypeScript and Kotlin cases are compile-only API
+  checks; the Rust case calls a helper that may assert, so the judge cascade decides it.
+- `test-with-assertion`: a new test with its own assertions.
+- `fp-*`: false positives. The token sits only in a comment or a string literal on added lines:
+  `swift/fp-comment-try-bang` (its context holds a real, unchanged `try!` line),
+  `swift/fp-comment-fatal-error`, `swift/fp-string-as-bang` (SwiftLint's rule examples),
+  `typescript/fp-string-as-any` (typescript-eslint's rule test code) and
+  `typescript/fp-comment-as-any` (commented-out code).
+
+Some cases carry more than one token, as the commits do: `swift/try-bang` also adds a
+`fatalError`, `typescript/ts-ignore` and `typescript/ts-expect-error` also add an
+`eslint-disable-next-line`, `python/noqa-type-ignore` adds both, `python/skipped-test` is a
+`skipif` on a test that asserts, and `swift/nonisolated-unsafe` is a new test file that asserts.
+
+No small Java commit adding an assertion-free test turned up in `square/okhttp` or
+`square/javapoet`, so Java has no `test-no-assertion` case. No Kotlin string-literal false
+positive was captured.

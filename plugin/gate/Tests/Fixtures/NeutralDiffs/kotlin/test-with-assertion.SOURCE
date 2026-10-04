@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: 112a19d5e4eab3fd376db1473220887285e39126
+path: okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt
+command: git show --format= 112a19d5e4eab3fd376db1473220887285e39126 -- okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt

@@ -1,0 +1,14 @@
+diff --git a/clap_complete/tests/testsuite/bash.rs b/clap_complete/tests/testsuite/bash.rs
+index 81c2ea91..e2a57839 100644
+--- a/clap_complete/tests/testsuite/bash.rs
++++ b/clap_complete/tests/testsuite/bash.rs
+@@ -161,3 +161,9 @@ fn complete() {
+     let actual = runtime.complete(input, &term).unwrap();
+     snapbox::assert_eq(expected, actual);
+ }
++
++#[test]
++#[cfg(unix)]
++fn register_dynamic_completion() {
++    common::register_example("dynamic", "test", completest::Shell::Bash);
++}

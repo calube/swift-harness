@@ -1,0 +1,21 @@
+diff --git a/packages/tests/server/websockets.test.ts b/packages/tests/server/websockets.test.ts
+index 2891df962..041238c83 100644
+--- a/packages/tests/server/websockets.test.ts
++++ b/packages/tests/server/websockets.test.ts
+@@ -1119,12 +1119,12 @@ describe('include "jsonrpc" in response if sent with message', () => {
+   });
+ });
+ 
+-test('wsClient stops reconnecting after .close()', async () => {
++test.only('wsClient stops reconnecting after .close()', async () => {
+   const badWsUrl = 'ws://localhost:9999';
+-  const retryDelayMsMock =
+-    vi.fn<NonNullable<WebSocketClientOptions['retryDelayMs']>>();
++  const retryDelayMsMock = vi.fn<
++    NonNullable<WebSocketClientOptions['retryDelayMs']>
++  >(() => 100);
+   const onErrorMock = vi.fn<NonNullable<WebSocketClientOptions['onError']>>();
+-  retryDelayMsMock.mockReturnValue(50);
+ 
+   const wsClient = createWSClient({
+     url: badWsUrl,
