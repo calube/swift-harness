@@ -80,14 +80,15 @@ private struct RunClone {
 
   func dependencies(
     warmup: any WarmupSpawning, events: any HarnessEventWriting = MemoryEventLog(),
-    harnessRoot: URL?? = nil, now: @escaping @Sendable () -> Date = { Date() }
+    harnessRoot: URL?? = nil, plugins: any PluginWarming = FakePlugins(steps: Steps()),
+    now: @escaping @Sendable () -> Date = { Date() }
   ) -> RunCommand.Dependencies {
     RunCommand.Dependencies(
       runner: runner,
       discover: DiscoverCommand.Dependencies(
         runner: runner, readers: [PackageReader()], harnessRoot: harnessRoot ?? plugin,
         events: events),
-      warmup: warmup, now: now)
+      warmup: warmup, plugins: plugins, now: now)
   }
 
   func remove() { try? FileManager.default.removeItem(at: base) }
@@ -194,6 +195,27 @@ private final class FakeClaude: ClaudeLaunching {
   func launch(executable: String, arguments: [String], directory: URL) throws(RunStartError) {
     calls.withLock { $0.append((arguments, directory)) }
     steps.append("claude")
+  }
+}
+
+/// Records each plugin directory it was asked to warm, and fails the ones named in `failing`.
+private final class FakePlugins: PluginWarming {
+  let steps: Steps
+  let failing: Set<String>
+  private let calls = Mutex<[String]>([])
+  var warmed: [String] { calls.withLock { $0 } }
+
+  init(steps: Steps, failing: Set<String> = []) {
+    self.steps = steps
+    self.failing = failing
+  }
+
+  func warm(directory: URL) async throws(RunStartError) -> [String] {
+    let path = directory.path(percentEncoded: false)
+    calls.withLock { $0.append(path) }
+    steps.append("plugin \(path)")
+    if failing.contains(path) { throw RunStartError(message: "building \(path) failed") }
+    return [path + "/bin/swiftgate"]
   }
 }
 
@@ -575,5 +597,107 @@ struct RunCommandTests {
     try signal.close()
     let text = try String(contentsOf: log, encoding: .utf8)
     #expect(text == "started warmup in \(clone.root.path(percentEncoded: false).dropLast())\n")
+  }
+
+  @Test(
+    "each --plugin-dir's gate is built after the clone is prepared and before claude starts, a relative one from the clone's root — catches a session whose plugin hooks run an older binary while their own builds"
+  )
+  func pluginDirectoriesWarmBeforeLaunch() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let steps = Steps()
+    let warmup = FakeWarmup(steps: steps, config: clone.layout.config)
+    let plugins = FakePlugins(steps: steps)
+    let claude = FakeClaude(steps: steps)
+    let absolute = clone.plugin.path(percentEncoded: false)
+
+    let prepared = try await RunCommand.start(
+      spec: spec.path, directory: clone.root, slug: nil,
+      extra: ["-p", "--plugin-dir", absolute, "--plugin-dir=tools/plugin"],
+      dependencies: clone.dependencies(warmup: warmup, plugins: plugins), claude: claude)
+
+    let bare = { (path: String) in path.hasSuffix("/") ? String(path.dropLast()) : path }
+    let relative = bare(prepared.root) + "/tools/plugin"
+    #expect(plugins.warmed.map(bare) == [bare(absolute), relative])
+    #expect(
+      steps.all.map { $0.hasPrefix("plugin ") ? "plugin" : $0 }
+        == ["warmup", "plugin", "plugin", "claude"])
+  }
+
+  @Test(
+    "a --plugin-dir whose gate fails to build stops the run before claude starts and removes what was prepared — catches a session launched with hooks that can only run a stale binary"
+  )
+  func failedPluginWarmRollsBack() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let warmup = FakeWarmup(steps: Steps(), config: clone.layout.config)
+    let absolute = clone.plugin.path(percentEncoded: false)
+    let plugins = FakePlugins(steps: Steps(), failing: [absolute])
+    let claude = FakeClaude(steps: Steps())
+
+    let error = await #expect(throws: RunStartError.self) {
+      try await RunCommand.start(
+        spec: spec.path, directory: clone.root, slug: nil, extra: ["--plugin-dir", absolute],
+        dependencies: clone.dependencies(warmup: warmup, plugins: plugins), claude: claude)
+    }
+
+    #expect(
+      error?.message.contains("building \(absolute) failed") == true, "\(String(describing: error))"
+    )
+    #expect(claude.launches.isEmpty)
+    #expect(try await clone.leftovers(slug: "spec", warmup: warmup) == [])
+  }
+
+  @Test(
+    "the live warmer runs each swiftgate shim's --version without the plugin data directory, in a folder of plugins too, and skips a plugin with no shim — catches a warm that fills a cache the session's hooks never look in"
+  )
+  func liveWarmerBuildsIntoTheSharedCache() async throws {
+    let clone = try await RunClone(files: ["README": "x\n"])
+    defer { clone.remove() }
+    let record = clone.base.appending(path: "warmed.log").path(percentEncoded: false)
+    func shim(at plugin: URL, exit status: Int32 = 0) throws -> String {
+      let bin = plugin.appending(path: "bin", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+      let path = bin.appending(path: "swiftgate").path(percentEncoded: false)
+      try Data(
+        """
+        #!/bin/sh
+        echo "$0 $* data=${CLAUDE_PLUGIN_DATA-unset}" >> "\(record)"
+        echo "build broke in $0" >&2
+        exit \(status)
+
+        """.utf8
+      ).write(to: URL(filePath: path))
+      #expect(chmod(path, 0o755) == 0)
+      return path
+    }
+    let single = clone.base.appending(path: "single", directoryHint: .isDirectory)
+    let singleShim = try shim(at: single)
+    let folder = clone.base.appending(path: "folder", directoryHint: .isDirectory)
+    let childShim = try shim(at: folder.appending(path: "harness"))
+    try FileManager.default.createDirectory(
+      at: folder.appending(path: "other/skills"), withIntermediateDirectories: true)
+    let runner = LiveProcessRunner(
+      baseEnvironment: RunClone.environment.merging(["CLAUDE_PLUGIN_DATA": "/inline-data"]) { $1 })
+    let warmer = LivePluginWarmer(runner: runner)
+
+    #expect(try await warmer.warm(directory: single) == [singleShim])
+    #expect(try await warmer.warm(directory: folder) == [childShim])
+    #expect(try await warmer.warm(directory: folder.appending(path: "other")) == [])
+    #expect(
+      try String(contentsOfFile: record, encoding: .utf8)
+        == "\(singleShim) --version data=unset\n\(childShim) --version data=unset\n")
+
+    let broken = clone.base.appending(path: "broken", directoryHint: .isDirectory)
+    let brokenShim = try shim(at: broken, exit: 1)
+    let error = await #expect(throws: RunStartError.self) {
+      try await warmer.warm(directory: broken)
+    }
+    #expect(error?.message.contains(brokenShim) == true, "\(String(describing: error))")
+    #expect(error?.message.contains("build broke in") == true, "\(String(describing: error))")
   }
 }

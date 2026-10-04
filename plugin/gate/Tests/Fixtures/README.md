@@ -1842,3 +1842,21 @@ phases before `build start` do, and `final` names the build run. The capture cop
 unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
 matched nothing.
+
+## Run report: a run that left tasks unfinished
+
+`RunReport/memos-2/{ledger.json,build-events.jsonl}` are the final `ledger.json` and the build run's
+`events.jsonl` of the second brownfield trial on `usememos/memos`, as
+`evals/results/2026-10-04-brownfield-trial/memos-2/` keeps them. The build marked 2 tasks `blocked`,
+left 1 `pending` and finished 1, and its `final` gate came back GREEN on the contract alone, so the
+report must not lead with that verdict. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-trial/memos-2 F=plugin/gate/Tests/Fixtures/RunReport/memos-2
+mkdir -p $F
+sed -E 's#"/[^"]*/memos-2/#"/CLONE/#g' $S/ledger.json > $F/ledger.json
+cp $S/build-events.jsonl $F/build-events.jsonl
+```
+
+The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
+changes nothing else.

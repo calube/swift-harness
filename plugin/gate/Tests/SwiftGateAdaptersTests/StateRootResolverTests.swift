@@ -153,6 +153,46 @@ struct StateRootResolverTests {
   }
 
   @Test(
+    "a linked worktree of a configured clone writes its events to the shared store under the common dir, and copy-up still lifts a store it kept under its own git dir into <common>/swift-harness/events/imported/<storeID>/ — catches events that die with the worktree's own git dir"
+  )
+  func linkedWorktreeWritesTheSharedStore() async throws {
+    let repository = try await Self.clone(configured: true)
+    defer { repository.remove() }
+    let linked = repository.root.deletingLastPathComponent()
+      .appending(path: "\(repository.root.lastPathComponent)-shared", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: linked) }
+    try await repository.git("worktree", "add", "-q", "-b", "shared", linked.path)
+    // A store a linked worktree kept under its own git dir, as builds did before every worktree
+    // of a configured clone wrote to the shared one.
+    let own = StateRootResolver.resolve(worktree: linked).url(RunLayout.eventsFile(.judge))
+    try FileManager.default.createDirectory(
+      at: own.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try HarnessEventJSON.encodeLine(EventSegmentStoreTests.decision("linked-only")).write(to: own)
+
+    try HarnessEventFiles(root: linked).append(EventSegmentStoreTests.decision("linked-shared"))
+
+    let common = try await Self.gitDirectory(repository)
+    let shared = try String(
+      contentsOfFile: "\(common)/swift-harness/events/judge.jsonl", encoding: .utf8)
+    #expect(shared.contains("linked-shared"))
+    #expect(!shared.contains("linked-only"))
+    let outcome = try EventCopyUp(source: linked, destination: repository.root).run()
+    guard case .copied(let storeID, _) = outcome else {
+      Issue.record("expected a copy, got \(outcome)")
+      return
+    }
+    let copied = try String(
+      contentsOfFile: "\(common)/swift-harness/events/imported/\(storeID)/judge.jsonl",
+      encoding: .utf8)
+    #expect(copied.contains("linked-only"))
+    #expect(!copied.contains("linked-shared"))
+    #expect(
+      try await repository.git("status", "--porcelain", "--ignored", "--untracked-files=all")
+        .isEmpty)
+    #expect(!FileManager.default.fileExists(atPath: linked.appending(path: ".harness").path))
+  }
+
+  @Test(
     "a scratch tree of a configured clone sits under <git-dir>/swift-harness/scratch/ and is gone afterwards, while an owned clone's stays beside the repository — catches prove's trees left beside a clone the harness doesn't own"
   )
   func scratchTreeSitsUnderTheGitDir() async throws {
@@ -184,34 +224,6 @@ struct StateRootResolverTests {
     #expect(
       Self.canonical(ownedRoot.deletingLastPathComponent())
         == Self.canonical(owned.root.deletingLastPathComponent()))
-  }
-
-  @Test(
-    "copying a linked worktree's events up in a configured clone lands them in <common>/swift-harness/events/imported/<storeID>/ and leaves both trees clean — catches a removed worktree's events lost or copied into the tree"
-  )
-  func eventsCopyUpUnderTheCommonDir() async throws {
-    let repository = try await Self.clone(configured: true)
-    defer { repository.remove() }
-    let linked = repository.root.deletingLastPathComponent()
-      .appending(path: "\(repository.root.lastPathComponent)-copied", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: linked) }
-    try await repository.git("worktree", "add", "-q", "-b", "copied", linked.path)
-    try HarnessEventFiles(root: linked).append(EventSegmentStoreTests.decision("linked-only"))
-
-    let outcome = try EventCopyUp(source: linked, destination: repository.root).run()
-
-    guard case .copied(let storeID, _) = outcome else {
-      Issue.record("expected a copy, got \(outcome)")
-      return
-    }
-    let common = try await Self.gitDirectory(repository)
-    let imported = "\(common)/swift-harness/events/imported/\(storeID)/judge.jsonl"
-    let copied = try String(contentsOfFile: imported, encoding: .utf8)
-    #expect(copied.contains("linked-only"))
-    #expect(
-      try await repository.git("status", "--porcelain", "--ignored", "--untracked-files=all")
-        .isEmpty)
-    #expect(!FileManager.default.fileExists(atPath: linked.appending(path: ".harness").path))
   }
 
   @Test(

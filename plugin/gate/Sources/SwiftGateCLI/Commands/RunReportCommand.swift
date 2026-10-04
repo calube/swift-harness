@@ -30,8 +30,8 @@ struct RunReportOutcome: Sendable, Equatable, Encodable {
 enum BrownfieldRunReportRun {
   static let command = "run report"
 
-  /// Reads the plan dir, the baseline at the plan branch's base tree, the last discover record
-  /// and the plan's newest build run, then writes `<plan-dir>/REPORT.md`. A source that can't be
+  /// Reads the plan dir and its ledger, the baseline at the plan branch's base tree, the last
+  /// discover record and the plan's newest build run, then writes `<plan-dir>/REPORT.md`. A source that can't be
   /// read is a line in its section; only a clone with no brownfield config or no such plan
   /// writes nothing.
   static func write(
@@ -83,7 +83,8 @@ enum BrownfieldRunReportRun {
         baseline: await baseline(
           layout: layout, base: base, branchExists: head != nil, branch: branch,
           git: git, runner: runner, root: root),
-        discover: discover(layout: layout), build: await build(slug: slug, git: git)))
+        discover: discover(layout: layout), build: await build(slug: slug, git: git),
+        ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) }))
 
     let path = plan.directory + "/" + BrownfieldRunReport.fileName
     do {
