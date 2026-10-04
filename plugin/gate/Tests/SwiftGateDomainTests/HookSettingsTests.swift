@@ -31,13 +31,13 @@ struct HookSettingsTests {
   }
 
   @Test(
-    "every rendered command is absolute under the plugin root, with matchers and args kept — catches a hook left on the unset plugin variable"
+    "every rendered hook sets CLAUDE_PLUGIN_ROOT to the plugin root and runs its absolute swiftgate with the source's args plus --source settings, matchers and timeouts kept — catches a settings hook that can't find the plugin root, or one the plugin's own registration can't be told apart from"
   )
   func absoluteCommands() throws {
     let source = try Data(contentsOf: Self.hooksJSON)
     let rendered = try #require(HookSettings.render(hooksJSON: source, pluginRoot: Self.pluginRoot))
 
-    #expect(!String(decoding: rendered, as: UTF8.self).contains("CLAUDE_PLUGIN_ROOT"))
+    #expect(!String(decoding: rendered, as: UTF8.self).contains(HookSettings.pluginRootVariable))
     let sourceHooks = try hooks(source)
     for (event, groups) in try hooks(rendered) {
       let original = try #require(sourceHooks[event])
@@ -48,12 +48,30 @@ struct HookSettingsTests {
         let sourceCommands = try #require(sourceGroup["hooks"] as? [[String: Any]])
         #expect(commands.count == sourceCommands.count, "\(event)")
         for (command, sourceCommand) in zip(commands, sourceCommands) {
-          #expect(command["command"] as? String == Self.pluginRoot + "/bin/swiftgate", "\(event)")
-          #expect(command["args"] as? [String] == sourceCommand["args"] as? [String], "\(event)")
+          let sourceArgs = try #require(sourceCommand["args"] as? [String])
+          #expect(command["command"] as? String == "/usr/bin/env", "\(event)")
+          #expect(
+            command["args"] as? [String]
+              == ["CLAUDE_PLUGIN_ROOT=\(Self.pluginRoot)", Self.pluginRoot + "/bin/swiftgate"]
+              + sourceArgs + ["--source", "settings"],
+            "\(event)")
           #expect(command["timeout"] as? Int == sourceCommand["timeout"] as? Int, "\(event)")
         }
       }
     }
+  }
+
+  @Test(
+    "the rendered Stop hook's status message names the slice tier — catches a brownfield session told its Stop runs the fast tier"
+  )
+  func stopStatusNamesSlice() throws {
+    let source = try Data(contentsOf: Self.hooksJSON)
+    let rendered = try #require(HookSettings.render(hooksJSON: source, pluginRoot: Self.pluginRoot))
+
+    let stop = try #require(try hooks(rendered)["Stop"])
+    let messages = stop.flatMap { ($0["hooks"] as? [[String: Any]]) ?? [] }
+      .compactMap { $0["statusMessage"] as? String }
+    #expect(messages == ["swiftgate check --tier slice"])
   }
 
   @Test(
