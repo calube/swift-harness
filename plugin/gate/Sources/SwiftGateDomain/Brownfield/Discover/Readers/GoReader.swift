@@ -1,6 +1,7 @@
 import Foundation
 
-/// Reads `go.mod`: an area per module, `go test` with `-run`, golangci-lint when configured.
+/// Reads `go.mod`: an area per module, `go test` with `-run`, golangci-lint when configured. Every
+/// command runs from the module's directory, the area root.
 ///
 /// golangci-lint finds a dotted `.golangci.*` itself, searching up from where it runs; any
 /// other name is passed with `-c`. With no config, lint stays missing rather than guessed.
@@ -19,12 +20,11 @@ public struct GoReader: EcosystemReader {
         return nil
       }
       let root = CICommandMining.dirname(path)
-      let run = { CICommandMining.inDirectory(root, $0) }
       let found = { (command: String) in Sourced(value: command, source: path, confidence: .found) }
       var commands: [AreaStep: Sourced<String>] = [
-        .test: found(run("go test ./...")),
-        .testFiles: found(run("go test ./... -run {tests}")),
-        .build: found(run("go build ./...")),
+        .test: found("go test ./..."),
+        .testFiles: found("go test ./... -run {tests}"),
+        .build: found("go build ./..."),
       ]
       var missing: [AreaStep: String] = [:]
       let config = BuildFilePaths.ancestors(of: root).lazy.flatMap { directory in
@@ -36,7 +36,7 @@ public struct GoReader: EcosystemReader {
           name.hasPrefix(".")
           ? "" : "-c \(CICommandMining.quote(BuildFilePaths.relativeFrom(root, to: config))) "
         commands[.lint] = Sourced(
-          value: run("golangci-lint run \(flag)./..."), source: config, confidence: .found)
+          value: "golangci-lint run \(flag)./...", source: config, confidence: .found)
       } else {
         missing[.lint] = "no golangci-lint config"
       }
