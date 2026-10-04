@@ -1,0 +1,5 @@
+swiftgate RED · run 20261004T190821Z-095285a9 · 537ms
+  T0 RED 537ms
+findings: 1 (1 gating)
+  major    Packages/GameEngine/Sources/GameEngine/GameEngine.swift:1  arch.undeclared-kind: GameEngine is a feature Core but declares no @Reducer; write it as a TCA feature, or declare its kind (engine, library, render) in .swiftgate.toml [[modules]] …
+details: .harness/runs/20261004T190821Z-095285a9/

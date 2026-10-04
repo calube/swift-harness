@@ -9,6 +9,7 @@
   /// `[[scenarios]]` entry together.
   enum Scenario: String, CaseIterable {
     case live
+    case empty
 
     func apply(to dependencies: inout DependencyValues) {
       switch self {

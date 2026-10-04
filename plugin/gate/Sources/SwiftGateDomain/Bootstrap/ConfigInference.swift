@@ -110,6 +110,7 @@ public struct InferredConfig: Sendable, Equatable {
       .replacingOccurrences(of: "{{DEVICE}}", with: quoted(simulator?.device ?? Self.placeholder))
       .replacingOccurrences(of: "{{OS}}", with: quoted(simulator?.os ?? Self.placeholder))
       .replacingOccurrences(of: "{{PROFILE}}", with: quoted(profile ?? Config.defaultProfile))
+      .replacingOccurrences(of: "{{SCENARIOS}}", with: ScenarioStamp.tables(scenarios))
   }
 
   /// Where an existing config disagrees with the repository or the machine. Only disagreements

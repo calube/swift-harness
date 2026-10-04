@@ -1,0 +1,374 @@
+bootstrap: 7 to write, 0 unchanged, 1 left alone, 1 outside the repository
+
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,45 @@
++<!-- swift-harness:begin -->
++## swift-harness
++
++The swift-harness plugin gates this repository. `swiftgate` is the only gate: skills, Claude
++Code hooks and git hooks all call it, and none of them re-implement a check.
++
++**Verdicts.** `GREEN` means the code is good. `RED` means the code is wrong: fix the code. `BLOCKED`
++means the environment is wrong (Xcode pin, simulator runtime, disk): fix the environment, never the
++code. Pass `--json` for the versioned report; full logs land in `.harness/runs/<run-id>/`.
++
++**Before you call a change done.**
++
++| When | Run |
++|---|---|
++| While editing | `swiftgate check --tier fast` (T0 + affected host tests; the Stop hook runs it too) |
++| Before pushing | `swiftgate check --tier push` (the pre-push hook runs it) |
++| Before asking for review | `swiftgate check --tier ready` (adds UI flows, prove, stress, reach) |
++| Machine trouble | `swiftgate doctor` |
++
++**Where the rules live.** In the plugin reference docs (path in your session context), routed
++by their `index.md`:
++
++- `standards.md`: concurrency, architecture, clients, errors, logging, SwiftUI, comments.
++  Rule ids such as `det.date-init` or `A2` point into it.
++- `testing-playbook.md`: tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
++
++**This repository's own docs.** [`docs/index.md`](docs/index.md) routes every doc this repository
++has: designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.
++
++**Skills.** `/swift-harness:architecture` (design a module, pick its kind),
++`/swift-harness:tdd` (test-first), `/swift-harness:test-gate` (pre-ready sequence),
++`/swift-harness:validate` (evidence for a PR), `/swift-harness:comment-audit`,
++`/swift-harness:status` (active plans across repositories).
++
++**Hard rules.**
++
++- Never run raw `xcodebuild`, erase simulators, or pass snapshot record flags: go through
++  `swiftgate` (`swiftgate test --tier t2|t3`, `swiftgate snapshots record`).
++- Never hand-edit snapshot references, `Package.resolved`, `.xcresult` bundles, or plan/ledger
++  state.
++- Waive a rule only on the offending line: `// swiftgate:allow <rule-id> — <reason>`. A bare allow
++  is itself RED.
++- Project settings live in `.swiftgate.toml`; `swiftgate bootstrap` manages this block, so
++  edit outside the markers.
++<!-- swift-harness:end -->
+
+CLAUDE.md -> AGENTS.md (new symlink)
+
+--- /dev/null
++++ b/.swiftgate.toml
+@@ -0,0 +1,113 @@
++# swiftgate project profile. `swiftgate bootstrap` writes this file once and never rewrites it;
++# edit it freely. Shape: the swift-harness design spec, section 5.4.
++schema = 1
++xcode = "26.2"
++app_scheme = "SampleApp"
++packages = ["Packages/*"]
++
++[simulator]
++device = "iPhone 17"
++os = "26.2"
++
++# T3 UI flows are a closed list (testing playbook P11). Declare one entry per XCUITest flow:
++# [[flows]]
++# name = "checkout"
++# reason = "revenue-critical; crosses three features"
++
++# Modules that deviate from the defaults (kind "feature", host-testable) need an entry.
++# Kinds: feature | engine | render | library | client | test-support.
++# [[modules]]
++# name = "GameEngine"
++# kind = "engine"
++# reason = "60Hz fixed-timestep simulation; per-frame store overhead unjustified"
++
++# Vendor SDK modules allowed only inside *Live modules:
++# [clients]
++# vendor_modules = ["FirebaseAnalytics"]
++
++# docs-lint and prose: the routers bootstrap stamps are managed files. Repo-specific anchors,
++# banned phrases (each needs a reason) and per-file word budgets are opt-in. Router and topic
++# default to 400 / 800 words; AGENTS.md defaults to 60 lines; a whole design doc defaults to
++# ~1,200 words.
++[docs]
++managed_files = ["docs/index.md", "AGENTS.md"]
++
++# [[docs.banned_phrases]]
++# phrase = "leverage"
++# reason = "vague business jargon; say what changed"
++#
++# [docs.budgets]
++# router = 400
++# topic = 800
++# [docs.budgets.sections]
++# architecture defaults to 80 words (spec §5.3); an entry here overrides it and merges over,
++# rather than replacing, the other section defaults.
++# architecture = 120
++
++# The test-quality judge sends test source and diffs to a model, so it is off until a repository
++# opts in. Each threshold is optional and defaults to the value shown. `backend = "jev"` also needs `send_to = "api.typesafe.ai"`,
++# naming the third-party host, and its `model` must be a versioned id (default "jev-1.13.0"; the
++# aliases "jev-latest" and "jev-preview" are refused). The API key never goes here: Jev reads it
++# from TYPESAFE_API_KEY in the environment.
++# [judge]
++# backend = "claude"           # none | claude | jev
++# advisory_threshold = 0.6    # default
++# block_threshold = 0.9        # default
++# send_to = "api.typesafe.ai"  # with backend = "jev" only
++
++# Local telemetry: gate runs, steps and test results, hook decisions, cache lookups, build halts
++# and agent token counts, as JSON lines under .harness/events/. On by default; nothing leaves the
++# machine. `enabled = false` stops every kind except the judge's audit log, which a configured
++# [judge] always writes. See the plugin's docs/telemetry.md.
++# [telemetry]
++# enabled = false
++
++# Simulator QA: `swiftgate sim up` holds its device until `sim down`, the agent-device session
++# ends, or this many minutes pass (1 to 240).
++# [qa]
++# session_timeout_minutes = 30
++
++# Dependency scenarios `swiftgate sim up --scenario <name>` may launch the app in. Each name is a
++# case of the app's `enum Scenario: String` (bootstrap stamps `Scenario.swift` with `live` beside
++# a single `@main` app file); `swiftgate arch` fails when the two lists differ.
++# [[scenarios]]
++# name = "live"
++# reason = "the app's own live dependencies, as it ships"
++
++# Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
++# [plan]
++# max_parallel = 3
++
++# What this repository is optimised for: the `[build.presets.<name>]` table `/swift-harness:build`
++# and `/swift-harness:ship` use when given no --preset. It only picks a preset; hooks, test-first
++# rules and the merge gate stay the same. `swiftgate doctor` fails a profile naming no preset.
++[harness]
++profile = "default"
++
++# Named `build` presets (design spec §5.1). Every key is required: a typo fails `swiftgate doctor`
++# rather than falling back to a default without warning.
++[build.presets.default]
++design_tier = "standard"
++max_parallel = 3
++review = "full"            # full: architecture + test-quality per task, verified; gate: the task gate only
++task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready
++merge_gate = "push"
++worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
++time_budget_min = 0        # 0: no budget
++stop_starts_before_min = 0
++on_design_conflict = "amend"   # amend: full --amend flow; block: D14
++task_proof = "per-task"    # per-task: each task gate runs --prove --mutate; final: only the final ready gate does
++sim_qa = "changed"         # changed: drive the changed screens in a simulator after the final gate; off: skip
++
++[build.presets.interview]
++design_tier = "sketch"
++max_parallel = 3
++review = "gate"
++task_gate = "fast"
++merge_gate = "push"
++worker_model = "tagged"
++time_budget_min = 38
++stop_starts_before_min = 8
++on_design_conflict = "block"
++task_proof = "final"
++sim_qa = "changed"
+
+--- /dev/null
++++ b/.swift-format
+@@ -0,0 +1,75 @@
++{
++  "fileScopedDeclarationPrivacy" : {
++    "accessLevel" : "private"
++  },
++  "indentConditionalCompilationBlocks" : true,
++  "indentSwitchCaseLabels" : false,
++  "indentation" : {
++    "spaces" : 2
++  },
++  "lineBreakAroundMultilineExpressionChainComponents" : false,
++  "lineBreakBeforeControlFlowKeywords" : false,
++  "lineBreakBeforeEachArgument" : false,
++  "lineBreakBeforeEachGenericRequirement" : false,
++  "lineBreakBetweenDeclarationAttributes" : false,
++  "lineLength" : 100,
++  "maximumBlankLines" : 1,
++  "multiElementCollectionTrailingCommas" : true,
++  "noAssignmentInExpressions" : {
++    "allowedFunctions" : [
++      "XCTAssertNoThrow"
++    ]
++  },
++  "prioritizeKeepingFunctionOutputTogether" : false,
++  "reflowMultilineStringLiterals" : "never",
++  "respectsExistingLineBreaks" : true,
++  "rules" : {
++    "AllPublicDeclarationsHaveDocumentation" : false,
++    "AlwaysUseLiteralForEmptyCollectionInit" : false,
++    "AlwaysUseLowerCamelCase" : true,
++    "AmbiguousTrailingClosureOverload" : true,
++    "AvoidRetroactiveConformances" : true,
++    "BeginDocumentationCommentWithOneLineSummary" : false,
++    "DoNotUseSemicolons" : true,
++    "DontRepeatTypeInStaticProperties" : true,
++    "FileScopedDeclarationPrivacy" : true,
++    "FullyIndirectEnum" : true,
++    "GroupNumericLiterals" : true,
++    "IdentifiersMustBeASCII" : true,
++    "NeverForceUnwrap" : false,
++    "NeverUseForceTry" : false,
++    "NeverUseImplicitlyUnwrappedOptionals" : false,
++    "NoAccessLevelOnExtensionDeclaration" : true,
++    "NoAssignmentInExpressions" : true,
++    "NoBlockComments" : true,
++    "NoCasesWithOnlyFallthrough" : true,
++    "NoEmptyLinesOpeningClosingBraces" : false,
++    "NoEmptyTrailingClosureParentheses" : true,
++    "NoLabelsInCasePatterns" : true,
++    "NoLeadingUnderscores" : false,
++    "NoParensAroundConditions" : true,
++    "NoPlaygroundLiterals" : true,
++    "NoVoidReturnOnFunctionSignature" : true,
++    "OmitExplicitReturns" : false,
++    "OneCasePerLine" : true,
++    "OneVariableDeclarationPerLine" : true,
++    "OnlyOneTrailingClosureArgument" : true,
++    "OrderedImports" : true,
++    "ReplaceForEachWithForLoop" : true,
++    "ReturnVoidInsteadOfEmptyTuple" : true,
++    "TypeNamesShouldBeCapitalized" : true,
++    "UseEarlyExits" : false,
++    "UseExplicitNilCheckInConditions" : true,
++    "UseLetInEveryBoundCaseVariable" : true,
++    "UseShorthandTypeNames" : true,
++    "UseSingleLinePropertyGetter" : true,
++    "UseSynthesizedInitializer" : true,
++    "UseTripleSlashForDocumentationComments" : true,
++    "UseWhereClausesInForLoops" : false,
++    "ValidateDocumentationComments" : false
++  },
++  "spacesAroundRangeFormationOperators" : false,
++  "spacesBeforeEndOfLineComments" : 2,
++  "tabWidth" : 8,
++  "version" : 1
++}
+
+--- /dev/null
++++ b/lefthook.yml
+@@ -0,0 +1,16 @@
++# Managed by `swiftgate bootstrap`. Git hooks run outside Claude Code, so they call the stable
++# symlink bootstrap installs rather than a plugin path that changes between versions.
++pre-commit:
++  commands:
++    swiftgate-comments:
++      run: '"$HOME/.local/bin/swiftgate" comments --staged'
++
++pre-push:
++  commands:
++    swiftgate-push:
++      run: '"$HOME/.local/bin/swiftgate" check --tier push'
++
++commit-msg:
++  commands:
++    swiftgate-commit-msg:
++      run: '"$HOME/.local/bin/swiftgate" comments --commit-msg {1}'
+
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,15 @@
++# swift-harness
++**/.harness/runs/
++**/.harness/hook-state/
++**/.harness/derived-data/
++**/.harness/judge-cache/
++**/.harness/events/
++**/.harness/cache/
++**/.harness/probe/
++**/.harness/context-pack/
++**/.harness/design-render/
++**/.harness/plan-draft/
++**/.harness/task-status.json
++**/.harness/build/
++**/.harness/tmp/
++.build/
+
+--- /dev/null
++++ b/docs/index.md
+@@ -0,0 +1,13 @@
++# Docs index
++
++The one routing surface for this repository's docs. Every doc should be reachable from this
++table, or through an area index it links.
++
++## If you're… → Read
++
++| If you're… | Read |
++|---|---|
++| New to the repo, or an agent starting a session | [`../AGENTS.md`](../AGENTS.md), then this file |
++
++Add a row above whenever you add a design, plan, ADR, or handoff, so this file stays the one
++router. Never let a doc go unlisted here.
+
+Left alone:
+  .swiftlint.yml: not written: swiftlint is not installed (style only)
+
+Outside the repository:
+  register /REPO in /HOME/.swift-harness/projects.json
+
+Notes:
+  consider: dependency scenarios for `swiftgate sim up --scenario`: 2 `@main … : App` files outside packages (App/SampleApp.swift, Companion/CompanionApp.swift); bootstrap stamps Scenario.swift only beside a single one. To adopt them, create Scenario.swift beside the app target's `@main` file with:
+      #if DEBUG
+        import Dependencies
+        import Foundation
+
+        /// A named set of dependency overrides the app launches with when it gets
+        /// `-harness-scenario <rawValue>`. Agents (`swiftgate sim up --scenario`) and UI tests select
+        /// the same cases, and `.swiftgate.toml`'s `[[scenarios]]` lists the same names; `swiftgate arch`
+        /// fails when the two lists differ. Add a case, its overrides in `apply(to:)`, and its
+        /// `[[scenarios]]` entry together.
+        enum Scenario: String, CaseIterable {
+          case live
+
+          func apply(to dependencies: inout DependencyValues) {
+            switch self {
+            case .live:
+              break
+            }
+          }
+
+          /// Applies the scenario the launch arguments name. Call it first in the app's `init()`:
+          /// `prepareDependencies` must run before the first store exists, or the store keeps live
+          /// values.
+          static func prepareFromLaunchArguments() {
+            guard let scenario = selected(by: ProcessInfo.processInfo.arguments) else { return }
+            prepareDependencies { scenario.apply(to: &$0) }
+          }
+
+          /// The scenario named after `-harness-scenario` in `arguments`, or nil when the flag is absent.
+          /// An unknown name reports an issue and yields `.live`, so a typo shows instead of passing
+          /// silently.
+          static func selected(by arguments: [String]) -> Scenario? {
+            guard let flag = arguments.firstIndex(of: "-harness-scenario") else { return nil }
+            let nameIndex = arguments.index(after: flag)
+            guard nameIndex < arguments.endIndex else {
+              reportIssue("-harness-scenario needs a name; launching live")
+              return .live
+            }
+            let name = arguments[nameIndex]
+            guard let scenario = Scenario(rawValue: name) else {
+              reportIssue(
+                "Unknown scenario \"\(name)\"; expected one of "
+                  + "\(allCases.map(\.rawValue).joined(separator: ", ")). Launching live")
+              return .live
+            }
+            return scenario
+          }
+        }
+      #else
+        /// Release builds launch with live dependencies only; this keeps the app's one-line call.
+        enum Scenario {
+          static func prepareFromLaunchArguments() {}
+        }
+      #endif
+    add to .swiftgate.toml:
+      [[scenarios]]
+      name = "live"
+      reason = "the app's own live dependencies, as it ships"
+    and add `Scenario.prepareFromLaunchArguments()` as the first line of the app's `init()`.
+  not a git repository: lefthook hooks are not installed
+
+Dry run: nothing was written. Re-run with --apply to write it.

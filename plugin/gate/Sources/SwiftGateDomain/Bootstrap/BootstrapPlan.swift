@@ -225,12 +225,15 @@ public enum BootstrapPlanner {
     let nested: String? =
       if case .repository(let prefix, _) = inputs.git, !prefix.isEmpty { prefix } else { nil }
 
+    let scenario = ScenarioStamp.plan(inputs)
     var stamps = [
       agents(existing(Paths.agents), body: inputs.templates.agents),
       Stamp(path: Paths.claude, change: claudeLink(existing(Paths.claude))),
-      Stamp(path: Paths.config, change: config(inputs)),
-      owned(Paths.swiftFormat, existing(Paths.swiftFormat), inputs.templates.swiftFormat),
+      Stamp(path: Paths.config, change: config(inputs, scenarios: scenario.scenarios)),
     ]
+    if let stamp = scenario.stamp { stamps.append(stamp) }
+    stamps.append(
+      owned(Paths.swiftFormat, existing(Paths.swiftFormat), inputs.templates.swiftFormat))
     let swiftLint = existing(Paths.swiftLint)
     if inputs.swiftLintInstalled || swiftLint != .absent {
       stamps.append(owned(Paths.swiftLint, swiftLint, inputs.templates.swiftLint))
@@ -258,7 +261,7 @@ public enum BootstrapPlanner {
     stamps.append(docsIndex(existing(Paths.docsIndex), template: inputs.templates.docsIndex))
 
     var home: [HomeAction] = []
-    var notes = inputs.inferred.unresolved.map { "inferred config: \($0)" }
+    var notes = inputs.inferred.unresolved.map { "inferred config: \($0)" } + scenario.notes
     switch inputs.registry {
     case .absent:
       home.append(
@@ -355,11 +358,12 @@ public enum BootstrapPlanner {
     }
   }
 
-  static func config(_ inputs: BootstrapInputs) -> StampChange {
+  static func config(_ inputs: BootstrapInputs, scenarios: [Scenario]) -> StampChange {
     switch inputs.config {
     case .absent:
       return .create(
-        inputs.inferred.render(template: inputs.templates.config, profile: inputs.profile))
+        inputs.inferred.render(
+          template: inputs.templates.config, profile: inputs.profile, scenarios: scenarios))
     case .loaded(let config):
       let drift =
         inputs.inferred.drift(from: config) + missingManagedFiles(config)
