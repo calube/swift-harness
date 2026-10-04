@@ -161,7 +161,9 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 // by default the command printed no level because the clone has no judge.
 // `swiftgate` is the fake `swiftgate events span` every stage agent runs its own span lines
 // against; a stage's return gets the `span` its start printed unless the scripted return sets one.
-const noJudge = { level: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
+const noJudge = { level: null, by: null, path: null, glob: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
+// What the diff-risk agent returns for a level the judge rated.
+const judged = level => ({ level, by: 'judge', path: null, glob: null, reason: null, exitStatus: 0 })
 async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge } = {}) {
   const calls = []
   let inFlight = 0
@@ -363,7 +365,7 @@ const tests = {
       await run(baseArgs({ taskProof: 'final' }), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: blocking }),
       await run(brownfieldArgs(), {
         workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()],
-        diffRisk: { level: 'high', reason: null, exitStatus: 0 },
+        diffRisk: judged('high'),
         reviews: { architecture: [{ findings: [finding({ file: 'Core/src/search.rs' })] }] },
       }),
     ]
@@ -429,7 +431,7 @@ const tests = {
     const scenarios = [
       [baseArgs(), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: { architecture: [{ findings: [finding()] }] } }, 7],
       [baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()] }, 2],
-      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'high', reason: null, exitStatus: 0 } }, 4],
+      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('high') }, 4],
     ]
     for (const [args, behave, expected] of scenarios) {
       const { calls } = await run(args, behave)
@@ -1063,13 +1065,13 @@ const tests = {
   },
 
   async 'classified review takes its depth from swiftgate judge diff-risk: low runs the gate only, high the full review — catches every brownfield task reviewed at medium whatever its risk'() {
-    const low = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'low', reason: null, exitStatus: 0 } })
+    const low = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('low') })
     assert.equal(low.result.outcome, 'ready-to-merge')
     assert.equal(low.reviewerCalls.length, 0, 'a low-risk change was reviewed')
     assert.match(low.result.notes, /classified at low by swiftgate judge diff-risk/)
     assertTaskReturn(low.result, 'classified')
 
-    const high = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'high', reason: null, exitStatus: 0 } })
+    const high = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('high') })
     assert.deepEqual(high.reviewerCalls.map(c => c.opts.agentType).sort(), ['swift-harness:architecture', 'swift-harness:test-quality'])
     assert.match(high.result.notes, /classified at high/)
 
@@ -1077,6 +1079,22 @@ const tests = {
     assert.equal(high.classifierCalls.length, 1)
     assert.ok(call.prompt.includes(`cd /work/search-task && ${SG} judge diff-risk --base search/plan --json`), call.prompt)
     assert.equal(call.opts.model, 'claude-sonnet-5-5')
+  },
+
+  async 'a sensitive path rates high with its glob and path in the review line run report reads, and a level with no named source falls back — catches every depth reported as the judge\'s, as in the fifth memos trial'() {
+    const sensitive = { level: 'high', by: 'sensitive', path: 'store/auth.go', glob: 'store/**', reason: null, exitStatus: 0 }
+    const { result, reviewerCalls, classifierCalls } = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: sensitive })
+    assert.deepEqual(reviewerCalls.map(c => c.opts.agentType).sort(), ['swift-harness:architecture', 'swift-harness:test-quality'])
+    // The exact line BrownfieldRunReport parses back into "because the sensitive glob … matches …".
+    assert.ok(result.notes.split('\n').includes('review: classified at high because the sensitive glob store/** matches store/auth.go'), result.notes)
+    assert.ok(!/by swiftgate judge diff-risk/.test(result.notes), result.notes)
+    const schema = classifierCalls[0].opts.schema
+    assert.deepEqual(schema.required.filter(k => ['by', 'path', 'glob'].includes(k)).sort(), ['by', 'glob', 'path'])
+
+    for (const diffRisk of [{ ...judged('high'), by: null }, { ...sensitive, path: null }]) {
+      const fell = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk })
+      assert.match(fell.result.notes, /classified at medium, because diff-risk gave no level/, JSON.stringify(diffRisk))
+    }
   },
 
   async 'a diff-risk agent that fails or answers outside the levels falls back to medium and logs why — catches a broken classifier skipping review or crashing the task'() {
@@ -1093,7 +1111,7 @@ const tests = {
   async 'diff-risk is asked once per task, after a green gate, and never in the owned profile — catches a fix pass re-rating the task or an owned build paying for a classifier'() {
     const behave = {
       workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()],
-      diffRisk: { level: 'low', reason: null, exitStatus: 0 },
+      diffRisk: judged('low'),
     }
     const fixed = await run(brownfieldArgs(), behave)
     assert.equal(fixed.classifierCalls.length, 1)
