@@ -63,4 +63,28 @@ struct GateEventsTests {
     #expect(text.contains(#""step":"app-build""#))
     #expect(!text.contains("XCTAssertEqual failed"))
   }
+
+  @Test(
+    "a brownfield report's gate.run carries its baselineCount and an owned one leaves it out — catches the absorbed count dropped between the report and the event line"
+  )
+  func baselineCount() throws {
+    let report = try RunReport(
+      runID: "20261004T120000Z-00000001", durationMilliseconds: 10,
+      tiers: [
+        try TierResult(tier: .t1, verdict: .green, durationMilliseconds: 10, testCounts: nil)
+      ],
+      findings: [])
+
+    let brownfield = try GateRunEvent(
+      report: report, command: "check slice", treeHash: nil, dirty: nil, baselineCount: 2)
+    let owned = try GateRunEvent(report: report, command: "check push", treeHash: nil, dirty: nil)
+
+    #expect(brownfield.baselineCount == 2)
+    #expect(owned.baselineCount == nil)
+    let run = HarnessEvent(
+      eventID: "run", time: Date(timeIntervalSince1970: 1_790_000_000), runID: report.runID,
+      source: HarnessEventSource(route: .check, tier: .slice), payload: .gateRun(brownfield))
+    let text = String(decoding: try HarnessEventJSON.encodeLine(run), as: UTF8.self)
+    #expect(text.contains(#""baselineCount":2"#))
+  }
 }

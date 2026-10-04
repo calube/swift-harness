@@ -241,18 +241,18 @@ struct BrownfieldSliceCheckTests {
     #expect(Self.verdict(parts) == .green)
   }
 
-  /// Holds each head command until `expected` are in flight at once, or `patience` passes.
+  /// Holds each command, yielding, until `expected` are in flight at once or it has yielded
+  /// `patience` times, and records the most that were in flight together.
   private final class Gathering: AreaCommandRunning {
     private struct State {
       var inFlight = 0
       var most = 0
-      var waiting: [CheckedContinuation<Void, Never>] = []
     }
     private let state = Mutex(State())
     let expected: Int
-    let patience: Duration
+    let patience: Int
 
-    init(expected: Int, patience: Duration) {
+    init(expected: Int, patience: Int) {
       self.expected = expected
       self.patience = patience
     }
@@ -260,28 +260,17 @@ struct BrownfieldSliceCheckTests {
     var most: Int { state.withLock { $0.most } }
 
     func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
-      await withCheckedContinuation { continuation in
-        let release = state.withLock { state -> [CheckedContinuation<Void, Never>] in
-          state.inFlight += 1
-          state.most = max(state.most, state.inFlight)
-          state.waiting.append(continuation)
-          guard state.inFlight >= expected else { return [] }
-          defer { state.waiting = [] }
-          return state.waiting
-        }
-        for waiter in release { waiter.resume() }
+      state.withLock { state in
+        state.inFlight += 1
+        state.most = max(state.most, state.inFlight)
+      }
+      var yields = 0
+      while state.withLock({ $0.most }) < expected, yields < patience {
+        yields += 1
+        await Task.yield()
       }
       state.withLock { $0.inFlight -= 1 }
       return .passed
-    }
-
-    /// Lets every held command go, so a serial walk ends instead of hanging.
-    func giveUp() {
-      let release = state.withLock { state in
-        defer { state.waiting = [] }
-        return state.waiting
-      }
-      for waiter in release { waiter.resume() }
     }
   }
 
@@ -291,27 +280,16 @@ struct BrownfieldSliceCheckTests {
   func areasRunTogether() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.base) }
-    let runner = Gathering(expected: 3, patience: .seconds(3))
-    let watchdog = Task {
-      try await Task.sleep(for: runner.patience)
-      while !Task.isCancelled {
-        runner.giveUp()
-        try await Task.sleep(for: .milliseconds(50))
-      }
-    }
-    defer { watchdog.cancel() }
+    let runner = Gathering(expected: 3, patience: 100_000)
 
-    let (parts, milliseconds) = try await GateRun.timed {
-      try await Self.run(
-        clone, areas: [Self.area("app"), Self.area("api"), Self.area("cli")],
-        changes: ["app", "api", "cli"].map {
-          Change(path: "\($0)/src/main.py", text: "x = 1\n", added: [1...1])
-        },
-        runner: runner)
-    }
+    let parts = try await Self.run(
+      clone, areas: [Self.area("app"), Self.area("api"), Self.area("cli")],
+      changes: ["app", "api", "cli"].map {
+        Change(path: "\($0)/src/main.py", text: "x = 1\n", added: [1...1])
+      },
+      runner: runner)
 
     #expect(runner.most == 3)
-    #expect(milliseconds < 3000)
     #expect(Self.verdict(parts) == .green)
   }
 
