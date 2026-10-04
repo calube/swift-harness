@@ -163,6 +163,8 @@ extension RuleIndexTests {
     ]
     let other = [
       CalibrationFreshness.wrongModelRuleID, EvidenceCacheContents.corruptLineRuleID,
+      QAReport.checkFailedRuleID, QAReport.checkUnverifiedRuleID,
+      QAReport.checkPassesAtBaseRuleID,
     ]
     return DesignLintRule.allCases.map(\.rawValue) + docsLint + planLint + build + other
       + enumeratedFamilies.values.flatMap { $0 }

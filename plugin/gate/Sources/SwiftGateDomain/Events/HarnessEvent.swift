@@ -83,6 +83,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case proveResult = "prove.result"
   /// 1 agent's tool calls in 1 window, read from a Claude Code transcript.
   case agentTools = "agent.tools"
+  /// 1 validation row in 1 `qa run`.
+  case qaCheck = "qa.check"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -95,6 +97,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .buildHalt, .buildResume, .buildReturnChecked: .build
     case .discoverRun, .warmupRun: .brownfield
     case .spanStart, .spanEnd: .span
+    case .qaCheck: .qa
     }
   }
 }
@@ -110,6 +113,7 @@ public enum HarnessEventStream: String, Sendable, CaseIterable {
   case build
   case brownfield
   case span
+  case qa
 
   public var fileName: String { "\(rawValue).jsonl" }
 }
@@ -177,6 +181,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case spanEnd(SpanEndEvent)
   case proveResult(ProveResultEvent)
   case agentTools(AgentToolsEvent)
+  case qaCheck(QACheckEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -197,6 +202,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .spanEnd: .spanEnd
     case .proveResult: .proveResult
     case .agentTools: .agentTools
+    case .qaCheck: .qaCheck
     }
   }
 }
@@ -422,6 +428,8 @@ extension HarnessEvent: Codable {
       payload = .proveResult(try c.decode(ProveResultEvent.self, forKey: .payload))
     case .agentTools:
       payload = .agentTools(try c.decode(AgentToolsEvent.self, forKey: .payload))
+    case .qaCheck:
+      payload = .qaCheck(try c.decode(QACheckEvent.self, forKey: .payload))
     }
   }
 
@@ -454,6 +462,7 @@ extension HarnessEvent: Codable {
     case .spanEnd(let end): try c.encode(end, forKey: .payload)
     case .proveResult(let result): try c.encode(result, forKey: .payload)
     case .agentTools(let tools): try c.encode(tools, forKey: .payload)
+    case .qaCheck(let check): try c.encode(check, forKey: .payload)
     }
   }
 }
