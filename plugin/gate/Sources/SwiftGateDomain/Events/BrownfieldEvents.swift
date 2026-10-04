@@ -50,6 +50,8 @@ public struct DiscoverRunEvent: Sendable, Equatable, Codable {
 /// The steps the warm-up runs, in order, per area.
 public enum WarmupStep: String, Sendable, Codable, CaseIterable {
   case generate, build, test
+  /// A node area's dependency install, run once when a task worktree or plan checkout is created.
+  case install
 }
 
 /// Whether a warm-up step found its caches already filled.

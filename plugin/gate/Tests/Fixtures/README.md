@@ -2393,3 +2393,33 @@ open(sys.argv[3], 'w').write(plan[:i] + section.rstrip('\\n') + '\\n\\n' + plan[
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/memos-4-validation-PLAN.md`
 matched nothing.
+
+## Node installs: 1 lockfile per package manager
+
+`NodeInstall/<manager>/` holds a 1-dependency `package.json` and the lockfile its manager wrote installing it:
+pnpm 10.25.0, npm 10.9.9, yarn 1.22.22 and bun 1.3.11, and `NodeInstall/yarn-berry/` the same project
+installed by yarn 4.5.3. `NodeInstall/pnpm-outdated/` is the pnpm project with
+the dependency moved to `6.0.0` and its lockfile left as it was; `output.txt` is what a frozen install printed
+there, and it exited 1. Captured in an empty directory `S`:
+
+```sh
+for m in pnpm npm yarn bun; do mkdir -p $S/$m
+  printf '{\n  "name": "install-fixture",\n  "version": "1.0.0",\n  "private": true,\n  "dependencies": {\n    "is-number": "7.0.0"\n  }\n}\n' > $S/$m/package.json
+done
+(cd $S/pnpm && pnpm install)
+(cd $S/npm && npm install --no-audit --no-fund)
+(cd $S/yarn && npx -y yarn@1.22.22 install)
+(cd $S/bun && bun install)
+mkdir -p $S/yarn-berry && cp $S/yarn/package.json $S/yarn-berry/
+(cd $S/yarn-berry && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack yarn@4.5.3 install)
+mkdir -p $S/pnpm-outdated && cp $S/pnpm/pnpm-lock.yaml $S/pnpm-outdated/
+sed 's/"7.0.0"/"6.0.0"/' $S/pnpm/package.json > $S/pnpm-outdated/package.json
+(cd $S/pnpm-outdated && CI=1 pnpm install --frozen-lockfile --prefer-offline > output.txt 2>&1)
+for d in pnpm npm yarn yarn-berry bun pnpm-outdated; do mkdir -p NodeInstall/$d
+  for f in package.json pnpm-lock.yaml package-lock.json yarn.lock bun.lock output.txt; do
+    [ -f $S/$d/$f ] && cp $S/$d/$f NodeInstall/$d/$f
+  done
+done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' NodeInstall` matched nothing.

@@ -140,6 +140,11 @@ Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, k
 1. `"$SG" run checkout create <slug> --session <session> --json` from the user's checkout. Its
    `worktree` is `<checkout>`; work only there. Never add or remove a worktree with git itself:
    only `swiftgate` keeps the gate reports a checkout holds when it goes.
+   `run checkout create` and `worktree create` install each node area's dependencies once, frozen
+   to its lockfile, and list each install in the JSON's `installs`. Never prefix an area command
+   with an install, here or in a worker's brief: run `<config>`'s commands as they are. An install
+   whose `outcome` isn't `passed` is a report line; its area's commands still run, and a step
+   that then fails is handled as any failing command is.
 2. Write the contract: the new types, signatures and stubs every task compiles against, with
    behaviour unchanged. It builds in every touched area: run each touched area's `build` command
    from `<config>` in `<checkout>`.
@@ -173,7 +178,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
    - Its `main` is `<plan-branch>`, checked out in `<checkout>`: run its steps there.
    - Build each worker's pack with `"$SG" context-pack --role worker --ledger <plan-dir>/ledger.json
      --task-id <task> --build-run <run> --json`, with no `--design`: the pack holds the task's
-     `PLAN.md` section, its areas' commands and the brownfield rules.
+     `PLAN.md` section, its areas' commands and the brownfield rules. The task's worktree already
+     has its node dependencies, so the worker runs those commands without an install first.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
