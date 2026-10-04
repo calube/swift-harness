@@ -7,9 +7,11 @@ import SwiftGateDomain
 enum StopHook {
   static let command = "hook stop"
 
-  static func run(_ payload: HookPayload, root: URL, dependencies: HookDependencies) async
-    -> HookResult
-  {
+  /// - Parameter brownfield: the worktree's clone runs the brownfield profile, so the hook gates
+  ///   at `slice` instead of `fast`.
+  static func run(
+    _ payload: HookPayload, root: URL, dependencies: HookDependencies, brownfield: Bool = false
+  ) async -> HookResult {
     let store = HookStateStore(worktreeRoot: root)
     let state = store.stopState(session: payload.sessionID)
     let fingerprint = await ContentFingerprint.compute(git: dependencies.git)
@@ -48,6 +50,11 @@ enum StopHook {
     case .release(let message), .warn(let message):
       return HookResult(stdout: HookOutput.systemMessage(message), stderr: stderr, exitCode: 0)
     }
+  }
+
+  /// The same run `swiftgate check --tier slice` performs, against the commit discovery read.
+  static func sliceTier(root: URL) async -> (Verdict, String) {
+    (.blocked, "swiftgate check --tier slice is not built yet")
   }
 
   /// The same run `swiftgate check --tier fast` performs, recorded in the run history under this

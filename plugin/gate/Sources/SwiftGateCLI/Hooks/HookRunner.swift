@@ -29,6 +29,10 @@ struct HookDependencies: Sendable {
   /// Where each call's `hook.decision` goes, asked only after the hook has decided, so reading
   /// the config it needs never delays a decision; `nil` records none.
   var telemetry: @Sendable () -> HookTelemetry? = { nil }
+  /// The `slice` tier a brownfield clone's Stop hook runs in the worktree: its verdict and report.
+  var brownfieldSlice: @Sendable (URL) async -> (Verdict, String) = { root in
+    await StopHook.sliceTier(root: root)
+  }
 
   static func live(root: URL, environment: [String: String]) -> HookDependencies {
     let runner = LiveProcessRunner()

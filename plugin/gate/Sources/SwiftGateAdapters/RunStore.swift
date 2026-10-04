@@ -87,7 +87,7 @@ public struct RunStore: Sendable {
     _ report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
-    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = []
+    checkTier: CheckTier? = nil, testResults: [TestCaseResult] = [], baselineCount: Int? = nil
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now

@@ -156,7 +156,8 @@ public struct GateRunEvent: Sendable, Equatable, Codable {
 
   /// The event for `report`.
   public init(
-    report: RunReport, command: String?, treeHash: String?, dirty: Bool?
+    report: RunReport, command: String?, treeHash: String?, dirty: Bool?,
+    baselineCount: Int? = nil
   ) throws(ReportContractViolation) {
     var ruleCounts: [String: Int] = [:]
     for finding in report.findings { ruleCounts[finding.ruleID, default: 0] += 1 }
