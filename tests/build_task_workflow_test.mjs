@@ -96,7 +96,7 @@ const brownfieldArgs = (extra = {}) => {
 }
 
 const brownfieldReturn = (overrides = {}) =>
-  workerReturn({ task: 'search-task', gate: { tier: 'slice', verdict: 'GREEN', runId: 'r-green' }, testsAdded: [], ...overrides })
+  workerReturn({ task: 'search-task', gate: { tier: 'slice', verdict: 'GREEN', runId: '20261004T141801Z-79b9bebf' }, testsAdded: [], ...overrides })
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -362,7 +362,7 @@ const tests = {
       await run(baseArgs({ planSurface: '1a2b3c4d' }), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: blocking }),
       await run(baseArgs({ taskProof: 'final' }), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: blocking }),
       await run(brownfieldArgs(), {
-        workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()],
+        workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()],
         diffRisk: { level: 'high', reason: null, exitStatus: 0 },
         reviews: { architecture: [{ findings: [finding({ file: 'Core/src/search.rs' })] }] },
       }),
@@ -573,6 +573,46 @@ const tests = {
     }
   },
 
+  async 'a commit sha, surface commit or gate run id out of its format is unusable at the worker stage and goes to the fix pass — catches a quoted sha that passes the stage and fails check-return'() {
+    // The surfaceCommit a worker returned in the fourth memos trial, quotes and all.
+    const quoted = '"7c3becaa"'
+    const cases = [
+      ['surfaceCommit', workerReturn({ surfaceCommit: quoted })],
+      ['surfaceCommit', workerReturn({ surfaceCommit: '7C3BECAA' })],
+      ['surfaceCommit', workerReturn({ surfaceCommit: 'HEAD~1' })],
+      ['surfaceCommit', workerReturn({ surfaceCommit: '7c3bec' })],
+      ['surfaceCommit', workerReturn({ surfaceCommit: 'a'.repeat(41) })],
+      ['commits', workerReturn({ commits: [quoted] })],
+      ['commits', workerReturn({ commits: ['3f2a91c', 'main'] })],
+      ['gate', workerReturn({ gate: { tier: 'fast', verdict: 'GREEN', runId: '"20260926T141502Z-4c1eab90"' } })],
+      ['gate', workerReturn({ gate: { tier: 'fast', verdict: 'GREEN', runId: '../20260926T141502Z-4c1eab90' } })],
+    ]
+    for (const [field, first] of cases) {
+      const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), { workers: [first, workerReturn({ commits: ['77aa001'] })] })
+      assert.equal(workerCalls.length, 2, `${JSON.stringify(first[field])} passed the worker stage`)
+      assert.match(workerCalls[1].prompt, /unusable/, 'the fix pass does not learn the return was unusable')
+      assert.ok(workerCalls[1].prompt.includes(field), `the fix pass is not told ${field} was wrong`)
+      assert.equal(result.surfaceCommit, null)
+      assertTaskReturn(result, 'gate')
+    }
+    await assert.rejects(
+      run(baseArgs({ review: 'gate' }), { workers: [red(), workerReturn({ commits: ['77aa001'], surfaceCommit: quoted })] }),
+      /surfaceCommit/,
+    )
+    // A full 40-hex sha and a 7-hex short one both stand.
+    for (const sha of ['7c3becaa', '0d989707f82c33f74bb852edd8965ec88fcf041b']) {
+      const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), { workers: [workerReturn({ commits: [sha], surfaceCommit: sha })] })
+      assert.equal(workerCalls.length, 1, sha)
+      assert.equal(result.surfaceCommit, sha)
+    }
+    const schema = (await run(baseArgs({ review: 'gate' }))).workerCalls[0].opts.schema
+    const hex = new RegExp(schema.properties.surfaceCommit.pattern)
+    assert.ok(hex.test('7c3becaa') && !hex.test(quoted), 'the schema leaves surfaceCommit unpatterned')
+    assert.equal(schema.properties.commits.items.pattern, schema.properties.surfaceCommit.pattern)
+    const runID = new RegExp(schema.properties.gate.properties.runId.pattern)
+    assert.ok(runID.test('20261004T141801Z-79b9bebf') && !runID.test('r-green'), 'the schema leaves gate.runId unpatterned')
+  },
+
   async 'a redReason on a return that is not gate-red is unusable — catches a reason the workflow would silently drop'() {
     const withReason = workerReturn({ redReason: 'no-progress' })
     const { workerCalls } = await run(baseArgs({ review: 'gate' }), { workers: [withReason, workerReturn()] })
@@ -635,7 +675,7 @@ const tests = {
 
   async 'the fix pass is a fresh worker handed the red gate run — catches a fixer that never learns why it runs'() {
     const { workerCalls, result } = await run(baseArgs({ review: 'gate' }), {
-      workers: [red(), workerReturn({ commits: ['77aa001'], gate: { tier: 'fast', verdict: 'GREEN', runId: 'g2' } })],
+      workers: [red(), workerReturn({ commits: ['77aa001'], gate: { tier: 'fast', verdict: 'GREEN', runId: '20260926T151000Z-000000a2' } })],
     })
     assert.equal(workerCalls.length, 2)
     assert.ok(workerCalls[1].prompt.includes('20260926T150000Z-0000beef'), 'fix prompt lacks the red run id')
@@ -643,7 +683,7 @@ const tests = {
     assert.equal(workerCalls[1].opts.agentType, WORKER)
     assert.equal(result.outcome, 'ready-to-merge')
     assert.deepEqual(result.commits, ['3f2a91c', '77aa001'], 'both attempts land on the branch')
-    assert.equal(result.gate.runId, 'g2')
+    assert.equal(result.gate.runId, '20260926T151000Z-000000a2')
   },
 
   async 'a fix pass that names no surface commit keeps the first attempt\'s — catches a proof base lost between attempts'() {
@@ -980,7 +1020,7 @@ const tests = {
   },
 
   async 'a prove task gate passes --prove and never --mutate, from the plan branch, in every worker prompt — catches prove-only proof still mutating, or a slice gated against main'() {
-    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()] }
+    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
     const { workerCalls } = await run(brownfieldArgs(), behave)
     assert.equal(workerCalls.length, 2)
     for (const { prompt } of workerCalls) {
@@ -992,7 +1032,7 @@ const tests = {
   },
 
   async 'paths a worker writes and reads come from the state root in a brownfield clone, and stay .harness in an owned one — catches task-status.json written where check-return never looks'() {
-    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()] }
+    const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
     const { workerCalls } = await run(brownfieldArgs(), behave)
     const state = brownfieldArgs().stateRoot
     assert.ok(workerCalls[0].prompt.includes(`State root: ${state}`), workerCalls[0].prompt)
@@ -1052,7 +1092,7 @@ const tests = {
 
   async 'diff-risk is asked once per task, after a green gate, and never in the owned profile — catches a fix pass re-rating the task or an owned build paying for a classifier'() {
     const behave = {
-      workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()],
+      workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()],
       diffRisk: { level: 'low', reason: null, exitStatus: 0 },
     }
     const fixed = await run(brownfieldArgs(), behave)

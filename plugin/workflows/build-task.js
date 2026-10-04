@@ -83,8 +83,11 @@ const GIT_DIR_STATE = '/swift-harness'
 
 // A spec page plan's sections a design conflict may cite; such a plan has no design to cite.
 const SPEC_PAGE_SECTIONS = ['slices', 'surface', 'modules']
-// `plan.json`'s `surfaceCommit`: a hex sha, never a ref name that could move.
+// `plan.json`'s `surfaceCommit`, and every commit a worker returns: a hex sha, never a ref name
+// that could move, nor one wrapped in quotes.
 const SHA = /^[0-9a-f]{7,40}$/
+// A `swiftgate check` run id: its UTC start and an 8-hex suffix.
+const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/
 // A build run id goes into a shell command, so only id characters pass.
 const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 // Every stage agent returns the id of the span it opened; the workflow strips it from what it keeps.
@@ -192,7 +195,7 @@ const GATE_SCHEMA = {
   properties: {
     tier: { type: 'string', enum: PROFILES[A.profile].tiers },
     verdict: { type: 'string', enum: VERDICTS },
-    runId: { type: 'string', description: `the run's runID in ${stateDir}/runs/history.jsonl` },
+    runId: { type: 'string', pattern: RUN_ID.source, description: `the run's runID in ${stateDir}/runs/history.jsonl` },
   },
 }
 const DESIGN_CONFLICT_SCHEMA = {
@@ -235,7 +238,7 @@ const TASK_RETURN_SCHEMA = {
     },
     task: { type: 'string' },
     outcome: { type: 'string', enum: WORKER_OUTCOMES },
-    commits: { type: 'array', items: { type: 'string' }, description: 'shas on the task branch, oldest first' },
+    commits: { type: 'array', items: { type: 'string', pattern: SHA.source }, description: 'hex shas on the task branch, oldest first' },
     gate: GATE_SCHEMA,
     review: { type: 'null', description: 'always null: the workflow fills it' },
     testsAdded: { type: 'array', items: { type: 'string' } },
@@ -243,7 +246,8 @@ const TASK_RETURN_SCHEMA = {
     designConflict: DESIGN_CONFLICT_SCHEMA,
     surfaceCommit: {
       type: ['string', 'null'],
-      description: 'the sha of your API-surface commit, the proof base your gate named; null when the task adds no API',
+      pattern: SHA.source,
+      description: 'the hex sha of your API-surface commit, the proof base your gate named; null when the task adds no API',
     },
   },
 }
@@ -308,14 +312,18 @@ function workerDefect(r) {
   if (missing.length || extra.length) return `its keys differ from TaskReturn (missing: ${missing.join(', ') || 'none'}; extra: ${extra.join(', ') || 'none'})`
   if (r.task !== A.task) return `it returned task ${JSON.stringify(r.task)}, not ${A.task}`
   if (!WORKER_OUTCOMES.includes(r.outcome)) return `its outcome ${JSON.stringify(r.outcome)} isn't one a worker may return`
-  if (!Array.isArray(r.commits) || !r.commits.every(nonEmptyString)) return 'commits is not an array of shas'
+  if (!Array.isArray(r.commits)) return 'commits is not an array of shas'
+  const notSha = r.commits.find(c => !(typeof c === 'string' && SHA.test(c)))
+  if (notSha !== undefined) return `commits holds ${JSON.stringify(notSha)}, not a hex sha of 7 to 40 lowercase characters`
   if (!Array.isArray(r.testsAdded) || !r.testsAdded.every(nonEmptyString)) return 'testsAdded is not an array of ids'
   if (typeof r.notes !== 'string') return 'notes is not a string'
-  if (r.surfaceCommit !== null && !nonEmptyString(r.surfaceCommit)) return 'surfaceCommit is neither a sha nor null'
+  if (r.surfaceCommit !== null && !(typeof r.surfaceCommit === 'string' && SHA.test(r.surfaceCommit))) {
+    return `surfaceCommit ${JSON.stringify(r.surfaceCommit)} is neither a hex sha of 7 to 40 lowercase characters nor null`
+  }
   if (r.gate !== null) {
     const g = r.gate
-    if (!g || typeof g !== 'object' || !PROFILES[A.profile].tiers.includes(g.tier) || !VERDICTS.includes(g.verdict) || !nonEmptyString(g.runId)) {
-      return `its gate ${JSON.stringify(g)} isn't {tier, verdict, runId}`
+    if (!g || typeof g !== 'object' || !PROFILES[A.profile].tiers.includes(g.tier) || !VERDICTS.includes(g.verdict) || !(typeof g.runId === 'string' && RUN_ID.test(g.runId))) {
+      return `its gate ${JSON.stringify(g)} isn't {tier, verdict, runId} with a swiftgate run id`
     }
   }
   if (r.outcome === 'design-conflict') {
