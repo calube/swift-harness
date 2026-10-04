@@ -1,6 +1,6 @@
 # Testing playbook
 
-How tests are written, placed, and judged in a swift-harness app. It's for anyone adding a test: a new engineer or an agent. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
+How tests are written, placed, and judged in a swift-harness app. It's for anyone adding a test. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
 
 Every rule here names what enforces it:
 
@@ -17,6 +17,8 @@ Waivers use the same-line syntax from [standards.md § Escape hatches](standards
 | T1 host | `TestStore` tests (exhaustive), client tests, engine rule and replay tests | `swift test` on the affected packages | < 60s | Injected dependencies, `TestClock`/`ImmediateClock`, `withMainSerialExecutor` only inside `.serialized` suites. |
 | T2 simulator | Snapshot tests, view and integration tests | `xcodebuild test` on a cloned simulator | minutes | Pinned device and OS, no network, dependency overrides. |
 | T3 flow | A thin XCUITest smoke test per critical flow | `xcodebuild test` on a cloned simulator | minutes | Launch-argument scenario injection. |
+
+Gate T1 and `prove` builds skip dSYMs, so links don't stall on `dsymutil`; rerun `swift test` locally for symbolicated crash traces.
 
 `swiftgate check --tier` composes the tiers:
 
@@ -168,7 +170,7 @@ Run it on a path relative to the repository root, e.g. `swiftgate testlint Packa
 ### 5.2 Behavioral (push and ready)
 
 - **`prove`:** each new or changed host test fails on an assertion with the source change reverted (P2).
-- **`mutate` (`swiftgate mutate`, and in `check --tier ready`):** mutation testing on **changed** Core/Client/Live lines, re-running the affected T1 tests. Operators: negate a conditional, shift a relational boundary (`<` ↔ `<=`), return a default, remove a call, remove an effect or `send`. Any surviving mutant is RED `mutate.survived` at `ready`, unless the line carries `// swiftgate:equivalent-mutant — <reason>`; a mutant that doesn't compile is `mutate.unviable` and left out of the kill rate. Each mutant builds and tests in its own scratch worktree, in parallel workers: seconds for a small package, minutes for TCA packages. Workers default to min(cores − 1, ceil(mutants / 2), 4), since each pays a cold build per package; set `[mutation] max_workers` (or `--jobs`) to change it. Each worker compiles and runs tests with cores ÷ workers jobs, and mutant builds carry no debug information, so no `dsymutil` runs. Mutate seeds each worker's tree with a clone of the package's `.build` (module cache dropped), which saves the dependency fetch but not the compile: SwiftPM rebuilds for the tree's new paths. Capped at `[mutation] max_mutants` (default 30) with sampling beyond; skipped while T1 is RED; never runs in the Stop hook. `review-input` also runs it, so reviewers see surviving mutants.
+- **`mutate` (`swiftgate mutate`, and in `check --tier ready`):** mutation testing on **changed** Core/Client/Live lines, re-running the affected T1 tests. Operators: negate a conditional, shift a relational boundary (`<` ↔ `<=`), return a default, remove a call, remove an effect or `send`. Any surviving mutant is RED `mutate.survived` at `ready`, unless the line carries `// swiftgate:equivalent-mutant — <reason>`; a mutant that doesn't compile is `mutate.unviable` and left out of the kill rate. Each mutant builds and tests in its own scratch worktree, in parallel workers: seconds to minutes per package. Workers default to min(cores − 1, ceil(mutants / 2), 4), since each pays a cold build per package; set `[mutation] max_workers` (or `--jobs`) to change it. Each worker uses cores ÷ workers jobs and builds without debug information. Mutate seeds each worker's tree with a clone of the package's `.build` (module cache dropped), which saves the dependency fetch but not the compile: SwiftPM rebuilds for the tree's new paths. Capped at `[mutation] max_mutants` (default 30) with sampling beyond; skipped while T1 is RED; never runs in the Stop hook. `review-input` also runs it, so reviewers see surviving mutants.
 - **Per-test reach (`swiftgate reach`, and in `check --tier ready`):** each new or changed host test runs alone with coverage. Zero production lines covered in the module it targets (`<Module>` for `<Module>Tests`, otherwise its local production dependencies) is RED `reach.no-production-lines`; failing when run alone is RED `reach.fails-alone`.
 
 ### 5.3 Judgment
