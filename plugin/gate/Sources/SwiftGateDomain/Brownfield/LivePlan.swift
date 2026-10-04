@@ -52,10 +52,12 @@ public struct LivePlanTask: Sendable, Equatable {
   /// Exact paths or `/`-terminated prefixes, repo-relative.
   public let writes: [String]
   public let brief: TaskBrief
+  /// The ids of `## Requirements` its `- Covers:` line names.
+  public let covers: [String]
 
   public init(
     id: String, deps: [String], gate: CheckTier, model: TaskModel?, estLines: Int,
-    writes: [String], brief: TaskBrief
+    writes: [String], brief: TaskBrief, covers: [String] = []
   ) {
     self.id = id
     self.deps = deps
@@ -64,6 +66,18 @@ public struct LivePlanTask: Sendable, Equatable {
     self.estLines = estLines
     self.writes = writes
     self.brief = brief
+    self.covers = covers
+  }
+}
+
+/// 1 bullet of a live plan's `## Requirements`: `- <id>: <title>`.
+public struct LivePlanRequirement: Sendable, Equatable, Codable {
+  public let id: String
+  public let title: String
+
+  public init(id: String, title: String) {
+    self.id = id
+    self.title = title
   }
 }
 
@@ -72,10 +86,15 @@ public struct LivePlan: Sendable, Equatable {
   public let tasks: [LivePlanTask]
   /// One entry per bullet of the `## Assumptions` section: each reading made of an ambiguous spec.
   public let assumptions: [String]
+  /// The `## Requirements` bullets, in plan order; empty when the plan has none.
+  public let requirements: [LivePlanRequirement]
 
-  public init(tasks: [LivePlanTask], assumptions: [String]) {
+  public init(
+    tasks: [LivePlanTask], assumptions: [String], requirements: [LivePlanRequirement] = []
+  ) {
     self.tasks = tasks
     self.assumptions = assumptions
+    self.requirements = requirements
   }
 }
 
@@ -94,6 +113,13 @@ public enum LivePlanError: Error, Sendable, Equatable {
   case invalidWrite(task: String, path: String)
   case missingDependency(task: String, dependency: String)
   case cycle(ids: [String])
+  /// A `## Requirements` bullet that isn't `- <id>: <title>`.
+  case invalidRequirement(line: String)
+  case duplicateRequirement(String)
+  /// A `- Covers:` id `## Requirements` doesn't list.
+  case unknownRequirement(task: String, id: String)
+  /// A requirement no task's `- Covers:` names.
+  case uncoveredRequirement(String)
 
   /// One sentence naming the task and what to fix in `PLAN.md`.
   public var message: String {
@@ -124,6 +150,14 @@ public enum LivePlanError: Error, Sendable, Equatable {
       "task `\(task)` depends on `\(dependency)`, which has no section in PLAN.md"
     case .cycle(let ids):
       "the tasks' dependencies form a cycle: " + ids.joined(separator: " -> ")
+    case .invalidRequirement(let line):
+      "`## Requirements` line `\(line)` is not `- <id>: <title>`"
+    case .duplicateRequirement(let id):
+      "requirement `\(id)` is listed more than once under `## Requirements`"
+    case .unknownRequirement(let task, let id):
+      "task `\(task)` covers `\(id)`, which `## Requirements` doesn't list"
+    case .uncoveredRequirement(let id):
+      "requirement `\(id)` is in `## Requirements` but no task's `- Covers:` names it"
     }
   }
 }
