@@ -42,6 +42,7 @@ prose_exclude = [
   "docs/plans/**", "docs/handoffs/**", "plugin/agents/**", "plugin/skills/**", "evals/cases/**",
   "evals/sessions/**", "evals/corpora/**", "plugin/gate/Tests/Fixtures/RunView/**",
   "evals/results/*-brownfield-trial/*/spec.md", "evals/results/*-brownfield-trial/*/PLAN*.md",
+  "plugin/gate/Tests/Fixtures/BrownfieldTrial/*PLAN*.md",
 ]
 
 [[docs.banned_phrases]]

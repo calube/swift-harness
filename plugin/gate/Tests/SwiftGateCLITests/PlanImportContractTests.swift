@@ -50,7 +50,7 @@ private struct ContractClone {
     try FileManager.default.copyItem(
       at: trial.appending(path: "memos-4-config.toml"), to: state.appending(path: "config.toml"))
     try FileManager.default.copyItem(
-      at: trial.appending(path: "memos-4-PLAN.txt"), to: planDirectory.appending(path: "PLAN.md"))
+      at: trial.appending(path: "memos-4-PLAN.md"), to: planDirectory.appending(path: "PLAN.md"))
     try await git(in: root, "branch", Self.planBranch)
     try await git(in: root, "worktree", "add", "-q", checkout.path, Self.planBranch)
   }

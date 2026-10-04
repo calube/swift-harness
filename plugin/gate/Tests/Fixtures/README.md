@@ -2179,8 +2179,8 @@ for line in open(sys.argv[1]):
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
 the run commits and gates before `plan import`, and for the preset a first discovery writes.
-`memos-4-PLAN.txt` is the orchestrator's live plan, whose first task, `share-view-limit-contract`,
-is the contract, as a `.txt` so the prose check skips it. `memos-4-history.jsonl` is the plan checkout's and the web worktree's
+`memos-4-PLAN.md` is the orchestrator's live plan, whose first task, `share-view-limit-contract`,
+is the contract; `.swiftgate.toml`'s `prose_exclude` keeps the prose check off it. `memos-4-history.jsonl` is the plan checkout's and the web worktree's
 `runs/history.jsonl`: the contract's `slice` at the base before the orchestrator committed it, a `doctor`, its
 `merge` at the contract commit `6fc0cb61`, and the web task's `slice`. `memos-4-config.toml` is the
 clone's `config.toml` after the orchestrator's `--set`s, with the `on_design_conflict = "block"` that
@@ -2190,7 +2190,7 @@ stopped the run. That trial had no RED gate run, so `memos-3-red-slice.history.j
 ```sh
 S=evals/results/2026-10-04-brownfield-trial F=plugin/gate/Tests/Fixtures/BrownfieldTrial
 mkdir -p $F
-cp $S/memos-4/PLAN.md $F/memos-4-PLAN.txt
+cp $S/memos-4/PLAN.md $F/memos-4-PLAN.md
 cp $S/memos-4/gate-history-task-worktrees.jsonl $F/memos-4-history.jsonl
 cp $S/memos-4/config.toml $F/memos-4-config.toml
 grep '"runID":"20261004T124744Z-9d7ec113"' $S/memos-3/gate-history-task-worktrees.jsonl \
