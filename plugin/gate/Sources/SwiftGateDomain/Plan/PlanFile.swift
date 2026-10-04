@@ -116,10 +116,13 @@ public struct PlanFile: Sendable, Equatable {
     public let path: String
     /// Each task's brief, keyed by task id, for the run viewer's task drawer.
     public let briefs: [String: TaskBrief]
+    /// The plan's `## Requirements`, in plan order, for the run viewer's spec rows.
+    public let requirements: [LivePlanRequirement]
 
-    public init(briefs: [String: TaskBrief]) {
+    public init(briefs: [String: TaskBrief], requirements: [LivePlanRequirement] = []) {
       self.path = Self.fileName
       self.briefs = briefs
+      self.requirements = requirements
     }
   }
 
@@ -198,7 +201,7 @@ extension PlanFile: Codable {
   }
 
   private enum LivePlanKeys: String, CodingKey {
-    case path, briefs
+    case path, briefs, requirements
   }
 
   /// A key that belongs to one source kind only; a file of the other kind that carries it fails.
@@ -273,8 +276,13 @@ extension PlanFile: Codable {
           debugDescription: "live plan path `\(path)` must be `\(LivePlanSource.fileName)`, "
             + "inside the plan's own directory")
       }
+      // A plan with no `## Requirements` writes no key, so its bytes match a file written
+      // before requirements were carried.
       source = .livePlan(
-        LivePlanSource(briefs: try live.decode([String: TaskBrief].self, forKey: .briefs)))
+        LivePlanSource(
+          briefs: try live.decode([String: TaskBrief].self, forKey: .briefs),
+          requirements: try live.decodeIfPresent(
+            [LivePlanRequirement].self, forKey: .requirements) ?? []))
     }
     self.init(
       schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -309,6 +317,9 @@ extension PlanFile: Codable {
       var nested = container.nestedContainer(keyedBy: LivePlanKeys.self, forKey: .livePlan)
       try nested.encode(live.path, forKey: .path)
       try nested.encode(live.briefs, forKey: .briefs)
+      if !live.requirements.isEmpty {
+        try nested.encode(live.requirements, forKey: .requirements)
+      }
     }
   }
 }

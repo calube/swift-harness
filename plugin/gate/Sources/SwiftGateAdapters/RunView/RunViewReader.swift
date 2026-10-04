@@ -7,8 +7,11 @@ import SwiftGateDomain
 ///
 /// An event belongs to the run when its payload names the run (`build.halt`, `build.resume`,
 /// `agent.usage`, `agent.tools`, `span.*`), or when it is a gate event (`gate.run`, `gate.step`,
-/// `test.result`, `prove.result`) of a gate run the run's ledger log or a task return names. No
-/// other event names a build run, so none other is kept.
+/// `test.result`, `prove.result`) of a gate run the run's ledger log or a task return names.
+///
+/// A brownfield run has phases before its build run exists, so the plan's first build run also
+/// keeps the spans that name the plan slug, and the `discover.run` and `warmup.run` events from
+/// the plan's launch on, until another plan launches. No other event is kept.
 public struct RunViewReader: RunViewReading {
   /// The git common dir, absolute.
   public let commonDirectory: URL
@@ -34,11 +37,13 @@ public struct RunViewReader: RunViewReading {
     var ledger: Ledger?
     var requirements: [RunViewRequirement] = []
     var briefs: [String: RunView.Brief] = [:]
+    var prebuild = Prebuild()
     if let join {
       let plan = try planState(join.plan, damage: &damage)
       ledger = plan.ledger
       requirements = plan.requirements
       briefs = plan.briefs
+      prebuild = try self.prebuild(plan: join.plan, buildRun: buildRun, damage: &damage)
     }
 
     var batches: [[StoredEvent]] = []
@@ -67,14 +72,68 @@ public struct RunViewReader: RunViewReading {
       join.map { Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns) } ?? [:]
     gateRuns.formUnion(workerGateRuns.keys)
     let events = EventQuery.merge(batches).map(\.event)
-    let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns)
+    let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns, prebuild: prebuild)
     return RunViewInput(
       buildRun: buildRun,
       events: events.filter {
-        Self.belongs($0, buildRun: buildRun, gateRuns: gateRuns, parents: parents)
+        Self.belongs(
+          $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild)
       },
       join: join, ledger: ledger, requirements: requirements, damage: damage, briefs: briefs,
-      workerGateRuns: workerGateRuns)
+      workerGateRuns: workerGateRuns, launchedAt: prebuild.launchedAt)
+  }
+
+  /// What a build run keeps from before it existed. Empty for any build run but its plan's first.
+  struct Prebuild: Equatable {
+    /// The plan slug the run skill's phases before `build start` name as their build run.
+    var slug: String?
+    /// When `swiftgate run` launched the plan; `nil` when no `swiftgate run` did.
+    var launchedAt: Date?
+    /// When the next plan in this clone launched, which ends this plan's discovery and warm-up.
+    var nextLaunch: Date?
+
+    /// Whether a `discover.run` or `warmup.run` at `time` belongs to this plan's launch.
+    func holds(_ time: Date) -> Bool {
+      guard let launchedAt, time >= launchedAt else { return false }
+      return nextLaunch.map { time < $0 } ?? true
+    }
+  }
+
+  /// The plan's launch clock, when `buildRun` is the plan's first build run. A clock that
+  /// doesn't read is damage, and the run then keeps only the spans that name the slug.
+  private func prebuild(plan: String, buildRun: String, damage: inout [RunView.Damage]) throws
+    -> Prebuild
+  {
+    let layout = try PlanStateLayout(commonDirectory: commonDirectory.path)
+    let directory = try layout.plan(plan).directory
+    let runs = (try? FileManager.default.contentsOfDirectory(atPath: directory + "/build")) ?? []
+    guard runs.filter(RunID.isValid).min() == buildRun else { return Prebuild() }
+    var prebuild = Prebuild(slug: plan)
+    guard let launched = clock(directory, damage: &damage) else { return prebuild }
+    prebuild.launchedAt = launched
+    let plans = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    var ignored: [RunView.Damage] = []
+    prebuild.nextLaunch =
+      plans.filter { $0 != plan && $0 != PlanStateLayout.sprintsDirectoryName }
+      .compactMap { other in
+        (try? layout.plan(other).directory).flatMap { clock($0, damage: &ignored) }
+      }
+      .filter { $0 > launched }.min()
+    return prebuild
+  }
+
+  /// `<plan dir>/clock.json`'s start; `nil` when the plan has none, as no owned plan does.
+  private func clock(_ planDirectory: String, damage: inout [RunView.Damage]) -> Date? {
+    let path = planDirectory + "/" + RunClock.fileName
+    guard FileManager.default.fileExists(atPath: path),
+      let data = read(path, damage: &damage)
+    else { return nil }
+    do {
+      return try RunClock.decode(data).started
+    } catch {
+      damage.append(RunView.Damage(source: display(path), reason: "\(error)"))
+      return nil
+    }
   }
 
   /// The newest build run of any plan; `nil` when there is none. Run ids start with their UTC
@@ -194,10 +253,13 @@ public struct RunViewReader: RunViewReading {
     /// The `gate.run`s of the run's gate runs, by event id.
     var gateRuns: Set<String> = []
 
-    init(_ events: [HarnessEvent], buildRun: String, gateRuns runs: Set<String>) {
+    init(
+      _ events: [HarnessEvent], buildRun: String, gateRuns runs: Set<String>,
+      prebuild: Prebuild = Prebuild()
+    ) {
       for event in events {
         switch event.payload {
-        case .spanStart(let span) where span.buildRun == buildRun:
+        case .spanStart(let span) where span.buildRun == buildRun || span.buildRun == prebuild.slug:
           spans.insert(span.spanID)
         case .gateRun where event.runID.map(runs.contains) == true:
           gateRuns.insert(event.eventID)
@@ -209,7 +271,8 @@ public struct RunViewReader: RunViewReading {
   }
 
   static func belongs(
-    _ event: HarnessEvent, buildRun: String, gateRuns: Set<String>, parents: Parents
+    _ event: HarnessEvent, buildRun: String, gateRuns: Set<String>, parents: Parents,
+    prebuild: Prebuild = Prebuild()
   ) -> Bool {
     let named: (String?) -> Bool = { $0.map(gateRuns.contains) ?? false }
     switch event.payload {
@@ -217,12 +280,13 @@ public struct RunViewReader: RunViewReading {
     case .buildResume(let resume): return resume.buildRun == buildRun
     case .agentUsage(let usage): return usage.buildRun == buildRun
     case .agentTools(let tools): return tools.buildRun == buildRun
-    case .spanStart(let span): return span.buildRun == buildRun
+    case .spanStart(let span): return span.buildRun == buildRun || span.buildRun == prebuild.slug
     case .spanEnd(let span): return parents.spans.contains(span.spanID)
     case .gateRun, .gateStep, .testResult: return named(event.runID)
     case .proveResult:
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
-    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup, .discoverRun, .warmupRun:
+    case .discoverRun, .warmupRun: return prebuild.holds(event.time)
+    case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
       return false
     }
   }
@@ -324,7 +388,9 @@ public struct RunViewReader: RunViewReading {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
     case .livePlan(let live):
-      // A live plan names no requirements of its own, only each task's brief.
+      state.requirements = live.requirements.map {
+        RunViewRequirement(id: $0.id, title: Self.cut($0.title))
+      }
       state.briefs = live.briefs.mapValues {
         RunView.Brief(
           title: $0.title, why: $0.why ?? "", designRef: $0.designRef, scope: $0.scope,
