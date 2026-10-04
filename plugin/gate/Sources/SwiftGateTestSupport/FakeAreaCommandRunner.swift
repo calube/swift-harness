@@ -14,9 +14,10 @@ public final class FakeAreaCommandRunner: AreaCommandRunning {
     self.handler = handler
   }
 
-  public var requests: [AreaCommandRequest] { [] }
+  public var requests: [AreaCommandRequest] { recorded.withLock { $0 } }
 
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
-    .timedOut(tail: "")
+    recorded.withLock { $0.append(request) }
+    return handler(request)
   }
 }
