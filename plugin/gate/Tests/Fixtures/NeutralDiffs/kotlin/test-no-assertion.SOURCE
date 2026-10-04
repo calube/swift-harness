@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: 79f50e1911e50e3360b25c318999d1274f0a7b8a
+path: okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt
+command: git show --format= 79f50e1911e50e3360b25c318999d1274f0a7b8a -- okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt

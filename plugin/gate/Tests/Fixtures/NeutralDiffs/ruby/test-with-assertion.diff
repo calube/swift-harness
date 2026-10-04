@@ -1,0 +1,13 @@
+diff --git a/test/faker/quotes/test_faker_quote.rb b/test/faker/quotes/test_faker_quote.rb
+index 2cf13be2..ab480e29 100644
+--- a/test/faker/quotes/test_faker_quote.rb
++++ b/test/faker/quotes/test_faker_quote.rb
+@@ -38,4 +38,8 @@ class TestFakerYoda < Test::Unit::TestCase
+   def test_fortune_cookie
+     assert_match(/\w+/, @tester.fortune_cookie)
+   end
++
++  def test_mitch_hedberg
++    assert_match(/\w+/, @tester.mitch_hedberg)
++  end
+ end

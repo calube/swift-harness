@@ -1,0 +1,13 @@
+diff --git a/Sources/NIOPosix/BaseStreamSocketChannel.swift b/Sources/NIOPosix/BaseStreamSocketChannel.swift
+index 605f5514..6f04ecec 100644
+--- a/Sources/NIOPosix/BaseStreamSocketChannel.swift
++++ b/Sources/NIOPosix/BaseStreamSocketChannel.swift
+@@ -76,6 +76,8 @@ class BaseStreamSocketChannel<Socket: SocketProtocol>: BaseSocketChannel<Socket>
+             return self.pendingWrites.writeSpinCount as! Option.Value
+         case _ as ChannelOptions.Types.WriteBufferWaterMarkOption:
+             return self.pendingWrites.waterMark as! Option.Value
++        case _ as ChannelOptions.Types.BufferedWritableBytesOption:
++            return Int(self.pendingWrites.bufferedBytes) as! Option.Value
+         default:
+             return try super.getOption0(option)
+         }

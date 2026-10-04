@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: 9109554a4f24d4a65aea79aae5fe35c835822ad5
+path: packages/server/src/unstable-core-do-not-import/rootConfig.ts
+command: git show --format= 9109554a4f24d4a65aea79aae5fe35c835822ad5 -- packages/server/src/unstable-core-do-not-import/rootConfig.ts

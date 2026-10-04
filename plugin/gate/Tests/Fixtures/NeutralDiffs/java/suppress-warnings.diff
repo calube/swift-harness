@@ -1,0 +1,11 @@
+diff --git a/mockwebserver-junit5/src/main/java9/module-info.java b/mockwebserver-junit5/src/main/java9/module-info.java
+new file mode 100644
+index 000000000..a17efe6c8
+--- /dev/null
++++ b/mockwebserver-junit5/src/main/java9/module-info.java
+@@ -0,0 +1,5 @@
++@SuppressWarnings("module")
++module mockwebserver3.junit5 {
++  requires okhttp3;
++  opens mockwebserver3.junit5.internal;
++}

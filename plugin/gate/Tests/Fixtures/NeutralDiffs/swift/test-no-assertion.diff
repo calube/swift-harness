@@ -1,0 +1,16 @@
+diff --git a/Tests/NIOTests/EventLoopTest.swift b/Tests/NIOTests/EventLoopTest.swift
+index f76c8d9c..8322c8ca 100644
+--- a/Tests/NIOTests/EventLoopTest.swift
++++ b/Tests/NIOTests/EventLoopTest.swift
+@@ -272,4 +272,11 @@ public class EventLoopTest : XCTestCase {
+             tries += 1
+         }
+     }
++
++    public func testShutdownWhileScheduledTasksNotReady() throws {
++        let group = MultiThreadedEventLoopGroup(numThreads: 1)
++        let eventLoop = group.next()
++        _ = eventLoop.scheduleTask(in: .hours(1)) { }
++        try group.syncShutdownGracefully()
++    }
+ }

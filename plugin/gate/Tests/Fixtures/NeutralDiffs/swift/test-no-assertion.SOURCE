@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: b91090f56322d7721395300714fcd66bbb824c24
+path: Tests/NIOTests/EventLoopTest.swift
+command: git show --format= b91090f56322d7721395300714fcd66bbb824c24 -- Tests/NIOTests/EventLoopTest.swift

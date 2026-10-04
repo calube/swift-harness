@@ -1,0 +1,4 @@
+repo: https://github.com/faker-ruby/faker
+sha: 8bbdedf0cdd780c89b9c66a019b2475eb25562d4
+path: test/faker/quotes/test_faker_quote.rb
+command: git show --format= 8bbdedf0cdd780c89b9c66a019b2475eb25562d4 -- test/faker/quotes/test_faker_quote.rb

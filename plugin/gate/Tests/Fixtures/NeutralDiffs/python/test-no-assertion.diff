@@ -1,0 +1,12 @@
+diff --git a/tests/test_meta.py b/tests/test_meta.py
+new file mode 100644
+index 00000000..97403823
+--- /dev/null
++++ b/tests/test_meta.py
+@@ -0,0 +1,6 @@
++import io
++
++
++def test_changelog_utf8_compatible():
++    with io.open("CHANGES.rst", encoding="UTF-8") as f:
++        f.read()

@@ -1,0 +1,4 @@
+repo: https://github.com/vapor/vapor
+sha: ebba10c4fc58c9d98ec300934c9502f139474c4e
+path: Sources/Vapor/Fixes/StringExtensions.swift
+command: git show --format= ebba10c4fc58c9d98ec300934c9502f139474c4e -- Sources/Vapor/Fixes/StringExtensions.swift

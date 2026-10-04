@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: cd6710454f25733900e133c6caf5188952763c36
+path: Tests/NIOPosixTests/SocketAddressTest.swift
+command: git show --format= cd6710454f25733900e133c6caf5188952763c36 -- Tests/NIOPosixTests/SocketAddressTest.swift

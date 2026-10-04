@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: 573d4f33ee2896c2bb7106203a936ae892d1ef1c
+path: packages/openapi/test/nodeModulesJsDoc.test.ts
+command: git show --format= 573d4f33ee2896c2bb7106203a936ae892d1ef1c -- packages/openapi/test/nodeModulesJsDoc.test.ts

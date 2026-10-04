@@ -1,0 +1,4 @@
+repo: https://github.com/gin-gonic/gin
+sha: 8860527de602b561500d68cb345c8b07de22805e
+path: utils_test.go
+command: git show --format= 8860527de602b561500d68cb345c8b07de22805e -- utils_test.go

@@ -1,0 +1,23 @@
+diff --git a/packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts b/packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts
+index efd24bd7..3b4f8480 100644
+--- a/packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts
++++ b/packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts
+@@ -157,6 +157,18 @@ ruleTester.run('consistent-type-assertions', rule, {
+         },
+       },
+     },
++    {
++      code: `
++const x = { key: 'value' } as any;
++      `,
++      options: [{ assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }],
++    },
++    {
++      code: `
++const x = { key: 'value' } as unknown;
++      `,
++      options: [{ assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }],
++    },
+   ],
+   invalid: [
+     ...dedupeTestCases(

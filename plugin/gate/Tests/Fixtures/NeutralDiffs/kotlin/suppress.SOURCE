@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: c4f96b781aefd38dd217f675e8c09414a82faac4
+path: okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt
+command: git show --format= c4f96b781aefd38dd217f675e8c09414a82faac4 -- okhttp/src/commonJvmAndroid/kotlin/okhttp3/internal/platform/Jdk9Platform.kt

@@ -1,0 +1,4 @@
+repo: https://github.com/apple/swift-nio
+sha: 2e96e470168774c77b2c5e31abb0fdf060dba8f3
+path: Sources/NIO/Selector.swift
+command: git show --format= 2e96e470168774c77b2c5e31abb0fdf060dba8f3 -- Sources/NIO/Selector.swift

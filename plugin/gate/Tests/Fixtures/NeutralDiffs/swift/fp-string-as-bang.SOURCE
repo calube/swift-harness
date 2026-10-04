@@ -1,0 +1,4 @@
+repo: https://github.com/realm/SwiftLint
+sha: 9c8b1d3ce5386dc001f00eb597bab923b061cb1f
+path: Source/SwiftLintBuiltInRules/Rules/Idiomatic/ForceCastRule.swift
+command: git show --format= 9c8b1d3ce5386dc001f00eb597bab923b061cb1f -- Source/SwiftLintBuiltInRules/Rules/Idiomatic/ForceCastRule.swift

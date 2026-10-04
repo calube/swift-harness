@@ -1,0 +1,4 @@
+repo: https://github.com/clap-rs/clap
+sha: e2d2d25094337ad98c21594f1fcb80109dd1ffc2
+path: clap_builder/src/builder/command.rs
+command: git show --format= e2d2d25094337ad98c21594f1fcb80109dd1ffc2 -- clap_builder/src/builder/command.rs

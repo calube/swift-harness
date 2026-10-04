@@ -1,0 +1,4 @@
+repo: https://github.com/square/okhttp
+sha: 50f1be974d877d5270305af644fc6a81975f078e
+path: android-test/src/test/kotlin/okhttp/android/test/NonRobolectricOkHttpClientTest.kt
+command: git show --format= 50f1be974d877d5270305af644fc6a81975f078e -- android-test/src/test/kotlin/okhttp/android/test/NonRobolectricOkHttpClientTest.kt

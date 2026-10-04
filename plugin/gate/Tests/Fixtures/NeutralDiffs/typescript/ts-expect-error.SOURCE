@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: f7aef25110611d953acbfcb658e68fcf897a9470
+path: packages/server/src/unstable-core-do-not-import/stream/utils/asyncIterable.ts
+command: git show --format= f7aef25110611d953acbfcb658e68fcf897a9470 -- packages/server/src/unstable-core-do-not-import/stream/utils/asyncIterable.ts

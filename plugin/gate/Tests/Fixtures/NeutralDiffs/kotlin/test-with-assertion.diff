@@ -1,0 +1,17 @@
+diff --git a/okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt b/okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt
+index 115873a46..f3df06633 100644
+--- a/okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt
++++ b/okhttp/src/jvmTest/kotlin/okhttp3/RequestBodyTest.kt
+@@ -119,6 +119,12 @@ class RequestBodyTest {
+     }
+   }
+ 
++  @Test
++  fun testSha256() {
++    val hash = "Hello".toRequestBody().sha256().hex()
++    assertThat(hash).isEqualTo("185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969")
++  }
++
+   private inline fun <T> assertOnFileDescriptor(
+     content: String? = null,
+     fn: (FileDescriptor) -> T,

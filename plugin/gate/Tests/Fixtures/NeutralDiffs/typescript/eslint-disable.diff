@@ -1,0 +1,19 @@
+diff --git a/packages/server/src/unstable-core-do-not-import/rootConfig.ts b/packages/server/src/unstable-core-do-not-import/rootConfig.ts
+index dbe5c8da6..20cc6003f 100644
+--- a/packages/server/src/unstable-core-do-not-import/rootConfig.ts
++++ b/packages/server/src/unstable-core-do-not-import/rootConfig.ts
+@@ -25,6 +25,14 @@ export const isServerDefault: boolean =
+   !!globalThis.process?.env?.['JEST_WORKER_ID'] ||
+   !!globalThis.process?.env?.['VITEST_WORKER_ID'];
+ 
++/**
++ * The default check to see if we're in development
++ */
++export function isDevDefault(): boolean {
++  // eslint-disable-next-line @typescript-eslint/dot-notation
++  return globalThis.process?.env['NODE_ENV'] !== 'production';
++}
++
+ /**
+  * The tRPC root config
+  * @internal

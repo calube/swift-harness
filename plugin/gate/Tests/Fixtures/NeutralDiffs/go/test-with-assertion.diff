@@ -1,0 +1,13 @@
+diff --git a/utils_test.go b/utils_test.go
+index b50914f..d2a740b 100644
+--- a/utils_test.go
++++ b/utils_test.go
+@@ -143,3 +143,8 @@ func TestMarshalXMLforH(t *testing.T) {
+ 	e := h.MarshalXML(enc, x)
+ 	assert.Error(t, e)
+ }
++
++func TestIsASCII(t *testing.T) {
++	assert.Equal(t, isASCII("test"), true)
++	assert.Equal(t, isASCII("🧡💛💚💙💜"), false)
++}

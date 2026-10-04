@@ -1,0 +1,4 @@
+repo: https://github.com/faker-ruby/faker
+sha: 289c71948a892945426a859c380d892048f3f257
+path: lib/faker/default/internet.rb
+command: git show --format= 289c71948a892945426a859c380d892048f3f257 -- lib/faker/default/internet.rb

@@ -1,0 +1,17 @@
+diff --git a/Sources/NIOCrashTester/main.swift b/Sources/NIOCrashTester/main.swift
+index 57999a3c..bc270ba3 100644
+--- a/Sources/NIOCrashTester/main.swift
++++ b/Sources/NIOCrashTester/main.swift
+@@ -12,7 +12,11 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
+-#if !canImport(Darwin) || os(macOS)
++// NIOCrashTester relies on POSIX subprocess + signal semantics and on pipe
++// channels (`NIOPipeBootstrap`) to capture the child's output; pipe channels
++// deliberately `fatalError` on Windows, so the crash-testing model cannot run
++// there. Exclude Windows alongside the non-macOS Darwin platforms.
++#if (!canImport(Darwin) || os(macOS)) && !os(Windows)
+ import NIOCore
+ import NIOPosix
+ import class Foundation.Process

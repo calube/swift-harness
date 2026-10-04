@@ -1,0 +1,4 @@
+repo: https://github.com/trpc/trpc
+sha: bdf2c6532e68afdccec30c50bfe44f94669bd865
+path: packages/openapi/test/openApiCompat.test.ts
+command: git show --format= bdf2c6532e68afdccec30c50bfe44f94669bd865 -- packages/openapi/test/openApiCompat.test.ts

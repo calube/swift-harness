@@ -1,0 +1,10 @@
+diff --git a/Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift b/Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift
+index 407588a7..55260fb7 100644
+--- a/Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift
++++ b/Sources/NIOConcurrencyHelpers/NIOLockedValueBox.swift
+@@ -80,3 +80,5 @@ public struct NIOLockedValueBox<Value> {
+ }
+ 
+ extension NIOLockedValueBox: @unchecked Sendable where Value: Sendable {}
++
++extension NIOLockedValueBox.Unsafe: @unchecked Sendable where Value: Sendable {}

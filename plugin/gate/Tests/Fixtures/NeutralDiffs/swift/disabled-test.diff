@@ -1,0 +1,13 @@
+diff --git a/Tests/NIOPosixTests/StrictCrashTests.swift b/Tests/NIOPosixTests/StrictCrashTests.swift
+index 73d08425..45932b5e 100644
+--- a/Tests/NIOPosixTests/StrictCrashTests.swift
++++ b/Tests/NIOPosixTests/StrictCrashTests.swift
+@@ -26,7 +26,7 @@ import ucrt
+ 
+ @Suite
+ struct StrictCrashTests {
+-    @Test
++    @Test(.disabled(if: System.isWindows, "Scheduling after shutdown does not trap as expected on Windows"))
+     func eventLoopScheduleAfterShutdown() async {
+         let result = await #expect(processExitsWith: .failure, observing: [\.standardErrorContent]) {
+             func blockingFunctionsAllowedInCrashTest() {

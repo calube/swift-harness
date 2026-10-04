@@ -1,0 +1,22 @@
+diff --git a/okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt b/okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt
+index 8de87027f..4471bc13d 100644
+--- a/okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt
++++ b/okhttp/src/jvmTest/java/okhttp3/KotlinSourceModernTest.kt
+@@ -963,6 +963,17 @@ class KotlinSourceModernTest {
+     val cacheControl: CacheControl = request.cacheControl
+   }
+ 
++  @Test
++  fun requestConstructor() {
++    Request(url = "".toHttpUrl())
++    Request(
++      url = "".toHttpUrl(),
++      headers = headersOf(),
++      method = "",
++      body = "".toRequestBody(null),
++    )
++  }
++
+   @Test
+   fun requestBuilder() {
+     val requestBody = "".toRequestBody(null)

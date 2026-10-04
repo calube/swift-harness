@@ -1,0 +1,4 @@
+repo: https://github.com/typescript-eslint/typescript-eslint
+sha: 03d9639c0fa535fd547961ab96a56cb38d0b8d07
+path: packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts
+command: git show --format= 03d9639c0fa535fd547961ab96a56cb38d0b8d07 -- packages/eslint-plugin/tests/rules/consistent-type-assertions.test.ts

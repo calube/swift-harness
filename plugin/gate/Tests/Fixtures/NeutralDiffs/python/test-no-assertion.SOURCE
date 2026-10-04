@@ -1,0 +1,4 @@
+repo: https://github.com/pallets/flask
+sha: ac302fb6071a4a580234e3596dac082d6e8d8a1f
+path: tests/test_meta.py
+command: git show --format= ac302fb6071a4a580234e3596dac082d6e8d8a1f -- tests/test_meta.py
