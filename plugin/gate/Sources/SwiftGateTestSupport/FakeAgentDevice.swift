@@ -55,6 +55,8 @@ public final class FakeAgentDevice: AgentDevice {
     public var recordedVideo: String
     public var logPath: String
     public var networkDump: Data
+    /// Whether `close` drops the target's session from `sessions`, as the real CLI does.
+    public var closeEndsSession: Bool
     public var failures: [String: AgentDeviceError]
 
     public init(
@@ -62,7 +64,7 @@ public final class FakeAgentDevice: AgentDevice {
       appState: AgentDeviceAppState = .runningForeground, sessions: [AgentDeviceSession] = [],
       batch: AgentDeviceBatchResult = AgentDeviceBatchResult(steps: [], json: Data()),
       recordedVideo: String = "", logPath: String = "", networkDump: Data = Data(),
-      failures: [String: AgentDeviceError] = [:]
+      closeEndsSession: Bool = true, failures: [String: AgentDeviceError] = [:]
     ) {
       self.version = version
       self.snapshotJSON = snapshotJSON
@@ -72,6 +74,7 @@ public final class FakeAgentDevice: AgentDevice {
       self.recordedVideo = recordedVideo
       self.logPath = logPath
       self.networkDump = networkDump
+      self.closeEndsSession = closeEndsSession
       self.failures = failures
     }
   }
@@ -177,6 +180,11 @@ public final class FakeAgentDevice: AgentDevice {
 
   public func close(on target: AgentDeviceTarget) async throws(AgentDeviceError) {
     _ = try record(.close(target))
+    state.withLock { state in
+      if state.script.closeEndsSession {
+        state.script.sessions.removeAll { $0.name == target.session }
+      }
+    }
   }
 
   public func releaseStale(udid: String) async throws(AgentDeviceError) {

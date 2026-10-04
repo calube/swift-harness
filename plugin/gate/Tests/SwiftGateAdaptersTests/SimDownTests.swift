@@ -1,0 +1,364 @@
+import Darwin
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+import SwiftGateTestSupport
+import Synchronization
+import Testing
+
+/// A process id that reads as alive until the test says it exited.
+final class FakeProcess: Sendable {
+  let pid: Int32
+  private let exited = Mutex(false)
+
+  init(pid: Int32) {
+    self.pid = pid
+  }
+
+  func exit() { exited.withLock { $0 = true } }
+
+  var isAlive: @Sendable (Int32) -> Bool {
+    { [self] candidate in candidate == pid && !exited.withLock { $0 } }
+  }
+}
+
+@Suite("sim down")
+struct SimDownTests {
+  static let base = SimulatorDevice(
+    udid: "BASE", name: "iPhone 17",
+    runtimeIdentifier: "com.apple.CoreSimulator.SimRuntime.iOS-26-2", state: "Shutdown",
+    isAvailable: true, deviceTypeIdentifier: "com.apple.CoreSimulator.SimDeviceType.iPhone-17")
+  static let runID = "20261004T120000Z-1a2b3c4d"
+  static let session = SimSession.agentDeviceSessionName(runID: runID)
+  static let worktree = "/repos/app-a"
+  static let holderPID: Int32 = 4242
+  /// Ends any hold a broken `sim down` leaves behind, so such a test fails instead of hanging.
+  static let holdTimeout = Duration.seconds(10)
+
+  let root = TestTemporaryDirectory.root.appending(
+    path: "sim-down-\(UUID().uuidString)", directoryHint: .isDirectory)
+  var lock: FileCountingLock {
+    FileCountingLock(
+      directory: root.appending(path: "locks"), name: "sim", capacity: 2,
+      pollInterval: .milliseconds(10))
+  }
+  var store: SimLeaseStore { SimLeaseStore(directory: root.appending(path: "locks/sim-leases")) }
+
+  func simDirectory(_ runID: String) -> URL {
+    root.appending(path: "state/runs/\(runID)/sim", directoryHint: .isDirectory)
+  }
+
+  static func agent(sessionUDID: String = "MADE-1", closeEndsSession: Bool = true)
+    -> FakeAgentDevice
+  {
+    FakeAgentDevice(
+      script: FakeAgentDevice.Script(
+        sessions: [AgentDeviceSession(name: session, udid: sessionUDID)],
+        closeEndsSession: closeEndsSession))
+  }
+
+  func down(
+    _ agent: FakeAgentDevice, simctl: FakeSimctl, runID: String? = runID,
+    worktree: String = worktree, isAlive: @escaping @Sendable (Int32) -> Bool,
+    clock: SimHoldClock = .continuous(), teardownTimeout: Duration = .seconds(20)
+  ) async -> Result<SimDowned, SimDownFailure> {
+    let directories = root
+    return await SimDown(
+      dependencies: SimDown.Dependencies(
+        agentDevice: agent, leases: store, simctl: simctl, isAlive: isAlive, clock: clock,
+        teardownTimeout: teardownTimeout, pollInterval: .milliseconds(10))
+    ).run(
+      SimDown.Request(
+        worktree: worktree, runID: runID,
+        simDirectory: {
+          directories.appending(path: "state/runs/\($0)/sim", directoryHint: .isDirectory)
+        }))
+  }
+
+  /// A real holder on a fake simulator, with the session `sim up` would record in its lease.
+  /// The holder's PID reads as alive until the hold returns.
+  func startHolder(_ simctl: FakeSimctl, agent: FakeAgentDevice) async throws -> (
+    lease: SimLease, process: FakeProcess, holding: Task<SimHoldOutcome, any Error>
+  ) {
+    let process = FakeProcess(pid: Self.holderPID)
+    let clones = SimulatorClones(
+      simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2"))
+    let holder = SimHolder(
+      devices: clones, leases: store, agentDevice: agent, worktree: Self.worktree,
+      holderPID: Self.holderPID, timeout: Self.holdTimeout,
+      pollInterval: .milliseconds(5), clock: .continuous())
+    let holding = Task {
+      defer { process.exit() }
+      return try await holder.hold(runID: Self.runID)
+    }
+    let deadline = ContinuousClock.now + .seconds(20)
+    while ContinuousClock.now < deadline {
+      if var lease = try store.read(runID: Self.runID) {
+        lease.session = Self.session
+        try store.write(lease)
+        agent.update { $0.sessions = [AgentDeviceSession(name: Self.session, udid: lease.udid)] }
+        return (lease, process, holding)
+      }
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    holding.cancel()
+    throw HolderNeverLeased()
+  }
+
+  struct HolderNeverLeased: Error {}
+
+  /// Removes whatever lease is left, so the holder returns, and waits for it.
+  func finish(_ holding: Task<SimHoldOutcome, any Error>) async {
+    try? store.remove(runID: Self.runID)
+    _ = try? await holding.value
+  }
+
+  static func harnessDevices(_ simctl: FakeSimctl) -> [String] {
+    simctl.currentDevices.filter { $0.udid != "BASE" }.map(\.udid)
+  }
+
+  static func closes(_ agent: FakeAgentDevice) -> [AgentDeviceTarget] {
+    agent.calls.compactMap { if case .close(let target) = $0 { target } else { nil } }
+  }
+
+  static func failure(_ result: Result<SimDowned, SimDownFailure>) -> SimDownFailure? {
+    if case .failure(let failure) = result { failure } else { nil }
+  }
+
+  @Test(
+    "sim down closes the run's session, removes the lease, waits out the holder and its device, then releases stale claims; a second call does nothing and succeeds — catches a teardown that leaves the session open or isn't idempotent"
+  )
+  func releasesOnceAndIsIdempotent() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+
+    let first = await down(agent, simctl: simctl, isAlive: process.isAlive)
+    #expect(
+      try first.get().outcome == .released(runID: Self.runID, udid: lease.udid))
+    #expect(Self.closes(agent) == [AgentDeviceTarget(udid: lease.udid, session: Self.session)])
+    #expect(
+      try await agent.sessions(on: AgentDeviceTarget(udid: lease.udid, session: Self.session))
+        .isEmpty)
+    #expect(try store.read(runID: Self.runID) == nil)
+    #expect(Self.harnessDevices(simctl).isEmpty)
+    #expect(agent.calls.contains(.releaseStale(udid: lease.udid)))
+    #expect(try await holding.value.end == .released)
+
+    let second = await down(agent, simctl: simctl, isAlive: process.isAlive)
+    #expect(try second.get().outcome == .nothingHeld(runID: Self.runID))
+    #expect(Self.closes(agent).count == 1)
+
+    let bare = await down(agent, simctl: simctl, runID: nil, isAlive: process.isAlive)
+    #expect(try bare.get().outcome == .nothingHeld(runID: nil))
+    #expect(Self.closes(agent).count == 1)
+  }
+
+  @Test(
+    "a session still listed after close is BLOCKED sim.driver-failed, though the device is still given back — catches a sim down that reports success with the session left open"
+  )
+  func sessionLeftOpenIsBlocked() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent(closeEndsSession: false)
+    let (_, process, holding) = try await startHolder(simctl, agent: agent)
+
+    let failure = Self.failure(await down(agent, simctl: simctl, isAlive: process.isAlive))
+    #expect(failure?.rule == .driverFailed)
+    #expect(failure?.message.contains(Self.session) == true)
+    #expect(try store.read(runID: Self.runID) == nil)
+    #expect(Self.harnessDevices(simctl).isEmpty)
+    await finish(holding)
+  }
+
+  @Test(
+    "a close that fails for a reason other than a gone session still gives the device back and releases claims, then reports BLOCKED sim.driver-failed — catches a failed close that leaks the slot"
+  )
+  func failedCloseStillTearsDown() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+    agent.update {
+      $0.failures["close"] = .unreadableOutput(
+        command: "close", status: .exited(1), detail: "no output")
+    }
+
+    let failure = Self.failure(await down(agent, simctl: simctl, isAlive: process.isAlive))
+    #expect(failure?.rule == .driverFailed)
+    #expect(failure?.runID == Self.runID)
+    #expect(try store.read(runID: Self.runID) == nil)
+    #expect(Self.harnessDevices(simctl).isEmpty)
+    #expect(agent.calls.contains(.releaseStale(udid: lease.udid)))
+    await finish(holding)
+  }
+
+  @Test(
+    "the captured SESSION_NOT_FOUND from close counts as already closed — catches a run whose session ended on its own failing sim down"
+  )
+  func sessionAlreadyClosed() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+    let captured = try AgentDeviceError.decodeFailure(
+      Fixture.data("AgentDevice/close-session-not-found.stdout"))
+    agent.update {
+      $0.failures["close"] = .failed(command: "close", captured)
+      $0.sessions = []
+    }
+
+    let result = await down(agent, simctl: simctl, isAlive: process.isAlive)
+    #expect(try result.get().outcome == .released(runID: Self.runID, udid: lease.udid))
+    #expect(Self.harnessDevices(simctl).isEmpty)
+    await finish(holding)
+  }
+
+  @Test(
+    "another worktree's lease is refused with sim.not-owner, and its session, lease and device survive — catches one worktree tearing down another's run"
+  )
+  func otherWorktreeRefused() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+
+    let failure = Self.failure(
+      await down(agent, simctl: simctl, worktree: "/repos/app-b", isAlive: process.isAlive))
+    #expect(failure?.rule == .notOwner)
+    #expect(failure?.verdict == .red)
+    #expect(failure?.message.contains(Self.worktree) == true)
+    #expect(agent.calls.isEmpty)
+    #expect(try store.read(runID: Self.runID) == lease)
+    #expect(Self.harnessDevices(simctl) == [lease.udid])
+
+    let bare = await down(
+      agent, simctl: simctl, runID: nil, worktree: "/repos/app-b", isAlive: process.isAlive)
+    #expect(try bare.get().outcome == .nothingHeld(runID: nil))
+    #expect(try store.read(runID: Self.runID) == lease)
+
+    try store.remove(runID: Self.runID)
+    await finish(holding)
+  }
+
+  @Test(
+    "with the holder killed, sim down deletes the run's own device, named for the dead PID, and no other orphan — catches a dead holder's device outliving sim down, or sim down deleting a device it doesn't own"
+  )
+  func deadHolderDeviceDeleted() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let dead: Int32 = 999_001
+    let own = SimulatorDevice(
+      udid: "MADE-1", name: SimulatorCloneName.make(ownerPID: dead, token: "aaaa1111"),
+      runtimeIdentifier: Self.base.runtimeIdentifier, state: "Booted", isAvailable: true)
+    let other = SimulatorDevice(
+      udid: "MADE-2", name: SimulatorCloneName.make(ownerPID: dead, token: "bbbb2222"),
+      runtimeIdentifier: Self.base.runtimeIdentifier, state: "Booted", isAvailable: true)
+    let simctl = FakeSimctl(devices: [Self.base, own, other])
+    try store.write(
+      SimLease(
+        runID: Self.runID, worktree: Self.worktree, udid: own.udid, holderPID: dead,
+        session: Self.session))
+    let agent = Self.agent()
+
+    let result = await down(agent, simctl: simctl, runID: nil, isAlive: { _ in false })
+    #expect(try result.get().outcome == .released(runID: Self.runID, udid: own.udid))
+    #expect(Self.harnessDevices(simctl) == [other.udid])
+    #expect(try store.read(runID: Self.runID) == nil)
+    #expect(agent.calls.contains(.releaseStale(udid: own.udid)))
+  }
+
+  @Test(
+    "a holder that never exits is BLOCKED swiftgate.environment naming its PID once the wait times out — catches a sim down that hangs or claims a release that didn't happen"
+  )
+  func holderThatNeverExits() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let device = SimulatorDevice(
+      udid: "MADE-1", name: SimulatorCloneName.make(ownerPID: Self.holderPID, token: "aaaa1111"),
+      runtimeIdentifier: Self.base.runtimeIdentifier, state: "Booted", isAvailable: true)
+    let simctl = FakeSimctl(devices: [Self.base, device])
+    try store.write(
+      SimLease(
+        runID: Self.runID, worktree: Self.worktree, udid: device.udid, holderPID: Self.holderPID,
+        session: Self.session))
+    let agent = Self.agent()
+    let clock = VirtualHoldClock()
+
+    let failure = Self.failure(
+      await down(
+        agent, simctl: simctl, isAlive: { $0 == Self.holderPID }, clock: clock.clock,
+        teardownTimeout: .seconds(60)))
+    #expect(failure?.rule == .environment)
+    #expect(failure?.message.contains("\(Self.holderPID)") == true)
+    #expect(clock.now >= .seconds(60))
+    #expect(Self.harnessDevices(simctl) == [device.udid])
+  }
+
+  @Test(
+    "with a holder killed by SIGKILL, the next orphan sweep deletes its device and runs release --stale on that device — catches an agent-device claim outliving a crashed run"
+  )
+  func killedHolderClaimsReleased() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let simctl = FakeSimctl(devices: [Self.base])
+    let config = SimulatorConfig(device: "iPhone 17", os: "26.2")
+    let child = try DetachedLauncher().launch(
+      DetachedLaunch(
+        executable: "/bin/sleep", arguments: ["600"], workingDirectory: root.path,
+        logPath: root.appending(path: "holder.log").path))
+    let holder = SimHolder(
+      devices: SimulatorClones(simctl: simctl, lock: lock, config: config, ownerPID: child),
+      leases: store, agentDevice: FakeAgentDevice(), worktree: Self.worktree, holderPID: child,
+      timeout: Self.holdTimeout, pollInterval: .milliseconds(5), clock: .continuous())
+    let holding = Task { try await holder.hold(runID: Self.runID) }
+    var lease: SimLease?
+    let deadline = ContinuousClock.now + .seconds(20)
+    while lease == nil, ContinuousClock.now < deadline {
+      lease = try store.read(runID: Self.runID)
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    let udid = try #require(lease?.udid)
+
+    kill(child, SIGKILL)
+    _ = DetachedLauncherTests.reap(child)
+    let agent = FakeAgentDevice()
+    let failures = LogLines()
+    let swept = try await SimulatorClones(
+      simctl: simctl, lock: lock, config: config,
+      releaseClaims: SimulatorClones.agentDeviceClaimRelease(agent, failed: failures.append)
+    ).sweepOrphans()
+
+    #expect(swept == [udid])
+    #expect(Self.harnessDevices(simctl).isEmpty)
+    #expect(agent.calls == [.releaseStale(udid: udid)])
+    #expect(failures.all.isEmpty)
+    try store.remove(runID: Self.runID)
+    await finish(holding)
+  }
+
+  @Test(
+    "the sweep's claim release skips an agent-device that can't launch and reports any other failure naming the device — catches a broken release passing silently"
+  )
+  func claimReleaseFailures() async {
+    let missing = FakeAgentDevice(
+      script: FakeAgentDevice.Script(failures: [
+        "device release": .runner(
+          command: "device release",
+          .launchFailed(executable: "agent-device", reason: "not found on PATH"))
+      ]))
+    let absent = LogLines()
+    await SimulatorClones.agentDeviceClaimRelease(missing, failed: absent.append)("MADE-1")
+    #expect(missing.calls == [.releaseStale(udid: "MADE-1")])
+    #expect(absent.all.isEmpty)
+
+    let broken = FakeAgentDevice(
+      script: FakeAgentDevice.Script(failures: [
+        "device release": .unreadableOutput(
+          command: "device release", status: .exited(1), detail: "no output")
+      ]))
+    let reported = LogLines()
+    await SimulatorClones.agentDeviceClaimRelease(broken, failed: reported.append)("MADE-1")
+    #expect(reported.all.count == 1)
+    #expect(reported.all.first?.contains("MADE-1") == true)
+  }
+}
