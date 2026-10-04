@@ -19,7 +19,7 @@
   try {
     const text = $("run-view").textContent.trim();
     if (text) view = JSON.parse(text);
-    else if (/^https?:$/.test(location.protocol)) liveMode = true;
+    else if (location.protocol !== "file:") liveMode = true;
     else pageDamage.push({ source: "page", reason: "no run data embedded" });
   } catch (error) {
     pageDamage.push({ source: "page", reason: "run data is not JSON: " + error.message });
