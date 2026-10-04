@@ -86,7 +86,7 @@
     cards.clear();
     board.addEventListener("click", (e) => {
       const c = e.target.closest(".card");
-      if (c) runViewer.openTaskDrawer(c.dataset.task, c);
+      if (c) runViewer.openTaskPopover(c.dataset.task, c);
     });
   }
 

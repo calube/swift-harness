@@ -24,6 +24,11 @@ const KEYS = {
   Tab: { code: 'Tab', windowsVirtualKeyCode: 9 },
   Enter: { code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' },
   Escape: { code: 'Escape', windowsVirtualKeyCode: 27 },
+  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32, text: ' ' },
+  ArrowLeft: { code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
+  ArrowRight: { code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+  Home: { code: 'Home', windowsVirtualKeyCode: 36 },
+  End: { code: 'End', windowsVirtualKeyCode: 35 },
 }
 
 /**
@@ -150,7 +155,7 @@ export async function launch({ deadlineMs = 12000 } = {}) {
       const spec = KEYS[key]
       if (!spec) throw new Error(`no key spec for ${key}`)
       await call('Input.dispatchKeyEvent', { type: spec.text ? 'keyDown' : 'rawKeyDown', key, ...spec })
-      await call('Input.dispatchKeyEvent', { type: 'keyUp', key, code: spec.code, windowsVirtualKeyCode: spec.windowsVirtualKeyCode })
+      await call('Input.dispatchKeyEvent', { type: 'keyUp', key: spec.key ?? key, code: spec.code, windowsVirtualKeyCode: spec.windowsVirtualKeyCode })
     },
     /** A PNG of the whole page, base64, for looking at a failure by eye. */
     async screenshot() {
