@@ -33,6 +33,8 @@ public enum AreaCommandOutcome: Sendable, Equatable {
   case passed
   /// `junit` holds the report's bytes when the request named a path and the command wrote it.
   case failed(exit: Int32, tail: String, junit: Data?)
-  case crashed(signal: Int32, tail: String)
+  /// The test process died rather than reporting a failure. `signal` is `nil` when the death was
+  /// read from the runner's output, such as a forked JVM's `System.exit`, and no signal was named.
+  case crashed(signal: Int32?, tail: String)
   case timedOut(tail: String)
 }
