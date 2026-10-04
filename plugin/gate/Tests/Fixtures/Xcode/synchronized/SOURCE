@@ -1,0 +1,8 @@
+url: https://github.com/Shopify/mobile-buy-sdk-ios
+commit: 350c914d8beea856026807cbd3effc73aaf8b7cd
+commit-date: 2026-04-07T12:01:50-04:00
+license: MIT
+languages: HTML, Objective-C, Ruby, Swift
+captured-utc: 2026-10-04
+command: git clone --filter=blob:none --no-checkout https://github.com/Shopify/mobile-buy-sdk-ios.git && git checkout 350c914d8beea856026807cbd3effc73aaf8b7cd
+kind: synchronized folders (PBXFileSystemSynchronizedRootGroup)

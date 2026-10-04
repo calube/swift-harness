@@ -1,0 +1,21 @@
+{
+  "project" : {
+    "configurations" : [
+      "Debug",
+      "Release"
+    ],
+    "name" : "Buy",
+    "schemes" : [
+      "Buy",
+      "Buy tvOS",
+      "Buy watchOS",
+      "BuyTests"
+    ],
+    "targets" : [
+      "Buy",
+      "Buy tvOS",
+      "Buy watchOS",
+      "BuyTests"
+    ]
+  }
+}

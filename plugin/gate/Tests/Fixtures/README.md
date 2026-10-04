@@ -1046,3 +1046,54 @@ cp .harness/runs/<run id>/report.json ../../plugin/gate/Tests/Fixtures/GateRun/r
 The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target selected with
 `--base HEAD`, and 7 findings across 7 rules naming the files `.`, `.swiftgate.toml` and `docs`.
 `grep -ciE '/Users|/private|/tmp|caleb|swift-harness' GateRun/report.json` printed 0.
+
+## Xcode
+
+1 `project.pbxproj` per inclusion kind, and the tool output read from it, captured from public
+repositories pinned at a commit. Xcode 26.2 (17C48), XcodeGen 2.45.3 (Homebrew), Tuist 4.210.0
+(the script installs it into its scratch directory with mise 2025.12.7, since this machine has no
+Tuist), git 2.50.1. The script needs network access. From the repository root:
+
+```sh
+plugin/gate/Tests/Fixtures/Xcode/capture.sh
+```
+
+Each case has a `SOURCE` (URL, commit, commit date, license, GitHub languages, capture date, clone
+command), the `git ls-files` of the clone (or of the project directory, for the 2 tool
+repositories), and `tree/<tracked path>`: tracked files copied byte for byte. Swift manifests carry
+a `.txt` suffix. Each command's output is in `<name>.stdout`, `<name>.stderr` and `<name>.status`,
+with the clone root as `/REPO` and the temp dir as `/TMP`.
+
+| Case | Repository | Inclusion | Captured output |
+|---|---|---|---|
+| `Xcode/synchronized/` | `Shopify/mobile-buy-sdk-ios` (MIT; Swift, Objective-C, Ruby), the first `gh search code PBXFileSystemSynchronizedRootGroup --filename project.pbxproj` result with a second language | 2 `PBXFileSystemSynchronizedRootGroup`s with 4 `PBXFileSystemSynchronizedBuildFileExceptionSet`s, beside a `Package.swift` | `xcodebuild-list` (`xcodebuild -list -json -project Buy.xcodeproj`) |
+| `Xcode/explicit/` | `touchlab/KaMPKit` (Apache-2.0; Kotlin, Swift) | explicit file references, build files and Sources phases | `xcodebuild-list`; `plutil-lint-valid` (`plutil -lint` on the tracked file); `plutil-lint-damaged` and `xcodebuild-list-damaged` on `damaged/KaMPKitiOS.xcodeproj/project.pbxproj`, the first half of the tracked file's bytes (`head -c`) |
+| `Xcode/xcodegen/` | `yonaskolb/XcodeGen` at tag `2.45.3` (MIT), its `Tests/Fixtures/SPM` | `project.yml`, generated project tracked | `xcodegen-version` (`xcodegen --version`); `xcodegen-generate` (`xcodegen generate` in the project directory), its project in `generated/`, and `git-status-after-generate.txt`; `not-installed` (`env PATH=/usr/bin:/bin xcodegen generate`) |
+| `Xcode/tuist/` | `tuist/tuist` at tag `4.210.0` (MIT outside `server/`, `kura/`, `atlas/`), its `examples/xcode/generated_app_with_framework_and_tests` | `Project.swift`, generated project ignored by its `.gitignore` | `tuist-version` (`tuist version`); `tuist-generate` (`tuist generate --no-open`), its project in `generated/`, and `git-status-after-generate.txt` (`--ignored`); `not-installed` (`env PATH=/usr/bin:/bin tuist generate --no-open`) |
+
+Observed behavior the Xcode readers rely on:
+
+- The XcodeGen and Tuist generated projects and the explicit project hold no
+  `PBXFileSystemSynchronized*` object. The synchronized project lists no source file at all. Each
+  root group (`Buy`, `BuyTests`) names its exception sets. Each set names 1 target and the files
+  under the folder that target leaves out (`membershipExceptions`, here `Info.plist`) or exports
+  (`publicHeaders`).
+- `xcodegen generate` with the pinned version rewrites the tracked project byte for byte:
+  `git-status-after-generate.txt` is empty and `generated/` equals `tree/`. It prints 3 progress
+  lines and `Created project at <absolute .xcodeproj path>` on stdout, nothing on stderr, exit 0.
+- XcodeGen names a local package's folder reference after the directory it points at
+  (`path: ../../..` becomes `name = XcodeGen`). Generating in a clone under another directory name
+  changes the project, so a scratch tree used to generate must keep the repository directory's
+  name.
+- `tuist generate` writes `App.xcodeproj` and `App.xcworkspace`, both ignored, so
+  `git status --porcelain` stays empty; its stdout ends `✔ Success` and `Project generated.` and
+  carries a `Total time taken:` line that changes run to run.
+- A missing generator run through `env` exits 127 with `env: <tool>: No such file or directory` on
+  stderr and nothing on stdout.
+- `plutil -lint` prints `<path>: OK` on stdout and exits 0 for a valid project. For the damaged file
+  it exits 1 with `<path>: (Unexpected character / at line 1)` on stderr: plutil reports the
+  failure at the comment header, not where the file ends.
+- `xcodebuild -list -json` prints `project.{configurations,name,schemes,targets}`. For the damaged
+  project it exits 74 with empty stdout, and stderr names it unreadable with a parse error (see
+  `xcodebuild-list-damaged.stderr`). It also writes a result bundle into the user temp dir whatever
+  `TMPDIR` says; the capture deletes the bundle it names.
