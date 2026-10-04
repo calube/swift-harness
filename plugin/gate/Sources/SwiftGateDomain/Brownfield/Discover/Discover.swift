@@ -14,6 +14,12 @@ public enum Discover {
     mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 0, stopStartsBeforeMin: 0,
     onDesignConflict: .block, taskProof: .prove, stallMin: 2)
 
+  /// `[judge]` for a clone discovered for the first time: the owned profile's default backend and
+  /// thresholds, so `judge diff-risk` can rate a slice (design §11.5) without a hand edit. Claude
+  /// sends nothing to a third party; Jev stays opt-in (ADR 0007).
+  public static let defaultJudge = JudgeConfig.enabled(
+    backend: .claude, thresholds: .defaults, model: nil)
+
   /// Runs every reader over `tree`, then lets the commands CI, `Makefile`, `justfile` and `bin/*`
   /// already run replace a reader's guess or fill a missing step.
   public static func propose(

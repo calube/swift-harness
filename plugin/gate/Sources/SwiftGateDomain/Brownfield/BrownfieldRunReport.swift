@@ -13,10 +13,16 @@ public enum RunReportInput<Value: Sendable & Equatable>: Sendable, Equatable {
 public struct RunReportBuild: Sendable, Equatable {
   public let record: BuildRunRecord
   public let log: BuildEventLog
+  /// Each checked return under the run's `returns/`, by task id. A task with no entry stored no
+  /// return there.
+  public let returns: [String: RunReportInput<TaskReturn>]
 
-  public init(record: BuildRunRecord, log: BuildEventLog) {
+  public init(
+    record: BuildRunRecord, log: BuildEventLog, returns: [String: RunReportInput<TaskReturn>] = [:]
+  ) {
     self.record = record
     self.log = log
+    self.returns = returns
   }
 }
 
