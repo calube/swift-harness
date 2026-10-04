@@ -72,12 +72,17 @@ struct BrownfieldDiscoverAdaptersTests {
       brownfield: emptyConfig().brownfield, areas: [area("api"), area("api")], allow: [],
       buildPresets: [:])
 
-    await #expect(throws: BrownfieldConfigWriteError.self) {
+    let error = await #expect(throws: BrownfieldConfigWriteError.self) {
       try await BrownfieldConfigWriter(layout: layout).update { _, _ in
         BrownfieldStateWrite(config: duplicate, files: [layout.discoverLast: Data("{}".utf8)])
       }
     }
 
+    guard case .invalidRender(let reason) = error else {
+      Issue.record("expected the schema to refuse the config, got \(String(describing: error))")
+      return
+    }
+    #expect(reason.contains("api"))
     #expect(!FileManager.default.fileExists(atPath: layout.config.path))
     #expect(!FileManager.default.fileExists(atPath: layout.discoverLast.path))
   }
