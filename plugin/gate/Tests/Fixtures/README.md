@@ -1154,11 +1154,30 @@ because the resumed session abandoned 1 task.
 | `returns/<task>.json` | the 2 checked returns; the abandoned task's was refused, so none was written |
 | `run.json`, `plan.json`, `plan.md`, `spec.md` | the build run record, the plan state, the spec page and the spec |
 
-There is no `usage` stream: `events ingest` exited 2 after every task, first with `no session
-record` and, after the resume wrote one, with `repeats an earlier message id with different usage`
-(see Transcripts). The first failure came from the SessionStart hook running the shim's last good
-binary while the plugin data cache rebuilt; that older binary refused a `plugin.json` with no
-`version`. No command records spans, `prove.result` or `agent.tools` yet; a later capture repeats this
+In the run, `events ingest` exited 2 after every task, first with `no session record` and, after
+the resume wrote one, with `repeats an earlier message id with different usage` (see Transcripts).
+The first failure came from the SessionStart hook running the shim's last good binary while the
+plugin data cache rebuilt; that older binary refused a `plugin.json` with no `version`.
+
+`events/usage.jsonl` (91 `agent.usage`: 68 main and 11 subagent orchestrator messages, 4 per
+build worker) was written afterwards by `events ingest` from the commit that reads streamed
+messages, in an `rsync` copy of the scratch app without `.harness/derived-data`, reading the
+transcripts Claude Code left. With `SG=<harness>/plugin/bin/swiftgate`,
+`SES=306d86af-8556-4a2c-8300-5029ecae68b2`, `R=20261004T045528Z-58d28c78` and
+`W=~/.claude/projects/<cwd slug>/$SES/subagents/workflows`, the same flags the run used:
+
+```sh
+for p in counter-core-reset-and-decrement-floor:wf_4110cb4e-e8d \
+  counter-ui-reset-button:wf_04439a44-cc1 counter-ui-reset-button-snapshot:wf_45713b8a-4f4; do
+  "$SG" events ingest --session $SES --workflow-transcripts $W/${p#*:} --role build-worker \
+    --task ${p%%:*} --build-run $R
+done
+"$SG" events ingest --session $SES --role orchestrator --build-run $R
+cp .harness/events/usage.jsonl <fixtures>/RunView/build-run-1/events/usage.jsonl
+```
+
+Each exited 0: 83 new, then 4, 4 and 0. The other streams and `store.json` stayed byte-identical.
+No command records spans, `prove.result` or `agent.tools` yet; a later capture repeats this
 run once one does.
 
 The sources held no machine path, so no `sed` ran. Ledger worktrees are relative

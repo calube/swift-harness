@@ -51,4 +51,5 @@ and R=$P/build/20261004T045528Z-58d28c78:
 
 events ingest exited 2 for every task and for the session: Claude Code 2.1.288 writes one
 assistant message as several lines with growing usage.output_tokens, and ingest refuses
-"repeats an earlier message id with different usage". So no usage stream is here.
+"repeats an earlier message id with different usage". events/usage.jsonl was written later
+by the fixed ingest, from the same transcripts; the Fixtures README has its commands.
