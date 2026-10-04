@@ -1,0 +1,6 @@
+lock acquired 2026-10-04T17:25:01Z { 577.39 762.47 537.28 }
+warm-up pid 20096 seen 2026-10-04T17:25:07Z
+warm-up pid 20096 exited, lock released 2026-10-04T17:25:15Z { 495.84 738.95 531.57 }
+lock acquired 2026-10-04T17:30:12Z { 228.69 453.51 463.24 }
+manual warm-up pid 46265 seen 2026-10-04T17:30:12Z
+manual warm-up exited, lock released 2026-10-04T17:34:39Z { 259.90 321.93 399.11 }
