@@ -45,7 +45,11 @@ extension SimDownTests {
       try await Task.sleep(for: .milliseconds(5))
     }
     var recorded = try #require(lease)
-    // `sim up` records the session it opened in the lease.
+    // `sim up` records the session it opened in the lease; the holder must see it open, or it
+    // ends the hold itself.
+    holderAgent.update {
+      $0.sessions = [AgentDeviceSession(name: Self.session, udid: recorded.udid)]
+    }
     recorded.session = Self.session
     try store.write(recorded)
     let target = AgentDeviceTarget(udid: recorded.udid, session: Self.session)
