@@ -61,9 +61,11 @@ exit 0 with nothing recorded, and `events list` and `summary` still read what ex
   prints matching events as JSON lines, oldest first, and lists damage on stderr.
 - `swiftgate events summary [--since <same forms>] [--run <gate run id>] [--build-run <build run id>] [--json]`
   prints the sections below. `--since` defaults to `7d`.
-- `swiftgate events ingest --session <id> [--workflow-transcripts <dir>] [--role <role>] [--task <id>]
+- `swiftgate events ingest --session <id> [--workflow-transcripts <dir> | --agent-id <id>] [--role <role>] [--task <id>]
   [--build-run <id>]` reads token counts offline from the session's transcript, its subagents' transcripts and,
-  with `--workflow-transcripts`, every `agent-*.jsonl` in that directory. It keeps message ids, model ids,
+  with `--workflow-transcripts`, every `agent-*.jsonl` in that directory. With `--agent-id`, the id the Agent
+  tool printed, it reads only that subagent of the session and tags it with `--role`, which it then requires:
+  the build skill's merge fixer, which the session launches itself. It keeps message ids, model ids,
   counts and times, and never the text. It also writes 1 `agent.tools` per agent per 60 s window of tool calls,
   keeping only repository-relative file-tool paths. Ingesting again adds nothing. Ingest stores a message
   the price table can't price without a cost, and names its model in the output. Roles: `orchestrator`, `design`, `plan`,

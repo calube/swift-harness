@@ -229,6 +229,7 @@ enum EventsIngestRun {
     var role: AgentRole?
     var task: String?
     var buildRun: String?
+    var agentID: String? = nil
   }
 
   static let command = "swiftgate events ingest"
@@ -263,6 +264,16 @@ enum EventsIngestRun {
       return refused("--build-run \(buildRun) is not a build run id")
     }
 
+    if options.agentID != nil {
+      if options.workflowTranscripts != nil {
+        return refused(
+          "--agent-id and --workflow-transcripts both name the agents --role tags; pass 1")
+      }
+      if options.role == nil {
+        return refused("--agent-id needs --role: what that subagent worked as")
+      }
+    }
+
     let transcriptPath: String
     do {
       guard
@@ -279,7 +290,9 @@ enum EventsIngestRun {
     }
 
     // With worker transcripts, --role and --task describe the workers, and the session running
-    // them is the orchestrator; without, they describe the session itself.
+    // them is the orchestrator; without, they describe the session itself. With --agent-id they
+    // describe 1 subagent the session launched itself, and only that transcript is read: any
+    // other subagent may belong to a workflow still running, which its own ingest tags.
     let sessionTags: (role: AgentRole?, task: String?) =
       options.workflowTranscripts == nil ? (options.role, options.task) : (.orchestrator, nil)
     var transcripts: [UsageTranscript] = []
@@ -293,8 +306,16 @@ enum EventsIngestRun {
         files += try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
           .map { ($0, options.role, options.task) }
       }
-      files += try reader.session(at: URL(filePath: transcriptPath)).map {
-        ($0, sessionTags.role, sessionTags.task)
+      let session = try reader.session(at: URL(filePath: transcriptPath))
+      if let agentID = options.agentID {
+        guard
+          let subagent = session.first(where: { $0.agent == .subagent && $0.agentID == agentID })
+        else {
+          return refused("--agent-id \(agentID) names no subagent transcript of this session")
+        }
+        files.append((subagent, options.role, options.task))
+      } else {
+        files += session.map { ($0, sessionTags.role, sessionTags.task) }
       }
       for (file, role, task) in files {
         do throws(TranscriptUsageError) {
@@ -387,7 +408,9 @@ struct EventsIngestCommand: ParsableCommand {
       + "A message or window already stored for the session is skipped, so ingesting again adds "
       + "nothing, except that a message stored with no role is retagged by an ingest that gives "
       + "it one. With --workflow-transcripts, --role and --task tag the workers and the session's "
-      + "own messages are tagged orchestrator; without, they tag the session's. "
+      + "own messages are tagged orchestrator; without, they tag the session's. With "
+      + "--agent-id, only that subagent of the session is read, and --role (required) and "
+      + "--task tag it: the merge fixer the build skill launches itself. "
       + "Exit 0 stored; 2 when [telemetry] enabled = false, outside a project, for a bad flag "
       + "value, an unreadable record or transcript, a malformed usage line or a failed write.")
 
@@ -406,12 +429,17 @@ struct EventsIngestCommand: ParsableCommand {
   @Option(name: .customLong("build-run"), help: "The build run id the usage belongs to.")
   var buildRun: String?
 
+  @Option(
+    name: .customLong("agent-id"),
+    help: "The id of 1 subagent of the session, as the Agent tool printed it.")
+  var agentID: String?
+
   func run() throws {
     try EventsCommandRunner.finish(
       EventsIngestRun.make(
         options: EventsIngestRun.Options(
           session: session, workflowTranscripts: workflowTranscripts, role: role, task: task,
-          buildRun: buildRun),
+          buildRun: buildRun, agentID: agentID),
         root: EventsCommandRunner.root))
   }
 }

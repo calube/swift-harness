@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot?: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>"}. Each stage agent opens and closes its own run-viewer span in that build run. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>"}. Each stage agent opens and closes its own run-viewer span in that build run, and runs every swiftgate command through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
@@ -160,15 +160,14 @@ function validateArgs(a) {
     if (unknown.length) invalid(`unknown reviewers: ${unknown.join(', ')}; expected ${REVIEWERS.join(', ')}`)
     reviewers = REVIEWERS.filter(r => a.reviewers.includes(r))
   }
-  // A workflow script can't read the environment, so the skill passes ${CLAUDE_PLUGIN_ROOT}: the
-  // standards and the testing playbook live in the plugin, not in the project being built.
-  let pluginRoot = null
-  if (a.pluginRoot !== undefined) {
-    if (!nonEmptyString(a.pluginRoot) || !a.pluginRoot.startsWith('/')) {
-      invalid(`pluginRoot must be the absolute plugin root, got ${JSON.stringify(a.pluginRoot)}`)
-    }
-    pluginRoot = a.pluginRoot.replace(/\/+$/, '')
+  // A workflow script can't read the environment, so the skill passes ${CLAUDE_PLUGIN_ROOT}: every
+  // stage runs the plugin's own swiftgate, since one on PATH may be an older install whose gate
+  // code and run store aren't this build's, and the standards and testing playbook live there too.
+  if (a.pluginRoot === undefined) invalid('pluginRoot is required: the absolute plugin root, ${CLAUDE_PLUGIN_ROOT}, whose bin/swiftgate every stage runs')
+  if (!nonEmptyString(a.pluginRoot) || !a.pluginRoot.startsWith('/')) {
+    invalid(`pluginRoot must be the absolute plugin root, got ${JSON.stringify(a.pluginRoot)}`)
   }
+  const pluginRoot = a.pluginRoot.replace(/\/+$/, '')
   // Every stage span names the build run, so a launch without one would draw no stage at all.
   if (!(typeof a.buildRun === 'string' && BUILD_RUN.test(a.buildRun))) {
     invalid(
@@ -181,6 +180,8 @@ function validateArgs(a) {
 }
 
 const A = validateArgs(ARGS)
+// The plugin under test's shim. Every swiftgate command a prompt hands a stage runs through it.
+const SG = `${A.pluginRoot}/bin/swiftgate`
 // Where the worker's run history, task-status.json and scratch files live.
 const stateDir = A.stateRoot ?? "the worktree's .harness"
 
@@ -458,7 +459,7 @@ const finalProofNote = A.taskProof === 'final' ? " The build's final ready gate 
 // A slice proves each changed test from the task's own merge base, so it takes no proof base, and
 // it has no owned-profile steps to turn on.
 const brownfieldGateLines = () => [
-  `Task gate: swiftgate check --tier ${A.taskGate} --base ${A.base} ${proofSteps}.`,
+  `Task gate: ${SG} check --tier ${A.taskGate} --base ${A.base} ${proofSteps}.`,
   ...(A.planSurface === null
     ? []
     : [
@@ -474,15 +475,16 @@ const taskGateLines = () =>
     ? brownfieldGateLines()
     : A.planSurface === null
     ? [
-        `Task gate: swiftgate check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS}, ` +
+        `Task gate: ${SG} check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS}, ` +
           `plus --proof-base <surface commit> when the task adds API.${finalProofNote}`,
       ]
     : [
-        `Task gate: swiftgate check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS} --proof-base ${A.planSurface}, ` +
+        `Task gate: ${SG} check --tier ${A.taskGate} --base main ${proofSteps}${TASK_GATE_STEPS} --proof-base ${A.planSurface}, ` +
           `plus --proof-base <stub sha> after it once you commit a stub.${finalProofNote}`,
         `Plan surface: ${A.planSurface}, already on main. It holds the plan's API as stubs, so write no surface commit of your own. ` +
           'When a test needs API the plan surface lacks, commit that API alone as a stub, check it with ' +
-          '`swiftgate surface-check <stub sha>` until GREEN, and return its sha as surfaceCommit; with no stub, surfaceCommit is null. ' +
+          `\`${SG} surface-check <stub sha>\` until GREEN, and return` +
+          ' its sha as surfaceCommit; with no stub, surfaceCommit is null. ' +
           'A new target or product in a Package.swift is never a stub: return a design conflict instead.',
         `Design conflict: this plan's source is a spec page, so the report names a spec page section: ${SPEC_PAGE_SECTIONS.map(x => `\`${x}\``).join(', ').replace(/, ([^,]*)$/, ' or $1')}, ` +
           'and its ids are the slice-… ids it invalidates.',
@@ -494,6 +496,8 @@ const brief = () =>
     `Worktree: ${A.worktree}, branch ${A.branch}, already checked out.`,
     `Write set: ${A.writeSet.join(', ')}.`,
     `Task proof: ${A.taskProof}.`,
+    `Swiftgate: ${SG}, the plugin under test. Run every gate command through that path, never a bare \`swiftgate\`: ` +
+      "the one on PATH may be another install, whose gate code and run store aren't this build's.",
     ...taskGateLines(),
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,
@@ -541,10 +545,8 @@ async function runWorker(fix, parent) {
 // The plugin's rule docs for reviewers and the verifier: the pack quotes only the standards
 // sections for the task's module kinds, and none of the testing playbook's P rules.
 const pluginDocs = () =>
-  A.pluginRoot === null
-    ? ''
-    : `Standards: ${A.pluginRoot}/docs/standards.md. Testing playbook: ${A.pluginRoot}/docs/testing-playbook.md. ` +
-      `Review contract for finding kinds and severity: ${A.pluginRoot}/docs/review-contract.md. Read every rule you cite or verify there. `
+  `Standards: ${A.pluginRoot}/docs/standards.md. Testing playbook: ${A.pluginRoot}/docs/testing-playbook.md. ` +
+  `Review contract for finding kinds and severity: ${A.pluginRoot}/docs/review-contract.md. Read every rule you cite or verify there. `
 
 const changeLines = commits =>
   `The change is commits ${commits.join(', ')} on ${A.branch}, which branched from ${A.base}. ` +
@@ -591,7 +593,6 @@ const failure = error => (error && error.message ? error.message : String(error)
 // first and `end` last, from the 2 lines its prompt carries, and returns the span id it got. The
 // workflow spawns no agent for a span, and a span never decides a task: a stage with no usable
 // id is logged, and the next stage starts without a parent.
-const spanSwiftgate = A.pluginRoot === null ? 'swiftgate' : `${A.pluginRoot}/bin/swiftgate`
 const SPAN_ID = /^[0-9a-f]{16}$/
 // How each stage ends its own span, from what it returns.
 const SPAN_END_RULES = {
@@ -602,7 +603,7 @@ const SPAN_END_RULES = {
 const shellWord = value => `'${String(value).replace(/'/g, `'\\''`)}'`
 function spanLines(phase, role, parent, endRule) {
   const start = [
-    `${spanSwiftgate} events span start --phase ${phase} --build-run ${A.buildRun}`,
+    `${SG} events span start --phase ${phase} --build-run ${A.buildRun}`,
     `--task ${shellWord(A.task)} --role ${role}`,
     ...(parent ? [`--parent ${parent}`] : []),
   ].join(' ')
@@ -610,7 +611,7 @@ function spanLines(phase, role, parent, endRule) {
     'Run-viewer span: telemetry only. These 2 commands never change your work or your return.',
     `1. Before anything else, run \`${start}\`. It prints your span id alone: return it as "span". ` +
       'Empty output means telemetry is off and a failed command means no span: either way return "span": null and skip step 2.',
-    `2. Last, once your return is decided, run \`${spanSwiftgate} events span end <span> --outcome <outcome>\` with your span id, ` +
+    `2. Last, once your return is decided, run \`${SG} events span end <span> --outcome <outcome>\` with your span id, ` +
       `where <outcome> is ${endRule}. If it fails, go on: your return stays the same.`,
   ].join('\n')
 }
@@ -707,14 +708,13 @@ function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, ext
 }
 
 const gateFinding = gate =>
-  `gate run ${gate.runId} (swiftgate check --tier ${gate.tier}) is ${gate.verdict}; read it in ${stateDir}/runs/`
+  `gate run ${gate.runId} (check --tier ${gate.tier}) is ${gate.verdict}; read it in ${stateDir}/runs/`
 
 // Classified review's depth comes from `swiftgate judge diff-risk` over the task's change, which a
 // workflow script can't run itself, so 1 agent runs it and hands back its JSON. Asked once, after
 // the first worker's gate: the fix pass changes the same task. Any answer that isn't a level runs
 // at medium, and the return's notes and the log say why: never a silent depth.
-const swiftgate = A.pluginRoot === null ? 'swiftgate' : `${A.pluginRoot}/bin/swiftgate`
-const DIFF_RISK_COMMAND = `cd ${A.worktree} && ${swiftgate} judge diff-risk --base ${A.base} --json`
+const DIFF_RISK_COMMAND = `cd ${A.worktree} && ${SG} judge diff-risk --base ${A.base} --json`
 const DIFF_RISK_SCHEMA = {
   type: 'object',
   required: ['level', 'reason', 'exitStatus'],

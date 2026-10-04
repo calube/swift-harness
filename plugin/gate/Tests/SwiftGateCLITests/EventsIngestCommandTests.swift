@@ -74,12 +74,12 @@ struct EventsIngestCommandTests {
 
     func ingest(
       _ session: String, workflow: String? = nil, role: AgentRole? = nil, task: String? = nil,
-      buildRun: String? = nil, prices: ModelPriceTable = .current
+      buildRun: String? = nil, agentID: String? = nil, prices: ModelPriceTable = .current
     ) -> EventsCommandOutput {
       EventsIngestRun.make(
         options: EventsIngestRun.Options(
           session: session, workflowTranscripts: workflow, role: role, task: task,
-          buildRun: buildRun),
+          buildRun: buildRun, agentID: agentID),
         root: repo.root, prices: prices)
     }
 
@@ -88,6 +88,13 @@ struct EventsIngestCommandTests {
       ingest(
         session, workflow: workflow, role: .buildWorker, task: task,
         buildRun: EventsIngestCommandTests.buildRun)
+    }
+
+    /// The build skill's call after the merge fixer, an Agent-tool subagent of the session, returns.
+    func fixerIngest(_ session: String, agentID: String, task: String) -> EventsCommandOutput {
+      ingest(
+        session, role: .buildWorker, task: task, buildRun: EventsIngestCommandTests.buildRun,
+        agentID: agentID)
     }
 
     /// The ship skill's call before its summary.
@@ -443,5 +450,54 @@ struct EventsIngestCommandTests {
     #expect(second.status == 0, "\(second.stderr)")
     #expect(second.stdout.contains("0 windows new, 2 already stored"), "\(second.stdout)")
     #expect(scenario.toolWindows.count == 2)
+  }
+
+  @Test(
+    "--agent-id stores only that subagent's messages, tagged with --role, --task and --build-run, and a later session ingest keeps them its own and files the rest as orchestrator — catches a merge fixer's usage filed as the orchestrator's"
+  )
+  func agentIDTagsOneSubagent() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let fixer = scenario.fixerIngest(
+      Self.subagentSession, agentID: "a705c5b0d3c2b4f5b", task: "fix-task")
+    #expect(fixer.status == 0, "\(fixer.stderr)")
+    let stored = scenario.usages
+    #expect(stored.count == 1)
+    let usage = try #require(stored.first)
+    #expect(usage.agent == .subagent)
+    #expect(usage.agentID == "a705c5b0d3c2b4f5b")
+    #expect(usage.role == .buildWorker)
+    #expect(usage.task == "fix-task")
+    #expect(usage.buildRun == Self.buildRun)
+    #expect(scenario.toolWindows.allSatisfy { $0.agent == .subagent && $0.task == "fix-task" })
+
+    #expect(scenario.shipIngest(Self.subagentSession).status == 0)
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    #expect(metrics[["role", "build-worker"]]?["messages"]?.value == 1)
+    #expect(metrics[["task", "fix-task"]]?["messages"]?.value == 1)
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 2)
+  }
+
+  @Test(
+    "--agent-id naming no subagent of the session, holding a path, beside --workflow-transcripts or without --role exits 2 naming the flag and stores nothing — catches a fixer ingest that silently tags nothing or the wrong agents",
+    arguments: [
+      ("no-such-agent", AgentRole.buildWorker, false, "no-such-agent"),
+      ("../a705c5b0d3c2b4f5b", AgentRole.buildWorker, false, "--agent-id"),
+      ("a705c5b0d3c2b4f5b", AgentRole.buildWorker, true, "--workflow-transcripts"),
+      ("a705c5b0d3c2b4f5b", nil, false, "--role"),
+    ] as [(String, AgentRole?, Bool, String)])
+  func agentIDRefusals(_ agentID: String, role: AgentRole?, workflow: Bool, named: String) throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let output = scenario.ingest(
+      Self.subagentSession,
+      workflow: workflow
+        ? scenario.transcripts.appending(path: "\(Self.subagentSession)/subagents").path : nil,
+      role: role, task: "fix-task", buildRun: Self.buildRun, agentID: agentID)
+    #expect(output.status == 2, "\(output.stdout)")
+    #expect(output.stderr.contains(named), "\(output.stderr)")
+    #expect(!output.stderr.contains(scenario.transcripts.path))
+    #expect(scenario.usages.isEmpty)
+    #expect(scenario.toolWindows.isEmpty)
   }
 }

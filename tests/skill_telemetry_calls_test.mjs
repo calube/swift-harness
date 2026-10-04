@@ -25,6 +25,9 @@ const TELEMETRY_COMMANDS = ['events ingest', 'events summary', 'build halt', 'bu
 // skip on it.
 const OPT_OUT = 'telemetry is off'
 
+// The sections whose ingest must skip an opt-out quietly and go on after any other failure.
+const INGEST_SECTIONS = [[BUILD, '## 3. On each completion'], [LOOP, '## Conflict or red main'], [SHIP, '## 7. Report']]
+
 const skillFiles = () => Object.fromEntries([BUILD, LOOP, SHIP].map(file => [file, readFileSync(join(root, file), 'utf8')]))
 const spanFiles = () => Object.fromEntries([BUILD, LOOP, RUN, SHIP].map(file => [file, readFileSync(join(root, file), 'utf8')]))
 
@@ -48,6 +51,12 @@ const REQUIRED = [
   {
     file: BUILD, heading: '## 3. On each completion', path: 'events ingest',
     flags: { '--session': '<session>', '--workflow-transcripts': '<transcripts>', '--role': 'build-worker', '--task': '<task>', '--build-run': '<run>' },
+  },
+  // The merge fixer is the build session's own subagent, so the completion ingest would file its
+  // usage as the orchestrator's; its own ingest tags it with the task it fixes.
+  {
+    file: LOOP, heading: '## Conflict or red main', path: 'events ingest',
+    flags: { '--session': '<session>', '--agent-id': '<agent>', '--role': 'build-worker', '--task': '<task>', '--build-run': '<run>' },
   },
   { file: SHIP, heading: '## 7. Report', path: 'events ingest', flags: { '--session': '<session>', '--role': 'orchestrator', '--build-run': '<run>' } },
   { file: SHIP, heading: '## 7. Report', path: 'events summary', flags: { '--build-run': '<run>' } },
@@ -81,7 +90,7 @@ export function telemetryCallProblems(files) {
   if (!/^\| `<transcripts>` \|[^\n]*Workflow tool printed/m.test(files[BUILD] ?? '')) {
     problems.push(`${BUILD}: no \`<transcripts>\` row naming the transcript directory the Workflow tool printed`)
   }
-  for (const [file, heading] of [[BUILD, '## 3. On each completion'], [SHIP, '## 7. Report']]) {
+  for (const [file, heading] of INGEST_SECTIONS) {
     const body = section(files[file] ?? '', heading)
     const paragraph = body && paragraphWith(body, 'events ingest')
     if (!paragraph) continue
@@ -116,7 +125,7 @@ export function tableValues(loop, column) {
 // `<reason>` and `<answer>` become each value the tables list, and an optional `[--flag <v>]`
 // loses its brackets. Returns {runs: [{where, args}], problems}.
 export function telemetryRuns(files, values, transcripts) {
-  const ids = { '<session>': 'session-1', '<run>': '20261001T000000Z-abcd1234', '<task>': 'parse-config', '<transcripts>': transcripts }
+  const ids = { '<session>': 'session-1', '<run>': '20261001T000000Z-abcd1234', '<task>': 'parse-config', '<transcripts>': transcripts, '<agent>': 'a705c5b0d3c2b4f5b' }
   const runs = []
   const problems = []
   for (const [file, text] of Object.entries(files)) {
@@ -137,12 +146,14 @@ export function telemetryRuns(files, values, transcripts) {
   return { runs, problems }
 }
 
-// The phase spans each skill opens, with the build run id each names. The run skill's phases
-// before `build start` have no build run yet, so they name the plan slug.
+// The phase spans each skill opens, with the build run id each names and any other flag values
+// it must carry. The run skill's phases before `build start` have no build run yet, so they name
+// the plan slug. The merge fixer's span sits inside its task, as the workflow's fix pass does.
 const SPANS = [
   [RUN, 'spec-read', '<slug>'], [RUN, 'explore', '<slug>'],
   [RUN, 'plan', '<slug>'], [RUN, 'contract', '<slug>'], [RUN, 'final', '<run>'],
   [BUILD, 'final', '<run>'], [SHIP, 'ship', '<run>'],
+  [LOOP, 'fix', '<run>', { '--task': '<task>', '--role': 'build-worker' }],
 ]
 // Phases the run viewer derives from their own events in a skill's run; a span call would draw
 // them twice.
@@ -150,7 +161,7 @@ const DERIVED = [[RUN, 'discover']]
 // A block that hands control away from the skill's own steps: a span still open there never ends.
 const LEAVES = /\bhalts?\b|\bends the run\b/i
 const isSpan = (inv, edge) => inv.words[0] === 'events' && inv.words[1] === 'span' && (!edge || inv.words[2] === edge)
-const flagValue = (words, flag) => words[words.indexOf(flag) + 1]
+const flagValue = (words, flag) => (words.includes(flag) ? words[words.indexOf(flag) + 1] : undefined)
 
 // The `## ` sections of `text`: {heading, line (1-based), body}.
 function sections(text) {
@@ -189,10 +200,15 @@ function blocks(body) {
  */
 export function spanCallProblems(files) {
   const problems = []
-  for (const [file, phase, run] of SPANS) {
+  for (const [file, phase, run, flags = {}] of SPANS) {
     const start = extractInvocations(files[file] ?? '').find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === phase)
     if (!start) problems.push(`${file}: never starts the \`${phase}\` span`)
     else if (flagValue(start.words, '--build-run') !== run) problems.push(`${file}: the \`${phase}\` span names --build-run ${flagValue(start.words, '--build-run')}, not ${run}`)
+    else {
+      for (const [flag, value] of Object.entries(flags)) {
+        if (flagValue(start.words, flag) !== value) problems.push(`${file}: the \`${phase}\` span names ${flag} ${flagValue(start.words, flag)}, not ${value}`)
+      }
+    }
   }
   for (const [file, phase] of DERIVED) {
     if (extractInvocations(files[file] ?? '').some(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === phase)) {
@@ -238,9 +254,12 @@ export function spanRuns(files) {
   const buildFinal = extractInvocations(files[BUILD] ?? '').find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === 'final')
   for (const [file, text] of Object.entries(files)) {
     let open = file === LOOP ? buildFinal : null
+    // A start closes only within its own section; past it, the event loop's ends close `final`.
+    const headingAt = line => text.split('\n').slice(0, line).filter(row => row.startsWith('## ')).length
     for (const inv of extractInvocations(text).filter(inv => isSpan(inv))) {
       const where = `${file}:${inv.line}`
       const args = fill(inv.words)
+      if (file === LOOP && open && open !== buildFinal && headingAt(open.line) !== headingAt(inv.line)) open = buildFinal
       if (inv.words[2] === 'start') {
         open = inv
         starts.push({ where, args })
@@ -291,7 +310,7 @@ const tests = {
 
   'a refused or failed ingest never stops the build or the ship report: the opt-out is skipped quietly and any other exit prints 1 line and goes on — catches a telemetry failure halting a build'() {
     const files = skillFiles()
-    for (const [file, heading] of [[BUILD, '## 3. On each completion'], [SHIP, '## 7. Report']]) {
+    for (const [file, heading] of INGEST_SECTIONS) {
       const paragraph = paragraphWith(section(files[file], heading) ?? '', 'events ingest')
       assert.ok(paragraph, `${file}: no ingest in \`${heading}\``)
       assert.doesNotMatch(paragraph, /\bhalt/i, `${file}: ${paragraph}`)
@@ -327,6 +346,24 @@ const tests = {
     // With telemetry off, ingest refuses with its opt-out line and the rest record nothing and pass.
     const wrong = results.filter(r => r.args[1] === 'ingest' ? r.status !== 2 || !r.out.includes(OPT_OUT) : r.status !== 0)
     assert.deepEqual(wrong.map(r => `${r.where}: exit ${r.status} for \`${r.args.join(' ')}\`: ${r.out.trim()}`), [])
+  },
+
+  'the build loop times the merge fixer in a fix span inside its task and ingests the fixer alone as that task\'s build-worker, ending the span before any halt — catches a merge fixer drawn nowhere and billed to the orchestrator'() {
+    const loop = section(skillFiles()[LOOP], '## Conflict or red main')
+    assert.ok(loop, 'no `## Conflict or red main` section')
+    const calls = extractInvocations(loop)
+    const start = calls.find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === 'fix')
+    assert.ok(start, 'the fixer runs with no fix span')
+    assert.deepEqual(['--build-run', '--task', '--role'].map(flag => flagValue(start.words, flag)), ['<run>', '<task>', 'build-worker'])
+    const launch = loop.split('\n').findIndex(row => /Launch `swift-harness:build-fixer`/.test(row)) + 1
+    assert.ok(launch > 0, 'no fixer launch')
+    assert.ok(start.line < launch, 'the fix span opens after the fixer runs')
+    const ends = calls.filter(inv => isSpan(inv, 'end') && inv.line > launch)
+    assert.deepEqual(ends.map(inv => flagValue(inv.words, '--outcome')).sort(), ['ok', 'red'], 'the fix span is not ended by the fixer\'s outcome')
+    const ingest = calls.find(inv => inv.words.slice(0, 2).join(' ') === 'events ingest')
+    assert.ok(ingest && ingest.line > launch, 'the fixer\'s usage is never ingested after it returns')
+    assert.equal(flagValue(ingest.words, '--workflow-transcripts'), undefined, 'the fixer ingest tags a whole transcript directory')
+    assert.match(loop, /`agentId: <agent>`|agentId[^\n]*<agent>/, 'the loop never says where <agent> comes from')
   },
 
   'the run skill times spec-read, explore, plan, contract and final and leaves discover to its own events, the build skill final and ship its report, each ended ok and on every halt — catches a phase never timed or a span left open by a halt'() {
@@ -377,13 +414,19 @@ const tests = {
       '## 2. Areas', '', '`"$SG" events span start --phase discover --build-run <slug>`', '',
       '`"$SG" events span end <span> --outcome ok`', '',
     ].join('\n')
-    assert.deepEqual(spanCallProblems({ [BUILD]: build, [RUN]: run, [SHIP]: '# Ship\n' }), [
+    const loop = [
+      '## Conflict or red main', '', '`"$SG" events span start --phase fix --build-run <run> --role orchestrator`', '',
+      '`"$SG" events span end <span> --outcome ok`', '',
+    ].join('\n')
+    assert.deepEqual(spanCallProblems({ [BUILD]: build, [LOOP]: loop, [RUN]: run, [SHIP]: '# Ship\n' }), [
       `${RUN}: never starts the \`explore\` span`,
       `${RUN}: never starts the \`plan\` span`,
       `${RUN}: never starts the \`contract\` span`,
       `${RUN}: never starts the \`final\` span`,
       `${BUILD}: the \`final\` span names --build-run <slug>, not <run>`,
       `${SHIP}: never starts the \`ship\` span`,
+      `${LOOP}: the \`fix\` span names --task undefined, not <task>`,
+      `${LOOP}: the \`fix\` span names --role orchestrator, not build-worker`,
       `${RUN}: starts the \`discover\` span the viewer derives from its own events`,
       `${BUILD}: \`## 4. Finish\` never ends the \`final\` span ok`,
       `${BUILD}: \`## 4. Finish\` leaves its span open at "1. \`"$SG" events span start --phase final --build-run <slug>"`,
@@ -410,6 +453,7 @@ const tests = {
     ].join('\n')
     assert.deepEqual(telemetryCallProblems({ [BUILD]: build, [SHIP]: ship }), [
       `${BUILD}: \`## 3. On each completion\` never runs \`swiftgate events ingest --session <session> --workflow-transcripts <transcripts> --role build-worker --task <task> --build-run <run>\``,
+      `${LOOP}: no \`## Conflict or red main\` section`,
       `${SHIP}: \`## 7. Report\` never runs \`swiftgate events ingest --session <session> --role orchestrator --build-run <run>\``,
       `${SHIP}: the summary prints before this session's usage is ingested`,
       `${BUILD}: no \`<transcripts>\` row naming the transcript directory the Workflow tool printed`,
@@ -420,6 +464,7 @@ const tests = {
     ])
     assert.deepEqual(telemetryCallProblems({ [SHIP]: '# Ship\n' }), [
       `${BUILD}: no \`## 3. On each completion\` section`,
+      `${LOOP}: no \`## Conflict or red main\` section`,
       `${SHIP}: no \`## 7. Report\` section`,
       `${SHIP}: no \`## 7. Report\` section`,
       `${BUILD}: no \`<transcripts>\` row naming the transcript directory the Workflow tool printed`,
