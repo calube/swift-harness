@@ -140,29 +140,4 @@ struct WorktreeNodeInstallTests {
     #expect(report.installs?.map(\.outcome) == [.passed])
     #expect(warmupRuns(log).map(\.step) == [.install])
   }
-
-  @Test(
-    "the run skill says worktree creation installs node dependencies and never tells anyone to prefix an area command with an install — catches orchestrators and workers paying an install on every slice"
-  )
-  func runSkillSaysNoInstallPrefix() throws {
-    let plugin = Fixture.checkoutRoot
-    let skill = try String(
-      contentsOf: plugin.appending(path: "skills/run/SKILL.md"), encoding: .utf8)
-    let prose = skill.split(whereSeparator: \.isWhitespace).joined(separator: " ")
-    #expect(prose.contains("Never prefix an area command with an install"))
-
-    let prefix = try Regex(#"\b(pnpm|npm|yarn|bun) (install|ci|i)\b[^\n`]*(&&|;)"#)
-    var offenders: [String] = []
-    for directory in ["skills", "agents", "workflows"] {
-      let root = plugin.appending(path: directory, directoryHint: .isDirectory)
-      guard let walker = FileManager.default.enumerator(atPath: root.path) else { continue }
-      for case let path as String in walker where path.hasSuffix(".md") || path.hasSuffix(".js") {
-        let text = try String(contentsOf: root.appending(path: path), encoding: .utf8)
-        for line in text.split(separator: "\n") where line.contains(prefix) {
-          offenders.append("\(directory)/\(path): \(line)")
-        }
-      }
-    }
-    #expect(offenders == [])
-  }
 }

@@ -9,7 +9,8 @@
 // build that skips `final` and `build finish`; a design conflict answered with stop where widening
 // the task's write set would do; a contract import that leaves it pending; a plan shape whose
 // example `plan import` rejects; and a plan checkout made or removed with raw `git worktree`,
-// which drops its gate reports. Its phase spans are checked with the other skills' telemetry
+// which drops its gate reports; and an area command prefixed with a package install, which costs
+// every slice the install that worktree creation already ran. Its phase spans are checked with the other skills' telemetry
 // calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -164,7 +165,38 @@ function importPlan(planText) {
   })
 }
 
+// A package install chained before another command: what worktree creation makes unnecessary.
+const INSTALL_PREFIX = /\b(?:pnpm|npm|yarn|bun) (?:install|ci|i)\b[^\n`]*(?:&&|;)/
+
+/** Each line of `files` (path to text) that chains a package install before another command. */
+function installPrefixes(files) {
+  return Object.entries(files).flatMap(([path, text]) =>
+    text.split('\n').filter(line => INSTALL_PREFIX.test(line)).map(line => `${path}: ${line.trim()}`))
+}
+
 const tests = {
+  'worktree creation installs node dependencies, so the run skill says never to prefix an area command with an install, and no skill, agent or workflow chains one — catches orchestrators and workers paying an install on every slice'() {
+    const prose = read('skills/run/SKILL.md').split(/\s+/).join(' ')
+    assert.ok(prose.includes('install each node area\'s dependencies once'), 'the run skill doesn\'t say worktree creation installs')
+    assert.ok(prose.includes('Never prefix an area command with an install'), 'the run skill doesn\'t forbid install prefixes')
+    const files = Object.fromEntries(['skills', 'agents', 'workflows']
+      .filter(directory => existsSync(join(root, directory)))
+      .flatMap(directory => markdownFiles(join(root, directory)))
+      .map(path => [relative(root, path), readFileSync(path, 'utf8')]))
+    assert.deepEqual(installPrefixes(files), [])
+  },
+  'the install-prefix check names a pnpm, npm ci and yarn install chained before a command — catches a checker that passes anything'() {
+    const planted = {
+      'a.md': 'Run `pnpm install --frozen-lockfile --prefer-offline && pnpm run build` in web.',
+      'b.md': 'npm ci; npm test',
+      'c.md': 'yarn install && yarn lint\nRun `pnpm run build` alone.',
+    }
+    assert.deepEqual(installPrefixes(planted), [
+      'a.md: Run `pnpm install --frozen-lockfile --prefer-offline && pnpm run build` in web.',
+      'b.md: npm ci; npm test',
+      'c.md: yarn install && yarn lint',
+    ])
+  },
   'the run skill, its references, the explorer and the bootstrap skill never ask the user and never skip git hooks — catches an approval step in a one-shot run'() {
     const files = { ...runSkillFiles(), [EXPLORER]: read(EXPLORER) }
     assert.ok(Object.keys(files).includes('skills/run/SKILL.md'), 'no skills/run/SKILL.md')
