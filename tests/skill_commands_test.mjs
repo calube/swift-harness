@@ -946,6 +946,94 @@ export function surfaceBaselineWalk(gates, rule) {
   }
 }
 
+// The stored `public let` fields of a Swift struct, read from its source, so a check against them
+// moves with the type.
+function swiftStoredFields(source, typeName) {
+  const body = source.split(new RegExp(`\\bstruct ${typeName}\\b[^{]*\\{`))[1] ?? ''
+  const fields = body.slice(0, body.search(/\n\}/))
+  return [...fields.matchAll(/^\s*public let (\w+): ([^\n=]+)/gm)].map(m => ({ name: m[1], optional: m[2].trim().endsWith('?') }))
+}
+
+// The validation table's shape and rule ids as the gate's domain declares them.
+function validationContract() {
+  const table = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/ValidationTable.swift'), 'utf8')
+  const lint = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/PlanLintValidation.swift'), 'utf8')
+  const layerBody = (table.split(/\benum ValidationLayer\b[^{]*\{/)[1] ?? '').split(/\n\}/)[0]
+  return {
+    tableFields: swiftStoredFields(table, 'ValidationTable').map(f => f.name),
+    rowFields: swiftStoredFields(table, 'ValidationRow'),
+    unitOnlyFields: swiftStoredFields(table, 'ValidationUnitOnly').map(f => f.name),
+    layers: [...layerBody.matchAll(/^\s*case (\w+)/gm)].map(m => m[1]),
+    ruleIDs: [...lint.matchAll(/RuleID = "([^"]+)"/g)].map(m => m[1]),
+  }
+}
+
+// Where the plan skill and its decomposer fall short of writing the validation table a design plan
+// keeps beside its ledger: the decomposer's contract returns rows in the table's shape, a design
+// with 2 or more UI tasks gets a validation task, and the skill writes `validation.json` before
+// `plan-lint` and names the rules that check it.
+function validationTableProblems({ plan, stateFiles, agent }, contract) {
+  const problems = []
+  const step5 = (plan.split('\n## 5. ')[1] ?? '').split('\n## ')[0]
+  const write = step5.search(/<plans>\/<slug>\/validation\.json/)
+  const lint = extractInvocations(step5).find(inv => inv.words[0] === 'plan-lint')
+  const lintAt = lint ? step5.split('\n').slice(0, lint.line - 1).join('\n').length : -1
+  if (write < 0) problems.push('step 5 never writes `<plans>/<slug>/validation.json`')
+  else if (lintAt >= 0 && write > lintAt) problems.push('step 5 writes `validation.json` after `plan-lint` reads it')
+  const specPage = (plan.split('\n### A spec-page plan\n')[1] ?? '').split(/\n#{2,3} /)[0].replace(/\s+/g, ' ')
+  if (!/writes no `validation\.json`/.test(specPage)) problems.push('the spec-page section never says a spec-page plan writes no `validation.json`')
+  for (const id of contract.ruleIDs) if (!plan.includes(`\`${id}\``)) problems.push(`the plan skill never names \`${id}\``)
+
+  const shape = (stateFiles.split('\n## `validation.json`\n')[1] ?? '').split('\n## ')[0]
+  const shapeJSON = /```json\n([\s\S]*?)\n```/.exec(shape)?.[1]
+  let stored
+  try { stored = shapeJSON && JSON.parse(shapeJSON) } catch { stored = undefined }
+  if (!stored) problems.push('the state files reference has no `validation.json` JSON shape')
+  else {
+    const keys = Object.keys(stored).sort()
+    if (JSON.stringify(keys) !== JSON.stringify([...contract.tableFields].sort())) problems.push(`the reference's \`validation.json\` keys are ${keys.join(', ')}, not ${contract.tableFields.join(', ')}`)
+    if (stored.schemaVersion !== 1) problems.push('the reference\'s `validation.json` has no `schemaVersion` 1')
+  }
+
+  const block = /```json\n([\s\S]*?)\n```/.exec((agent.split('\n## Output contract\n')[1] ?? '').split('\n## ')[0])?.[1]
+  let reply
+  try { reply = block && JSON.parse(block) } catch { reply = undefined }
+  if (!reply) return [...problems, 'the decomposer\'s output contract has no JSON example']
+  const validation = reply.validation
+  const wantKeys = contract.tableFields.filter(f => f !== 'schemaVersion').sort()
+  if (!validation || JSON.stringify(Object.keys(validation).sort()) !== JSON.stringify(wantKeys)) {
+    problems.push(`the decomposer's reply has no \`validation\` object with ${wantKeys.join(', ')}`)
+  } else {
+    const taskIDs = new Set((reply.tasks ?? []).map(t => t.id))
+    const names = contract.rowFields.map(f => f.name)
+    const required = contract.rowFields.filter(f => !f.optional).map(f => f.name)
+    for (const row of validation.rows) {
+      const where = `the decomposer's ${row.requirement} ${row.layer} row`
+      const extra = Object.keys(row).filter(k => !names.includes(k))
+      const missing = required.filter(k => !(k in row))
+      if (extra.length || missing.length) problems.push(`${where} has keys ${Object.keys(row).join(', ')}, not ${names.join(', ')}`)
+      if (!contract.layers.includes(row.layer)) problems.push(`${where} has a layer outside ${contract.layers.join(', ')}`)
+      for (const id of [...(row.runsAfter ?? []), row.writer]) if (!taskIDs.has(id)) problems.push(`${where} names \`${id}\`, which is no task in the reply`)
+    }
+    for (const entry of validation.unitOnly) {
+      if (JSON.stringify(Object.keys(entry).sort()) !== JSON.stringify([...contract.unitOnlyFields].sort())) problems.push(`the decomposer's unit-only entry for ${entry.requirement} has keys ${Object.keys(entry).join(', ')}, not ${contract.unitOnlyFields.join(', ')}`)
+    }
+    const checked = new Set([...validation.rows, ...validation.unitOnly].map(r => r.requirement))
+    const reqs = [...new Set((reply.tasks ?? []).flatMap(t => t.covers ?? []).filter(id => id.startsWith('req-')))]
+    for (const id of reqs) if (!checked.has(id)) problems.push(`the decomposer's example leaves ${id} with no row and no unit-only reason`)
+  }
+  const prose = agent.replace(/\s+/g, ' ')
+  if (!/2 or more tasks build UI[^.]*validation task/.test(prose)) problems.push('the decomposer never adds a validation task when 2 or more tasks build UI')
+  for (const id of contract.ruleIDs) if (!agent.includes(`\`${id}\``)) problems.push(`the decomposer's fix round never names \`${id}\``)
+  return problems
+}
+
+const planValidationFiles = () => ({
+  plan: readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8'),
+  stateFiles: readFileSync(join(root, 'skills/plan/references/state-files.md'), 'utf8'),
+  agent: readFileSync(join(root, 'agents/design-decomposer.md'), 'utf8'),
+})
+
 const tests = {
   'ship, build and sprint run doctor with the session id at their preflight and stop on doctor.plugin-changed — catches a session running stale prompts past its preflight'() {
     for (const [skill, heading] of [['ship', '## 1. Preflight'], ['sprint', '## 1. Preflight'], ['build', '## 1. Start']]) {
@@ -1420,6 +1508,55 @@ const tests = {
     assert.ok(decomposer.some(inv => inv.words.includes('--design') && !inv.words.includes('--spec-page')), 'no decomposer pack reads a design')
     assert.ok(resolved.some(r => r.path === 'plan set' && r.flags.includes('--resume') && r.flags.includes('--session')), 'a spec-page plan\'s resume note is written by hand')
     assert.match(text.replace(/\s+/g, ' '), /`plan-lint\.spec-page-moved`[^.]*halt/, 'a moved page goes to the decomposer\'s fix round')
+  },
+
+  'the decomposer returns validation rows in validation.json\'s shape beside its tasks, and the plan skill writes validation.json before plan-lint and names its rules — catches a design plan built with no checks after each merge'() {
+    const contract = validationContract()
+    assert.deepEqual(contract.tableFields, ['schemaVersion', 'rows', 'unitOnly'])
+    assert.deepEqual(contract.rowFields.map(f => f.name), ['requirement', 'layer', 'check', 'runsAfter', 'writer', 'reason'])
+    assert.equal(contract.ruleIDs.length, 4)
+    assert.deepEqual(validationTableProblems(planValidationFiles(), contract), [])
+    const { problems } = scanSkills(join(root, 'skills/plan'), help, root)
+    assert.deepEqual(problems, [])
+  },
+
+  'the validation table check names a missing write, a write after plan-lint, a spec-page plan left silent, a missing rule, a wrong shape and an uncovered requirement — catches a check that passes anything'() {
+    const contract = validationContract()
+    const plan = [
+      '### A spec-page plan', '', 'Confirm the page.', '',
+      '## 5. Schedule, write the ledger, lint', '',
+      '1. Lint:', '', '   ```bash', '   "$SG" plan-lint <slug> --json', '   ```', '',
+      '2. Write `<plans>/<slug>/validation.json`.', '',
+      '## 6. Set the index', '',
+      'The rules: `plan-lint.validation-uncovered`.',
+    ].join('\n')
+    const stateFiles = ['# Plan state files', '', '## `validation.json`', '', '```json', '{"schemaVersion": 2, "rows": []}', '```'].join('\n')
+    const reply = {
+      tasks: [{ id: 'a', covers: ['req-one', 'req-two'] }],
+      validation: { rows: [{ requirement: 'req-one', layer: 'unit', check: 'x', runsAfter: ['b'], writer: 'a', why: 'no' }], unitOnly: [] },
+    }
+    const agent = ['# Decomposer', '', '## Output contract', '', '```json', JSON.stringify(reply), '```', '', 'Fix `plan-lint.validation-uncovered`.'].join('\n')
+    assert.deepEqual(validationTableProblems({ plan, stateFiles, agent }, contract), [
+      'step 5 writes `validation.json` after `plan-lint` reads it',
+      'the spec-page section never says a spec-page plan writes no `validation.json`',
+      'the plan skill never names `plan-lint.validation-unknown-task`',
+      'the plan skill never names `plan-lint.validation-state-without-flow`',
+      'the plan skill never names `plan-lint.validation-flow-without-ios`',
+      'the reference\'s `validation.json` keys are rows, schemaVersion, not schemaVersion, rows, unitOnly',
+      'the reference\'s `validation.json` has no `schemaVersion` 1',
+      'the decomposer\'s req-one unit row has keys requirement, layer, check, runsAfter, writer, why, not requirement, layer, check, runsAfter, writer, reason',
+      'the decomposer\'s req-one unit row has a layer outside acceptance, flow, state',
+      'the decomposer\'s req-one unit row names `b`, which is no task in the reply',
+      'the decomposer\'s example leaves req-two with no row and no unit-only reason',
+      'the decomposer never adds a validation task when 2 or more tasks build UI',
+      'the decomposer\'s fix round never names `plan-lint.validation-unknown-task`',
+      'the decomposer\'s fix round never names `plan-lint.validation-state-without-flow`',
+      'the decomposer\'s fix round never names `plan-lint.validation-flow-without-ios`',
+    ])
+    assert.deepEqual(validationTableProblems({ plan: '', stateFiles: '', agent: '' }, contract).slice(0, 2), [
+      'step 5 never writes `<plans>/<slug>/validation.json`',
+      'the spec-page section never says a spec-page plan writes no `validation.json`',
+    ])
   },
 
   'the plan skill\'s spec-page confirm line names every approver plan confirm takes, delegate included — catches a delegated session steered to confirm as the user'() {

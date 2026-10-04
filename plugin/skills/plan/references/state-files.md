@@ -89,6 +89,34 @@ On a replan, `tasks` is the `<fixed>` tasks as the old ledger had them, in its o
 decomposer's new tasks. A `done` task keeps every field, `actualLines`, `model` and `branch`
 included.
 
+## `validation.json`
+
+Path: `<plans>/<slug>/validation.json`, a design plan only. The plan skill writes it from the
+decomposer's `validation`; `plan-lint` reads it, and the build runs each row once its `runsAfter`
+tasks merge.
+
+```json
+{
+  "schemaVersion": 1,
+  "rows": [
+    {
+      "requirement": "req-offline-queue-drains-on-reconnect",
+      "layer": "acceptance",
+      "check": "OrderQueueCoreTests/drainsThroughLiveClientOnReconnect",
+      "runsAfter": ["offline-queue-client-interface", "offline-queue-core-reducer"],
+      "writer": "offline-queue-core-reducer"
+    }
+  ],
+  "unitOnly": [
+    {"requirement": "req-offline-queue-rejects-invalid-orders", "reason": "the client's own test rejects an empty order, and no other module sees it"}
+  ]
+}
+```
+
+- `layer` is `acceptance`, `flow` or `state`; any other value fails decoding.
+- `runsAfter` and `writer` are ledger task ids. `reason` on a row is optional.
+- `unitOnly` lists each requirement its tasks' unit tests prove alone, with the reason.
+
 ## `replan.json`
 
 Path: `.harness/plan-draft/<slug>/replan.json`. The plan skill writes it on a replan, and the

@@ -37,13 +37,17 @@ public struct RunViewInput: Sendable, Equatable {
   /// The absolute roots of the run's checkouts, so a finding message's machine path can become
   /// repo-relative before it enters the view.
   public var checkoutRoots: [String]
+  /// What the warm-up recorded into the baseline for each failed `warmup.run`'s step, by event
+  /// id; absent when no baseline record matched it.
+  public var warmupBaselines: [String: BaselineStepResult]
 
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
     ledger: Ledger? = nil, requirements: [RunViewRequirement] = [],
     damage: [RunView.Damage] = [], briefs: [String: RunView.Brief] = [:],
     workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
-    gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = []
+    gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = [],
+    warmupBaselines: [String: BaselineStepResult] = [:]
   ) {
     self.buildRun = buildRun
     self.events = events
@@ -56,5 +60,6 @@ public struct RunViewInput: Sendable, Equatable {
     self.launchedAt = launchedAt
     self.gateReports = gateReports
     self.checkoutRoots = checkoutRoots
+    self.warmupBaselines = warmupBaselines
   }
 }
