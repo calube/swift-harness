@@ -3,6 +3,8 @@
 Status: accepted by the user, 2026-09-28, with the simulator QA design
 (`docs/designs/2026-09-28-simulator-qa-design.md`).
 Fills the Foundation design's sub-project 3 row.
+Amended by [ADR 0008](0008-simulator-qa-layered-validation.md), 2026-10-04: run-scoped batch flows, kept flows in
+XCUITest with keep-always attachments and a typed id module, a recording lock, and 2 offline flow rules.
 
 ## Context
 
