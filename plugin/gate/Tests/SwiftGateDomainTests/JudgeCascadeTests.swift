@@ -251,4 +251,34 @@ struct JudgeCascadeTests {
         JudgeProportion(count: 2, n: 2), JudgeProportion(count: 0, n: 0),
       ])
   }
+
+  @Test(
+    "when Jev gave no answer, both blocking questions go to claude and the advisory ones stay unasked; claude's 0.95 blocks naming jev's error, and a claude failure is 1 minor judge.blocked naming both — catches a judge that can't run passing quietly"
+  )
+  func jevFailedSendsBlockingQuestionsToClaude() throws {
+    let plan = JudgeCascade.jevFailedPlan(questions: .tests)
+    func findings(_ claude: JudgeCascade.ClaudeOutcome) throws -> [Finding] {
+      try JudgeCascade.jevFailedFindings(
+        subject: Self.subject, jevError: "set TYPESAFE_API_KEY", claude: claude,
+        questions: .tests, claudeIdentity: Self.claude, thresholds: Self.thresholds)
+    }
+
+    let answered = try findings(
+      .answered(
+        Self.answers(failsIfBroken: 0.95, implementation: 0.1, rationale: "never compared")
+          .filter { ["fails-if-broken", "asserts-implementation"].contains($0.question) }))
+    let failed = try findings(.failed("claude reported an error: overloaded"))
+
+    #expect(plan.escalated == ["fails-if-broken", "asserts-implementation"])
+    #expect(plan.escalations.values.allSatisfy { $0 == .jevFailed })
+    #expect(plan.step(for: "tier") == .keep)
+    #expect(answered.map(\.ruleID) == ["judge.fails-if-broken"])
+    #expect(answered.first?.severity == .major)
+    #expect(answered.first?.message.contains("claude/claude-sonnet-5-5") == true)
+    #expect(answered.first?.message.contains("set TYPESAFE_API_KEY") == true)
+    #expect(failed.map(\.ruleID) == [JudgeCascade.blockedRuleID])
+    #expect(failed.first?.severity == .minor)
+    #expect(failed.first?.message.contains("set TYPESAFE_API_KEY") == true)
+    #expect(failed.first?.message.contains("overloaded") == true)
+  }
 }

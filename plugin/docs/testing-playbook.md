@@ -203,7 +203,7 @@ A `Judge` protocol takes typed questions and returns calibrated probabilities, n
 | `judge bench` arm | `claude:claude-sonnet-5-5` | `jev:jev-1.13.0#test-quality@2-jev`; `cascade:jev-1.13.0,claude-sonnet-5-5` for both |
 
 - **Jev blocks, Claude settles:** Jev at or above `block_threshold` on a blocking question blocks `ready`, with Claude's reason, or the template's and a `failureScenario` saying why. In the uncertain band Claude answers in `@1`'s words; if it fails, Jev's answer stays advisory.
-- **Fails loudly at `ready`:** Claude takes the blocking questions a retried Jev can't answer; if Claude can't, `judge.blocked` makes the gate BLOCKED.
+- **Jev down at `ready`:** Claude takes the blocking questions a retried Jev can't answer; if Claude can't, `judge.blocked` makes the gate BLOCKED.
 - **Benchmark:** `judge bench` scores each `--backend` arm, `judge bench-render` compares them and lists the bands. Run it before setting Jev's thresholds.
 - **Audit log:** `judge events`; see [judge-audit.md](judge-audit.md).
 
