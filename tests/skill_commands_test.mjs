@@ -1037,7 +1037,7 @@ function h2Section(text, heading) {
 }
 
 const runValidationFileNames = [
-  'skills/run/SKILL.md', 'skills/run/references/plan-shape.md', 'skills/run/references/validation-worker.md',
+  'skills/run/SKILL.md', 'skills/run/references/plan-shape.md', 'skills/qa/references/validation-worker.md',
   'skills/build/references/event-loop.md',
 ]
 const runValidationFiles = () => Object.fromEntries(runValidationFileNames.map(name =>
@@ -1047,12 +1047,13 @@ const runValidationFiles = () => Object.fromEntries(runValidationFileNames.map(n
 // worker's checks into plan state before `qa run --at-base` reads them there, every merge runs
 // `qa run --after <task>` and a red one undoes the merge, `final` runs every merged row, flow rows
 // stay with `xcode` areas, the contract names what the checks target, and the validation task
-// writes only `.harness/qa/`, since no commit carries that folder and its task never merges.
+// follows the shared worker brief but writes only `.harness/qa/`, since no commit carries that
+// folder and its task never merges.
 function runValidationProblems(files) {
   const problems = []
   const skill = files['skills/run/SKILL.md'] ?? ''
   const shape = files['skills/run/references/plan-shape.md'] ?? ''
-  const worker = files['skills/run/references/validation-worker.md'] ?? ''
+  const worker = files['skills/qa/references/validation-worker.md'] ?? ''
   const loop = files['skills/build/references/event-loop.md'] ?? ''
   const qaCalls = text => extractInvocations(text).filter(inv => inv.words[0] === 'qa')
   const isRun = inv => inv.words[1] === 'run'
@@ -1102,10 +1103,11 @@ function runValidationProblems(files) {
     }
   }
   if (!worker) problems.push('no validation worker brief')
-  else {
-    if (!worker.includes('`.harness/qa/<slug>/`')) problems.push('the validation worker brief never names `.harness/qa/<slug>/` as its write set')
-    if (!/\bnever commits?\b/i.test(worker)) problems.push('the validation worker brief never says it commits nothing')
-    if (!qaCalls(worker).some(inv => inv.words[1] === 'lint')) problems.push('the validation worker never runs `swiftgate qa lint` on its flows')
+  if (!skill.includes('skills/qa/references/validation-worker.md')) {
+    problems.push('the run skill never hands its validation task the shared validation worker brief')
+  }
+  if (!/validation task[^.]*commits nothing/.test(h2Section(skill, '7. ').replace(/\s+/g, ' '))) {
+    problems.push('step 7 never says the validation task commits nothing')
   }
   return problems
 }
@@ -1184,7 +1186,7 @@ const tests = {
     for (const [path, flag, file] of [
       ['qa adopt', '--json', 'skills/run/SKILL.md'], ['qa run', '--at-base', 'skills/run/SKILL.md'],
       ['qa run', '--after', 'skills/run/SKILL.md'], ['qa run', '--plan', 'skills/run/SKILL.md'],
-      ['qa run', '--json', 'skills/run/SKILL.md'], ['qa lint', '--json', 'skills/run/references/validation-worker.md'],
+      ['qa run', '--json', 'skills/run/SKILL.md'],
       ['qa run', '--after', 'skills/build/references/event-loop.md'],
     ]) assert.ok(has(path, flag, file), `${file} never runs \`swiftgate ${path} ${flag}\``)
   },
@@ -1201,7 +1203,7 @@ const tests = {
         '## 8. Final', '', '1. `"$SG" qa run --after <task> --json`.', '',
       ].join('\n'),
       'skills/run/references/plan-shape.md': ['```markdown', '### demo-validation', '- Writes: .harness/qa/demo/, Tests/DemoTests.swift', '```'].join('\n'),
-      'skills/run/references/validation-worker.md': 'Write the checks under `.harness/qa/`, then commit them.\n',
+      'skills/qa/references/validation-worker.md': 'Write the checks under `.harness/qa/`, then commit them.\n',
       'skills/build/references/event-loop.md': '## After each merge\n\n`"$SG" qa run --json`.\n',
     }
     assert.deepEqual(runValidationProblems(files), [
@@ -1216,9 +1218,8 @@ const tests = {
       'the after-merge step never runs `swiftgate qa run --after <task>`',
       'the after-merge step never undoes a merge whose rows read red',
       'the validation task example writes `Tests/DemoTests.swift`, outside `.harness/qa/`',
-      'the validation worker brief never names `.harness/qa/<slug>/` as its write set',
-      'the validation worker brief never says it commits nothing',
-      'the validation worker never runs `swiftgate qa lint` on its flows',
+      'the run skill never hands its validation task the shared validation worker brief',
+      'step 7 never says the validation task commits nothing',
     ])
     assert.deepEqual(runValidationProblems({}), [
       'the run skill never runs `swiftgate qa adopt`',
@@ -1233,6 +1234,8 @@ const tests = {
       'the build loop has no `## After each merge` step',
       'the plan shape has no `### <slug>-validation` task example',
       'no validation worker brief',
+      'the run skill never hands its validation task the shared validation worker brief',
+      'step 7 never says the validation task commits nothing',
     ])
   },
 
