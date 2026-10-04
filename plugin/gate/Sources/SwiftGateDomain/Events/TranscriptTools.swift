@@ -149,12 +149,14 @@ public struct ToolIngestPlan: Sendable, Equatable {
 
 /// From a session's tool calls to the `agent.tools` events not stored yet.
 public enum ToolIngest {
-  /// `topLevels` maps each working directory to the git top level holding it; a path is kept
-  /// only when it sits inside its line's top level. `stored` is every `agent.tools` event id the
-  /// store holds.
+  /// `topLevels` maps each working directory to the git top level holding it, and `worktrees`
+  /// to every worktree root of its repository. A path is kept relative to the innermost of those
+  /// holding it: a worker's transcript names the main checkout as its `cwd` while it edits its
+  /// own worktree; with none, only the top level counts. `stored` is every `agent.tools` event
+  /// id the store holds.
   public static func plan(
     sessionID: String, transcripts: [ToolTranscript], buildRun: String?,
-    topLevels: [String: String], stored: Set<String>
+    topLevels: [String: String], worktrees: [String: [String]] = [:], stored: Set<String>
   ) -> ToolIngestPlan {
     var events: [HarnessEvent] = []
     var read: Set<String> = []
@@ -189,7 +191,8 @@ public enum ToolIngest {
             otherCount += 1
           }
           guard let path = call.path else { continue }
-          guard let kept = relative(path, cwd: call.cwd, topLevels: topLevels),
+          guard
+            let kept = relative(path, cwd: call.cwd, topLevels: topLevels, worktrees: worktrees),
             EventPayloadGuard.rejection(inJSON: kept) == nil
           else {
             dropped += 1
@@ -223,12 +226,19 @@ public enum ToolIngest {
     return "tools-\(sessionID)-\(agentID ?? "main")-\(milliseconds)"
   }
 
-  /// `path` relative to the top level of `cwd`, resolved against `cwd` when relative; `nil` for
-  /// a `~` path, an unknown top level, or a path that lands outside it.
-  static func relative(_ path: String, cwd: String?, topLevels: [String: String]) -> String? {
-    guard !path.hasPrefix("~"), let cwd, let top = topLevels[cwd] else { return nil }
+  /// `path` relative to the innermost of `cwd`'s top level and worktree roots holding it,
+  /// resolved against `cwd` when relative; `nil` for a `~` path, a `cwd` with no known root, or
+  /// a path inside none of them.
+  static func relative(
+    _ path: String, cwd: String?, topLevels: [String: String], worktrees: [String: [String]]
+  ) -> String? {
+    guard !path.hasPrefix("~"), let cwd else { return nil }
+    let roots = ([topLevels[cwd]].compactMap { $0 } + (worktrees[cwd] ?? [])).compactMap {
+      components($0)
+    }
     let absolute = path.hasPrefix("/") ? path : "\(cwd)/\(path)"
-    guard let parts = components(absolute), let root = components(top), parts.starts(with: root)
+    guard let parts = components(absolute),
+      let root = roots.filter({ parts.starts(with: $0) }).max(by: { $0.count < $1.count })
     else { return nil }
     let rest = parts.dropFirst(root.count)
     return rest.isEmpty ? "." : rest.joined(separator: "/")

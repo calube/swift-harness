@@ -336,6 +336,8 @@ enum EventsIngestRun {
         uniqueKeysWithValues: cwds.compactMap { cwd in
           topLevel.of(cwd).map { (cwd, $0) }
         }),
+      worktrees: Dictionary(
+        uniqueKeysWithValues: cwds.map { cwd in (cwd, topLevel.worktrees(of: cwd)) }),
       stored: Set(
         read.events.compactMap {
           if case .agentTools = $0.event.payload { $0.event.eventID } else { nil }

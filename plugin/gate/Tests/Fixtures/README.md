@@ -1022,6 +1022,27 @@ jq -c "$F" <worker transcript> > Transcripts/streamed/agent-ad10c26c66ae4d738.js
 
 After the copy, the grep above matched nothing in it.
 
+### Worker paths in other worktrees (`worker-worktrees/`)
+
+`worker-worktrees/agent-a5144c1382233c055.jsonl` and `agent-a1df530e0a9c131c0.jsonl` are 2 worker
+transcripts of the `RunView/build-run-2` capture (see its `SOURCE`), the Workflow agents of tasks
+`counter-ui-reset-button` and `counter-core-reset-and-decrement-floor`, Claude Code 2.1.288 on
+`claude-sonnet-5-5`. Claude Code wrote them to
+`~/.claude/projects/<cwd slug>/<session_id>/subagents/workflows/<workflow>/agent-<agentId>.jsonl`.
+Every line's `cwd` is the scratch repository's main checkout, though the first worker's `Edit`
+names a file in its own worktree beside it, `../app-<plan>-<task>`; the second's `Read` names the
+main checkout's context pack. The filter keeps each line's type, time and `cwd`, and of its content
+only `tool_use` blocks (`id`, `name` and the `file_path`, `path` or `notebook_path` input) and
+`tool_result` blocks (`tool_use_id`), so no command, text or output. With `ROOT` the scratch
+directory's `realpath`, the `$S` of that `SOURCE`:
+
+```sh
+F='select(.type=="assistant" or .type=="user") | {type, timestamp, isSidechain, cwd, message: {content: [.message.content[]? | objects | select(.type=="tool_use" or .type=="tool_result") | if .type=="tool_use" then {type, id, name, input: (.input | with_entries(select(.key=="file_path" or .key=="path" or .key=="notebook_path")))} else {type, tool_use_id} end]}}'
+jq -c "$F" <worker transcript> | sed "s#$ROOT#/SCRATCH#g" > Transcripts/worker-worktrees/agent-<agentId>.jsonl
+```
+
+After the copy, both greps of `RunView/build-run-2` matched nothing in them.
+
 ## Events
 
 `Events/judge.jsonl` is a judge audit log as the writer at `bbf0c62` wrote it, before the store
@@ -1746,7 +1767,10 @@ not the plugin under test; the fixer ran the plugin's own `bin/swiftgate`, and i
 The sources held no machine path, so no `sed` ran.
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/build-run-2`
 and `grep -rniE 'sk-ant|api[_-]?key|ANTHROPIC|bearer|password|secret|token=' RunView/build-run-2`
-matched nothing. Each `agent.tools` `files` list is empty.
+matched nothing. Each `agent.tools` `files` list is empty: the ingest that wrote them dropped
+every path, for 2 reasons `Transcripts/worker-worktrees/` now covers. A worker's transcript names
+the main checkout as its `cwd`, so a path in its own worktree sat outside that top level; and the
+top level lookup standardised the `/private/var/…` `cwd` to `/var/…`, so no path matched even there.
 
 ## Run view: a brownfield run's pre-build phases
 
