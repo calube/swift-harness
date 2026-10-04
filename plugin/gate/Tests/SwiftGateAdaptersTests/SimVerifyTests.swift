@@ -247,4 +247,49 @@ struct SimVerifyTests {
 
     #expect(evidence.crashReports == [SimCrashReport.path(fileName: name): .present(captured)])
   }
+
+  @Test(
+    "the request's audit scope reaches the verdict: the brownfield trial's captured run is RED on 183 findings over every control, and GREEN with 1 nit when a brownfield run with no flow audits none — catches sim verify ignoring the scope its caller chose"
+  )
+  func auditScopeReachesTheVerdict() throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let trial = Fixture.directory.appending(path: "BrownfieldTrial/aidoku-setting-flow/sim")
+    let directory = simDirectory()
+    try FileManager.default.createDirectory(
+      at: directory.appending(path: "steps"), withIntermediateDirectories: true)
+    for name in [SimSession.fileName, SimStep.logFileName] {
+      try FileManager.default.copyItem(
+        at: trial.appending(path: name), to: directory.appending(path: name))
+    }
+    for n in 1...5 {
+      try FileManager.default.copyItem(
+        at: trial.appending(path: SimStep.treePath(n: n)),
+        to: directory.appending(path: SimStep.treePath(n: n)))
+      try Data("png bytes".utf8).write(to: directory.appending(path: SimStep.screenshotPath(n: n)))
+    }
+    let head = SimCheckoutHead.commit(
+      try SimSession.decode(try Data(contentsOf: trial.appending(path: SimSession.fileName)))
+        .headCommit)
+
+    func judged(_ audit: SimAuditScope) throws -> SimVerifyReport {
+      try Self.report(
+        SimVerify(
+          dependencies: SimVerify.Dependencies(
+            leases: leases, isAlive: { _ in false }, clock: VirtualHoldClock().clock,
+            now: { Self.finishedAt })
+        ).run(
+          SimVerify.Request(
+            worktree: Self.worktree, runID: Self.runID, checkoutHead: head,
+            simDirectory: { _ in directory }, historyFile: historyFile, audit: audit)))
+    }
+
+    let whole = try judged(.everyControl)
+    #expect(whole.verdict == .red)
+    #expect(whole.findings.count == 183)
+    let none = try judged(.unaudited(reason: SimAuditScope.noFlowReason))
+    #expect(none.verdict == .green, "\(none.findings.map(\.message))")
+    #expect(none.notes.map(\.rule) == [SimAuditScope.untargetedRuleID])
+    let written = try writtenReport()
+    #expect((written["notes"] as? [[String: Any]])?.count == 1)
+  }
 }

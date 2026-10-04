@@ -52,7 +52,9 @@ private struct ValidationClone {
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
   ])
 
-  init(plan: String, xcodeArea: Bool = false) async throws {
+  init(plan: String, xcodeArea: Bool = false, config fixture: String = "memos-4-config.toml")
+    async throws
+  {
     root = try TestTemporaryDirectory.make("swiftgate-validation").resolvingSymlinksInPath()
     try await git("init", "-q", "-b", "main")
     try await git("config", "commit.gpgsign", "false")
@@ -60,7 +62,7 @@ private struct ValidationClone {
     try await git("add", "-A")
     try await git("commit", "-q", "-m", "base")
     var config = try String(
-      contentsOf: Self.trial.appending(path: "memos-4-config.toml"), encoding: .utf8)
+      contentsOf: Self.trial.appending(path: fixture), encoding: .utf8)
     if xcodeArea {
       let presets = try #require(config.range(of: "[build.presets.brownfield]"))
       config.insert(contentsOf: Self.xcodeArea, at: presets.lowerBound)
@@ -117,6 +119,42 @@ private func line(of needle: String, in text: String) -> Int? {
 
 @Suite("plan import validation table")
 struct PlanImportValidationTests {
+  @Test(
+    "the Aidoku trial's plan, whose acceptance row named a test source file, fails the import at that row with validation-check-source-file and writes nothing, and imports once the row names the test — catches the row qa run later ran as a path and read red on exit 126"
+  )
+  func aidokuSourceFileCheckFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "aidoku-validation-2-PLAN.md"),
+      encoding: .utf8)
+    let clone = try await ValidationClone(
+      plan: captured, config: "aidoku-validation-config.toml")
+    defer { clone.remove() }
+
+    let report = await clone.run()
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.verdict == .red)
+    let row = try #require(
+      line(of: "`AidokuTests/LargeDownloadConfirmationTests.swift`", in: captured))
+    #expect(
+      report.message.contains("line \(row): \(PlanLintValidation.checkSourceFileRuleID)"),
+      "\(report.message)")
+    #expect(report.message.contains("test: <Target>/<Class>"), "\(report.message)")
+    #expect(!clone.exists("ledger.json"))
+    #expect(!clone.exists("validation.json"))
+
+    try clone.write(
+      plan: try replacing(
+        "`AidokuTests/LargeDownloadConfirmationTests.swift`",
+        with: "`test: AidokuTests/LargeDownloadConfirmationTests`", in: captured))
+    let fixed = await clone.run()
+    #expect(fixed.status == .imported, "\(fixed.message)")
+    let table = try ValidationTableJSON.decode(Data(contentsOf: clone.validationFile))
+    #expect(
+      table.rows.first { $0.layer == .acceptance }?.check
+        == "test: AidokuTests/LargeDownloadConfirmationTests")
+  }
+
   @Test(
     "the captured plan's Validation table imports every row into validation.json beside the ledger — catches a row dropped between PLAN.md and the file qa run reads"
   )

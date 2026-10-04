@@ -142,6 +142,7 @@ enum QARunRun {
     let checks = Checks(
       planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies,
       runID: runID, plan: runPlan, atBase: options.atBase,
+      areas: testAreas(root: root, common: common, table: table),
       flows: dependencies.flows.map { simulator in
         QAFlowRunner(
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
@@ -235,6 +236,33 @@ enum QARunRun {
     return report
   }
 
+  /// The areas a `test:` acceptance row resolves in: the brownfield config's, read only when a
+  /// row is in that form.
+  private static func testAreas(root: URL, common: String, table: ValidationTable)
+    -> Result<[BrownfieldArea], AcceptanceTestUnresolved>
+  {
+    guard
+      table.rows.contains(where: {
+        $0.layer == .acceptance && AcceptanceTestReference.parse($0.check) != nil
+      })
+    else { return .success([]) }
+    let loaded: LoadedConfig?
+    do {
+      loaded = try ConfigLoader().loadProfile(
+        repositoryRoot: root, commonDir: URL(filePath: common, directoryHint: .isDirectory))
+    } catch {
+      return .failure(AcceptanceTestUnresolved(reason: "the config doesn't load: \(error)"))
+    }
+    guard case .brownfield(let config)? = loaded else {
+      return .failure(
+        AcceptanceTestUnresolved(
+          reason:
+            "a `test:` check runs through a brownfield area's test command, and this "
+            + "repository has no brownfield config"))
+    }
+    return .success(config.areas)
+  }
+
   /// Runs 1 row's check and saves what it printed: an acceptance or state row's command or
   /// script, or a flow row through ``QAFlowRunner``.
   private struct Checks: Sendable {
@@ -244,6 +272,8 @@ enum QARunRun {
     let runID: String
     let plan: QARunPlan
     let atBase: Bool
+    /// What a `test:` acceptance row resolves in.
+    let areas: Result<[BrownfieldArea], AcceptanceTestUnresolved>
     let flows: QAFlowRunner?
     /// State rows a flow row already ran on its device, by row.
     let stateResults = StateResults()
@@ -341,16 +371,32 @@ enum QARunRun {
         return QACheckOutcome(
           result: .unverified, message: "not run: no port for QA_PORT: \(error)")
       }
-      let script = URL(filePath: planDirectory).appending(path: row.check).path
-      var isDirectory: ObjCBool = false
-      let program: QACheckRequest.Program =
-        !row.check.hasPrefix("/")
-          && FileManager.default.fileExists(atPath: script, isDirectory: &isDirectory)
-          && !isDirectory.boolValue
-        ? .script(path: script) : .command(row.check)
+      let name = Self.evidenceName(entry)
+      let program: QACheckRequest.Program
+      var directory = workingDirectory
+      var shown = row.check
+      if row.layer == .acceptance, let reference = AcceptanceTestReference.parse(row.check) {
+        let junit = qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path
+        switch areas.flatMap({ reference.resolve(in: $0, junitPath: junit) }) {
+        case .success(let resolved):
+          program = .command(resolved.command)
+          shown = resolved.command
+          if resolved.root != "." { directory += "/" + resolved.root }
+        case .failure(let unresolved):
+          return QACheckOutcome(result: .unverified, message: "not run: \(unresolved.reason)")
+        }
+      } else {
+        let script = URL(filePath: planDirectory).appending(path: row.check).path
+        var isDirectory: ObjCBool = false
+        program =
+          !row.check.hasPrefix("/")
+            && FileManager.default.fileExists(atPath: script, isDirectory: &isDirectory)
+            && !isDirectory.boolValue
+          ? .script(path: script) : .command(row.check)
+      }
       let output = await dependencies.checks.run(
         QACheckRequest(
-          program: program, workingDirectory: workingDirectory,
+          program: program, workingDirectory: directory,
           environment: [
             "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
             "QA_EVIDENCE_DIR": qaDirectory.path,
@@ -374,9 +420,8 @@ enum QARunRun {
         result = .unverified
         status = "not started: \(reason)"
       }
-      let name = Self.evidenceName(entry)
       let text =
-        "$ \(row.check)\nQA_PORT=\(port)\nexit: \(exitStatus.map(String.init) ?? status)\n"
+        "$ \(shown)\nQA_PORT=\(port)\nexit: \(exitStatus.map(String.init) ?? status)\n"
         + "--- stdout ---\n\(output.stdout)\n--- stderr ---\n\(output.stderr)\n"
       var message = status
       var evidence: [String] = []
@@ -546,7 +591,7 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
         worktree: CanonicalPath.of(root), runID: request.runID, checkoutHead: checkoutHead,
         simDirectory: { _ in simDirectory },
         historyFile: StateRootResolver.resolve(worktree: root)
-          .url(RunLayout.historyFile, directoryHint: .notDirectory)))
+          .url(RunLayout.historyFile, directoryHint: .notDirectory), audit: request.audit))
   }
 
   func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {

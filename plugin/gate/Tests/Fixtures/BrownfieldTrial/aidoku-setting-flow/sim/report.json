@@ -1,0 +1,1110 @@
+{
+  "blocked" : null,
+  "checkoutHead" : "f7e10b00b4d7bf7336441a9943809b255724bc08",
+  "command" : "sim verify",
+  "findings" : [
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"Updates\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"More\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"Library\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"Browse\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"History\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"Settings\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 001 \"after step 1: wait role=button label=\"Settings\"\": Button \"Search\" has no accessibility identifier",
+      "path" : "steps\/001.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 1
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch settings.downloads.confirmLargeDownloads has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Button \"Library\" has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Button \"Browse\" has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Button \"History\" has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Button \"Settings\" has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 002 \"after step 5: wait label=\"Compress Downloads\"\": Button \"Search\" has no accessibility identifier",
+      "path" : "steps\/002.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 2
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch settings.downloads.confirmLargeDownloads has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Button \"Library\" has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Button \"Browse\" has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Button \"History\" has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Button \"Settings\" has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 003 \"after step 6: wait id=\"settings.downloads.confirmLargeDownloads\"\": Button \"Search\" has no accessibility identifier",
+      "path" : "steps\/003.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 3
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch settings.downloads.confirmLargeDownloads has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Button \"Library\" has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Button \"Browse\" has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Button \"History\" has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Button \"Settings\" has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 004 \"after step 7: wait label=\"Confirm Large Downloads\"\": Button \"Search\" has no accessibility identifier",
+      "path" : "steps\/004.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 4
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch settings.downloads.confirmLargeDownloads has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Cell with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no label has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Switch with no identifier has no readable label",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-label",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Button \"Library\" has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Button \"Browse\" has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Button \"History\" has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Button \"Settings\" has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    },
+    {
+      "message" : "step 005 \"after step 8: is exists id=\"settings.downloads.confirmLargeDownloads\" value=\"0\"\": Button \"Search\" has no accessibility identifier",
+      "path" : "steps\/005.tree.json",
+      "rule" : "sim.a11y-identifier",
+      "step" : 5
+    }
+  ],
+  "headCommit" : "f7e10b00b4d7bf7336441a9943809b255724bc08",
+  "runID" : "20261004T223404Z-be50ef8e-row1",
+  "schemaVersion" : 1,
+  "stepCount" : 5,
+  "verdict" : "RED"
+}
