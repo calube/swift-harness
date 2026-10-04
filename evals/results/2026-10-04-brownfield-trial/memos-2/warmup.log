@@ -1,0 +1,85 @@
+warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: /Users/caleb/Developer/trials/memos-2/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
+web build: passed, 35952 ms, cold
+web test: failed, 18978 ms, cold
+    }
+  
+   ❯ tests/filtered-memo-stats.test.ts:81:53
+       79|     const { result } = renderHook(() => useFilteredMemoStats({ userNam…
+       80|
+       81|     expect(result.current.statistics.activityStats).toEqual({ "2026-05…
+         |                                                     ^
+       82|     expect(result.current.statistics.timeBasis).toBe("update_time");
+       83|   });
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+  
+   FAIL  tests/filtered-memo-stats.test.ts > useFilteredMemoStats > falls back to created timestamps when updated array is empty (old server)
+  AssertionError: expected { '2026-04-30': 1 } to deeply equal { '2026-05-01': 1 }
+  
+  - Expected
+  + Received
+  
+    {
+  -   "2026-05-01": 1,
+  +   "2026-04-30": 1,
+    }
+  
+   ❯ tests/filtered-memo-stats.test.ts:106:53
+      104|     const { result } = renderHook(() => useFilteredMemoStats({ userNam…
+      105|
+      106|     expect(result.current.statistics.activityStats).toEqual({ "2026-05…
+         |                                                     ^
+      107|     expect(warn).toHaveBeenCalled();
+      108|     warn.mockRestore();
+  
+  ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+  
+  
+   Test Files  1 failed | 193 passed (194)
+        Tests  3 failed | 1769 passed (1772)
+     Start at  05:45:02
+     Duration  18.18s (transform 17.91s, setup 31.72s, import 82.57s, tests 29.81s, environment 102.88s)
+  
+   ELIFECYCLE  Test failed. See above for more details.
+memos build: passed, 7804 ms, cold
+memos test: failed, 60726 ms, cold
+  ok  	github.com/usememos/memos/markdown/parser/tagdata	3.167s
+  ok  	github.com/usememos/memos/markdown/renderer	3.099s
+  ?   	github.com/usememos/memos/proto	[no test files]
+  ?   	github.com/usememos/memos/proto/gen/api/v1	[no test files]
+  ?   	github.com/usememos/memos/proto/gen/api/v1/apiv1connect	[no test files]
+  ?   	github.com/usememos/memos/proto/gen/store	[no test files]
+  ?   	github.com/usememos/memos/provider/ai	[no test files]
+  ok  	github.com/usememos/memos/provider/ai/audio	2.817s
+  ?   	github.com/usememos/memos/provider/ai/audiollm	[no test files]
+  ok  	github.com/usememos/memos/provider/ai/audiollm/gemini	2.924s
+  ?   	github.com/usememos/memos/provider/ai/stt	[no test files]
+  ok  	github.com/usememos/memos/provider/ai/stt/openai	3.082s
+  ?   	github.com/usememos/memos/provider/idp	[no test files]
+  ok  	github.com/usememos/memos/provider/idp/oauth2	3.118s
+  ok  	github.com/usememos/memos/provider/storage	3.177s
+  ok  	github.com/usememos/memos/provider/storage/s3	8.843s
+  --- FAIL: TestEntrypointDoesNotLoopWhenTargetUIDIsRoot (6.38s)
+      entrypoint_test.go:36: 
+          	Error Trace:	/Users/caleb/Developer/trials/memos-2/scripts/entrypoint_test.go:36
+          	Error:      	Received unexpected error:
+          	            	signal: killed
+          	Test:       	TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+  FAIL
+  FAIL	github.com/usememos/memos/scripts	19.915s
+  ok  	github.com/usememos/memos/server	3.497s
+  ok  	github.com/usememos/memos/server/api/v1	10.180s
+  ok  	github.com/usememos/memos/server/api/v1/test	38.012s
+  ok  	github.com/usememos/memos/server/auth	6.653s
+  ok  	github.com/usememos/memos/server/fileserver	6.714s
+  ok  	github.com/usememos/memos/server/frontend	6.044s
+  ok  	github.com/usememos/memos/server/mcp	5.882s
+  ok  	github.com/usememos/memos/server/test	7.167s
+  ok  	github.com/usememos/memos/store	7.822s
+  ok  	github.com/usememos/memos/store/cache	6.006s
+  ?   	github.com/usememos/memos/store/db	[no test files]
+  ok  	github.com/usememos/memos/store/db/mysql	5.626s
+  ok  	github.com/usememos/memos/store/db/postgres	5.621s
+  ok  	github.com/usememos/memos/store/db/sqlite	5.694s
+  ok  	github.com/usememos/memos/store/test	47.360s
+  FAIL
