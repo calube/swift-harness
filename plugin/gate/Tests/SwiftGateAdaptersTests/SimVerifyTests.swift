@@ -230,4 +230,21 @@ struct SimVerifyTests {
     #expect(failure.message.contains("run id"))
     #expect(history().isEmpty)
   }
+
+  @Test(
+    "the evidence loader reads every file sim down copied into sim/crashes — catches crash reports sim verify never judges"
+  )
+  func loadsCrashReports() throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try recorded(asserts: [nil])
+    let name = "SampleApp-2026-10-04-151000.ips"
+    let captured = try Fixture.data("AgentDevice/crash/\(name)")
+    let crashes = simDirectory().appending(path: SimCrashReport.directoryName)
+    try FileManager.default.createDirectory(at: crashes, withIntermediateDirectories: true)
+    try captured.write(to: crashes.appending(path: name))
+
+    let evidence = try SimVerify.evidence(runID: Self.runID, simDirectory: simDirectory())
+
+    #expect(evidence.crashReports == [SimCrashReport.path(fileName: name): .present(captured)])
+  }
 }

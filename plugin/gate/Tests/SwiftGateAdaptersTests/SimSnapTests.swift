@@ -165,16 +165,17 @@ struct SimSnapTests {
     let steps = try SimStep.decodeLog(try #require(stepLog()))
     #expect(steps.map(\.label) == ["home", "after tap"])
     #expect(steps.map(\.assert) == [nil, "Counter"])
+    #expect(steps.map(\.appState) == [.runningForeground, .runningForeground])
     let target = AgentDeviceTarget(
       udid: "MADE-1", session: SimSession.agentDeviceSessionName(runID: Self.runID))
     let targets = device.fake.calls.compactMap { call -> AgentDeviceTarget? in
       switch call {
-      case .snapshot(let used), .screenshot(_, let used): used
+      case .snapshot(let used), .screenshot(_, let used), .appState(let used): used
       default: nil
       }
     }
-    #expect(device.fake.calls.count == 6)
-    #expect(targets == Array(repeating: target, count: 6))
+    #expect(device.fake.calls.count == 8)
+    #expect(targets == Array(repeating: target, count: 8))
   }
 
   @Test(
@@ -347,5 +348,74 @@ struct SimSnapTests {
       contentsOf: simDirectory(Self.runID).appending(path: SimSession.logFileName),
       encoding: .utf8)
     #expect(log.contains("DEVICE_IN_USE"))
+  }
+
+  @Test(
+    "the captured not-running snapshot failure with the app not running records a step with its screenshot, no tree and appState notRunning, then exits RED sim.app-exited — catches a crash reported as a driver problem with no step for sim verify"
+  )
+  func exitedBeforeCapture() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try started()
+    let notRunning = try AgentDeviceError.decodeFailure(
+      try Fixture.data("AgentDevice/crash/snapshot-not-running.stdout"))
+    let device = try device()
+    device.fake.update {
+      $0.failures["snapshot"] = .failed(command: "snapshot", notRunning)
+      $0.appState = .notRunning
+    }
+
+    let failure = try #require(Self.failure(await snap(device, label: "after tap")))
+
+    #expect(failure.rule == .appExited)
+    #expect(failure.verdict == .red)
+    #expect(failure.runID == Self.runID)
+    #expect(failure.message.contains("step 001"))
+    #expect(failure.message.contains("sim down"))
+    #expect(stepFiles() == ["001.png"])
+    let steps = try SimStep.decodeLog(try #require(stepLog()))
+    try #require(steps.count == 1)
+    #expect(steps[0].label == "after tap")
+    #expect(steps[0].tree == nil)
+    #expect(steps[0].appState == .notRunning)
+    #expect(steps[0].screenshot == SimStep.screenshotPath(n: 1))
+  }
+
+  @Test(
+    "an app that stops running after the snapshots records the step with its tree and appState notRunning, and exits RED sim.app-exited — catches a crash between captures passing as a clean step"
+  )
+  func exitedAfterCapture() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try started()
+    let device = try device()
+    device.fake.update { $0.appState = .notRunning }
+
+    let failure = try #require(Self.failure(await snap(device)))
+
+    #expect(failure.rule == .appExited)
+    #expect(stepFiles() == ["001.png", "001.tree.json"])
+    let steps = try SimStep.decodeLog(try #require(stepLog()))
+    #expect(steps.map(\.appState) == [.notRunning])
+    #expect(steps.map(\.tree) == [SimStep.treePath(n: 1)])
+  }
+
+  @Test(
+    "a not-running snapshot failure while appstate reports the app in front stays BLOCKED sim.driver-failed with no step, and becomes sim.app-exited once appstate agrees — catches a driver hiccup recorded as an app exit"
+  )
+  func notRunningErrorButRunning() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    try started()
+    let notRunning = try AgentDeviceError.decodeFailure(
+      try Fixture.data("AgentDevice/crash/snapshot-not-running.stdout"))
+    let device = try device()
+    device.fake.update { $0.failures["snapshot"] = .failed(command: "snapshot", notRunning) }
+
+    let failure = try #require(Self.failure(await snap(device)))
+
+    #expect(failure.rule == .driverFailed)
+    #expect(stepFiles().isEmpty)
+    #expect(stepLog() == nil)
+
+    device.fake.update { $0.appState = .notRunning }
+    #expect(Self.failure(await snap(device))?.rule == .appExited)
   }
 }

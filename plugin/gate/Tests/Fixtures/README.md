@@ -318,6 +318,50 @@ file holds a local path.
 | `AgentDevice/seeded/clean.tree.json` | the clean run's `sim/steps/001.tree.json` |
 | `gate/Fixtures/seeds/sim-verify/unlabeled-controls/sim/`, `gate/Fixtures/seeds/sim-verify/valid/sim/` | each run's `session.json`, `steps.ndjson`, `steps/001.png` and `steps/001.tree.json`, unmodified |
 
+### AgentDevice/crash
+
+A real `sim up` run against `examples/SampleApp` on 2026-10-04, with `agent-device` 0.21.18 on a
+clone `sim up` made from the configured iPhone 17 (iOS 26.2), whose app was killed with `SIGABRT`.
+The iOS runtime has no `kill`, so `xcrun simctl spawn <udid> kill -ABRT <pid>` fails with
+`NSPOSIXErrorDomain` code 2; a simulator app is a Mac process, so the Mac's `kill` reaches it. From
+`examples/SampleApp`, with the worktree's `swift build --product swiftgate`:
+
+```
+../../plugin/gate/.build/debug/swiftgate sim up --json
+../../plugin/gate/.build/debug/swiftgate sim snap "counter screen" --json
+xcrun simctl spawn <udid> launchctl list | grep SampleApp
+ps -o pid,command -p <pid>
+kill -ABRT <pid>
+agent-device appstate --udid <udid> --session <session> --json
+agent-device snapshot --udid <udid> --session <session> --json
+agent-device screenshot <scratch>/after-crash.png --udid <udid> --session <session> --json
+../../plugin/gate/.build/debug/swiftgate sim down --json
+```
+
+`launchctl list` gives the app's PID, and `ps` shows it is the run's device's `SampleApp`. Each
+`agent-device` call's stdout, stderr and exit status are kept as `crash/<call>.{stdout,stderr,status}`;
+`$HOME` is replaced with `/HOME` and the scratch path with `/SCRATCH`. The crash report is copied
+unmodified from `~/Library/Logs/DiagnosticReports/`; macOS had already written `/Users/USER` for the
+home folder.
+
+| Files | From |
+|---|---|
+| `AgentDevice/crash/appstate-not-running` | `appstate` 5 s after the kill |
+| `AgentDevice/crash/snapshot-not-running` | `snapshot` after the kill |
+| `AgentDevice/crash/screenshot-not-running` | `screenshot` after the kill |
+| `AgentDevice/crash/SampleApp-2026-10-04-151000.ips` | the report macOS wrote for the kill |
+
+Observed behavior `sim` relies on:
+
+- After the crash, `appstate` exits 0 with `data.state` `notRunning`.
+- `snapshot` fails with `COMMAND_FAILED`, message `app '<bundle id>' is not running` and
+  `details.runnerErrorCode` `APP_NOT_RUNNING`; it doesn't relaunch the app. `screenshot` still
+  succeeds and shows the home screen.
+- The report appeared about 14 s after the crash, named `<process>-<yyyy-MM-dd-HHmmss>.ips`. Its
+  first line is a JSON header; the rest is a JSON body whose `procPath` holds
+  `CoreSimulator/Devices/<udid>/`, with `bundleInfo.CFBundleIdentifier`, `captureTime` (the crash,
+  `yyyy-MM-dd HH:mm:ss.SSSS ±hhmm`) and `exception` `{type: EXC_CRASH, signal: SIGABRT}`.
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's

@@ -1,0 +1,31 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "app 'com.example.SampleApp' is not running",
+    "hint": "Reads do not launch the app. Relaunch it with open; if a system prompt such as a deep-link confirmation holds its launch, answer it with alert accept.",
+    "diagnosticId": "muu9a5b6-54eec52f",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-20261004T200803Z-169b3631/runner.log",
+    "diagnosticsRecord": {
+      "session": "swiftgate-20261004T200803Z-169b3631",
+      "requestId": "d12a0cb34b2a4014"
+    },
+    "retriable": true,
+    "details": {
+      "runner": {
+        "error": {
+          "hint": "Reads do not launch the app. Relaunch it with open; if a system prompt such as a deep-link confirmation holds its launch, answer it with alert accept.",
+          "message": "app 'com.example.SampleApp' is not running",
+          "code": "APP_NOT_RUNNING"
+        },
+        "ok": false
+      },
+      "runnerErrorCode": "APP_NOT_RUNNING",
+      "xcodebuild": {
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": ""
+      }
+    }
+  }
+}

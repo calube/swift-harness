@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "data": {
+    "platform": "ios",
+    "appName": "com.example.SampleApp",
+    "appBundleId": "com.example.SampleApp",
+    "source": "runner",
+    "state": "notRunning",
+    "surface": "app",
+    "device_udid": "346175A9-071A-41DA-9D2F-519510A282EA",
+    "ios_simulator_device_set": null
+  }
+}

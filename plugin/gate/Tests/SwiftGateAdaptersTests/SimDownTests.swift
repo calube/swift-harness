@@ -60,7 +60,8 @@ struct SimDownTests {
   func down(
     _ agent: FakeAgentDevice, simctl: FakeSimctl, runID: String? = runID,
     worktree: String = worktree, isAlive: @escaping @Sendable (Int32) -> Bool,
-    clock: SimHoldClock = .continuous(), teardownTimeout: Duration = .seconds(20)
+    clock: SimHoldClock = .continuous(), teardownTimeout: Duration = .seconds(20),
+    crashReportWait: Duration = .milliseconds(50)
   ) async -> Result<SimDowned, SimDownFailure> {
     let directories = root
     return await SimDown(
@@ -69,7 +70,7 @@ struct SimDownTests {
         crashReports: CrashReportReader(
           directory: root.appending(path: "DiagnosticReports", directoryHint: .isDirectory)),
         isAlive: isAlive, clock: clock, teardownTimeout: teardownTimeout,
-        pollInterval: .milliseconds(10))
+        pollInterval: .milliseconds(10), crashReportWait: crashReportWait)
     ).run(
       SimDown.Request(
         worktree: worktree, runID: runID,
@@ -363,5 +364,71 @@ struct SimDownTests {
     await SimulatorClones.agentDeviceClaimRelease(broken, failed: reported.append)("MADE-1")
     #expect(reported.all.count == 1)
     #expect(reported.all.first?.contains("MADE-1") == true)
+  }
+
+  static let crashReportName = "SampleApp-2026-10-04-151000.ips"
+
+  /// The run's `session.json` on the captured crash report's device, started before the crash,
+  /// and a step log whose last step found the app not running.
+  func recordedExit() throws {
+    let directory = simDirectory(Self.runID)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try SimSession(
+      agentDeviceVersion: AgentDevicePin.version, udid: "346175A9-071A-41DA-9D2F-519510A282EA",
+      deviceType: "iPhone 17", runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+      bundleID: "com.example.SampleApp", scenario: nil,
+      headCommit: "0123456789abcdef0123456789abcdef01234567",
+      startedAt: Date(timeIntervalSince1970: 1_791_144_484)
+    ).encoded().write(to: directory.appending(path: SimSession.fileName))
+    let exited = SimStep(
+      n: 1, label: "after tap", assert: nil, screenshot: SimStep.screenshotPath(n: 1), tree: nil,
+      settled: nil, elapsedMs: 300, appState: .notRunning)
+    try (exited.line() + Data("\n".utf8)).write(
+      to: directory.appending(path: SimStep.logFileName))
+  }
+
+  @Test(
+    "sim down copies the run's captured crash report into sim/crashes and lists it — catches a crash report sim verify never gets to name"
+  )
+  func copiesCrashReport() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (_, process, holding) = try await startHolder(simctl, agent: agent)
+    try recordedExit()
+    let reports = root.appending(path: "DiagnosticReports", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: reports, withIntermediateDirectories: true)
+    let captured = try Fixture.data("AgentDevice/crash/\(Self.crashReportName)")
+    try captured.write(to: reports.appending(path: Self.crashReportName))
+
+    let downed = try await down(agent, simctl: simctl, isAlive: process.isAlive).get()
+
+    let path = SimCrashReport.path(fileName: Self.crashReportName)
+    #expect(downed.crashReports == [path])
+    #expect(try Data(contentsOf: simDirectory(Self.runID).appending(path: path)) == captured)
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: downed.json()) as? [String: Any])
+    #expect(json["crashReports"] as? [String] == [path])
+    #expect(downed.text.contains(path))
+    await finish(holding)
+  }
+
+  @Test(
+    "a recorded exit whose crash report never appears is a note after the wait, not a failure — catches a missing report passing silently"
+  )
+  func notesMissingCrashReport() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    let (_, process, holding) = try await startHolder(simctl, agent: agent)
+    try recordedExit()
+    try FileManager.default.createDirectory(
+      at: root.appending(path: "DiagnosticReports"), withIntermediateDirectories: true)
+
+    let downed = try await down(agent, simctl: simctl, isAlive: process.isAlive).get()
+
+    #expect(downed.crashReports.isEmpty)
+    #expect(downed.notes.contains { $0.contains("no crash report") })
+    await finish(holding)
   }
 }
