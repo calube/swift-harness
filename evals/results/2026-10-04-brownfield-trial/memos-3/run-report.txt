@@ -1,0 +1,47 @@
+run: INCOMPLETE, 3 task(s) not done: share-view-limit-store (blocked), share-view-limit-api (pending), share-view-limit-web (blocked)
+final: GREEN (gate run 20261004T125001Z-cfca83f2), gating only what merged
+
+# Run report: spec
+
+## Unfinished tasks
+
+- share-view-limit-store: blocked
+- share-view-limit-api: pending
+- share-view-limit-web: blocked
+
+## Assumptions
+
+- The contract commit already landed the proto fields (`optional int32 view_limit = 4`, output-only `int32 view_count = 5`) with regenerated Go, OpenAPI and TypeScript, the store fields `MemoShare.ViewLimit *int32` and `MemoShare.ViewCount int32`, and the `ConsumeMemoShareView(ctx, uid, now)` store and driver method, stubbed in each driver.
+- Columns are `view_limit INTEGER DEFAULT NULL` and `view_count INTEGER NOT NULL DEFAULT 0`, added by migration `26.10/00__add_memo_share_view_limit.sql` for each driver, since the run's date is 2026-10 and the migration README names `YY.MM/NN`.
+- Adding the first calendar migration moves the binary's schema version from 0.31.8 to 26.10.1; store tests that assert 0.31.8 as the current version, or 26.9.1 as a newer-than-binary schema, are updated to the new version as part of the store task.
+- "Only a successful resolve counts" is read as: GetSharedMemo runs all its existing checks (token, expiry, memo state, read access, conversion) first and consumes the view last, through 1 conditional UPDATE (`view_limit IS NULL OR view_count < view_limit`, not expired); 0 rows updated means NOT_FOUND. That UPDATE is what stops 2 racing resolves from both taking the last view.
+- Attachment downloads through the fileserver's `share_token` query parameter neither count views nor check the view limit: a read-once link's memo page loads its attachments right after the view that used up the limit, and must still show them. Expiry still applies there as today.
+- Expiry in the consuming UPDATE keeps today's rule: a share is expired when now is greater than `expires_ts`.
+- The web panel's view-limit select uses the values none, 1, 10 and 100; the count text uses i18n keys `memo.share.views-of-limit` ("{{count}} of {{limit}} views") and `memo.share.views` ("{{count}} views") in `en.json` only.
+- MySQL and PostgreSQL migrations and drivers are written but not run here; the spec says their containers aren't available, so the store tests run with `DRIVER=sqlite` only.
+- The memos area's test command is `DRIVER=sqlite go test -json ./...`, per the spec's note that Go tests run with `DRIVER=sqlite`; the discovered `go test -json ./...` tried MySQL and PostgreSQL containers.
+- The contract task's return was stored without passing `build check-return`: the check asks for an `app-build` step that a slice gate in this non-app repository never records. The contract commit 1316c660 is on the plan branch and its slice gate was GREEN (run 20261004T124315Z-62ce9982).
+- Halt on share-view-limit-web: `build check-return` failed with `build-return.gate-missing-step: gate run 20261004T124503Z-79e036f7 never ran the task gate's app-build step`. The slice gate records no steps at all, so no slice task can pass this check. Chose the recommended option, go on without it: the task stays blocked, and its commits 92640971 and 85f39893 stay on branch spec/share-view-limit-web.
+- Halt on share-view-limit-store: `build check-return` failed the same way (`build-return.gate-missing-step`, gate run 20261004T124847Z-cc87cdd0). Chose the recommended option, go on without it: the task stays blocked, its commits f975b462 and 1151658c stay on branch spec/share-view-limit-store, and share-view-limit-api, which depends on it, never starts.
+
+## Baseline failures
+
+- memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+- memos test: github.com/usememos/memos/scripts.TestEntrypointDoesNotLoopWhenTargetUIDIsRoot
+- web test: the whole step
+
+## Build-only areas
+
+- memos (Go, root `.`; warm test 30.6 s, build-only: its tests and their proof run at merge)
+
+## Dropped steps
+
+- none
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at 1316c66095bd42bf45c1bec0b208202099b74252 holds every commit of the run; merging it is your call

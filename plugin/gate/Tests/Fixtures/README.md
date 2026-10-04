@@ -1898,3 +1898,26 @@ cp $S/build-events.jsonl $F/build-events.jsonl
 
 The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
 changes nothing else.
+
+## Build returns: GREEN brownfield slice returns
+
+`BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
+`usememos/memos` handed to `build check-return`, which rejected both for a missing `app-build` step. Each
+`.history.jsonl` beside it is the task worktree's `runs/history.jsonl` line for the `check slice` run the return
+cites. The returns are the `result` of each `build-task` workflow's output file, written as the orchestrator wrote
+them before calling `check-return`. `T` is the orchestrator session's task output directory,
+`<Claude Code temp dir>/<cwd slug>/5f9bc272-d96a-48ac-ae63-61af01b8865a/tasks`, and `C` is the trial clone. From
+this directory:
+
+```sh
+F=BuildReturn/memos-3 W=$C/.git/worktrees/memos-3-spec-share-view-limit
+mkdir -p $F
+for p in store:wj86fkhlk:20261004T124847Z-cc87cdd0 web:w2tnxl83w:20261004T124503Z-79e036f7; do
+  IFS=: read task out run <<<"$p"
+  python3 -c "import json,sys;d=json.load(open(sys.argv[1]));r=d['result'];sys.stdout.write(r if isinstance(r,str) else json.dumps(r))" \
+    $T/$out.output > $F/share-view-limit-$task.json
+  grep "\"runID\":\"$run\"" $W-$task/swift-harness/runs/history.jsonl > $F/share-view-limit-$task.history.jsonl
+done
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-3/*` matched nothing.
