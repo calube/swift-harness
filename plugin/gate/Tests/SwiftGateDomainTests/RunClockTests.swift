@@ -22,12 +22,20 @@ import Testing
   }
 
   @Test(
-    "a start that isn't an ISO 8601 time fails to decode — catches a clock read as some other date")
-  func rejectsANonISOStart() throws {
-    let text = String(decoding: try Self.clock.encoded(), as: UTF8.self)
-      .replacingOccurrences(of: "2026-09-21T14:13:20.250Z", with: "yesterday")
+    "the start reads only as an ISO 8601 time — catches a clock read as some other date or rejected when a person writes it"
+  )
+  func readsOnlyAnISOStart() throws {
+    let json = """
+      {"base": "abc123", "origin": "/home/me/spec.md", "planBranch": "swift-harness/export",
+       "spec": "/repo/.git/plan/spec.md", "specSource": "copied", "started": "STARTED"}
+      """
 
-    #expect(throws: DecodingError.self) { try RunClock.decode(Data(text.utf8)) }
+    let read = try RunClock.decode(
+      Data(json.replacingOccurrences(of: "STARTED", with: "2026-09-21T14:13:20.250Z").utf8))
+    #expect(read == Self.clock)
+    #expect(throws: DecodingError.self) {
+      try RunClock.decode(Data(json.replacingOccurrences(of: "STARTED", with: "yesterday").utf8))
+    }
   }
 
   @Test(
@@ -40,10 +48,13 @@ import Testing
     #expect(RunSlug.make(specPath: "--Café--.spec.md", isTaken: { _ in false }) == "caf-spec")
   }
 
-  @Test("a stem with no letters or digits falls back to `run` — catches an empty slug")
+  @Test(
+    "a stem with no letters or digits falls back to `run`, suffixed like any other — catches an empty slug"
+  )
   func slugFallsBackToRun() {
     #expect(RunSlug.make(specPath: "notes/___.md", isTaken: { _ in false }) == "run")
     #expect(RunSlug.make(specPath: "", isTaken: { _ in false }) == "run")
+    #expect(RunSlug.make(specPath: "notes/___.md", isTaken: { $0 == "run" }) == "run-2")
   }
 
   @Test(
