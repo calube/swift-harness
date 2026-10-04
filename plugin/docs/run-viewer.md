@@ -60,6 +60,7 @@ default is Overview. Each tab's label carries badges counted from the view.
 | Spec | requirements against tasks, commits and merge gates | uncovered requirements |
 | Gates | every gate run, and a row per changed test `prove` ran | RED runs, a task's runs after its first RED, unproven tests |
 | Tokens | tokens per task and role, "pending" for a running worker until its ingest | pending tasks |
+| Validation | each validation row's newest `qa run` result | red, unverified and waiting rows |
 
 The footer, under every tab, names what the reader couldn't read. A `swiftgate run`'s header names its time
 box; its cutoff shows as `budget` halts.
@@ -72,6 +73,8 @@ a module's tab shows once it draws. The board puts each task in queued, building
 blocked lane, which also holds a task with an open halt. The graph draws the deps as SVG in waves. A card, node
 or Overview row opens a task popover: status, column, deps, latest gate, commits, covers and why it failed or
 stopped. Its Open task opens the drawer: the brief, properties, links and activity.
+
+See also [validation rows](run-viewer-validation.md).
 
 ## Live mode
 
@@ -87,5 +90,5 @@ badge once the preset's `stall_min` passes with no event of that task, and a hal
 ## Privacy
 
 Every string in the view passes the event guard before either command writes or serves it. The view drops
-the ledger's worktree path and holds no prompt, source line, commit subject or tool output.  A RED gate's
-finding messages are the 1 piece of report text it keeps, with machine paths taken out.
+the ledger's worktree path and holds no prompt, source line, commit subject or tool output but a RED gate's
+findings and a red check's last output lines, without machine paths.
