@@ -84,6 +84,16 @@ public enum QAFiles {
   }
 }
 
+extension QAFiles {
+  /// The newest `qa/report.json` under `runsDirectory` for `plan` over every row: neither at the
+  /// merge base nor `--after` a task. A report that doesn't decode can't name its plan, so it is
+  /// passed over.
+  public static func newestWholeRun(plan: String, runsDirectory: URL) -> RunReportInput<QAReport>
+  {
+    .missing(path: runsDirectory.path)
+  }
+}
+
 /// The checkouts `git worktree list` names for a repository, canonical.
 public struct QACheckouts: Sendable {
   private let runner: any ProcessRunner
