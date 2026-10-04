@@ -26,9 +26,21 @@ public struct LedgerProgress: Sendable, Equatable {
   public func contains(_ id: String) -> Bool { tasks.contains { $0.id == id } }
 }
 
+extension LedgerProgress: Decodable {
+  private enum CodingKeys: String, CodingKey {
+    case tasks
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    self.init(tasks: try c.decode([Task].self, forKey: .tasks))
+  }
+}
+
+/// Reads only `tasks[].id` and `tasks[].status`; every other key, `waves` included, is left to
+/// ``LedgerJSON``. A status outside ``TaskStatus`` still fails the read.
 public enum LedgerProgressJSON {
   public static func decode(_ data: Data) throws -> LedgerProgress {
-    let ledger = try LedgerJSON.decode(data)
-    return LedgerProgress(tasks: ledger.tasks.map { .init(id: $0.id, status: $0.status) })
+    try JSONDecoder().decode(LedgerProgress.self, from: data)
   }
 }

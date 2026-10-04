@@ -376,7 +376,8 @@ struct QARunCommandTests {
     #expect(report.verdict == .green, "\(report.message)")
     #expect(report.rows.map(\.result) == [.pass, .waiting])
     #expect(report.rows.last?.waitingOn == ["list-ui"])
-    #expect(after.rows.map(\.result) == [.pass, .pass])
+    #expect(after.rows.map(\.requirement) == ["req-list"])
+    #expect(after.rows.map(\.result) == [.pass])
   }
 
   @Test(
