@@ -130,10 +130,103 @@ public struct RunViewQARun: Sendable, Equatable {
 
 /// Folds the run's `qa.check` events and the reports they name into the view's validation
 /// section and its `qa.check` spans.
+///
+/// A run at the merge base is expected to fail every row, so it neither sets a row's result nor
+/// draws a span.
 enum RunViewValidationFold {
   static func fold(
     _ events: [HarnessEvent], qaRuns: [String: RunViewQARun], roots: [String],
     into view: inout RunView
   ) {
+    let checks = events.compactMap { event -> (event: HarnessEvent, check: QACheckEvent)? in
+      guard case .qaCheck(let check) = event.payload, !check.atBase else { return nil }
+      return (event, check)
+    }
+    guard let plan = checks.first?.check.plan else { return }
+    let scrubRoots = RunViewGateFailures.Scrub.roots(roots)
+    var newest: [Int: (event: HarnessEvent, check: QACheckEvent)] = [:]
+    for entry in checks {
+      if let seen = newest[entry.check.row], seen.event.time > entry.event.time { continue }
+      newest[entry.check.row] = entry
+    }
+    var damage: [RunView.Damage] = []
+    let rows = newest.keys.sorted().compactMap { number -> RunViewValidation.Row? in
+      guard let entry = newest[number] else { return nil }
+      let qaRun = entry.event.runID ?? ""
+      return row(
+        entry.check, at: entry.event.time, qaRun: qaRun, read: qaRuns[qaRun], roots: scrubRoots,
+        damage: &damage)
+    }
+    var counts = RunViewValidation.Counts()
+    for row in rows {
+      switch row.result {
+      case .pass: counts.pass += 1
+      case .red: counts.red += 1
+      case .unverified: counts.unverified += 1
+      case .waiting: counts.waiting += 1
+      }
+    }
+    view.validation = RunViewValidation(plan: plan, counts: counts, rows: rows)
+    view.damage += damage
+    let parent =
+      view.spans.contains { $0.id == RunViewSpans.runSpanID } ? RunViewSpans.runSpanID : nil
+    let spans = checks.compactMap { span($0.check, event: $0.event, parent: parent) }
+    view.spans = (view.spans + spans).enumerated()
+      .sorted { ($0.element.start, $0.offset) < ($1.element.start, $1.offset) }.map(\.element)
+  }
+
+  /// 1 row from its newest check and its report row; each string the guard rejects is dropped as
+  /// a damage row.
+  private static func row(
+    _ check: QACheckEvent, at time: Date, qaRun: String, read: RunViewQARun?, roots: [String],
+    damage: inout [RunView.Damage]
+  ) -> RunViewValidation.Row {
+    let source = "qa run \(qaRun) row \(check.row)"
+    func keep(_ text: String, _ field: String) -> String? {
+      guard let reason = EventPayloadGuard.rejection(inJSON: text) else { return text }
+      damage.append(RunView.Damage(source: source, reason: "\(field): \(reason.rawValue)"))
+      return nil
+    }
+    let reported = read?.report?.rows.first { $0.row == check.row }
+    let evidence = check.evidence.enumerated().compactMap {
+      keep($0.element, "evidence[\($0.offset)]")
+    }
+    var output: [String] = []
+    var cut = false
+    if check.result == .red, let read {
+      let lines = evidence.compactMap { read.outputs[$0] }
+        .flatMap { $0.split(whereSeparator: \.isNewline) }
+        .map { RunViewGateFailures.Scrub.message(String($0), roots: roots).0 }
+        .filter { !$0.isEmpty }
+      output = Array(lines.suffix(RunViewValidation.maxOutputLines))
+      cut = lines.count > output.count
+    }
+    return RunViewValidation.Row(
+      row: check.row, requirement: check.requirement, layer: check.layer,
+      check: reported.flatMap { keep($0.check, "check") },
+      runsAfter: (reported?.runsAfter ?? []).compactMap { keep($0, "runsAfter") },
+      result: check.result, message: reported.flatMap { keep($0.message, "message") },
+      exitStatus: check.exitStatus, milliseconds: check.milliseconds, evidence: evidence,
+      waitingOn: check.waitingOn, qaRun: qaRun, at: time, output: output, outputCut: cut)
+  }
+
+  /// A check that answered, `pass` or `red`, as a span ending at its event; `nil` for a row that
+  /// didn't run or ran with no answer.
+  private static func span(_ check: QACheckEvent, event: HarnessEvent, parent: String?)
+    -> RunView.Span?
+  {
+    let outcome: SpanOutcome
+    switch check.result {
+    case .pass: outcome = .ok
+    case .red: outcome = .red
+    case .unverified, .waiting: return nil
+    }
+    let how = check.exitStatus.map { " with exit \($0)" } ?? ""
+    return RunView.Span(
+      id: "qa:\(event.runID ?? ""):\(check.row)", parent: parent, phase: .qaCheck,
+      start: event.time.addingTimeInterval(-Double(check.milliseconds) / 1000), end: event.time,
+      outcome: outcome,
+      failureReason: outcome == .red
+        ? "Row \(check.row) \(check.layer.rawValue) check failed\(how)." : nil)
   }
 }
