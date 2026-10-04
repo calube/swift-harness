@@ -117,6 +117,18 @@ struct RunViewGateFailureTests {
   }
 
   @Test(
+    "the captured RED merge gate's span and the merge it closes give its rule and failing test count as the reason — catches a red gate span with no failure reason"
+  )
+  func redGateSpanReason() throws {
+    let view = RunViewBuilder.build(try RedGateRun().input)
+    let reason = "t2.test-failed: 1 test fails on the merged branch."
+    let red = view.spans.filter { $0.gateRun == RedGateRun.redGate && $0.outcome == .red }
+    #expect(Set(red.map(\.phase)).isSuperset(of: [.gate, .merge]))
+    #expect(red.allSatisfy { $0.failureReason == reason })
+    #expect(view.spans.filter { $0.outcome == .ok }.allSatisfy { $0.failureReason == nil })
+  }
+
+  @Test(
     "a finding's absolute paths, home paths and newlines never reach the view's JSON, which passes the guard — catches a machine path published in a report"
   )
   func noMachinePathReachesTheJSON() throws {
