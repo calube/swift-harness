@@ -88,4 +88,27 @@ struct XcodeProjectFilesTests {
         compiling: "ios/KaMPKitiOS/Extra.swift", projectPath: "missing.xcodeproj", in: root)
         == nil)
   }
+
+  @Test(
+    "a missing project and an unknown target come back as their own outcomes with no tool run — catches a refusal reported as a check failure"
+  )
+  func unreadableAndRefused() async throws {
+    let root = try Self.makeTree()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let runner = Self.replaying(lint: "valid")
+    let files = XcodeProjectFiles(runner: runner, repositoryRoot: root)
+
+    #expect(
+      await files.addFile(
+        "ios/KaMPKitiOS/Extra.swift", target: "KaMPKitiOS", projectPath: "x.xcodeproj")
+        == .io("x.xcodeproj/project.pbxproj can't be read"))
+    let refused = await files.addFile(
+      "ios/KaMPKitiOS/Extra.swift", target: "Widget", projectPath: Self.projectPath)
+    #expect(
+      refused
+        == .refused(
+          .targetNotFound("Widget", known: ["KaMPKitiOS", "KaMPKitiOSTests", "KaMPKitiOSUITests"])))
+    #expect(runner.invocations.isEmpty)
+  }
+
 }

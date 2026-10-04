@@ -171,4 +171,65 @@ struct PBXProjectEditTests {
     let text = try Fixture.text("Xcode/explicit/damaged/KaMPKitiOS.xcodeproj/project.pbxproj")
     #expect(throws: PBXProjectEditError.self) { try Self.add(to: text) }
   }
+
+  @Test(
+    "a name with a space is quoted the way the parser reads it back — catches a bare path that splits the project"
+  )
+  func quotedName() throws {
+    let path = "ios/KaMPKitiOS/Breed Row.swift"
+    let (_, edited) = try Self.added(try Self.add(path))
+    #expect(edited.contains("path = \"Breed Row.swift\"; sourceTree"))
+    let membership = TargetMembership(
+      project: try PBXProject(parsing: edited), projectPath: Self.fixture.projectPath)
+    #expect(membership.targets(compiling: path).map(\.name) == ["KaMPKitiOS"])
+  }
+
+  @Test(
+    "a project with no build file section gains 1 between its neighbours in name order — catches a build file written outside any section"
+  )
+  func missingSection() throws {
+    let text = try Self.fixture.text()
+    let begin = try #require(text.range(of: "/* Begin PBXBuildFile section */\n"))
+    let end = try #require(text.range(of: "/* End PBXBuildFile section */\n\n"))
+    let stripped = text.replacingCharacters(in: begin.lowerBound..<end.upperBound, with: "")
+    let (added, edited) = try Self.added(try Self.add(to: stripped))
+    #expect(
+      edited.contains(
+        "/* Begin PBXBuildFile section */\n\t\t\(added.buildFileID) /* BreedDetailScreen.swift in Sources */"
+      ))
+    let section = try #require(edited.range(of: "/* End PBXBuildFile section */\n\n"))
+    #expect(edited[section.upperBound...].hasPrefix("/* Begin PBXContainerItemProxy section */"))
+  }
+
+  @Test(
+    "an id the project already uses is never reused for a new object — catches 2 objects under 1 id"
+  )
+  func idCollision() throws {
+    let taken = PBXProjectEdit.stableID(
+      "fileReference", path: Self.newFile, target: "KaMPKitiOS")
+    let text = try Self.fixture.text().replacing("6278498AD96A4D949D39BF44", with: taken)
+    let (added, edited) = try Self.added(try Self.add(to: text))
+    #expect(added.fileReferenceID != taken)
+    #expect(try PBXProject(parsing: edited).objects[taken]?.isa == "PBXGroup")
+  }
+
+  @Test(
+    "a target with no Sources phase, or a phase whose files sit on 1 line, is refused without an edit — catches a phase created or a line rewritten"
+  )
+  func layoutRefusals() throws {
+    let text = try Self.fixture.text()
+    let noPhase = text.replacing("\t\t\t\tF1465EF923AA94BF0055F7C3 /* Sources */,\n", with: "")
+    #expect(throws: PBXProjectEditError.noSourcesPhase(target: "KaMPKitiOS")) {
+      try Self.add(to: noPhase)
+    }
+    let oneLine = text.replacing(
+      "files = (\n\t\t\t\tF1465F1823AA94C00055F7C3 /* KaMPKitiOSTests.swift in Sources */,\n\t\t\t);",
+      with: "files = (F1465F1823AA94C00055F7C3 /* KaMPKitiOSTests.swift in Sources */, );")
+    #expect(oneLine != text)
+    #expect(
+      throws: PBXProjectEditError.unrecognizedLayout(
+        "F1465F0F23AA94C00055F7C3 has no multi-line files")
+    ) { try Self.add("ios/KaMPKitiOSTests/More.swift", target: "KaMPKitiOSTests", to: oneLine) }
+  }
+
 }
