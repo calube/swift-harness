@@ -14,6 +14,8 @@ public enum AgentDeviceErrorCode: String, Sendable, Equatable, CaseIterable {
 /// The `error.details.reason` values the pinned version was seen to print.
 public enum AgentDeviceFailureReason: String, Sendable, Equatable, CaseIterable {
   case waitDeadlineExceeded = "wait_deadline_exceeded"
+  /// An `is` step whose predicate didn't hold.
+  case predicateFailed = "predicate_failed"
 }
 
 /// The batch step that stopped a batch: its 1-based index and its command.

@@ -130,32 +130,120 @@ public struct BatchFlowPlan: Sendable, Equatable {
 
   /// How many assertions `steps` holds, and so how many screenshots the plan needs.
   public static func assertionCount(_ steps: [FlowStep]) -> Int {
-    0
+    steps.filter(FlowRules.asserts).count
   }
 
-  /// - Parameter screenshots: 1 path per assertion, in order.
+  /// - Parameter screenshots: 1 path per assertion, in order; an assertion past the last path
+  ///   gets no evidence.
   public static func make(steps: [FlowStep], screenshots: [String]) -> BatchFlowPlan {
-    BatchFlowPlan(steps: steps, evidence: [], driven: [], origin: [])
+    var driven: [FlowJSON] = []
+    var origin: [Int?] = []
+    var evidence: [Evidence] = []
+    let snapshot = FlowJSON.object(["command": .string("snapshot"), "input": .object([:])])
+    for step in steps {
+      driven.append(.object(step.fields))
+      origin.append(step.number)
+      guard FlowRules.asserts(step), evidence.count < screenshots.count else { continue }
+      let path = screenshots[evidence.count]
+      let first = driven.count + 1
+      driven += [
+        snapshot,
+        .object(["command": .string("screenshot"), "input": .object(["path": .string(path)])]),
+        snapshot,
+      ]
+      origin += [nil, nil, nil]
+      evidence.append(
+        Evidence(
+          after: step.number, label: "after step \(step.number): \(label(step))",
+          assert: expectedText(step), snapshot: first, screenshot: first + 1, settle: first + 2,
+          screenshotPath: path))
+    }
+    return BatchFlowPlan(steps: steps, evidence: evidence, driven: driven, origin: origin)
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.
   public func drivenJSON() -> Data {
-    Data()
+    // Built from parsed JSON values only, which always serialize.
+    (try? JSONSerialization.data(
+      withJSONObject: driven.map(\.foundationValue),
+      options: [.sortedKeys, .withoutEscapingSlashes])) ?? Data("[]".utf8)
   }
 
   /// Where the batch stopped, from the failing driven step's index.
   public func stop(atDrivenIndex index: Int, command: String) -> Stop {
-    .step(n: index, command: command)
+    if let n = origin(of: index) { return .step(n: n, command: command) }
+    let after = origin.prefix(max(0, index - 1)).compactMap { $0 }.last ?? 0
+    return .evidence(after: after, command: command)
   }
 
   /// The flow's record from the steps that ran. `failedAt` is the driven index of the step that
-  /// failed, which isn't in `results`.
+  /// failed, which isn't in `results`; a capture that failed marks the step it follows not ok.
   public func record(results: [BatchStepOutcome], failedAt: Int?) -> QAFlowRecord {
-    QAFlowRecord(source: .batch, steps: [])
+    var steps: [QAFlowStep] = []
+    var offset = 0
+    let byIndex = Dictionary(results.map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
+    let last = failedAt ?? (results.map(\.index).max() ?? 0)
+    for index in 1...max(1, last) where index <= origin.count {
+      let outcome = byIndex[index]
+      if let n = origin[index - 1], let step = self.steps.first(where: { $0.number == n }) {
+        let ok = index != failedAt && (outcome?.ok ?? false)
+        steps.append(QAFlowStep(n: n, label: Self.label(step), offsetMs: offset, ok: ok))
+      } else if index == failedAt, let previous = steps.popLast() {
+        steps.append(
+          QAFlowStep(n: previous.n, label: previous.label, offsetMs: previous.offsetMs, ok: false))
+      }
+      offset += outcome?.durationMs ?? 0
+    }
+    return QAFlowRecord(source: .batch, steps: steps)
   }
 
   /// A step's label: its command and what it acts on, such as `is text id="counter.value" "1"`.
   public static func label(_ step: FlowStep) -> String {
-    step.command
+    var parts = [step.command]
+    func string(_ value: FlowJSON?) -> String? {
+      if case .string(let text)? = value { text } else { nil }
+    }
+    if let kind = string(step.input["kind"]) ?? string(step.input["predicate"]) {
+      parts.append(kind)
+    }
+    var target: [String: FlowJSON] = [:]
+    if case .object(let fields)? = step.input["target"] { target = fields }
+    if let selector = string(step.input["selector"]) ?? string(target["selector"]) {
+      parts.append(selector)
+    }
+    for key in ["text", "absent", "value"] {
+      if let text = string(step.input[key]) { parts.append("\"\(text)\"") }
+    }
+    return parts.joined(separator: " ")
+  }
+
+  /// The flow file's step number at a 1-based driven index; `nil` for a capture.
+  private func origin(of index: Int) -> Int? {
+    guard index >= 1, index <= origin.count else { return nil }
+    return origin[index - 1]
+  }
+
+  /// The text an `is text` step compares, which must then be in the step's tree. A `wait` for
+  /// text may match part of a label, so it names no text the tree must hold whole.
+  private static func expectedText(_ step: FlowStep) -> String? {
+    guard step.command == "is", case .string("text")? = step.input["predicate"],
+      case .string(let value)? = step.input["value"]
+    else { return nil }
+    return value
+  }
+}
+
+extension FlowJSON {
+  /// The value as `JSONSerialization` writes it.
+  var foundationValue: Any {
+    switch self {
+    case .null: NSNull()
+    case .bool(let value): value
+    case .integer(let value): value
+    case .number(let value): value
+    case .string(let value): value
+    case .array(let values): values.map(\.foundationValue)
+    case .object(let fields): fields.mapValues(\.foundationValue)
+    }
   }
 }
