@@ -14,7 +14,8 @@ struct DoctorTests {
     freeBytes: Int64? = 500_000_000_000, shim: ShimStatus = .current,
     swiftLint: Bool = true, mmdc: Bool = true, packages: [PackageManifest] = [],
     resolved: [String: String] = [:], architecture: [Finding] = [], config: Config? = nil,
-    judgeKeysSet: Set<String>? = nil
+    judgeKeysSet: Set<String>? = nil, agentDeviceVersion: String? = nil,
+    agentDevicePin: ToolPin? = nil
   ) throws -> DoctorFacts {
     DoctorFacts(
       config: try config ?? SampleGraph.config(modules: []),
@@ -23,7 +24,8 @@ struct DoctorTests {
       devices: devices.map { .success($0) } ?? .failure("simctl could not run"),
       freeBytes: freeBytes, shim: shim, swiftLintInstalled: swiftLint, packages: packages,
       resolvedVersions: resolved, architectureFindings: architecture, mermaidCLIInstalled: mmdc,
-      judgeKeysSet: judgeKeysSet)
+      judgeKeysSet: judgeKeysSet, agentDeviceVersion: agentDeviceVersion,
+      agentDevicePin: agentDevicePin)
   }
 
   private func ids(_ result: DoctorResult) -> [String] { result.findings.map(\.ruleID) }
@@ -212,6 +214,80 @@ struct DoctorTests {
     #expect(ToolVersion("6.2") < ToolVersion("6.4"))
     #expect(!(ToolVersion("26.2") < ToolVersion("26.2.0")))
   }
+
+  private static let agentDevicePin = ToolPin(
+    version: "0.21.18", installCommand: "npm i -g agent-device@0.21.18")
+
+  private func qaConfig(scenarios: [Scenario] = [], simQA: BuildPreset.SimQA = .off) throws
+    -> Config
+  {
+    try Config(
+      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"),
+      buildPresets: [
+        "default": BuildPreset(
+          designTier: .standard, maxParallel: 3, review: .full, taskGate: .ledger,
+          mergeGate: .push, workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0,
+          onDesignConflict: .amend, simQA: simQA)
+      ],
+      scenarios: scenarios)
+  }
+
+  private func agentDeviceFinding(
+    config: Config, version: String?
+  ) throws -> (DoctorResult, Finding?) {
+    let result = Doctor.evaluate(
+      try facts(config: config, agentDeviceVersion: version, agentDevicePin: Self.agentDevicePin))
+    return (result, result.findings.first { $0.ruleID == Doctor.agentDeviceRuleID })
+  }
+
+  @Test(
+    "a repo with a scenario and no agent-device is BLOCKED with the exact install line — catches a doctor that passes a machine sim up will block on"
+  )
+  func missingAgentDeviceBlocksQARepo() throws {
+    let config = try qaConfig(scenarios: [Scenario(name: "live", reason: "the real clients")])
+    let (result, finding) = try agentDeviceFinding(config: config, version: nil)
+    let blocked = try #require(finding)
+    #expect(result.verdict == .blocked)
+    #expect(blocked.severity == .minor)
+    #expect(blocked.message.contains("npm i -g agent-device@0.21.18"))
+  }
+
+  @Test(
+    "agent-device 0.21.15 under a sim_qa = changed preset is BLOCKED naming both versions — catches a version check that only looks for the binary"
+  )
+  func wrongAgentDeviceVersionBlocks() throws {
+    let (result, finding) = try agentDeviceFinding(
+      config: try qaConfig(simQA: .changed), version: "0.21.15")
+    let blocked = try #require(finding)
+    #expect(result.verdict == .blocked)
+    #expect(blocked.message.contains("0.21.15"))
+    #expect(blocked.message.contains("0.21.18"))
+    #expect(blocked.message.contains("npm i -g agent-device@0.21.18"))
+  }
+
+  @Test(
+    "with every preset at sim_qa = off and no scenarios, a missing agent-device is a nit and the verdict stays GREEN — catches doctor blocking repos that never run QA"
+  )
+  func agentDeviceIsANitWithoutQA() throws {
+    let (result, finding) = try agentDeviceFinding(config: try qaConfig(), version: nil)
+    let nit = try #require(finding)
+    #expect(nit.severity == .nit)
+    #expect(nit.message.contains("npm i -g agent-device@0.21.18"))
+    #expect(result.verdict == .green)
+  }
+
+  @Test(
+    "the captured agent-device --version output at the pin gives no doctor.agent-device finding — catches a pin compare tripped by the CLI's trailing newline"
+  )
+  func pinnedAgentDevicePasses() throws {
+    let captured = try Fixture.text("AgentDevice/version.stdout")
+    let (result, finding) = try agentDeviceFinding(
+      config: try qaConfig(simQA: .changed), version: captured)
+    #expect(finding == nil)
+    #expect(result.verdict == .green)
+  }
+
 }
 
 @Suite("doctor: the session's plugin")
