@@ -388,28 +388,28 @@ struct LiveProcessRunnerTests {
   }
 
   @Test(
-    "runs leave no descriptor open behind them — catches a leaked stdin file or pipe end exhausting a long gate's descriptor table",
-    .disabled("load-sensitive 60 s budget; load-flakes-are-diagnosed re-enables it")
+    "runs leave no descriptor open behind them — catches a leaked stdin file or pipe end exhausting a long gate's descriptor table"
   )
-  func runsLeaveNoDescriptorsOpen() async throws {
-    let runs = 200
-    let budget = Duration.seconds(60)
-    let deadline = ContinuousClock.now.advanced(by: budget)
-    let before = Self.openDescriptorCount()
-    for finished in 0..<runs {
-      guard ContinuousClock.now < deadline else {
-        Issue.record("only \(finished) of \(runs) runs finished inside \(budget)")
-        return
+  func runsLeaveNoDescriptorsOpen() async {
+    // Other tests open and close hundreds of descriptors a second in this process, so the count
+    // runs in a child process of its own, where only these runs touch the table.
+    await #expect(processExitsWith: .success) {
+      let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"])
+      let invocation = ProcessInvocation(
+        executable: "/bin/cat", standardInput: Data("echo".utf8), timeout: .seconds(10))
+      // The first run opens the runner's process-wide signal pipe, which stays open by design.
+      _ = try await runner.run(invocation)
+      let runs = 20
+      let before = Self.openDescriptorCount()
+      for _ in 0..<runs {
+        let output = try await runner.run(invocation)
+        #expect(output.stdout.text == "echo")
       }
-      let output = try await runner.run(
-        ProcessInvocation(
-          executable: "/bin/cat", standardInput: Data("echo".utf8), timeout: .seconds(10)))
-      #expect(output.stdout.text == "echo")
-    }
-    let after = Self.openDescriptorCount()
+      let leaked = Self.openDescriptorCount() - before
 
-    // Parallel tests open and close descriptors too; a leak of even 1 per run clears this margin.
-    #expect(after - before < runs / 2, "\(after - before) more descriptors open after \(runs) runs")
+      #expect(leaked == 0, "\(leaked) more descriptors open after \(runs) runs")
+      if leaked != 0 { exit(EXIT_FAILURE) }
+    }
   }
 
   @Test(
