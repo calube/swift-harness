@@ -1,0 +1,19 @@
+{
+  "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
+  "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
+  "cwd": "/REPO",
+  "prompt_id": "6e933ef9-887c-44d3-90c8-2250594b1735",
+  "permission_mode": "acceptEdits",
+  "agent_id": "ae8669eccba2aada5",
+  "agent_type": "swift-harness:verifier",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "/PLUGIN/bin/swiftgate events span start --phase verify --build-run 20261004-capture --task 'reviewer-span' --role review",
+    "description": "Start the verify phase span for the reviewer"
+  },
+  "tool_use_id": "toolu_013LFg25pJtVkQ8Z3WrAtf2d"
+}

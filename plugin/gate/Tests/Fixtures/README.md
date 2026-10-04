@@ -254,6 +254,23 @@ literal `Date()` to CounterCore's reducer and stop without fixing) and `pre-tool
 transcript directory `/HOME/.claude/projects/-REPO/`, and every `session_id` the fixed
 `8f2c1d7e-…` the tests key on; nothing else changed.
 
+`pre-tool-use-bash-reviewer-span` is a review agent's span line, captured the same way (Claude
+Code 2.1.288, 2026-10-04) from a scratch git repository with no `.swiftgate.toml`, which changes
+nothing in the payload:
+
+```
+SWIFTGATE_HOOK_RECORD_DIR=<dir> claude -p "Use the Agent tool exactly once, with subagent_type \
+  swift-harness:verifier, and this prompt: 'Run exactly this one Bash command, once, verbatim, \
+  and reply with its output and nothing else: <plugin>/bin/swiftgate events span start --phase \
+  verify --build-run 20261004-capture --task 'reviewer-span' --role review'. Then reply done." \
+  --plugin-dir <plugin> --permission-mode acceptEdits --setting-sources project,local \
+  --output-format stream-json --verbose --include-hook-events
+```
+
+It shows a plugin subagent's PreToolUse carries `agent_id` and `agent_type`
+`swift-harness:verifier`. Scrubbed as above, and the plugin directory became `/PLUGIN`; the JSON
+was re-indented.
+
 The rest (`pre-tool-use-bash-git-commit`, `pre-tool-use-edit-snapshot`,
 `pre-tool-use-write-*`, `post-tool-use-write-markdown`, `session-start-resume`) are still built
 from the documented schema: no live session produced a Write, a subagent or a resume. Tests swap
