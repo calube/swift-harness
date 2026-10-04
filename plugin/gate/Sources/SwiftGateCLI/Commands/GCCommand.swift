@@ -10,6 +10,8 @@ struct GCSummary: Sendable, Equatable, Encodable {
   var orphanClones: [String] = []
   /// Runs whose holder had died: session closed, lease removed, claims released.
   var releasedLeases: [String] = []
+  /// What a sweep skipped without failing, such as an unreadable lease.
+  var notes: [String] = []
   var errors: [String] = []
   /// Sealed segments, indexes and rollups removed by `--events`, relative to the root.
   var removedEvents: [String] = []
@@ -48,6 +50,10 @@ enum GCRun {
       removeSealedEvents(
         root: root, before: now.addingTimeInterval(-Double(days) * 86_400), into: &summary)
     }
+    let leases = await sweepLeases()
+    summary.releasedLeases = leases.released
+    summary.errors += leases.problems
+    summary.notes += leases.notes
     do {
       summary.orphanClones = try await sweepOrphans()
     } catch {
@@ -120,11 +126,16 @@ enum GCRun {
     case .human:
       var lines = [
         "gc: removed \(summary.removed.count) item(s) older than \(maxAgeDays) day(s), "
-          + "\(summary.orphanClones.count) orphan clone(s)"
+          + "\(summary.orphanClones.count) orphan clone(s), "
+          + "\(summary.releasedLeases.count) dead holder lease(s)"
       ]
       lines += summary.removed.map { "  removed \($0)" }
       lines += summary.removedEvents.map { "  removed event file \($0)" }
       lines += summary.orphanClones.map { "  deleted clone \($0)" }
+      lines += summary.releasedLeases.map {
+        "  released run \($0): session closed, lease removed, claims released"
+      }
+      lines += summary.notes.map { "  note: \($0)" }
       lines += summary.errors.map { "  error: \($0)" }
       return lines.joined(separator: "\n")
     }
@@ -181,8 +192,10 @@ struct GCCommand: AsyncParsableCommand {
       releaseClaims: SimulatorClones.agentDeviceClaimRelease(LiveAgentDevice(runner: runner)) {
         failure in claimFailures.withLock { $0.append(failure) }
       })
+    let down = SimDown.live(runner: runner)
     var summary = await GCRun.run(
-      root: root, maxAgeDays: days, eventsOlderThanDays: events ? olderThan : nil, now: Date()
+      root: root, maxAgeDays: days, eventsOlderThanDays: events ? olderThan : nil, now: Date(),
+      sweepLeases: { await down.sweepDeadHolders(simDirectory: SimDown.simDirectory(for:)) }
     ) {
       try await clones.sweepOrphans()
     }

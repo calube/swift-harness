@@ -45,7 +45,8 @@ struct SimHoldCommand: AsyncParsableCommand {
       devices: SimulatorClones.live(
         config: simulator, runner: runner,
         releaseClaims: SimulatorClones.agentDeviceClaimRelease(
-          LiveAgentDevice(runner: runner), failed: { Self.log("sim hold: \($0)") })),
+          LiveAgentDevice(runner: runner), failed: { Self.log("sim hold: \($0)") }),
+        sweepLeases: { await Self.sweepDeadHolders(SimDown.live(runner: runner)) }),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
       holderPID: getpid(), timeout: .seconds(target.sessionTimeoutMinutes * 60),
@@ -59,6 +60,13 @@ struct SimHoldCommand: AsyncParsableCommand {
       Self.log("sim hold: \(error.message)")
       throw ExitCode(Verdict.blocked.exitCode)
     }
+  }
+
+  /// Frees what killed holders left before taking a device, logging each run and problem.
+  static func sweepDeadHolders(_ down: SimDown) async {
+    let sweep = await down.sweepDeadHolders(simDirectory: SimDown.simDirectory(for:))
+    for run in sweep.released { log("sim hold: released run \(run), whose holder had died") }
+    for line in sweep.problems + sweep.notes { log("sim hold: \(line)") }
   }
 
   /// Unbuffered, so `agent-device.log` shows each line even if the holder is killed.

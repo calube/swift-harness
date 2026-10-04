@@ -128,8 +128,10 @@ extension SimDownTests {
         command: "close", status: .exited(1), detail: "no output")
     }
 
-    let sweep = await sweeper(agent, simctl: FakeSimctl(devices: [Self.base]), isAlive: { _ in false })
-      .sweepDeadHolders(simDirectory: { _ in nil })
+    let sweep = await sweeper(
+      agent, simctl: FakeSimctl(devices: [Self.base]), isAlive: { _ in false }
+    )
+    .sweepDeadHolders(simDirectory: { _ in nil })
 
     #expect(sweep.released.isEmpty)
     #expect(sweep.problems.count == 1)

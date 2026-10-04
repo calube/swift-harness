@@ -81,10 +81,12 @@ public struct SimulatorClones: Sendable {
     pid > 0 && (kill(pid, 0) == 0 || errno == EPERM)
   }
 
-  /// Deletes harness clones whose owning process has died, returning their UDIDs. One clone that
-  /// cannot be deleted (another session may be deleting it too) never stops the rest.
+  /// Frees dead holders' leases, then deletes harness clones whose owning process has died,
+  /// returning their UDIDs. One clone that cannot be deleted (another session may be deleting it
+  /// too) never stops the rest.
   @discardableResult
   public func sweepOrphans() async throws(SimulatorCloneError) -> [String] {
+    await sweepLeases?()
     let devices: [SimulatorDevice]
     do {
       devices = try await simctl.devices()
@@ -122,6 +124,7 @@ public struct SimulatorClones: Sendable {
   }
 
   private func makeClone() async throws(SimulatorCloneError) -> SimulatorDevice {
+    await sweepLeases?()
     let devices = try await simctlCall { () async throws(SimctlError) in try await simctl.devices()
     }
     await sweep(SimulatorSelection.orphans(in: devices, isAlive: isAlive))
