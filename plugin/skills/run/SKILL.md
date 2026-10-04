@@ -23,7 +23,7 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<base>` | the commit `<plan-branch>` started at: `git merge-base <plan-branch> HEAD` in the user's checkout, before anything lands |
 | `<common>` | `git rev-parse --path-format=absolute --git-common-dir` |
 | `<plan-dir>` | `<common>/swift-harness/plans/<slug>` |
-| `<checkout>` | the worktree on `<plan-branch>` that `run checkout create` makes, named by its JSON's `worktree`: where you commit, merges land and gates run |
+| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task worktrees sit beside it as `<top>-<slug>-<task>` |
 | `<config>` | `<common>/swift-harness/config.toml`, written only by `discover --apply` and `allow` |
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
 | `<run>` | the `runId` that `build start` prints in step 7 |
@@ -200,7 +200,7 @@ line, covers only what merged. Print it as your last message as written. Merging
 ## Rules
 
 - Every choice is yours. A question you would ask becomes an assumption in `PLAN.md`.
-- Commits land on `<plan-branch>` only, from `<checkout>` or a task worktree under the git dir.
+- Commits land on `<plan-branch>` only, from `<checkout>` or a task worktree beside it.
 - The repository's git hooks run on every commit; our own commit-message check doesn't run here.
 - `<config>` changes only through `"$SG" discover --apply` and `"$SG" allow`.
 - Explorer and worker models are pinned ids, never aliases.
