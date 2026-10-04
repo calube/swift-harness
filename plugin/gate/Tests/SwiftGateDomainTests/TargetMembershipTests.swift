@@ -145,4 +145,39 @@ struct TargetMembershipTests {
       inclusion: .tuist)
     #expect(tuist.first?.message.contains("tuist generate") == true)
   }
+
+  @Test(
+    "an exception set naming a target that doesn't own the folder adds those files to that target — catches inclusions read as exclusions"
+  )
+  func exceptionAddsForNonOwner() throws {
+    let text = try CapturedXcodeProject.synchronized.text()
+    let owner =
+      "fileSystemSynchronizedGroups = (\n\t\t\t\t4E697FC12E1D5E0A00329950 /* Buy */,\n\t\t\t);\n\t\t\tname = \"Buy watchOS\";"
+    #expect(text.contains(owner))
+    let detached = text.replacing(
+      owner, with: "fileSystemSynchronizedGroups = (\n\t\t\t);\n\t\t\tname = \"Buy watchOS\";")
+    let membership = TargetMembership(
+      project: try PBXProject(parsing: detached), projectPath: "Buy.xcodeproj")
+    #expect(membership.targets(including: "Buy/Info.plist").map(\.name) == ["Buy watchOS"])
+    #expect(
+      membership.targets(compiling: "Buy/Client/Graph.Cache.swift").map(\.name) == [
+        "Buy", "Buy tvOS",
+      ])
+    #expect(membership.targets(compiling: "Buy/Makefile").isEmpty)
+  }
+
+  @Test(
+    "a new Swift file every owner of a synchronized folder leaves out is a finding naming the exception — catches excluded files counted as compiled"
+  )
+  func synchronizedExcludedNewFile() throws {
+    let text = try CapturedXcodeProject.synchronized.text()
+    let list = "membershipExceptions = (\n\t\t\t\tInfo.plist,"
+    #expect(text.contains(list))
+    let excluded = text.replacing(list, with: list + "\n\t\t\t\tLegacy.swift,")
+    let membership = TargetMembership(
+      project: try PBXProject(parsing: excluded), projectPath: "Buy.xcodeproj")
+    let findings = try membership.newFileFindings(["Buy/Legacy.swift"], inclusion: .synchronized)
+    #expect(findings.map(\.file) == ["Buy/Legacy.swift"])
+    #expect(findings.first?.message.contains("exception") == true)
+  }
 }

@@ -1,7 +1,6 @@
 /// A value of an old-style (OpenStep) property list, the format `project.pbxproj` is written in.
 public indirect enum PlistValue: Sendable, Equatable {
   case string(String)
-  case data([UInt8])
   case array([PlistValue])
   case dictionary([String: PlistValue])
 
@@ -47,7 +46,6 @@ public enum PBXProjectError: Error, Sendable, Equatable {
   case unexpectedEnd(expected: String)
   case unterminatedString(line: Int)
   case unterminatedComment(line: Int)
-  case invalidData(line: Int)
   case trailingContent(line: Int)
   /// A key the format requires, such as `objects` or `rootObject`, is absent or the wrong shape.
   case missingKey(String)
@@ -216,8 +214,7 @@ private struct PlistParser {
     switch bytes[index] {
     case UInt8(ascii: "{"): return try parseDictionary()
     case UInt8(ascii: "("): return try parseArray()
-    case UInt8(ascii: "\""), UInt8(ascii: "'"): return .string(try parseQuoted())
-    case UInt8(ascii: "<"): return try parseData()
+    case UInt8(ascii: "\""): return .string(try parseQuoted())
     default:
       guard let word = parseUnquoted() else { throw unexpected() }
       return .string(word)
@@ -263,14 +260,13 @@ private struct PlistParser {
   }
 
   private mutating func parseQuoted() throws(PBXProjectError) -> String {
-    let quote = bytes[index]
     let startLine = line
     index += 1
     var out: [UInt8] = []
     while index < bytes.count {
       let byte = bytes[index]
       index += 1
-      if byte == quote { return String(decoding: out, as: UTF8.self) }
+      if byte == UInt8(ascii: "\"") { return String(decoding: out, as: UTF8.self) }
       if byte == UInt8(ascii: "\n") { line += 1 }
       guard byte == UInt8(ascii: "\\") else {
         out.append(byte)
@@ -283,65 +279,10 @@ private struct PlistParser {
       case UInt8(ascii: "n"): out.append(0x0A)
       case UInt8(ascii: "t"): out.append(0x09)
       case UInt8(ascii: "r"): out.append(0x0D)
-      case UInt8(ascii: "a"): out.append(0x07)
-      case UInt8(ascii: "b"): out.append(0x08)
-      case UInt8(ascii: "f"): out.append(0x0C)
-      case UInt8(ascii: "v"): out.append(0x0B)
-      case UInt8(ascii: "U"):
-        let digits = bytes[index..<min(index + 4, bytes.count)]
-        index += digits.count
-        if let scalar = UInt32(String(decoding: digits, as: UTF8.self), radix: 16)
-          .flatMap(Unicode.Scalar.init)
-        {
-          out.append(contentsOf: Array(String(Character(scalar)).utf8))
-        }
-      case UInt8(ascii: "0")...UInt8(ascii: "7"):
-        var value = UInt32(escaped - UInt8(ascii: "0"))
-        var count = 1
-        while count < 3, index < bytes.count,
-          (UInt8(ascii: "0")...UInt8(ascii: "7")).contains(bytes[index])
-        {
-          value = value * 8 + UInt32(bytes[index] - UInt8(ascii: "0"))
-          index += 1
-          count += 1
-        }
-        out.append(UInt8(truncatingIfNeeded: value))
       default: out.append(escaped)
       }
     }
     throw .unterminatedString(line: startLine)
-  }
-
-  private mutating func parseData() throws(PBXProjectError) -> PlistValue {
-    let startLine = line
-    index += 1
-    var nibbles: [UInt8] = []
-    while index < bytes.count {
-      let byte = bytes[index]
-      index += 1
-      if byte == UInt8(ascii: ">") {
-        guard nibbles.count.isMultiple(of: 2) else { throw .invalidData(line: startLine) }
-        return .data(
-          stride(from: 0, to: nibbles.count, by: 2).map { nibbles[$0] << 4 | nibbles[$0 + 1] })
-      }
-      if byte == UInt8(ascii: " ") || byte == UInt8(ascii: "\t") { continue }
-      if byte == UInt8(ascii: "\n") {
-        line += 1
-        continue
-      }
-      guard let nibble = Self.hexValue(byte) else { throw .invalidData(line: startLine) }
-      nibbles.append(nibble)
-    }
-    throw .unexpectedEnd(expected: ">")
-  }
-
-  private static func hexValue(_ byte: UInt8) -> UInt8? {
-    switch byte {
-    case UInt8(ascii: "0")...UInt8(ascii: "9"): byte - UInt8(ascii: "0")
-    case UInt8(ascii: "a")...UInt8(ascii: "f"): byte - UInt8(ascii: "a") + 10
-    case UInt8(ascii: "A")...UInt8(ascii: "F"): byte - UInt8(ascii: "A") + 10
-    default: nil
-    }
   }
 
   private mutating func parseUnquoted() -> String? {

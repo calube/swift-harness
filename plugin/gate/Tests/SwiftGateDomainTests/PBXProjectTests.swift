@@ -155,4 +155,41 @@ struct PBXProjectTests {
       try PBXProject(parsing: renamed)
     }
   }
+
+  @Test(
+    "a captured project cut inside a comment, cut inside a string, broken by a stray character, or followed by more text fails naming the line — catches a malformed project read as valid",
+    arguments: [
+      ("comment", PBXProjectError.unterminatedComment(line: 9)),
+      ("string", PBXProjectError.unterminatedString(line: 38)),
+      ("character", PBXProjectError.unexpectedCharacter("?", line: 3)),
+      ("trailing", PBXProjectError.trailingContent(line: 645)),
+    ])
+  func malformed(cut: String, expected: PBXProjectError) throws {
+    let text = try CapturedXcodeProject.explicit.text()
+    let broken: String
+    switch cut {
+    case "comment":
+      broken = String(text[..<(try #require(text.range(of: "/* Begin PBXBuildFile"))).upperBound])
+    case "string":
+      broken = String(text[..<(try #require(text.range(of: "sourceTree = \"<"))).upperBound])
+    case "character":
+      broken = text.replacing("archiveVersion = 1;", with: "archiveVersion ? 1;")
+    default:
+      broken = text + "}\n"
+    }
+    #expect(throws: expected) { try PBXProject(parsing: broken) }
+  }
+
+  @Test(
+    "an object without an isa fails naming the object — catches an object of unknown kind read as a file"
+  )
+  func missingISA() throws {
+    let text = try CapturedXcodeProject.explicit.text()
+    let entry = "46A5B5EF26AF54F7002EFEAA /* BreedListScreen.swift in Sources */ = {"
+    #expect(text.contains(entry + "isa = PBXBuildFile; "))
+    let broken = text.replacing(entry + "isa = PBXBuildFile; ", with: entry)
+    #expect(throws: PBXProjectError.missingKey("isa of 46A5B5EF26AF54F7002EFEAA")) {
+      try PBXProject(parsing: broken)
+    }
+  }
 }
