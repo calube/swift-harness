@@ -22,10 +22,12 @@ public struct HarnessTemplates: Sendable, Equatable {
   public let gitignore: String
   /// `docs/index.md`: the docs router, seeded once and then owned by whatever adds rows to it.
   public let docsIndex: String
+  /// `Scenario.swift`, stamped beside a single app entry point (see ``ScenarioStamp``).
+  public let scenario: String
 
   public init(
     agents: String, config: String, swiftFormat: String, swiftLint: String, lefthook: String,
-    gitignore: String, docsIndex: String
+    gitignore: String, docsIndex: String, scenario: String
   ) {
     self.agents = agents
     self.config = config
@@ -34,6 +36,7 @@ public struct HarnessTemplates: Sendable, Equatable {
     self.lefthook = lefthook
     self.gitignore = gitignore
     self.docsIndex = docsIndex
+    self.scenario = scenario
   }
 }
 
@@ -79,12 +82,16 @@ public struct BootstrapInputs: Sendable {
   public var shimTarget: String
   /// `--profile`: the `[harness] profile` a created config names. `nil` when not given.
   public var profile: String?
+  /// The app entry points and `Scenario` declarations outside `packages`. A stamp target beside
+  /// an entry point reads its state from ``existing`` like any other path.
+  public var appSources: AppSources
 
   public init(
     root: String, existing: [String: ExistingEntry], templates: HarnessTemplates,
     config: ConfigState, inferred: InferredConfig, swiftLintInstalled: Bool,
     lefthookInstalled: Bool, git: GitState, registry: RegistryState, registryPath: String,
-    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil
+    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil,
+    appSources: AppSources = AppSources()
   ) {
     self.root = root
     self.existing = existing
@@ -100,6 +107,7 @@ public struct BootstrapInputs: Sendable {
     self.shimPath = shimPath
     self.shimTarget = shimTarget
     self.profile = profile
+    self.appSources = appSources
   }
 }
 
@@ -217,12 +225,15 @@ public enum BootstrapPlanner {
     let nested: String? =
       if case .repository(let prefix, _) = inputs.git, !prefix.isEmpty { prefix } else { nil }
 
+    let scenario = ScenarioStamp.plan(inputs)
     var stamps = [
       agents(existing(Paths.agents), body: inputs.templates.agents),
       Stamp(path: Paths.claude, change: claudeLink(existing(Paths.claude))),
-      Stamp(path: Paths.config, change: config(inputs)),
-      owned(Paths.swiftFormat, existing(Paths.swiftFormat), inputs.templates.swiftFormat),
+      Stamp(path: Paths.config, change: config(inputs, scenarios: scenario.scenarios)),
     ]
+    if let stamp = scenario.stamp { stamps.append(stamp) }
+    stamps.append(
+      owned(Paths.swiftFormat, existing(Paths.swiftFormat), inputs.templates.swiftFormat))
     let swiftLint = existing(Paths.swiftLint)
     if inputs.swiftLintInstalled || swiftLint != .absent {
       stamps.append(owned(Paths.swiftLint, swiftLint, inputs.templates.swiftLint))
@@ -250,7 +261,7 @@ public enum BootstrapPlanner {
     stamps.append(docsIndex(existing(Paths.docsIndex), template: inputs.templates.docsIndex))
 
     var home: [HomeAction] = []
-    var notes = inputs.inferred.unresolved.map { "inferred config: \($0)" }
+    var notes = inputs.inferred.unresolved.map { "inferred config: \($0)" } + scenario.notes
     switch inputs.registry {
     case .absent:
       home.append(
@@ -347,11 +358,12 @@ public enum BootstrapPlanner {
     }
   }
 
-  static func config(_ inputs: BootstrapInputs) -> StampChange {
+  static func config(_ inputs: BootstrapInputs, scenarios: [Scenario]) -> StampChange {
     switch inputs.config {
     case .absent:
       return .create(
-        inputs.inferred.render(template: inputs.templates.config, profile: inputs.profile))
+        inputs.inferred.render(
+          template: inputs.templates.config, profile: inputs.profile, scenarios: scenarios))
     case .loaded(let config):
       let drift =
         inputs.inferred.drift(from: config) + missingManagedFiles(config)

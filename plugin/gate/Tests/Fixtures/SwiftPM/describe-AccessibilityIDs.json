@@ -1,0 +1,63 @@
+{
+  "dependencies" : [
+
+  ],
+  "manifest_display_name" : "AccessibilityIDs",
+  "name" : "AccessibilityIDs",
+  "path" : "/REPO/examples/SampleApp/Packages/AccessibilityIDs",
+  "platforms" : [
+    {
+      "name" : "ios",
+      "version" : "18.0"
+    },
+    {
+      "name" : "macos",
+      "version" : "15.0"
+    }
+  ],
+  "products" : [
+    {
+      "name" : "AccessibilityIDs",
+      "targets" : [
+        "AccessibilityIDs"
+      ],
+      "type" : {
+        "library" : [
+          "automatic"
+        ]
+      }
+    }
+  ],
+  "swift_languages_versions" : [
+    "6"
+  ],
+  "targets" : [
+    {
+      "c99name" : "AccessibilityIDsTests",
+      "module_type" : "SwiftTarget",
+      "name" : "AccessibilityIDsTests",
+      "path" : "Tests/AccessibilityIDsTests",
+      "sources" : [
+        "AccessibilityIDTests.swift"
+      ],
+      "target_dependencies" : [
+        "AccessibilityIDs"
+      ],
+      "type" : "test"
+    },
+    {
+      "c99name" : "AccessibilityIDs",
+      "module_type" : "SwiftTarget",
+      "name" : "AccessibilityIDs",
+      "path" : "Sources/AccessibilityIDs",
+      "product_memberships" : [
+        "AccessibilityIDs"
+      ],
+      "sources" : [
+        "AccessibilityID.swift"
+      ],
+      "type" : "library"
+    }
+  ],
+  "tools_version" : "6.2"
+}

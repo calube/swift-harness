@@ -94,8 +94,11 @@ public struct InferredConfig: Sendable, Equatable {
   }
 
   /// Fills the template's `{{XCODE}}`, `{{APP_SCHEME}}`, `{{PACKAGES}}`, `{{DEVICE}}`, `{{OS}}`
-  /// and `{{PROFILE}}`, which is `profile` or ``Config/defaultProfile``.
-  public func render(template: String, profile: String? = nil) -> String {
+  /// and `{{PROFILE}}`, which is `profile` or ``Config/defaultProfile``, and `{{SCENARIOS}}`: a
+  /// `[[scenarios]]` table per entry of `scenarios`, or a commented example when it is empty.
+  public func render(template: String, profile: String? = nil, scenarios: [Scenario] = [])
+    -> String
+  {
     let packageList =
       packages.isEmpty
       ? "[\(quoted(Self.placeholder))]" : "[\(packages.map(quoted).joined(separator: ", "))]"
@@ -107,6 +110,7 @@ public struct InferredConfig: Sendable, Equatable {
       .replacingOccurrences(of: "{{DEVICE}}", with: quoted(simulator?.device ?? Self.placeholder))
       .replacingOccurrences(of: "{{OS}}", with: quoted(simulator?.os ?? Self.placeholder))
       .replacingOccurrences(of: "{{PROFILE}}", with: quoted(profile ?? Config.defaultProfile))
+      .replacingOccurrences(of: "{{SCENARIOS}}", with: ScenarioStamp.tables(scenarios))
   }
 
   /// Where an existing config disagrees with the repository or the machine. Only disagreements

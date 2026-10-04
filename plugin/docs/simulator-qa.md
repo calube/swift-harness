@@ -1,8 +1,32 @@
 # Simulator QA
 
-How `swiftgate qa lint` checks flow files, how `swiftgate qa run` and `swiftgate qa adopt` treat a
-plan's validation rows, and how `swiftgate sim down` ends a run. Their rule ids are in
+How `swiftgate sim verify` judges a run's steps, how `swiftgate sim down` ends a run, how
+`swiftgate qa lint` checks flow files, and how `swiftgate qa run` and `swiftgate qa adopt` treat a
+plan's validation rows. Their rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index).
+
+## sim verify
+
+`swiftgate sim verify [<runID>] [--json]` judges the evidence `sim snap` recorded (simulator QA
+§5.2). It reads only the run's `sim/` folder and the checkout's HEAD, and never touches the device.
+Without `<runID>` it takes this worktree's newest run whose holder is alive. It judges a named run
+from its folder even after `sim down`, but a lease that names another worktree is `sim.not-owner`
+(RED, exit 1), and it writes nothing.
+
+The verdict is GREEN (exit 0), RED (exit 1) on any finding, or BLOCKED (exit 2) when `session.json`
+or `steps.ndjson` doesn't read, git can't name HEAD, or the caller named no run and none is live.
+A RED finding outranks BLOCKED.
+
+Each step's tree must also show every button, switch, text field and cell with an accessibility
+identifier (`sim.a11y-identifier`) and a readable label (`sim.a11y-label`). A label is readable when
+it holds more than whitespace and differs from the identifier. Static text, images and containers
+need neither. These 2 rules check standards §7 on the screen the app drew, so an icon-only
+button with no `.accessibilityLabel` fails here even when review missed it.
+
+Each judged run writes `sim/report.json` with keys `schemaVersion`, `command`, `runID`, `verdict`,
+`stepCount`, `headCommit` (the commit `sim up` built), `checkoutHead`, `blocked` and `findings`,
+each `{rule, step, path, message}` with `path` relative to `sim/`. Unknown values are `null`. It
+also appends a `sim verify` line to the runs history with the run id and verdict.
 
 ## qa lint
 

@@ -12,7 +12,7 @@ Toolchain: Apple Swift 6.2 (swiftlang-6.2.3.3.20), macOS 26.
 
 | File | Capture |
 |---|---|
-| `SwiftPM/describe-<Package>.json` (APIClient, CounterFeature, GameEngine, HTTPClient, LogClient) | `(cd examples/SampleApp/Packages/<Package> && swift package describe --type json) \| sed "s#$ROOT#/REPO#g"` |
+| `SwiftPM/describe-<Package>.json` (APIClient, AccessibilityIDs, CounterFeature, GameEngine, HTTPClient, LogClient) | `(cd examples/SampleApp/Packages/<Package> && swift package describe --type json) \| sed "s#$ROOT#/REPO#g"` |
 | `SwiftPM/dump-package-GameEngine.json` | `(cd examples/SampleApp/Packages/GameEngine && swift package dump-package) \| sed "s#$ROOT#/REPO#g"` |
 | `SwiftPM/dump-package-main-actor-core.json` | `(cd gate/Fixtures/arch/arch.core-main-actor-isolation/bad/Packages/Feed && swift package dump-package) \| sed "s#$ROOT#/REPO#g"` |
 | `SwiftPM/describe-no-package.stderr.txt` | `cd "$(mktemp -d)" && swift package describe --type json` (stderr; exit status 1, empty stdout) |
@@ -284,6 +284,40 @@ Observed behavior the adapter relies on:
   `Keyboard` and `Key`, and any other type as `Element(<raw value>)`. The snapshot engine in
   `dist/src/ios-snapshot-engine.js` also rewrites some `Other` nodes to `Heading`.
 
+### AgentDevice/seeded
+
+Two real `sim up` and `sim snap` runs against `examples/SampleApp` on 2026-10-04, with `agent-device`
+0.21.18 on a clone `sim up` made from the configured iPhone 17 (iOS 26.2). The seeded run had this
+local diff applied to `Packages/CounterFeature/Sources/CounterUI/CounterView.swift`, below the
+`counter.fact` button; it was never committed, and `git checkout -- Packages` removed it after the
+capture:
+
+```swift
+      Button("Share") {}
+
+      Button {} label: { Circle().frame(width: 44, height: 44) }
+        .accessibilityIdentifier("counter.dot")
+```
+
+The clean run used the app as committed. Each run, from `examples/SampleApp`, with the worktree's
+`swift build --product swiftgate`:
+
+```
+../../plugin/gate/.build/debug/swiftgate sim up --json
+../../plugin/gate/.build/debug/swiftgate sim snap "counter screen" --assert "Cat fact" --json
+agent-device close --udid <udid> --session <session> --json
+rm <lock dir>/sim-leases/<runID>.json
+```
+
+Removing the lease makes the holder delete the clone and free its slot. Nothing was scrubbed: no
+file holds a local path.
+
+| Files | From |
+|---|---|
+| `AgentDevice/seeded/unlabeled-controls.tree.json` | the seeded run's `sim/steps/001.tree.json`: a `Button` labelled `Share` with no identifier, and a `Button` with identifier `counter.dot` and no label |
+| `AgentDevice/seeded/clean.tree.json` | the clean run's `sim/steps/001.tree.json` |
+| `gate/Fixtures/seeds/sim-verify/unlabeled-controls/sim/`, `gate/Fixtures/seeds/sim-verify/valid/sim/` | each run's `session.json`, `steps.ndjson`, `steps/001.png` and `steps/001.tree.json`, unmodified |
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's
@@ -433,6 +467,26 @@ Observed behavior the adapter relies on:
   after the project, or else the only scheme that is also a target.
 - Listing resolves the project's packages first (16s cold on the sample app).
 - A missing project exits 66 with the error on stderr.
+
+### `Bootstrap/Scenario/`
+
+Real `swiftgate bootstrap` runs on 2026-10-04 (Xcode 26.2), on `rsync` copies of
+`examples/SampleApp` without `.harness`, `DerivedData`, `.build`, `.swiftpm` or `xcuserdata`, and
+with `.swiftgate.toml` and `App/Scenario.swift` deleted, so the copy is the app before it adopted
+the harness: 1 `@main … : App` file, `App/SampleApp.swift`. Not a git repository. Every command
+ran with `HOME=<scratch>/home SWIFTGATE_CACHE_DIR=<scratch>/cache SWIFTGATE_BUILD_CONFIG=debug
+<checkout>/plugin/bin/swiftgate`, written `SG` below. Scrubbing: the copy's path becomes `/REPO`,
+the scratch home `/HOME`, the checkout's `plugin` directory `/PLUGIN`.
+
+| File | Capture |
+|---|---|
+| `single-dry-run.stdout` | `SG bootstrap` in the copy (exit 0) |
+| `single-apply.stdout` | `SG bootstrap --apply` next (exit 0) |
+| `single-stamped-Scenario.swift`, `single-stamped.swiftgate.toml` | `App/Scenario.swift` and `.swiftgate.toml` as that apply wrote them, copied verbatim |
+| `single-arch.stdout` | `SG arch` next (exit 1). Its 1 finding is `arch.undeclared-kind` for `GameEngine`, whose `[[modules]]` entry went with the deleted config; no `sim.scenario-drift` |
+| `single-rerun-Scenario.swift`, `single-rerun.stdout` | `case empty` added after `case live` with `sed -i '' 's/^    case live$/    case live\n    case empty/' App/Scenario.swift`, then `SG bootstrap` (exit 0, `Nothing to do.`); the file is copied after the run, unchanged by it |
+| `two-CompanionApp.swift` | Not tool output: the second `@main … : App` file written for the next run, copied to `Companion/CompanionApp.swift` in a fresh copy |
+| `two-dry-run.stdout` | `SG bootstrap` in that copy (exit 0): no `Scenario.swift`, a commented `[[scenarios]]` example in the config, and a `consider:` note naming both entry points |
 
 ## Judge
 

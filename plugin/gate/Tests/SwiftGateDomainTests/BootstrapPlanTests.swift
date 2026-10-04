@@ -119,7 +119,7 @@ struct BootstrapPlanTests {
   static let templates = HarnessTemplates(
     agents: "# Router\n", config: "xcode = {{XCODE}}\n", swiftFormat: "{}\n", swiftLint: "rules\n",
     lefthook: "pre-commit:\n", gitignore: "# swift-harness\n**/.harness/runs/\n.harness/x.lock\n",
-    docsIndex: "# Docs index\n")
+    docsIndex: "# Docs index\n", scenario: "enum Scenario: String { case live }\n")
 
   static let inferred = ConfigInference.infer(
     RepositorySurvey(
@@ -297,7 +297,7 @@ struct BootstrapPlanTests {
       agents: Self.templates.agents, config: "[harness]\nprofile = {{PROFILE}}\n",
       swiftFormat: Self.templates.swiftFormat, swiftLint: Self.templates.swiftLint,
       lefthook: Self.templates.lefthook, gitignore: Self.templates.gitignore,
-      docsIndex: Self.templates.docsIndex)
+      docsIndex: Self.templates.docsIndex, scenario: Self.templates.scenario)
     #expect(
       change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
         == .create("[harness]\nprofile = \"default\"\n"))
@@ -437,6 +437,148 @@ struct BootstrapPlanTests {
     #expect(try ProjectRegistry.decode(Data(registry.encoded().utf8)) == registry)
     #expect(throws: DecodingError.self) {
       try ProjectRegistry.decode(Data("{\"schema\":2,\"projects\":[]}".utf8))
+    }
+  }
+}
+
+@Suite("bootstrap scenario stamp")
+struct BootstrapScenarioStampTests {
+  static let scenarioTemplate = "enum Scenario: String, CaseIterable {\n  case live\n}\n"
+
+  static func inputs(
+    entryPoints: [AppEntryPoint], declarations: [String] = [],
+    existing: [String: ExistingEntry] = [:], config: ConfigState = .absent
+  ) -> BootstrapInputs {
+    var inputs = BootstrapPlanTests.inputs(existing: existing, config: config)
+    let base = BootstrapPlanTests.templates
+    inputs.templates = HarnessTemplates(
+      agents: base.agents, config: "schema = 1\n{{SCENARIOS}}\n", swiftFormat: base.swiftFormat,
+      swiftLint: base.swiftLint, lefthook: base.lefthook, gitignore: base.gitignore,
+      docsIndex: base.docsIndex, scenario: scenarioTemplate)
+    inputs.appSources = AppSources(entryPoints: entryPoints, scenarioDeclarations: declarations)
+    return inputs
+  }
+
+  static let app = AppEntryPoint(path: "App/MyApp.swift", typeName: "MyApp")
+
+  private func stamp(_ plan: BootstrapPlan, _ path: String) -> StampChange? {
+    plan.stamps.first { $0.path == path }?.change
+  }
+
+  @Test(
+    "an @main type conforming to App is an entry point, and other @main types are not — catches a stamp beside a command-line tool's main or a missed SwiftUI app"
+  )
+  func scansEntryPoints() {
+    let found: [(String, String?)] = [
+      ("@main\nstruct MyApp: App {\n  var body: some Scene { WindowGroup {} }\n}\n", "MyApp"),
+      ("@MainActor @main public struct Shop: SwiftUI.App, Sendable {}", "Shop"),
+      ("@main\nfinal class Legacy: NSObject, App {}", "Legacy"),
+      ("@main\nstruct Tool: AsyncParsableCommand {}", nil),
+      ("@main struct Runner {\n  static func main() {}\n}\n", nil),
+      ("struct Preview: App {}", nil),
+      ("@main\nstruct Wrapped: AppWrapper {}", nil),
+    ]
+    for (text, typeName) in found {
+      #expect(AppEntryPoint.scan(path: "A/F.swift", text: text)?.typeName == typeName, "\(text)")
+    }
+    #expect(
+      AppEntryPoint.scan(path: "A/F.swift", text: "@main struct X: App {}")
+        == AppEntryPoint(path: "A/F.swift", typeName: "X"))
+  }
+
+  @Test(
+    "any type named Scenario counts as declared, and a longer name does not — catches a second Scenario type stamped into a module that already has one"
+  )
+  func detectsScenarioDeclarations() {
+    #expect(AppSources.declaresScenario("enum Scenario: String, CaseIterable {}"))
+    #expect(AppSources.declaresScenario("  public struct Scenario {}"))
+    #expect(AppSources.declaresScenario("#if DEBUG\nenum Scenario: String { case live }\n#endif"))
+    #expect(!AppSources.declaresScenario("enum ScenarioKind: String {}"))
+    #expect(!AppSources.declaresScenario("let scenario = Scenario.live"))
+  }
+
+  @Test(
+    "1 entry point and no config stamps Scenario.swift beside it, a [[scenarios]] live entry, and the call to add — catches a stamp without its config entry, or one that edits the app file"
+  )
+  func singleEntryPointStampsBoth() throws {
+    let plan = BootstrapPlanner.plan(Self.inputs(entryPoints: [Self.app]))
+
+    #expect(stamp(plan, "App/Scenario.swift") == .create(Self.scenarioTemplate))
+    #expect(stamp(plan, "App/MyApp.swift") == nil)
+    guard case .create(let config) = stamp(plan, BootstrapPlanner.Paths.config) else {
+      Issue.record("config not created")
+      return
+    }
+    #expect(config.contains("[[scenarios]]\nname = \"live\"\nreason = "))
+    #expect(!config.contains("{{SCENARIOS}}"))
+    let call = try #require(plan.notes.first { $0.contains(ScenarioStamp.call) })
+    #expect(call.contains("MyApp"))
+    #expect(call.contains("App/MyApp.swift"))
+    #expect(!plan.notes.contains { $0.hasPrefix("consider") })
+  }
+
+  @Test(
+    "2 entry points stamp neither file and add a consider line naming both — catches a stamp guessed into the wrong target"
+  )
+  func twoEntryPointsConsider() throws {
+    let other = AppEntryPoint(path: "Widget/WidgetApp.swift", typeName: "WidgetApp")
+    let plan = BootstrapPlanner.plan(Self.inputs(entryPoints: [Self.app, other]))
+
+    #expect(!plan.stamps.contains { $0.path.hasSuffix(ScenarioStamp.fileName) })
+    guard case .create(let config) = stamp(plan, BootstrapPlanner.Paths.config) else {
+      Issue.record("config not created")
+      return
+    }
+    #expect(!config.contains("\n[[scenarios]]"))
+    #expect(!config.contains("{{SCENARIOS}}"))
+    let consider = try #require(plan.notes.first { $0.hasPrefix("consider") })
+    #expect(consider.contains("App/MyApp.swift") && consider.contains("Widget/WidgetApp.swift"))
+    #expect(consider.contains(ScenarioStamp.call))
+  }
+
+  @Test(
+    "no entry point stamps neither file and adds a consider line — catches a stamp written to the repository root of a package-only repository"
+  )
+  func noEntryPointConsider() throws {
+    let plan = BootstrapPlanner.plan(Self.inputs(entryPoints: []))
+
+    #expect(!plan.stamps.contains { $0.path.hasSuffix(ScenarioStamp.fileName) })
+    let consider = try #require(plan.notes.first { $0.hasPrefix("consider") })
+    #expect(consider.contains(Self.scenarioTemplate.split(separator: "\n")[0]))
+  }
+
+  @Test(
+    "an existing config stamps neither file and prints the file and the call under consider — catches bootstrap adding an enum the config it never rewrites does not list"
+  )
+  func existingConfigConsider() throws {
+    let config = try Config(
+      xcode: "26.2", appScheme: "App", packages: ["Packages/*"],
+      simulator: SimulatorConfig(device: "iPhone 17", os: "26.2"))
+    let plan = BootstrapPlanner.plan(
+      Self.inputs(entryPoints: [Self.app], config: .loaded(config)))
+
+    #expect(stamp(plan, "App/Scenario.swift") == nil)
+    let consider = try #require(plan.notes.first { $0.hasPrefix("consider") })
+    #expect(consider.contains("App/Scenario.swift"))
+    #expect(consider.contains("case live"))
+    #expect(consider.contains("name = \"live\""))
+    #expect(consider.contains(ScenarioStamp.call))
+  }
+
+  @Test(
+    "an existing Scenario.swift or Scenario type is never touched and asks for nothing — catches a rerun that overwrites the app's own scenarios"
+  )
+  func existingScenarioUntouched() {
+    let fresh = BootstrapPlanner.plan(Self.inputs(entryPoints: [Self.app]))
+    #expect(fresh.stamps.contains { $0.path == "App/Scenario.swift" })
+    let own = ExistingEntry.file("enum Scenario: String { case live, empty }\n")
+    for inputs in [
+      Self.inputs(entryPoints: [Self.app], existing: ["App/Scenario.swift": own]),
+      Self.inputs(entryPoints: [Self.app], declarations: ["App/Support/Scenarios.swift"]),
+    ] {
+      let plan = BootstrapPlanner.plan(inputs)
+      #expect(!plan.stamps.contains { $0.path.hasSuffix(ScenarioStamp.fileName) })
+      #expect(!plan.notes.contains { $0.contains(ScenarioStamp.call) })
     }
   }
 }

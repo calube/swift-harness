@@ -100,7 +100,8 @@ struct RuleIndexTests {
       buildReturn + sourceRules + ArchCheck.ruleIDs + hostEvidence + simulatorEvidence + simulator
         + changedTests + coverage + mutation + judge + harness + environment + surface
         + commandRules + sprint + specPage + planConfirm + planSurface + brownfield
-        + SimUpRule.allCases.map(\.rawValue) + SimSnapRule.allCases.map(\.rawValue))
+        + SimUpRule.allCases.map(\.rawValue) + SimSnapRule.allCases.map(\.rawValue)
+        + SimEvidenceRule.allCases.map(\.rawValue) + SimVerifyRefusal.allCases.map(\.rawValue))
   }
 
   /// Every backticked rule id in the index section.

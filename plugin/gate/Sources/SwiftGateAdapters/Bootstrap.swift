@@ -108,6 +108,7 @@ public enum BootstrapFiles {
     public static let lefthook = "templates/lefthook.yml"
     public static let gitignore = "templates/gitignore"
     public static let docsIndex = "templates/docs-index.md"
+    public static let scenario = "templates/Scenario.swift"
   }
 
   /// Directories never searched for packages: build output, dependency checkouts, bundles.
@@ -128,7 +129,7 @@ public enum BootstrapFiles {
       swiftFormat: try read(TemplateNames.swiftFormat),
       swiftLint: try read(TemplateNames.swiftLint),
       lefthook: try read(TemplateNames.lefthook), gitignore: try read(TemplateNames.gitignore),
-      docsIndex: try read(TemplateNames.docsIndex))
+      docsIndex: try read(TemplateNames.docsIndex), scenario: try read(TemplateNames.scenario))
   }
 
   public static func entry(root: URL, path: String) -> ExistingEntry {
@@ -177,6 +178,46 @@ public enum BootstrapFiles {
     }
     visit("", depth: 0)
     return found.sorted()
+  }
+
+  /// The `@main … : App` files and `Scenario` declarations among the Swift files outside any
+  /// package, build output or hidden directory.
+  public static func appSources(root: URL) -> AppSources {
+    var sources = AppSources()
+    let manager = FileManager.default
+    func visit(_ relative: String) {
+      let directory = relative.isEmpty ? root : root.appending(path: relative)
+      if !relative.isEmpty,
+        manager.fileExists(atPath: directory.appending(path: "Package.swift").path)
+      {
+        return
+      }
+      guard
+        let children = try? manager.contentsOfDirectory(
+          at: directory, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+      else { return }
+      for child in children.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+        let name = child.lastPathComponent
+        let path = relative.isEmpty ? name : "\(relative)/\(name)"
+        let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+        guard !name.hasPrefix("."), values?.isSymbolicLink != true else { continue }
+        if values?.isDirectory == true {
+          guard !skippedDirectories.contains(name), !name.hasSuffix(".xcodeproj"),
+            !name.hasSuffix(".xcworkspace")
+          else { continue }
+          visit(path)
+        } else if name.hasSuffix(".swift"),
+          let text = try? String(contentsOf: child, encoding: .utf8)
+        {
+          if let entryPoint = AppEntryPoint.scan(path: path, text: text) {
+            sources.entryPoints.append(entryPoint)
+          }
+          if AppSources.declaresScenario(text) { sources.scenarioDeclarations.append(path) }
+        }
+      }
+    }
+    visit("")
+    return sources
   }
 
   /// Names directly under `root`, for ``AppContainer/choose(among:)``.

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateRules
 import SwiftGateTestSupport
 import Synchronization
 import Testing
@@ -114,6 +115,26 @@ struct BootstrapCommandTests {
 
     func remove() {
       TestTemporaryDirectory.remove(repository.deletingLastPathComponent())
+    }
+
+    /// The sample app as it was before it adopted the harness: no config and no `Scenario`
+    /// enum, with its single `@main` app file.
+    func removeHarnessAdoption() throws {
+      for path in [Config.fileName, "App/Scenario.swift"] {
+        try FileManager.default.removeItem(at: repository.appending(path: path))
+      }
+    }
+
+    /// Every Swift file in the repository, as `arch` reads them.
+    func swiftSources() throws -> [SourceInput] {
+      try FileManager.default.subpathsOfDirectory(atPath: repository.path)
+        .filter { $0.hasSuffix(".swift") && !$0.contains(".build/") }
+        .sorted()
+        .map { relative in
+          SourceInput(
+            path: relative,
+            text: try String(contentsOf: repository.appending(path: relative), encoding: .utf8))
+        }
     }
 
     /// Every path under the repository and the home directory, with file contents or link
@@ -315,5 +336,103 @@ struct BootstrapCommandTests {
       let gating = result.findings.filter { $0.severity.lintLevel == .error }
       #expect(gating.isEmpty, "\(gating.map { "\($0.file) \($0.ruleID): \($0.message)" })")
     }
+  }
+
+  private static var scenarioTemplate: String {
+    get throws {
+      try String(
+        contentsOf: Fixture.checkoutRoot.appending(path: "templates/Scenario.swift"),
+        encoding: .utf8)
+    }
+  }
+
+  @Test(
+    "a repository with 1 @main App file gets Scenario.swift beside it and [[scenarios]] live, and arch's drift rule passes on the result — catches a stamp that fails its own drift check"
+  )
+  func singleEntryPointStampsScenario() async throws {
+    let sandbox = try Sandbox(copyingSampleApp: true, probe: try await FakeBootstrapProbe.make())
+    defer { sandbox.remove() }
+    try sandbox.removeHarnessAdoption()
+    let appFile = try sandbox.state()["repo/App/SampleApp.swift"]
+
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!outcome.failed, "\(outcome.text)")
+    let state = try sandbox.state()
+    #expect(state["repo/App/Scenario.swift"] == (try Self.scenarioTemplate))
+    #expect(
+      state["repo/App/Scenario.swift"]
+        == (try Fixture.text("Bootstrap/Scenario/single-stamped-Scenario.swift")))
+    #expect(state["repo/App/SampleApp.swift"] == appFile)
+    let config = try #require(try ConfigLoader().load(repositoryRoot: sandbox.repository))
+    #expect(config.scenarios == [ScenarioStamp.live])
+    let drift = try ScenarioDriftRule.evaluate(config: config, sources: try sandbox.swiftSources())
+    #expect(drift.isEmpty, "\(drift.map(\.message))")
+    let callLine = try #require(
+      outcome.text.split(separator: "\n").first { $0.contains(ScenarioStamp.call) })
+    #expect(callLine.contains("App/SampleApp.swift"))
+    let captured = try Fixture.text("Bootstrap/Scenario/single-apply.stdout")
+    #expect(captured.split(separator: "\n").contains(callLine))
+    let entry = ScenarioStamp.tables([ScenarioStamp.live])
+    #expect(state["repo/\(Config.fileName)"]?.contains(entry) == true)
+    #expect(
+      (try Fixture.text("Bootstrap/Scenario/single-stamped.swiftgate.toml")).contains(entry))
+    #expect(
+      !(try Fixture.text("Bootstrap/Scenario/single-arch.stdout")).contains(ScenarioDriftRule.id))
+  }
+
+  @Test(
+    "a repository with 2 @main App files gets neither file and a consider line naming both — catches a scenario enum stamped into a guessed target"
+  )
+  func twoEntryPointsConsider() async throws {
+    let sandbox = try Sandbox(copyingSampleApp: true, probe: try await FakeBootstrapProbe.make())
+    defer { sandbox.remove() }
+    try sandbox.removeHarnessAdoption()
+    let second = sandbox.repository.appending(path: "Companion/CompanionApp.swift")
+    try FileManager.default.createDirectory(
+      at: second.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try FileManager.default.copyItem(
+      at: Fixture.directory.appending(path: "Bootstrap/Scenario/two-CompanionApp.swift"),
+      to: second)
+
+    let outcome = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!outcome.failed, "\(outcome.text)")
+    let state = try sandbox.state()
+    #expect(!state.keys.contains { $0.hasSuffix("/Scenario.swift") })
+    let config = try #require(try ConfigLoader().load(repositoryRoot: sandbox.repository))
+    #expect(config.scenarios.isEmpty)
+    let consider = try #require(
+      outcome.text.split(separator: "\n").first { $0.contains("consider") })
+    #expect(consider.contains("App/SampleApp.swift"))
+    #expect(consider.contains("Companion/CompanionApp.swift"))
+    let captured = try Fixture.text("Bootstrap/Scenario/two-dry-run.stdout")
+    #expect(captured.split(separator: "\n").contains(consider))
+  }
+
+  @Test(
+    "a second bootstrap leaves an edited Scenario.swift as the app left it — catches a rerun that resets the app's scenarios to the template"
+  )
+  func existingScenarioIsKept() async throws {
+    let sandbox = try Sandbox(copyingSampleApp: true, probe: try await FakeBootstrapProbe.make())
+    defer { sandbox.remove() }
+    try sandbox.removeHarnessAdoption()
+    let first = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+    #expect(!first.failed, "\(first.text)")
+    let stamped = sandbox.repository.appending(path: "App/Scenario.swift")
+    let edited = try #require(try sandbox.state()["repo/App/Scenario.swift"])
+      .replacingOccurrences(of: "case live\n", with: "case live\n    case empty\n")
+    #expect(edited != (try Self.scenarioTemplate))
+    try Data(edited.utf8).write(to: stamped)
+
+    let second = await BootstrapRun.run(
+      root: sandbox.repository, apply: true, environment: sandbox.environment)
+
+    #expect(!second.failed)
+    #expect(try String(contentsOf: stamped, encoding: .utf8) == edited)
+    #expect(!second.text.contains(ScenarioStamp.call))
   }
 }
