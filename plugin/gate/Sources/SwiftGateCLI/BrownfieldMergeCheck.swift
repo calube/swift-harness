@@ -233,13 +233,19 @@ enum BrownfieldMergeCheck {
 
     let proved = touched.filter(dependencies.sliceBuildsOnly)
     if !proved.isEmpty {
+      let proofBase: String
+      do throws(GitError) {
+        proofBase = try await Self.proofBase(tier: tier, base: base, git: git)
+      } catch {
+        return blocked("git: \(error)")
+      }
       let config = BrownfieldConfig(
         brownfield: dependencies.config.brownfield, areas: proved,
         allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
         judge: dependencies.config.judge)
       let (judgement, milliseconds) = await GateRun.timed {
         await BrownfieldProve.run(
-          root: root, base: base, config: config,
+          root: root, base: proofBase, config: config,
           junitDirectory: dependencies.layout.worktreeRoot.appending(
             path: "junit", directoryHint: .isDirectory),
           proofs: context.proofs, dependencies: dependencies.prove)
@@ -250,6 +256,13 @@ enum BrownfieldMergeCheck {
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
     return outcome
+  }
+
+  /// Where `tier`'s prove measures changed tests from and reverts the source to.
+  static func proofBase(tier: CheckTier, base: String, git: any Git) async throws(GitError)
+    -> String
+  {
+    base
   }
 
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
