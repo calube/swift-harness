@@ -156,33 +156,42 @@ public struct RunViewReader: RunViewReading {
     }
   }
 
-  /// The task worktrees of `plan` that exist now, a fix worktree included.
+  /// The task worktrees of `plan` that exist now, a fix worktree included. In a brownfield clone,
+  /// also the plan branch's checkout, where merges and their gates run, unless it is this
+  /// checkout, whose store is already read.
   private func liveWorktrees(plan: String, ledger: Ledger, damage: inout [RunView.Damage]) -> [URL]
   {
-    var worktrees: [URL] = []
-    for task in ledger.tasks {
-      for name in [task.id, "fix-\(task.id)"] {
-        let path: String
-        do {
-          path = try TaskWorktree(
-            commonDirectory: commonDirectory.path, plan: plan, task: name
-          ).path
-        } catch {
-          damage.append(
-            RunView.Damage(
-              source: commonDirectory.lastPathComponent,
-              reason: "task worktrees can't be named: \(error)"))
-          return worktrees
-        }
-        var isDirectory: ObjCBool = false
-        if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
-          isDirectory.boolValue
-        {
-          worktrees.append(URL(filePath: path, directoryHint: .isDirectory))
+    var paths: [String] = []
+    do {
+      for task in ledger.tasks {
+        for name in [task.id, "fix-\(task.id)"] {
+          paths.append(
+            try TaskWorktree(
+              commonDirectory: commonDirectory.path, plan: plan, task: name, profile: profile
+            ).path)
         }
       }
+      if profile == .brownfield, let first = ledger.tasks.first {
+        let checkout = try TaskWorktree(
+          commonDirectory: commonDirectory.path, plan: plan, task: first.id, profile: profile
+        ).mainCheckout
+        let state = StateRootResolver.resolve(
+          worktree: URL(filePath: checkout, directoryHint: .isDirectory))
+        if state.directory.standardizedFileURL != stateRoot.directory.standardizedFileURL {
+          paths.append(checkout)
+        }
+      }
+    } catch {
+      damage.append(
+        RunView.Damage(
+          source: commonDirectory.lastPathComponent,
+          reason: "task worktrees can't be named: \(error)"))
     }
-    return worktrees
+    return paths.filter { path in
+      var isDirectory: ObjCBool = false
+      return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        && isDirectory.boolValue
+    }.map { URL(filePath: $0, directoryHint: .isDirectory) }
   }
 
   private struct PlanState {

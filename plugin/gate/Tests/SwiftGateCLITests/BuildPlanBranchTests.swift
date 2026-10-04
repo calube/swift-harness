@@ -13,7 +13,7 @@ private struct PinnedClock: BuildClock {
 /// A throwaway brownfield clone with its own git dir: the user's checkout on `main`, the config
 /// under the common dir, a plan branch with a contract commit checked out at `<plan-dir>/checkout`,
 /// a claimed plan whose ledger holds task `t1`, and a brownfield build run.
-private struct PlanBranchScenario {
+struct PlanBranchScenario {
   static let slug = "2026-10-04-search"
   static let task = "t1"
   static let session = "5e0c7a1b-2d3f-4a6b-8c9d-0e1f2a3b4c5d"
@@ -33,7 +33,7 @@ private struct PlanBranchScenario {
     name = "core"
     root = "Core"
     language = "python"
-    kind = "pytest"
+    kind = "python"
     test = "pytest"
     test_globs = ["Core/tests/**/*.py"]
     packs = []

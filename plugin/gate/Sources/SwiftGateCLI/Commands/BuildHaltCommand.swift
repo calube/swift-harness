@@ -151,7 +151,8 @@ struct BuildHaltCommand: AsyncParsableCommand {
     commandName: "halt",
     abstract: "Record that a build run stopped to ask a person, and why.",
     discussion:
-      "Writes build.halt to the main checkout's .harness/events/build.jsonl: the build run, the "
+      "Writes build.halt to the main checkout's .harness/events/build.jsonl, or in a brownfield "
+      + "clone to <git-common-dir>/swift-harness/events/build.jsonl: the build run, the "
       + "task and the reason, never the question's text. A halt no resume answers stays open. "
       + "Exit 0 recorded, or nothing to record with [telemetry] enabled = false; 2 for a --run "
       + "or --task that isn't an id, or a store that can't be read or written; 64 for an "

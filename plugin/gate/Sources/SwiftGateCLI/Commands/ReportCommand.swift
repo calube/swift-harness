@@ -89,8 +89,10 @@ enum ReportRun {
     let state = StateRootResolver.resolve(worktree: root)
     let input: RunViewInput
     do {
-      input = try RunViewReader(commonDirectory: commonDirectory, stateRoot: state)
-        .read(buildRun: buildRun)
+      input = try RunViewReader(
+        commonDirectory: commonDirectory, stateRoot: state,
+        profile: BuildPresetCatalog.profile(root: root)
+      ).read(buildRun: buildRun)
     } catch {
       return blocked("\(error)")
     }

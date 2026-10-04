@@ -24,6 +24,45 @@ struct BrownfieldConfigTOMLTests {
     let again = try TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOML.render(config))
     #expect(again == config)
   }
+
+  @Test(
+    "a [judge] table reads as the owned profile's judge settings and renders back byte for byte — catches a brownfield clone that can never name a judge, so the slice judge stays advisory"
+  )
+  func judgeRoundTrips() throws {
+    let judge = """
+      [judge]
+      backend = "jev"
+      model = "jev-1.13.0"
+      send_to = "api.typesafe.ai"
+      advisory_threshold = 0.6
+      block_threshold = 0.9
+
+      """
+    let text = BrownfieldConfigTOMLSample.text.replacingOccurrences(
+      of: "[build.presets.brownfield]", with: judge + "\n[build.presets.brownfield]")
+    let config = try TOMLConfigDecoder().decodeBrownfield(text)
+    #expect(
+      config.judge
+        == .enabled(
+          backend: .jev, thresholds: JudgeThresholds(advisory: 0.6, block: 0.9),
+          model: "jev-1.13.0"))
+    #expect(BrownfieldConfigTOML.render(config) == text)
+  }
+
+  @Test(
+    "a [judge] key holding a credential is refused by name — catches a brownfield config that stores an API key"
+  )
+  func judgeSecretRefused() {
+    let text = BrownfieldConfigTOMLSample.text.replacingOccurrences(
+      of: "[build.presets.brownfield]",
+      with: "[judge]\nbackend = \"claude\"\napi_key = \"sk\"\n\n[build.presets.brownfield]")
+    let error = #expect(throws: ConfigLoadError.self) {
+      try TOMLConfigDecoder().decodeBrownfield(text)
+    }
+    #expect(error.map { "\($0)" }?.contains("judge.api_key") == true, "\(String(describing: error))")
+    let plain = try? TOMLConfigDecoder().decodeBrownfield(BrownfieldConfigTOMLSample.text)
+    #expect(plain?.judge == .disabled)
+  }
 }
 
 enum BrownfieldConfigTOMLSample {

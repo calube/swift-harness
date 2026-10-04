@@ -37,6 +37,8 @@ const REVIEW_FINDING_KEYS = [
 const WORKER = 'swift-harness:build-worker'
 const REVIEWERS = { 'swift-harness:architecture': 'architecture', 'swift-harness:test-quality': 'test-quality' }
 const VERIFIER = 'swift-harness:verifier'
+// The agent that runs `swiftgate judge diff-risk` for classified review.
+const CLASSIFIER = 'general-purpose'
 
 const baseArgs = (extra = {}) => ({
   task: 'catalog-list-reducer',
@@ -140,7 +142,10 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 // `reviews[reviewer]` is a list of returns, one per review round. `verifies[reviewer]` is a list
 // of verifier answers, one per verify call for that reviewer: a function gets the findings it
 // was sent, and a missing entry confirms every finding.
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {} } = {}) {
+// `diffRisk` is what the diff-risk agent returns (a function gets the prompt, an Error is thrown);
+// by default the command printed no level because the clone has no judge.
+const noJudge = { level: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, diffRisk = noJudge } = {}) {
   const calls = []
   let inFlight = 0
   let maxReviewersInFlight = 0
@@ -153,6 +158,10 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       const next = workers[n - 1]
       assert.ok(next !== undefined, `unexpected worker call ${n}`)
       return typeof next === 'function' ? next(prompt) : structuredClone(next)
+    }
+    if (opts.agentType === CLASSIFIER) {
+      if (diffRisk instanceof Error) throw diffRisk
+      return typeof diffRisk === 'function' ? diffRisk(prompt) : structuredClone(diffRisk)
     }
     if (opts.agentType === VERIFIER) {
       assert.equal(opts.phase, 'Verify', `the verifier ran as a discovery reviewer (label ${opts.label})`)
@@ -181,9 +190,10 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   const logs = []
   const result = await script(args, agent, message => logs.push(message))
   const workerCalls = calls.filter(c => c.opts.agentType === WORKER)
-  const reviewerCalls = calls.filter(c => c.opts.agentType !== WORKER && c.opts.agentType !== VERIFIER)
+  const reviewerCalls = calls.filter(c => ![WORKER, VERIFIER, CLASSIFIER].includes(c.opts.agentType))
   const verifyCalls = calls.filter(c => c.opts.agentType === VERIFIER)
-  return { result, calls, workerCalls, reviewerCalls, verifyCalls, maxReviewersInFlight, logs }
+  const classifierCalls = calls.filter(c => c.opts.agentType === CLASSIFIER)
+  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, maxReviewersInFlight, logs }
 }
 
 // The contract `build check-return` decodes: exactly TaskReturn's keys, `review` always filled.
@@ -725,6 +735,50 @@ const tests = {
     assert.match(result.notes, /diff-risk/)
     assert.ok(logs.some(l => /diff-risk/.test(l)), 'the medium fallback is not logged')
     assertTaskReturn(result, 'classified')
+  },
+
+  async 'classified review takes its depth from swiftgate judge diff-risk: low runs the gate only, high the full review — catches every brownfield task reviewed at medium whatever its risk'() {
+    const low = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'low', reason: null, exitStatus: 0 } })
+    assert.equal(low.result.outcome, 'ready-to-merge')
+    assert.equal(low.reviewerCalls.length, 0, 'a low-risk change was reviewed')
+    assert.match(low.result.notes, /classified at low by swiftgate judge diff-risk/)
+    assertTaskReturn(low.result, 'classified')
+
+    const high = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: { level: 'high', reason: null, exitStatus: 0 } })
+    assert.deepEqual(high.reviewerCalls.map(c => c.opts.agentType).sort(), ['swift-harness:architecture', 'swift-harness:test-quality'])
+    assert.match(high.result.notes, /classified at high/)
+
+    const call = high.classifierCalls[0]
+    assert.equal(high.classifierCalls.length, 1)
+    assert.ok(call.prompt.includes('cd /work/search-task && swiftgate judge diff-risk --base search/plan --json'), call.prompt)
+    assert.equal(call.opts.model, 'claude-sonnet-5-5')
+    const rooted = await run(brownfieldArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [brownfieldReturn()], diffRisk: { level: 'low', reason: null, exitStatus: 0 },
+    })
+    assert.ok(rooted.classifierCalls[0].prompt.includes('/plugins/swift-harness/bin/swiftgate judge diff-risk'))
+  },
+
+  async 'a diff-risk agent that fails or answers outside the levels falls back to medium and logs why — catches a broken classifier skipping review or crashing the task'() {
+    for (const diffRisk of [new Error('agent died'), { level: 'critical', reason: null, exitStatus: 0 }, { level: 'low', reason: null, exitStatus: 2 }, null]) {
+      const { result, reviewerCalls, logs } = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk })
+      assert.deepEqual(reviewerCalls.map(c => c.opts.agentType), ['swift-harness:test-quality'], JSON.stringify(diffRisk))
+      assert.match(result.notes, /classified at medium, because diff-risk gave no level/)
+      assert.ok(logs.some(l => /diff-risk gave no level/.test(l)), JSON.stringify(logs))
+    }
+    const { logs } = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: new Error('agent died') })
+    assert.ok(logs.some(l => l.includes('agent died')), JSON.stringify(logs))
+  },
+
+  async 'diff-risk is asked once per task, after a green gate, and never in the owned profile — catches a fix pass re-rating the task or an owned build paying for a classifier'() {
+    const behave = {
+      workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: 'r-red' }, redReason: 'no-progress' }), brownfieldReturn()],
+      diffRisk: { level: 'low', reason: null, exitStatus: 0 },
+    }
+    const fixed = await run(brownfieldArgs(), behave)
+    assert.equal(fixed.classifierCalls.length, 1)
+    assert.equal(fixed.result.outcome, 'ready-to-merge')
+    const owned = await run(baseArgs())
+    assert.equal(owned.classifierCalls.length, 0)
   },
 
   async 'brownfield-only modes fail under an owned task gate, and owned modes under a slice gate — catches a preset mixing the profiles'() {

@@ -48,9 +48,8 @@ enum BrownfieldSliceCheck {
           root: root, layout: merge.layout, runner: merge.runner, deadline: liveDeadline),
         trackedTree: merge.trackedTree, tree: merge.tree,
         warmTestMilliseconds: { _, _ in nil },
-        judgeAssertion: { _, _ in
-          .unanswered("no judge backend is wired for the brownfield profile")
-        },
+        judgeAssertion: BrownfieldJudge.assertionJudge(
+          BrownfieldJudge.live(merge.config.judge, root: root)),
         deadline: liveDeadline)
     }
   }

@@ -73,6 +73,7 @@ struct NewSubcommandRegistrationTests {
     ("judge --ready", ["judge", "--ready"], "tests"),
     ("judge tests --ready", ["judge", "tests", "--ready"], "tests"),
     ("judge ask", ["judge", "ask", "--input", "-"], "ask"),
+    ("judge diff-risk", ["judge", "diff-risk", "--base", "swift-harness/plan", "--json"], "diff-risk"),
     (
       "judge ask --backend",
       [

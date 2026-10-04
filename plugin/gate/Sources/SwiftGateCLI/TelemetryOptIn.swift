@@ -4,9 +4,24 @@ import SwiftGateDomain
 
 /// Whether a checkout records events, under the profile its clone runs.
 enum TelemetryOptIn {
-  /// `[telemetry] enabled` of the checkout's config; `nil` outside a project.
+  /// `[telemetry] enabled` of an owned repository's `.swiftgate.toml`; always on in a brownfield
+  /// clone, whose events stay under the git dir (design §12); `nil` outside a project.
   static func enabled(root: URL) -> Result<Bool?, StaticCheckInputs.ConfigFailure> {
-    StaticCheckInputs.loadConfig(root: root).map { $0?.telemetry.enabled }
+    guard let common = ConfigLoader.commonDirectory(enclosing: root) else {
+      return StaticCheckInputs.loadConfig(root: root).map { $0?.telemetry.enabled }
+    }
+    do throws(ProfileLoadError) {
+      switch try ConfigLoader().loadProfile(repositoryRoot: root, commonDir: common) {
+      case nil: return .success(nil)
+      case .owned(let config): return .success(config.telemetry.enabled)
+      case .brownfield: return .success(true)
+      }
+    } catch {
+      let outcome: StaticCheckOutcome =
+        error.verdict == .red
+        ? .invalid(reason: error.description) : .blocked(reason: error.description)
+      return .failure(StaticCheckInputs.ConfigFailure(outcome: outcome))
+    }
   }
 
   /// The checkout's event writer: `nil` outside a project or for a config that doesn't load, and

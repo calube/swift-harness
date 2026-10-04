@@ -117,8 +117,10 @@ Workflow({
 - Under the brownfield preset, whose task gate is `slice`, also pass `stateRoot`, the worktree's
   `$(git -C <worktree> rev-parse --absolute-git-dir)/swift-harness`, and `base`, the plan branch
   the task branched from. The worker writes `task-status.json` and reads its runs there, where
-  `build check-return` looks. `model` must be a pinned id, and `classified` review runs at `medium`
-  (1 reviewer) and says so in the return's `notes` until a diff-risk answer reaches the workflow.
+  `build check-return` looks. `model` must be a pinned id. `classified` review takes its depth
+  from `swiftgate judge diff-risk --base <base> --json` after the first green gate: `low` the gate
+  only, `medium` 1 Sonnet reviewer, `high` the full review. With no level it runs at `medium` and
+  says why in the log and the return's `notes`. Pass `pluginRoot` so the workflow names the shim.
 
 Unknown or missing args make the workflow throw `build-task: …` at once: that is a skill bug, so fix
 the args and relaunch, and don't count it as the task's attempt.

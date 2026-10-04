@@ -45,6 +45,14 @@ public enum BrownfieldConfigTOML {
         "line_sha = \(quoted(entry.lineSHA))", "reason = \(quoted(entry.reason))", "",
       ]
     }
+    if case .enabled(let backend, let thresholds, let model) = config.judge {
+      lines += ["[judge]", "backend = \(quoted(backend.rawValue))"]
+      if let model { lines.append("model = \(quoted(model))") }
+      if let host = backend.egressHost { lines.append("send_to = \(quoted(host))") }
+      lines += [
+        "advisory_threshold = \(thresholds.advisory)", "block_threshold = \(thresholds.block)", "",
+      ]
+    }
     for name in config.buildPresets.keys.sorted() {
       let preset = config.buildPresets[name]!
       let taskGate =
