@@ -31,9 +31,10 @@ public enum SimAuditScope: Sendable, Equatable {
     }
   }
 
-  /// The 1 note for `count` findings this scope left out; `nil` when it judged every control or
-  /// left nothing out.
-  func note(untargeted count: Int) -> SimVerifyNote? {
+  /// The 1 note for the findings this scope left out: `count` on controls no step selects, and
+  /// `navigated` on controls steps select only to move through the app. `nil` when it judged
+  /// every control or left nothing out.
+  func note(untargeted count: Int, navigated: Int = 0) -> SimVerifyNote? {
     let findings = count == 1 ? "1 finding" : "\(count) findings"
     switch self {
     case .everyControl:
@@ -126,6 +127,12 @@ public struct SimSelector: Sendable, Equatable {
     }
     for step in steps { visit(.object(step.input), key: nil) }
     return found
+  }
+
+  /// Whether `element` satisfies every term of an alternative holding an `id` term: the selector
+  /// names it by the identifier the change's contract gives it, not by text or role it inherits.
+  public func namesIdentifier(_ element: SimElement) -> Bool {
+    false
   }
 
   /// Whether `element` satisfies every term of some alternative, compared as the pin compares:

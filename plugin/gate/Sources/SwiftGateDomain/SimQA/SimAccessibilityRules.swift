@@ -8,9 +8,10 @@ public enum SimAccessibilityRules {
     tree.elements.filter(\.isInteractive).flatMap { findings($0, step: step) }
   }
 
-  /// The findings `scope` judges over `tree`, and how many findings it left out.
+  /// The findings `scope` judges over `tree`, and how many it left out: `untargeted` on controls
+  /// no selector matches, `navigated` on controls a selector matches only by label, role or text.
   public static func audit(_ tree: SimTree, step: SimStep, scope: SimAuditScope)
-    -> (findings: [SimEvidenceFinding], untargeted: Int)
+    -> (findings: [SimEvidenceFinding], untargeted: Int, navigated: Int)
   {
     var judged: [SimEvidenceFinding] = []
     var untargeted = 0
@@ -24,7 +25,7 @@ public enum SimAccessibilityRules {
         }
       if inScope { judged += found } else { untargeted += found.count }
     }
-    return (judged, untargeted)
+    return (judged, untargeted, 0)
   }
 
   private static func findings(_ element: SimElement, step: SimStep) -> [SimEvidenceFinding] {
