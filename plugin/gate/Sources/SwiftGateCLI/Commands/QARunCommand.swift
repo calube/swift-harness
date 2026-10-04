@@ -114,18 +114,18 @@ enum QARunRun {
 
     var merged: Set<String>?
     if !options.atBase || options.after != nil {
-      let ledger: Ledger
+      let progress: LedgerProgress
       do throws(PlanStateStoreError) {
-        ledger = try PlanStateStore(plan: plan).ledger()
+        progress = try PlanStateStore(plan: plan).ledgerProgress()
       } catch {
         return blocked("reading \(plan.ledgerFile): \(error)", plan: slug)
       }
-      if let after = options.after, !ledger.tasks.contains(where: { $0.id == after }) {
+      if let after = options.after, !progress.contains(after) {
         return blocked(
           "--after `\(after)` names no task in \(plan.ledgerFile); no row ran", plan: slug)
       }
       if !options.atBase {
-        merged = Set(ledger.tasks.filter { $0.status == .done }.map(\.id))
+        merged = progress.merged
       }
     }
     let runPlan = QARunPlan.make(table: table, merged: merged, after: options.after)

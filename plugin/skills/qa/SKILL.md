@@ -9,9 +9,23 @@ This skill decides what to try in the app. `swiftgate` decides whether it worked
 comes from `sim verify`, and a prepared row's result from `qa run`. The skill never re-checks a
 screen another way.
 
-`SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the repository toplevel, in the
-foreground. Read only `verdict`, `findings[]` and the fields named below from `--json` output; the
-evidence stays under `.harness/runs/<runID>/`, so open it only to explain a finding.
+`SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Run every command from the repository toplevel. Read
+only `verdict`, `findings[]` and the fields named below from `--json` output; the evidence stays
+under `.harness/runs/<runID>/`, so open it only to explain a finding.
+
+## Foreground work
+
+A headless session ends when a turn ends with only background Bash work left, and that work dies
+with it: a `qa run` cut short leaves no report and no verdict. On a cold cache, the first
+`swiftgate` call also builds the binary, which can take minutes. So, before step 1, warm it:
+
+```bash
+"$SG" --version
+```
+
+Give that call, and every `qa run` and `sim up`, `sim snap`, `sim down` and `sim verify` after it,
+the Bash tool's `timeout` at 600000, its longest. Never pass `run_in_background` to one and never
+end one with a shell `&`.
 
 ## 1. Run the prepared rows
 

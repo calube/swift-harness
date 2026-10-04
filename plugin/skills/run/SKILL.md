@@ -72,11 +72,13 @@ nothing merged.
 ## Foreground work
 
 A headless run ends when a turn ends with only background Bash work left, and that work dies
-with it: a gate cut short leaves no run and no verdict. So every `check`, `qa run`, `build
-cutoff` and area command runs in the foreground, with the Bash tool's `timeout` at 600000, its
-longest. Never pass `run_in_background` to one and never end one with a shell `&`. The 1 kind of
-background work in a run is the Workflow and Agent tool calls, which keep the session alive until
-they return; no timer runs beside them.
+with it: a gate cut short leaves no run and no verdict. On a cold cache, the first `swiftgate`
+call also builds the binary, which can take minutes, so before step 1 warm it with
+`"$SG" --version`. That call and every `check`, `qa run`, `build cutoff` and area command run in
+the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
+`run_in_background` to one and never end one with a shell `&`. The 1 kind of background work in a
+run is the Workflow and Agent tool calls, which keep the session alive until they return; no timer
+runs beside them.
 
 ## 1. Read the spec
 
@@ -137,8 +139,8 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
 - **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
   step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
-  `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`.
-  Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
+  `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`,
+  which proves only the tests that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
   running, is marked as unknown; `slice` measures it.
 
 Never edit `<config>` by hand.

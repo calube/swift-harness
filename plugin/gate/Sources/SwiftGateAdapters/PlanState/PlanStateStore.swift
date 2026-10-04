@@ -51,6 +51,16 @@ public struct PlanStateStore: Sendable {
     }
   }
 
+  /// Each task's id and status from `ledger.json`, for a reader that needs nothing else.
+  public func ledgerProgress() throws(PlanStateStoreError) -> LedgerProgress {
+    let data = try read(plan.ledgerFile)
+    do {
+      return try LedgerProgressJSON.decode(data)
+    } catch {
+      throw .malformed(path: plan.ledgerFile, detail: "\(error)")
+    }
+  }
+
   private func read(_ path: String) throws(PlanStateStoreError) -> Data {
     guard FileManager.default.fileExists(atPath: path) else { throw .missing(path: path) }
     do {

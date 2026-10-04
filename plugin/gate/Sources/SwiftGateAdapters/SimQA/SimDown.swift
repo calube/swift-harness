@@ -5,6 +5,7 @@ import SwiftGateDomain
 /// the run's `agent-device` session, remove the lease so the holder gives the device back, wait
 /// for the holder to exit and the device to go, then release `agent-device`'s stale claims on the
 /// device. With no lease to release it does nothing and succeeds, so a second call is harmless.
+/// `gc` and each holder's orphan sweep run the same release on every lease a dead holder left.
 public struct SimDown: Sendable {
   public struct Request: Sendable {
     /// The caller's canonical worktree root.
@@ -71,6 +72,34 @@ public struct SimDown: Sendable {
     }
   }
 
+  /// Releases every lease on the machine whose holder has died, whichever worktree wrote it: a
+  /// dead holder can't give anything back itself. Each goes through the same release as
+  /// `sim down`.
+  ///
+  /// - Parameter simDirectory: the run's `sim/` folder for its lease, where a problem is logged;
+  ///   `nil` (the lease's worktree is gone) logs nothing.
+  public func sweepDeadHolders(simDirectory: @Sendable (SimLease) -> URL?) async -> SimLeaseSweep {
+    var sweep = SimLeaseSweep()
+    let listing: SimLeaseListing
+    do {
+      listing = try dependencies.leases.all()
+    } catch {
+      sweep.problems.append("leases not swept: \(error.message)")
+      return sweep
+    }
+    sweep.notes = listing.unreadable.map { "unreadable lease skipped: \($0.message)" }
+    for lease in listing.leases where !dependencies.isAlive(lease.holderPID) {
+      let store = simDirectory(lease).map { SimRunStore(simDirectory: $0) }
+      do throws(SimDownFailure) {
+        _ = try await release(lease, store: store, notes: [])
+        sweep.released.append(lease.runID)
+      } catch {
+        sweep.problems.append(error.message)
+      }
+    }
+    return sweep
+  }
+
   private func down(_ request: Request) async throws(SimDownFailure) -> SimDowned {
     var notes: [String] = []
     guard let lease = try resolve(request, notes: &notes) else {
@@ -105,7 +134,8 @@ public struct SimDown: Sendable {
     }
   }
 
-  private func release(_ lease: SimLease, store: SimRunStore, notes: [String])
+  /// - Parameter store: where problems are logged; `nil` logs nothing.
+  private func release(_ lease: SimLease, store: SimRunStore?, notes: [String])
     async throws(SimDownFailure) -> SimDowned
   {
     var notes = notes
@@ -131,11 +161,12 @@ public struct SimDown: Sendable {
     }
 
     if !driverProblems.isEmpty {
-      for problem in driverProblems { store.appendLog("sim down: \(problem)") }
+      for problem in driverProblems { store?.appendLog("sim down: \(problem)") }
+      let log = store.map { "; see \($0.agentDeviceLog.path)" } ?? ""
       throw SimDownFailure(
         rule: .driverFailed,
         message: "run \(runID) gave back \(lease.udid), but "
-          + driverProblems.joined(separator: "; ") + "; see \(store.agentDeviceLog.path)",
+          + driverProblems.joined(separator: "; ") + log,
         runID: runID)
     }
     return SimDowned(outcome: .released(runID: runID, udid: lease.udid), notes: notes)
@@ -290,5 +321,32 @@ public struct SimDown: Sendable {
           runID: lease.runID)
       }
     }
+  }
+}
+
+extension SimDown {
+  /// The production wiring: `agent-device`, `xcrun simctl`, the machine-wide lease store and the
+  /// user's crash report folder.
+  public static func live(runner: any ProcessRunner) -> SimDown {
+    SimDown(
+      dependencies: Dependencies(
+        agentDevice: LiveAgentDevice(runner: runner),
+        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+        simctl: LiveSimctl(runner: runner),
+        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
+        isAlive: SimulatorClones.processIsAlive, clock: .continuous()))
+  }
+
+  /// The lease's run `sim/` folder in its worktree's state root, or `nil` when that worktree is
+  /// gone, so a sweep never recreates a removed worktree to log into it.
+  public static func simDirectory(for lease: SimLease) -> URL? {
+    var isDirectory: ObjCBool = false
+    guard FileManager.default.fileExists(atPath: lease.worktree, isDirectory: &isDirectory),
+      isDirectory.boolValue
+    else { return nil }
+    return StateRootResolver.resolve(
+      worktree: URL(filePath: lease.worktree, directoryHint: .isDirectory)
+    )
+    .url(SimSession.directory(runID: lease.runID), directoryHint: .isDirectory)
   }
 }

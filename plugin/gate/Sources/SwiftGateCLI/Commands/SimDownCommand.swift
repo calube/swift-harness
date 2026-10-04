@@ -26,14 +26,7 @@ struct SimDownCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let state = StateRootResolver.resolve(worktree: root)
-    let runner = LiveProcessRunner()
-    let down = SimDown(
-      dependencies: SimDown.Dependencies(
-        agentDevice: LiveAgentDevice(runner: runner),
-        leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
-        simctl: LiveSimctl(runner: runner),
-        crashReports: CrashReportReader(directory: CrashReportReader.defaultDirectory()),
-        isAlive: SimulatorClones.processIsAlive, clock: .continuous()))
+    let down = SimDown.live(runner: LiveProcessRunner())
     let result = await down.run(
       SimDown.Request(
         worktree: CanonicalPath.of(root), runID: runID,

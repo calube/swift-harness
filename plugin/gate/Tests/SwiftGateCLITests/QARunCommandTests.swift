@@ -354,6 +354,33 @@ struct QARunCommandTests {
   }
 
   @Test(
+    "a plain qa run reads each task's merged status from a ledger with no waves key, as --at-base runs without one — catches the same plan passing at base and BLOCKED on the branch"
+  )
+  func ledgerWithoutWaves() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [
+        validationRow("req-save", .acceptance, "exit 0", after: ["save-ui"]),
+        validationRow("req-list", .acceptance, "exit 0", after: ["list-ui"]),
+      ], tasks: ["save-ui": .done, "list-ui": .pending])
+    let ledgerFile = repo.planDirectory.appending(path: "ledger.json")
+    var ledger = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: ledgerFile)) as? [String: Any])
+    #expect(ledger.removeValue(forKey: "waves") != nil)
+    try JSONSerialization.data(withJSONObject: ledger).write(to: ledgerFile)
+
+    let report = await repo.run(QARunRun.Options())
+    let after = await repo.run(QARunRun.Options(after: "list-ui"), suffix: 2)
+
+    #expect(report.verdict == .green, "\(report.message)")
+    #expect(report.rows.map(\.result) == [.pass, .waiting])
+    #expect(report.rows.last?.waitingOn == ["list-ui"])
+    #expect(after.rows.map(\.requirement) == ["req-list"])
+    #expect(after.rows.map(\.result) == [.pass])
+  }
+
+  @Test(
     "with no --plan it takes the 1 plan holding a validation.json, is GREEN with a note when none does, and BLOCKED naming each when 2 do — catches rows run from the wrong plan"
   )
   func planChoice() async throws {

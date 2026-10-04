@@ -29,6 +29,25 @@ struct SimSnapCommandTests {
   }
 
   @Test(
+    "sim snap takes an --assert value that starts with a dash, such as -2, before or after the run id — catches a negative count parsed as an unknown flag"
+  )
+  func dashValueAssert() throws {
+    let before = try #require(
+      try SwiftGate.parseAsRoot([
+        "sim", "snap", "after decrement", "--assert", "-2", "20261004T120000Z-1a2b3c4d",
+      ]) as? SimSnapCommand)
+    let after = try #require(
+      try SwiftGate.parseAsRoot([
+        "sim", "snap", "after decrement", "20261004T120000Z-1a2b3c4d", "--assert", "-2", "--json",
+      ]) as? SimSnapCommand)
+
+    #expect(before.assert == "-2")
+    #expect(before.runID == "20261004T120000Z-1a2b3c4d")
+    #expect(after.assert == "-2")
+    #expect(after.json)
+  }
+
+  @Test(
     "sim snap prints a failure as JSON with --json and as text without — catches a refusal a calling skill can't parse"
   )
   func printsFailure() throws {
