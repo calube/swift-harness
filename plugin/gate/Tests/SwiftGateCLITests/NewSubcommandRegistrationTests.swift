@@ -205,6 +205,26 @@ struct NewSubcommandRegistrationTests {
       "allow"
     ),
     ("plan import", ["plan", "import", "example-plan"], "import"),
+    ("report --html", ["report", "--html", "20261003T120000Z-1a2b3c4d"], "report"),
+    (
+      "report --json --out",
+      ["report", "--json", "20261003T120000Z-1a2b3c4d", "--out", "run.json"], "report"
+    ),
+    ("view", ["view"], "view"),
+    (
+      "view --build-run --port",
+      ["view", "--build-run", "20261003T120000Z-1a2b3c4d", "--port", "8123"], "view"
+    ),
+    (
+      "events span start",
+      [
+        "events", "span", "start", "--phase", "worker", "--build-run",
+        "20261003T120000Z-1a2b3c4d", "--task", "example-task", "--role", "build-worker",
+        "--parent", "0123456789abcdef",
+      ],
+      "start"
+    ),
+    ("events span end", ["events", "span", "end", "0123456789abcdef", "--outcome", "ok"], "end"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state

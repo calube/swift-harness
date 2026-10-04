@@ -57,10 +57,12 @@ public struct GateStepTiming: Sendable, Equatable {
   public let derivedData: GateDerivedData
   /// The brownfield area the step ran for; `nil` for a step that isn't 1 area's.
   public let area: String?
+  /// The step's start, in milliseconds after its gate's start; `nil` when not timed.
+  public let startMs: Int?
 
   public init(
     step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
-    derivedData: GateDerivedData, area: String? = nil
+    derivedData: GateDerivedData, area: String? = nil, startMs: Int? = nil
   ) {
     self.step = step
     self.tier = tier
@@ -68,6 +70,7 @@ public struct GateStepTiming: Sendable, Equatable {
     self.verdict = verdict
     self.derivedData = derivedData
     self.area = area
+    self.startMs = startMs
   }
 }
 
@@ -204,6 +207,9 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
   public let derivedData: GateDerivedData
   /// The brownfield area the step ran for.
   public let area: String?
+  /// The step's start, in milliseconds after its gate's start; `nil` on a line written before
+  /// steps were timed from the start, so a reader lays those end to end.
+  public let startMs: Int?
 
   public init(_ timing: GateStepTiming) {
     self.tier = timing.tier
@@ -212,10 +218,11 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
     self.verdict = timing.verdict
     self.derivedData = timing.derivedData
     self.area = timing.area
+    self.startMs = timing.startMs
   }
 
   private enum CodingKeys: String, CodingKey {
-    case tier, step, verdict, derivedData, area
+    case tier, step, verdict, derivedData, area, startMs
     case milliseconds = "ms"
   }
 }
