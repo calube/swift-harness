@@ -133,7 +133,9 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
    its `notes` from there.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
-4. `"$SG" build merge <slug> <task> --session <session> --json`, then
+4. `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
+   its own command: `build merge` refuses unless the build run's newest check of this return is
+   GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`). Then
    `"$SG" check --tier <mergeGate>` on main (with a plan surface,
    `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.

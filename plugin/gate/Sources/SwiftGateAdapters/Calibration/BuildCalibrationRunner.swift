@@ -405,16 +405,17 @@ struct Sandbox {
         throw .blocked("can't read the sandbox's run history: \(error)")
       }
       if let record = history.records.last(where: { $0.runID == runID }) {
-        gateRun = .init(
-          tier: TaskReturnEvidence.GateRun.tier(ofCommand: record.command),
-          verdict: record.verdict, steps: record.steps ?? [],
-          proofBases: record.proofBases ?? [])
+        gateRun = .init(record: record)
       }
+    }
+    var lastCommit: String?
+    if let last = taskReturn.commits.last, commits[last] == .onBranch {
+      lastCommit = try await revision(last)
     }
     let evidence = TaskReturnEvidence(
       branch: branch, branchExists: tip != nil, commits: commits, gateRun: gateRun,
       taskGate: gate, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: surface,
-      taskGateStepsRequired: taskGateStepsRequired)
+      taskGateStepsRequired: taskGateStepsRequired, lastCommit: lastCommit)
     var problems = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       .filter { $0.rule != .reviewMissing }.map { "\($0.rule.rawValue): \($0.message)" }
     if taskReturn.task != taskID {

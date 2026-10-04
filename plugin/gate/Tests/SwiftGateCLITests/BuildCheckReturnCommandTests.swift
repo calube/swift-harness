@@ -124,7 +124,8 @@ private struct SurfaceReturnScenario {
       findings: [])
     try RunStore(worktreeRoot: worktree).record(
       report, finishedAt: Self.finishedAt, command: "check push",
-      steps: ["prove", "mutate", "impact", "coverage", "app-build"], proofBases: [surface])
+      steps: ["prove", "mutate", "impact", "coverage", "app-build"], proofBases: [surface],
+      headCommit: commit, dirty: false)
     let taskReturn = TaskReturn(
       task: Self.task, outcome: .readyToMerge, commits: [commit],
       gate: .init(tier: .push, verdict: .green, runID: runID),

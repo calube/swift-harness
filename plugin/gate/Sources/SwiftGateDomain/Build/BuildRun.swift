@@ -423,7 +423,12 @@ public struct BuildEventLog: Sendable, Equatable {
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;
   /// `nil` when none was recorded.
   public func latestReturnCheck(task: String, fix: Bool) -> BuildEvent.ReturnCheck? {
-    nil
+    for event in events.reversed() {
+      if case .returnCheck(let check) = event, check.task == task, check.fix == fix {
+        return check
+      }
+    }
+    return nil
   }
 }
 

@@ -57,8 +57,28 @@ private struct MergeScenario {
 
   func main() async throws -> String { try await repo.git("rev-parse", "main") }
 
-  func merge(_ task: String, fix: Bool = false) async -> BuildMergeReport {
-    await flow(task, fix: fix).merge()
+  /// Merges as the build skill does: after a GREEN `build check-return` of the branch's tip,
+  /// unless `checked` is false.
+  func merge(_ task: String, fix: Bool = false, checked: Bool = true) async -> BuildMergeReport {
+    if checked {
+      let branch = "\(Self.plan)/\(fix ? "fix-" : "")\(task)"
+      if let tip = try? await repo.git("rev-parse", "--verify", "-q", "refs/heads/\(branch)") {
+        try? await check(task, fix: fix, verdict: .green, commit: tip)
+      }
+    }
+    return await flow(task, fix: fix).merge()
+  }
+
+  /// Records a `build check-return` verdict in the build run as the command does.
+  func check(
+    _ task: String, fix: Bool = false, verdict: Verdict, commit: String?,
+    checkID: String = "check-\(UUID().uuidString)", rules: [TaskReturnFinding.Rule] = []
+  ) async throws {
+    try await run.append(
+      .returnCheck(
+        .init(
+          task: task, fix: fix, verdict: verdict, commit: commit, checkID: checkID, rules: rules,
+          at: Self.at)))
   }
 
   func undo(_ task: String) async -> BuildMergeReport {
@@ -389,8 +409,9 @@ struct BuildMergeTests {
         arguments: ["merge"], status: .exited(128),
         stderr: "untracked working tree files would be overwritten by merge"))
     let merger = FakeMergeRunner(
-      commits: ["refs/heads/main": "pre"], mergeFailure: refusal)
+      commits: ["refs/heads/main": "pre", "refs/heads/search/t1": "tip"], mergeFailure: refusal)
     let workspace = FakeGitWorkspace(branches: ["search/t1"])
+    try await scenario.check("t1", verdict: .green, commit: "tip")
 
     let report = await BuildMerge(
       plan: MergeScenario.plan, task: "t1", git: scenario.repo.adapter, workspace: workspace,
@@ -430,7 +451,7 @@ struct BuildMergeTests {
     #expect(report.postCommit == post)
     #expect(try await scenario.repo.git("rev-parse", "main^2") == fixTip)
     #expect(
-      try scenario.run.events().events == [
+      try scenario.run.events().events.filter { $0.kind != .returnCheck } == [
         .merge(
           .init(
             task: "t1", preCommit: pre, postCommit: try #require(first.postCommit),
@@ -478,5 +499,117 @@ struct BuildMergeTests {
 
     #expect(report.status == .refused, "\(report.message)")
     #expect(try await scenario.main() == moved)
+  }
+
+  @Test(
+    "memos-5's fix merge, run 1 s after its RED check-return, is refused naming the check, its rule and build-merge.return-not-green, and main stays put — catches a merge after a RED check"
+  )
+  func mergeAfterRedCheckRefused() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let fixTip = try await scenario.taskBranch("fix-t1", "C.swift", "c\n")
+    let checks = try Memos5.webChecksBeforeFixMerge()
+    #expect(checks.map(\.verdict) == [.green, .red], "memos-5 checked web GREEN, then its fix RED")
+    for captured in checks {
+      try await scenario.check(
+        "t1", fix: captured.fix, verdict: captured.verdict, commit: fixTip,
+        checkID: captured.checkID, rules: captured.rules)
+    }
+    let pre = try await scenario.main()
+
+    let report = await scenario.merge("t1", fix: true, checked: false)
+
+    #expect(report.status == .refused, "\(report.message)")
+    #expect(report.reason == .returnNotGreen)
+    #expect(report.verdict == .red)
+    #expect(report.message.contains("build-merge.return-not-green"))
+    #expect(report.message.contains("149F4D00-BC19-467E-B18F-8E330C1B6A00"))
+    #expect(report.message.contains("build-return.outside-write-set-unexplained"))
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+  }
+
+  @Test(
+    "a branch with no check-return recorded is refused return-unchecked, and a GREEN check of the task's own return doesn't license merging its fixer's branch — catches a merge with no check, or one return's check spent on another"
+  )
+  func uncheckedReturnRefused() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let fixTip = try await scenario.taskBranch("fix-t1", "C.swift", "c\n")
+    let pre = try await scenario.main()
+
+    let unchecked = await scenario.merge("t1", checked: false)
+    try await scenario.check("t1", verdict: .green, commit: tip)
+    try await scenario.check("t1", verdict: .green, commit: fixTip)
+    let fixOnTaskCheck = await scenario.merge("t1", fix: true, checked: false)
+
+    #expect(unchecked.reason == .returnUnchecked, "\(unchecked.message)")
+    #expect(unchecked.message.contains("build-merge.return-unchecked"))
+    #expect(fixOnTaskCheck.reason == .returnUnchecked, "\(fixOnTaskCheck.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+  }
+
+  @Test(
+    "a GREEN check of an earlier commit refuses a branch that has moved past it with return-stale, naming both commits, and a fresh GREEN check of the new tip merges — catches a merge of commits the GREEN check didn't cover"
+  )
+  func staleCheckRefused() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    let checked = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    try await scenario.check("t1", verdict: .green, commit: checked)
+    try await scenario.repo.git("switch", "-q", "\(MergeScenario.plan)/t1")
+    try scenario.repo.write("Unchecked.swift", "u\n")
+    let unchecked = try await scenario.repo.commitAll("feat: unreviewed extra")
+    try await scenario.repo.git("switch", "-q", "main")
+    let pre = try await scenario.main()
+
+    let stale = await scenario.merge("t1", checked: false)
+
+    #expect(stale.status == .refused, "\(stale.message)")
+    #expect(stale.reason == .returnStale)
+    #expect(stale.message.contains(checked) && stale.message.contains(unchecked))
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+    #expect(await scenario.merge("t1").status == .merged)
+  }
+}
+
+/// The fifth memos brownfield trial's captured `build.return-checked` events: its web task's
+/// checks up to the fix merge that landed 1 s after a RED one.
+private enum Memos5 {
+  struct Check {
+    let fix: Bool
+    let verdict: Verdict
+    let checkID: String
+    let rules: [TaskReturnFinding.Rule]
+  }
+
+  static let directory = URL(filePath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent()
+    .appending(path: "Fixtures/BuildReturn/memos-5", directoryHint: .isDirectory)
+
+  static func webChecksBeforeFixMerge() throws -> [Check] {
+    let log = BuildEventJSON.decode(
+      try Data(contentsOf: directory.appending(path: "build-events.jsonl")))
+    let merges = log.events.compactMap { event -> Date? in
+      guard case .merge(let merge) = event, merge.task == "share-view-limit-web" else {
+        return nil
+      }
+      return merge.at
+    }
+    let fixMerge = try #require(merges.last)
+    let events = try HarnessEventJSON.decode(
+      try Data(contentsOf: directory.appending(path: "return-checked.jsonl"))
+    ).events
+    return events.compactMap { event -> Check? in
+      guard case .buildReturnChecked(let checked) = event.payload,
+        checked.task == "share-view-limit-web", event.time <= fixMerge
+      else { return nil }
+      return Check(
+        fix: checked.fix, verdict: checked.verdict, checkID: event.eventID, rules: checked.rules)
+    }
   }
 }

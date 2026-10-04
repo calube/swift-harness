@@ -50,7 +50,8 @@ struct RunProvenanceTests {
     func evidence(reviewRequired: Bool) -> TaskReturnEvidence {
       TaskReturnEvidence(
         branch: "p/fix-t", branchExists: true, commits: ["abc1": .onBranch],
-        gateRun: .init(tier: .push, verdict: .green), taskGate: .push, taskStatus: nil,
+        gateRun: .init(tier: .push, verdict: .green, dirty: false), taskGate: .push,
+        taskStatus: nil,
         reviewRequired: reviewRequired, taskGateStepsRequired: reviewRequired)
     }
 
@@ -72,7 +73,7 @@ struct RunProvenanceTests {
     func evidence(proofRequired: Bool) -> TaskReturnEvidence {
       TaskReturnEvidence(
         branch: "p/t", branchExists: true, commits: ["abc1": .onBranch, "def2": .onBranch],
-        gateRun: .init(tier: .push, verdict: .green, steps: ["prove", "mutate"]),
+        gateRun: .init(tier: .push, verdict: .green, steps: ["prove", "mutate"], dirty: false),
         taskGate: .push, taskStatus: nil, proofRequired: proofRequired, surfaceCommit: .onBranch,
         taskGateStepsRequired: proofRequired)
     }

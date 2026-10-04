@@ -2229,6 +2229,29 @@ for line in open(sys.argv[1]):
 
 `grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
 
+### A stale task gate and a merge after a RED check
+
+The rest of `BuildReturn/memos-5/` is state the fifth brownfield trial on `usememos/memos` left in its clone `C`, after the run
+removed its task worktrees. The orchestrator wrote the 3 returns above byte for byte to its `returns/`, beside
+`fix-share-view-limit-web.json`, the fixer's return `build check-return` read. `task-gate-runs.jsonl` is the `gate.run` event of
+each run those returns cite, from the clone's gate event store: the store task's slice ran on a dirty tree at
+the contract commit, not at the task's own commit. `last-commits.txt` is `git rev-parse` of each return's last
+commit. `return-checked.jsonl` is the clone's 5 `build.return-checked` events, and `build-events.jsonl` is the
+build run's event log, whose second web merge landed 1 s after the fixer's RED check. From this directory:
+
+```sh
+C=<trial clone>/.git/swift-harness B=$C/plans/spec/build/20261004T160656Z-0ad8c7c2 F=BuildReturn/memos-5
+mkdir -p $F
+cp $B/returns/fix-share-view-limit-web.json $F/
+grep -E '"runID":"(20261004T160820Z-3c3ed983|20261004T160825Z-8924b00e|20261004T161750Z-62635ccf|20261004T161222Z-50cc3d46)"' \
+  $C/events/gate.jsonl | grep '"kind":"gate.run"' > $F/task-gate-runs.jsonl
+cp $C/events/build.jsonl $F/return-checked.jsonl
+cp $B/events.jsonl $F/build-events.jsonl
+for c in 990fd862 20e3afcf 0f470558 bae9f2f8; do echo "$c $(git -C $C/../.. rev-parse $c)"; done > $F/last-commits.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
+
 ## Brownfield trial: a contract landed before import
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
