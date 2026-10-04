@@ -46,18 +46,14 @@ struct BrownfieldConfigFileTests {
     let original = Data("schema = 1\n[harness]\nprofile = \"owned\"\n".utf8)
     try original.write(to: url)
     var called = false
-    let outcome: Result<BrownfieldConfig, BrownfieldConfigFileError>
-    do throws(BrownfieldConfigFileError) {
-      outcome = .success(
-        try BrownfieldConfigFile(url: url).update { config in
-          called = true
-          return config
-        })
-    } catch {
-      outcome = .failure(error)
+    let error = #expect(throws: BrownfieldConfigFileError.self) {
+      try BrownfieldConfigFile(url: url).update { config in
+        called = true
+        return config
+      }
     }
-    guard case .failure(.invalid(let path, _)) = outcome else {
-      Issue.record("expected invalid, got \(outcome)")
+    guard case .invalid(let path, _) = error else {
+      Issue.record("expected invalid, got \(String(describing: error))")
       return
     }
     #expect(path == url.path)
