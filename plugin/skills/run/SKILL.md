@@ -156,11 +156,15 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 1. `"$SG" plan import <slug> --json`. Status `invalid` quotes the task and line to fix: fix
    `PLAN.md` and import again. Status `blocked` names the state it couldn't read: report it and
    stop. The import links the root `PLAN.md` to `<plan-dir>/PLAN.md` and keeps that link out of
-   `git status`; workers read the plan by absolute path.
+   `git status`; workers read the plan by absolute path. It also sets the plan's index entry to
+   `planned`, so `build start` needs no `index set`.
 2. Run the build loop of `/swift-harness:build` (its `SKILL.md` and `references/event-loop.md`) with
    these changes:
    - Start it with `"$SG" build start <slug> --preset brownfield --session <session> --json`.
    - Its `main` is `<plan-branch>`, checked out in `<checkout>`: run its steps there.
+   - Build each worker's pack with `"$SG" context-pack --role worker --ledger <plan-dir>/ledger.json
+     --task-id <task> --build-run <run> --json`, with no `--design`: the pack holds the task's
+     `PLAN.md` section, its areas' commands and the brownfield rules.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build ends the run at step 9 with the report.
