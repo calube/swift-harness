@@ -85,7 +85,7 @@ struct AllowCommand: AsyncParsableCommand {
         return BrownfieldConfig(
           brownfield: config.brownfield, areas: config.areas,
           allow: config.allow.contains(entry) ? config.allow : config.allow + [entry],
-          buildPresets: config.buildPresets)
+          buildPresets: config.buildPresets, judge: config.judge)
       }
     } catch {
       throw .write(error)

@@ -114,7 +114,8 @@ public enum Discover {
         sliceBudgetSeconds: settings?.sliceBudgetSeconds ?? defaultSliceBudgetSeconds,
         timeBudgetMinutes: settings?.timeBudgetMinutes ?? 0, sensitive: settings?.sensitive ?? []),
       areas: proposal.areas.map(BrownfieldArea.init(proposed:)), allow: existing?.allow ?? [],
-      buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset])
+      buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset],
+      judge: existing?.judge ?? .disabled)
   }
 }
 

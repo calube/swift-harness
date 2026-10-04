@@ -14,10 +14,15 @@ public struct RunViewReader: RunViewReading {
   public let commonDirectory: URL
   /// Where this checkout's harness state lives.
   public let stateRoot: StateRoot
+  /// Which ``TaskWorktree`` layout names the task worktrees and the checkout merges land in.
+  public let profile: RepositoryProfile
 
-  public init(commonDirectory: URL, stateRoot: StateRoot) {
+  public init(
+    commonDirectory: URL, stateRoot: StateRoot, profile: RepositoryProfile = .owned
+  ) {
     self.commonDirectory = commonDirectory
     self.stateRoot = stateRoot
+    self.profile = profile
   }
 
   public func read(buildRun: String) throws -> RunViewInput {

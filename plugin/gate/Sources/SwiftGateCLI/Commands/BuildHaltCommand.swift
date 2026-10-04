@@ -132,12 +132,10 @@ enum BuildHaltRun {
     } catch {
       return .refused(refused("can't find the main checkout: \(error)"))
     }
-    do throws(ConfigLoadError) {
-      // No `.swiftgate.toml` is a repo the harness doesn't run in: nothing to record.
-      let config = try ConfigLoader().load(repositoryRoot: root)
-      return .found(root: root, enabled: config?.telemetry.enabled ?? false)
-    } catch {
-      return .refused(refused("reading \(ConfigLoader.fileName): \(error)"))
+    switch TelemetryOptIn.enabled(root: root) {
+    // No config is a repo the harness doesn't run in: nothing to record.
+    case .success(let enabled): return .found(root: root, enabled: enabled ?? false)
+    case .failure(let failure): return .refused(refused("reading the config: \(failure.outcome)"))
     }
   }
 

@@ -74,11 +74,6 @@ extension CacheEventRecorder {
   /// reads the config: nothing for a root with no loadable `.swiftgate.toml`, and a writer that
   /// keeps nothing under `[telemetry] enabled = false`.
   static func live(root: URL) -> CacheEventRecorder {
-    CacheEventRecorder(events: {
-      guard case .success(let config?) = StaticCheckInputs.loadConfig(root: root) else {
-        return nil
-      }
-      return EventWriterFactory.make(root: root, enabled: config.telemetry.enabled)
-    })
+    CacheEventRecorder(events: { TelemetryOptIn.writer(root: root) })
   }
 }
