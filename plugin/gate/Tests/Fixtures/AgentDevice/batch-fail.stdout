@@ -1,0 +1,60 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 2 (wait): wait timed out for text: No such text anywhere",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muu3c7it-c8a1c52e",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture/requests/e9f60d046a666533.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture",
+      "requestId": "e9f60d046a666533"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 2000,
+      "readableCaptures": 2,
+      "captures": 3,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 522,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 823,
+          "durationMs": 516,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1641,
+          "durationMs": 361,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 2002,
+      "step": 2,
+      "command": "wait",
+      "positionals": [
+        "text",
+        "No such text anywhere",
+        "2000"
+      ],
+      "executed": 1,
+      "total": 3,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 489,
+            "selector": "id=\"counter.value\""
+          },
+          "durationMs": 490
+        }
+      ]
+    }
+  }
+}

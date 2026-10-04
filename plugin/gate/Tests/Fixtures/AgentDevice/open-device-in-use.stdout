@@ -1,0 +1,20 @@
+{
+  "success": false,
+  "error": {
+    "code": "DEVICE_IN_USE",
+    "message": "Device is already in use by session \"swiftgate-capture\".",
+    "hint": "Run agent-device session list to inspect active sessions. To reuse this device, rerun the command with --session swiftgate-capture. To open a new session on this device, first run agent-device close --session swiftgate-capture. To wait for the device to free up, run the same open with --wait <ms>.",
+    "diagnosticId": "muu3c17x-6f8cc394",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-other/requests/689502d3ea8b64ae.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-other",
+      "requestId": "689502d3ea8b64ae"
+    },
+    "retriable": true,
+    "details": {
+      "session": "swiftgate-capture",
+      "deviceId": "F9277B7E-DB39-40C2-AF02-659F9A517B7A",
+      "deviceName": "agent-device-capture-10909"
+    }
+  }
+}

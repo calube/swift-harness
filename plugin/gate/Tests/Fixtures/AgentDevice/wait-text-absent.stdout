@@ -1,0 +1,39 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "wait timed out for text: No such text anywhere",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muu3bxo4-3580f0cd",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture/requests/30d7305daebd19b2.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture",
+      "requestId": "30d7305daebd19b2"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 2000,
+      "readableCaptures": 2,
+      "captures": 3,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 485,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 785,
+          "durationMs": 463,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1549,
+          "durationMs": 454,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 2003
+    }
+  }
+}

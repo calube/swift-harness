@@ -1,0 +1,10 @@
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_ARGS",
+    "message": "Flag --session is not supported for command device.",
+    "hint": "Check command arguments and run --help for usage examples.",
+    "diagnosticId": "muu3ctnu-e8dcf4a9",
+    "logPath": "/HOME/.agent-device/logs/swiftgate-capture/2026-10-04/2026-10-04T17-25-02-636Z-muu3ctnu-e8dcf4a9.ndjson"
+  }
+}
