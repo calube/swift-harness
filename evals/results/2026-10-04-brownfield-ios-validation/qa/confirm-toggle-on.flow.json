@@ -1,0 +1,8 @@
+[
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "label=\"Settings\""}, "settle": true}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "label=\"Downloads\""}, "settle": true}},
+  {"command": "wait", "input": {"selector": "id=\"Downloads.confirmLargeDownloads\"", "timeoutMs": 10000}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"Downloads.confirmLargeDownloads\" value=\"0\""}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "id=\"Downloads.confirmLargeDownloads\""}, "settle": true}},
+  {"command": "wait", "input": {"selector": "id=\"Downloads.confirmLargeDownloads\" value=\"1\"", "timeoutMs": 10000}}
+]

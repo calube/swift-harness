@@ -1,0 +1,54 @@
+final: GREEN (gate run 20261004T213316Z-5e50b21d)
+
+# Run report: spec
+
+## Unfinished tasks
+
+- none
+
+## Time box
+
+- 45 min, from [build.presets.brownfield]: launched 2026-10-04T21:08:19Z, starts stop 2026-10-04T21:40:19Z, cutoff 2026-10-04T21:48:19Z, ends 2026-10-04T21:53:19Z
+- the cutoff never came
+
+## Assumptions
+
+- The warm-up build and test failed on "SwiftLintBuildToolPlugin must be enabled"; both commands now pass `-skipPackagePluginValidation`, the flag CI uses for unattended plugin builds.
+- The manga chapter list's download paths are the multi-select toolbar Download button (which covers Select All, the screen's "Download All") and the per-chapter context-menu Download; the single-chapter path never crosses 50, so the prompt sits on the toolbar path. The library screen's Download All/Unread menu is another screen and stays out of scope.
+- `<n>` in the prompt is the count of chapters that would actually be queued, after the existing filter drops downloaded, downloading and queued chapters.
+- The prompt is shown before the existing Wi-Fi check; confirming then runs today's path unchanged, including the no-Wi-Fi alert.
+- The defaults key is `Downloads.confirmLargeDownloads`, following the `Downloads.` prefix of the other download keys, and the accessibility identifier reuses that string.
+- The toggle sits after "Parallel Downloads" and before the iOS 26 background toggle, inside the existing download settings group; only the English string is added, other locales fall back to the key's English text as the app does for new strings.
+- The repository has no typed accessibility-id module, so the identifier lives as a constant on `LargeDownloadConfirmation`.
+- settings-toggle's first merge went red on its own test (it read toggle keys from the top level of `Settings.downloadSettings`, which is 1 group); the fixer changed only the test to read the group's items, and the fix merge's gate was GREEN.
+- download-prompt branched while that red merge was on the plan branch, so its return failed `build-return.outside-write-set` after the undo; halt answered retry: its 1 commit was rebased onto the plan branch and the task relaunched into its worktree to re-gate.
+- The flow and state rows read `unverified`: `sim up` loads `.swiftgate.toml` from the tree, which a brownfield clone lacks, so no simulator could be leased; the rows stay, and the report quotes them.
+- req-prompt gets no flow row: driving it needs an installed source with a manga over 50 chapters, which a fresh simulator lacks; the threshold unit tests and the merge build stand in for it.
+
+## Baseline failures
+
+- Aidoku build: the whole step
+- Aidoku lint: the whole step
+- Aidoku test: the whole step
+
+## Build-only areas
+
+- none
+
+## Dropped steps
+
+- none
+
+## Review depth
+
+- threshold-rule (merged): low, as swiftgate judge diff-risk rated it
+- settings-toggle (merged): low, as swiftgate judge diff-risk rated it
+- download-prompt (merged): medium, as swiftgate judge diff-risk rated it
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at c5d44dd53e7a713df0361962a6ea2081e7154b74 holds every commit of the run; merging it is your call
