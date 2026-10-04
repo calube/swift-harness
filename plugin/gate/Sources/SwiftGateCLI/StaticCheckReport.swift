@@ -50,7 +50,14 @@ enum StaticCheckReport {
       allowances = try perRule.map { ruleID, waived throws(ReportContractViolation) in
         try AllowanceCount(ruleID: ruleID, count: waived.count)
       }
-      verdict = result.findings.contains { $0.severity.failsGate } ? .red : .green
+      verdict =
+        if result.findings.contains(where: \.severity.failsGate) {
+          .red
+        } else if result.findings.contains(where: { blockingRuleIDs.contains($0.ruleID) }) {
+          .blocked
+        } else {
+          .green
+        }
     case .blocked(let reason):
       findings = [
         try Finding(

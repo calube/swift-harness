@@ -183,6 +183,35 @@ struct JudgeFailsLoudlyTests {
   }
 
   @Test(
+    "a judge that can't run at ready reports judge.blocked and the judge.not-run note, BLOCKED with exit 2, through judge tests --ready and check --tier ready alike — catches the blocked judge reported as 1 swiftgate.environment finding"
+  )
+  func blockedKeepsItsRuleAndNote() async throws {
+    let expected: Set = [JudgeCascade.blockedRuleID, TestJudgeCheck.notRunRuleID]
+    let judged = try await Events.judged(
+      judge: Self.jev(failing: [Self.missingKey], calls: Calls()),
+      reasonJudge: Steps.failingReasonJudge(.backend("overloaded"), asked: Steps.Asked()))
+
+    let report = try StaticCheckReport.make(
+      runID: Events.runID, durationMilliseconds: 0,
+      outcome: TestJudgeCheck.outcome(judged.findings),
+      blockingRuleIDs: TestJudgeCheck.blockingRuleIDs)
+
+    #expect(report.verdict == .blocked)
+    #expect(report.verdict.exitCode == 2)
+    #expect(Set(report.findings.map(\.ruleID)) == expected)
+    let blocked = report.findings.filter { $0.ruleID == JudgeCascade.blockedRuleID }
+    #expect(!blocked.isEmpty)
+    #expect(blocked.allSatisfy { $0.file == JudgeCommandsTests.testFile })
+    #expect(blocked.allSatisfy { $0.message.contains("overloaded") })
+
+    let step = try await Steps.ready(
+      judge: Self.jev(failing: [Self.missingKey], calls: Calls()), config: Steps.jevConfig,
+      reasonJudge: Steps.failingReasonJudge(.backend("overloaded"), asked: Steps.Asked()))
+    #expect(step.t1.verdict == .blocked)
+    #expect(Set(step.judged.map(\.ruleID)) == expected)
+  }
+
+  @Test(
     "the missing key that escalates to Claude at ready stays 1 minor judge.not-run note below it, with Claude asked nothing — catches the ready-tier escalation reaching advisory runs"
   )
   func belowReadyStaysAdvisory() async throws {

@@ -316,12 +316,7 @@ enum TestJudgeCheck {
 
   /// What `judge tests` reports for the step's findings, under ``blockingRuleIDs``.
   static func outcome(_ findings: [Finding]) -> StaticCheckOutcome {
-    if verdict(findings) == .blocked {
-      return .blocked(
-        reason: findings.filter { $0.ruleID == JudgeCascade.blockedRuleID }
-          .map { "\($0.file):\($0.line ?? 0) \($0.message)" }.joined(separator: "\n"))
-    }
-    return .checked(RuleRunResult(findings: findings, allowances: []))
+    .checked(RuleRunResult(findings: findings, allowances: []))
   }
 
   /// A judge that can't run is reported, never gating: it says nothing about the code.
