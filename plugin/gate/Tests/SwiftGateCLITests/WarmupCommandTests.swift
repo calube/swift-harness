@@ -26,7 +26,7 @@ private struct WarmupClone {
     return BrownfieldStateLayout(commonDir: gitDir, gitDir: gitDir)
   }
 
-  init(areas: [String]?) async throws {
+  init(areas: [String]?, test: String = "npm test", build: String = "npm run build") async throws {
     root = TestTemporaryDirectory.root
       .appending(path: "swiftgate-warmup-\(UUID().uuidString)", directoryHint: .isDirectory)
       .resolvingSymlinksInPath()
@@ -51,7 +51,7 @@ private struct WarmupClone {
       areas: areas.map { name in
         BrownfieldArea(
           name: name, root: "packages/\(name)", language: .typescript, kind: .node,
-          test: "npm test", testFiles: nil, lint: nil, build: "npm run build", e2e: nil,
+          test: test, testFiles: nil, lint: nil, build: build, e2e: nil,
           testGlobs: [], packs: [], xcode: nil)
       }, allow: [], buildPresets: [:])
     try FileManager.default.createDirectory(
@@ -218,6 +218,42 @@ struct WarmupCommandTests {
     #expect(
       WarmupCommand.generation(from: .generated(generation, run), milliseconds: 9_000)
         == .generated(milliseconds: 1_250, run: run))
+  }
+
+  @Test(
+    "the warm-up run start spawns names the parent's binary in every warmup.run event — catches a spawned warm-up that can't read the source hash its parent's entry point cleared",
+    .timeLimit(.minutes(2))
+  )
+  func spawnedWarmupNamesTheBinary() async throws {
+    let clone = try await WarmupClone(areas: ["web"], test: "true", build: "true")
+    defer { clone.remove() }
+    let finished = clone.root.appending(path: "finished.fifo").path
+    #expect(mkfifo(finished, 0o600) == 0)
+    let swiftgate = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let wrapper = clone.root.appending(path: "swiftgate-then-signal")
+    try Data("#!/bin/sh\n\"\(swiftgate)\" \"$@\"\necho done > \"\(finished)\"\n".utf8)
+      .write(to: wrapper)
+    #expect(chmod(wrapper.path, 0o755) == 0)
+    var environment = WarmupClone.environment
+    environment["LLVM_PROFILE_FILE"] = clone.root.appending(path: "%p.profraw").path
+    let hash = "0123456789abcdef"
+    let spawner = LiveWarmupSpawner(
+      runner: LiveProcessRunner(baseEnvironment: environment), executable: wrapper.path,
+      arguments: ["warmup"], binary: try GateBinary(sourceHash: hash, pluginVersion: nil))
+
+    _ = try await spawner.spawn(
+      directory: clone.root, log: clone.root.appending(path: "logs/warmup.log"))
+    // Opening the fifo blocks until the wrapper writes it, after the warm-up exited.
+    let signal = try FileHandle(forReadingFrom: URL(filePath: finished))
+    #expect(try signal.readToEnd() == Data("done\n".utf8))
+    try signal.close()
+
+    let data = try #require(try HarnessEventFiles(root: clone.root).read(.brownfield, runID: nil))
+    let events = try HarnessEventJSON.decode(data).events.filter {
+      if case .warmupRun = $0.payload { true } else { false }
+    }
+    #expect(events.count == 2, "a build and a test event")
+    #expect(events.allSatisfy { $0.source.binary?.sourceHash == hash })
   }
 }
 

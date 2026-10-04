@@ -143,6 +143,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   public let buildOnlyAreas: Section<String>
   public let droppedSteps: Section<DroppedStep>
   public let reviewFallbacks: Section<String>
+  /// 1 line per reviewed task: the depth its classified review ran at and what set it.
+  public let reviewDepths: Section<String>
   /// Every ledger task not `done`, in ledger order. Its note says why the ledger couldn't be read,
   /// so whether the run finished is unknown.
   public let unfinishedTasks: Section<UnfinishedTask>
@@ -155,6 +157,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     assumptions: Section<String>, baselineFailures: Section<BaselineFailureLine>,
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
     reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>,
+    reviewDepths: Section<String> = Section(items: [], note: nil),
     timeBox: Section<String>? = nil
   ) {
     self.plan = plan
@@ -167,13 +170,14 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.buildOnlyAreas = buildOnlyAreas
     self.droppedSteps = droppedSteps
     self.reviewFallbacks = reviewFallbacks
+    self.reviewDepths = reviewDepths
     self.unfinishedTasks = unfinishedTasks
     self.timeBox = timeBox
   }
 
   private enum CodingKeys: String, CodingKey {
     case plan, planBranch, planBranchHead, final, finalNote, assumptions, baselineFailures
-    case buildOnlyAreas, droppedSteps, reviewFallbacks, unfinishedTasks, timeBox
+    case buildOnlyAreas, droppedSteps, reviewFallbacks, reviewDepths, unfinishedTasks, timeBox
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -189,6 +193,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     try c.encode(buildOnlyAreas, forKey: .buildOnlyAreas)
     try c.encode(droppedSteps, forKey: .droppedSteps)
     try c.encode(reviewFallbacks, forKey: .reviewFallbacks)
+    try c.encode(reviewDepths, forKey: .reviewDepths)
     try c.encode(unfinishedTasks, forKey: .unfinishedTasks)
     try c.encode(timeBox, forKey: .timeBox)
   }
@@ -206,7 +211,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       baselineFailures: Self.baselineFailures(inputs.baseline), buildOnlyAreas: buildOnly,
       droppedSteps: Self.droppedSteps(inputs.discover),
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
-      unfinishedTasks: Self.unfinishedTasks(inputs.ledger), timeBox: Self.timeBox(inputs.build))
+      unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
+      reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build))
   }
 
   /// The box's line, then 1 line per task the cutoff abandoned or never started. A task the
@@ -390,21 +396,32 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   /// Classified review takes each task's depth from `judge diff-risk`, and `build-task.js` puts
   /// the depth and its source in the return's `notes` as 1 line starting with this.
   static let classifiedNotePrefix = "review: classified at "
-  /// How the line ends when diff-risk rated the change.
+  /// How the line ends when the judge rated the change.
   static let ratedNoteSuffix = " by swiftgate judge diff-risk"
+  /// How the line continues after `high` when a changed path matched a sensitive glob: then
+  /// `<glob> matches <path>`.
+  static let sensitiveNoteInfix = " because the sensitive glob "
+  /// What separates the glob from the path in a sensitive line.
+  static let sensitiveNoteMatches = " matches "
   /// How the line continues after `medium` when diff-risk gave no level.
   static let fallbackNoteInfix = ", because diff-risk gave no level ("
 
-  /// 1 line per reviewed task whose classified review didn't run at the depth diff-risk rated:
-  /// it fell back to `medium`, saying why, or its depth is unknown because its return is missing,
-  /// unreadable or silent. A task the build carried through review is one it merged, or one it
-  /// started that ended blocked or needing a replan, since a return halts only after its review;
-  /// a task marked done with no merge was landed without one.
-  private static func reviewFallbacks(_ build: RunReportInput<RunReportBuild>) -> Section<String> {
-    guard case .read(let run) = build else {
-      return Section(items: [], note: describe(build, what: "build run"))
-    }
-    guard run.record.preset.review == .classified else { return Section(items: [], note: nil) }
+  /// What a reviewed task's return says about its classified review's depth.
+  private enum DepthReading {
+    case judged(DiffRiskLevel)
+    case sensitive(glob: String, path: String)
+    /// Ran at `medium`, because diff-risk gave no level.
+    case fellBack(why: String)
+    case unknown(String)
+    /// The task stopped before review, as a design conflict or a red gate does.
+    case notReviewed
+  }
+
+  /// Each task the build carried through review, in the order the log first names it, with the
+  /// state that shows it was reviewed. A task the build carried through review is one it merged,
+  /// or one it started that ended blocked or needing a replan, since a return halts only after
+  /// its review; a task marked done with no merge was landed without one.
+  private static func reviewedTasks(_ run: RunReportBuild) -> [(task: String, state: String)] {
     var order: [String] = []
     var merged: Set<String> = []
     var ended: [String: TaskStatus] = [:]
@@ -420,51 +437,100 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
         continue
       }
     }
-    let items = order.compactMap { task -> String? in
-      let state: String
-      if merged.contains(task) {
-        state = "merged"
-      } else if let status = ended[task], [.blocked, .needsReplan].contains(status) {
-        state = status.rawValue
-      } else {
-        return nil
+    return order.compactMap { task in
+      if merged.contains(task) { return (task, "merged") }
+      if let status = ended[task], [.blocked, .needsReplan].contains(status) {
+        return (task, status.rawValue)
       }
-      return fallback(run.returns[task]).map { "\(task) (\(state)): \($0)" }
+      return nil
+    }
+  }
+
+  /// 1 line per reviewed task whose classified review didn't run at the depth diff-risk rated:
+  /// it fell back to `medium`, saying why, or its depth is unknown because its return is missing,
+  /// unreadable or silent.
+  private static func reviewFallbacks(_ build: RunReportInput<RunReportBuild>) -> Section<String> {
+    guard case .read(let run) = build else {
+      return Section(items: [], note: describe(build, what: "build run"))
+    }
+    guard run.record.preset.review == .classified else { return Section(items: [], note: nil) }
+    let items = reviewedTasks(run).compactMap { task, state -> String? in
+      let why: String
+      switch depth(run.returns[task]) {
+      case .judged, .sensitive, .notReviewed: return nil
+      case .fellBack(let reason):
+        why = "classified review ran at medium, because diff-risk gave no level: \(reason)"
+      case .unknown(let reason): why = "review depth unknown: \(reason)"
+      }
+      return "\(task) (\(state)): \(why)"
     }
     return Section(items: items, note: nil)
   }
 
-  /// Why a task's review didn't run at a rated depth; `nil` when diff-risk rated it, or when the
-  /// task stopped before review, as a design conflict or a red gate does.
-  private static func fallback(_ input: RunReportInput<TaskReturn>?) -> String? {
+  /// 1 line per reviewed task: the depth its classified review ran at and what set it.
+  private static func reviewDepths(_ build: RunReportInput<RunReportBuild>) -> Section<String> {
+    guard case .read(let run) = build else {
+      return Section(items: [], note: describe(build, what: "build run"))
+    }
+    let review = run.record.preset.review
+    guard review == .classified else {
+      return Section(
+        items: [], note: "the preset's review is \(review.rawValue), so no task was classified")
+    }
+    let items = reviewedTasks(run).compactMap { task, state -> String? in
+      let depth: String
+      switch Self.depth(run.returns[task]) {
+      case .judged(let level): depth = "\(level.rawValue), as swiftgate judge diff-risk rated it"
+      case .sensitive(let glob, let path):
+        depth = "\(DiffRiskLevel.high.rawValue), because the sensitive glob \(glob) matches \(path)"
+      case .fellBack(let why):
+        depth = "\(DiffRiskLevel.medium.rawValue), because diff-risk gave no level: \(why)"
+      case .unknown(let why): depth = "unknown, \(why)"
+      case .notReviewed: return nil
+      }
+      return "\(task) (\(state)): \(depth)"
+    }
+    return Section(items: items, note: nil)
+  }
+
+  /// What a task's return says its classified review's depth was.
+  private static func depth(_ input: RunReportInput<TaskReturn>?) -> DepthReading {
     let taskReturn: TaskReturn
     switch input {
     case nil:
-      return "review depth unknown: the build run stored no checked return for it"
+      return .unknown("the build run stored no checked return for it")
     case .missing(let path)?:
-      return "review depth unknown: \(path) doesn't exist"
+      return .unknown("\(path) doesn't exist")
     case .unreadable(let source, let reason)?:
-      return "review depth unknown: \(source) didn't read: \(reason)"
+      return .unknown("\(source) didn't read: \(reason)")
     case .read(let read)?:
       taskReturn = read
     }
     let line = taskReturn.notes.split(separator: "\n").last { $0.hasPrefix(classifiedNotePrefix) }
     guard let line else {
-      if [.designConflict, .gateRed].contains(taskReturn.outcome) { return nil }
-      return "review depth unknown: its return's notes name no classified depth"
+      if [.designConflict, .gateRed].contains(taskReturn.outcome) { return .notReviewed }
+      return .unknown("its return's notes name no classified depth")
     }
     let rest = line.dropFirst(classifiedNotePrefix.count)
     if rest.hasSuffix(ratedNoteSuffix),
-      DiffRiskLevel(rawValue: String(rest.dropLast(ratedNoteSuffix.count))) != nil
+      let level = DiffRiskLevel(rawValue: String(rest.dropLast(ratedNoteSuffix.count)))
     {
-      return nil
+      return .judged(level)
+    }
+    let sensitive = DiffRiskLevel.high.rawValue + sensitiveNoteInfix
+    if rest.hasPrefix(sensitive),
+      let split = rest.dropFirst(sensitive.count).range(of: sensitiveNoteMatches)
+    {
+      let match = rest.dropFirst(sensitive.count)
+      let glob = String(match[..<split.lowerBound])
+      let path = String(match[split.upperBound...])
+      if !glob.isEmpty, !path.isEmpty { return .sensitive(glob: glob, path: path) }
     }
     let medium = DiffRiskLevel.medium.rawValue + fallbackNoteInfix
     if rest.hasPrefix(medium), rest.hasSuffix(")") {
-      let why = rest.dropFirst(medium.count).dropLast()
-      return "classified review ran at medium, because diff-risk gave no level: \(why)"
+      return .fellBack(why: String(rest.dropFirst(medium.count).dropLast()))
     }
-    return "review depth unknown: its return's review line doesn't read as a depth: \(line)"
+    return .unknown("its return's review line doesn't read as a depth: \(line)")
   }
 
   /// The report as Markdown. A run that left a task short of `done`, or whose ledger couldn't be
@@ -502,6 +568,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     out += render("Dropped steps", droppedSteps) {
       "\($0.area) \($0.step.rawValue): \($0.reason)"
     }
+    out += render("Review depth", reviewDepths) { $0 }
     out += render("Review fallbacks", reviewFallbacks) { $0 }
     out += ["", "## Plan branch", ""]
     if let planBranchHead {

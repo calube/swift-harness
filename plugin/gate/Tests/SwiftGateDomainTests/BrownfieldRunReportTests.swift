@@ -328,6 +328,67 @@ import Testing
     #expect(full.reviewFallbacks == .init(items: [], note: nil))
   }
 
+  /// A return the fifth `usememos/memos` trial's `build-task` workflow handed back.
+  private static func memos5Return(_ task: String) throws -> TaskReturn {
+    try TaskReturnJSON.decode(Fixture.data("BuildReturn/memos-5/\(task).json"))
+  }
+
+  @Test(
+    "the report names each reviewed task's depth and what set it: the judge, a sensitive path or a fallback — catches the fifth memos trial's report, which named no depth when diff-risk rated every task"
+  )
+  func reviewDepthPerTask() throws {
+    let tasks = ["share-view-limit-store", "share-view-limit-web", "share-view-limit-api"]
+    var returns: [String: RunReportInput<TaskReturn>] = [:]
+    for task in tasks { returns[task] = .read(try Self.memos5Return(task)) }
+    let store = try Self.memos5Return("share-view-limit-store")
+    returns["auth"] = .read(
+      Self.noting(
+        "Done.\nreview: classified at high because the sensitive glob store/** matches "
+          + "store/auth.go", store, task: "auth"))
+    returns["legacy"] = .read(try Self.memos4Return("share-view-limit-web"))
+    var events: [BuildEvent] = []
+    for task in tasks + ["auth", "missing"] {
+      events += [
+        Self.started(task),
+        .merge(.init(task: task, preCommit: "a", postCommit: "b", at: Self.at)),
+      ]
+    }
+    events += [
+      Self.started("legacy"),
+      .transition(.init(task: "legacy", from: .inProgress, to: .blocked, at: Self.at)),
+    ]
+    let base = Self.build(events: events)
+    let build = RunReportBuild(record: base.record, log: base.log, returns: returns)
+
+    let report = BrownfieldRunReport.make(Self.inputs(build: .read(build)))
+
+    #expect(
+      report.reviewDepths.items == [
+        "share-view-limit-store (merged): high, as swiftgate judge diff-risk rated it",
+        "share-view-limit-web (merged): medium, as swiftgate judge diff-risk rated it",
+        "share-view-limit-api (merged): high, as swiftgate judge diff-risk rated it",
+        "auth (merged): high, because the sensitive glob store/** matches store/auth.go",
+        "missing (merged): unknown, the build run stored no checked return for it",
+        "legacy (blocked): medium, because diff-risk gave no level: the clone's config has no "
+          + "[judge] section",
+      ])
+    #expect(report.reviewDepths.note == nil)
+    #expect(lines("Review depth", in: report.text) == report.reviewDepths.items)
+    #expect(
+      !report.reviewFallbacks.items.contains { $0.hasPrefix("auth ") },
+      "a sensitive path's depth read as a fallback")
+
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: JSONEncoder().encode(report)) as? [String: Any])
+    let section = try #require(object["reviewDepths"] as? [String: Any])
+    #expect(section["items"] as? [String] == report.reviewDepths.items)
+
+    let full = BrownfieldRunReport.make(
+      Self.inputs(build: .read(Self.build(review: .full, events: events))))
+    #expect(full.reviewDepths.items.isEmpty)
+    #expect(full.reviewDepths.note == "the preset's review is full, so no task was classified")
+  }
+
   @Test("the plan branch to merge is named with its head, or as missing — catches a dangling name")
   func planBranch() {
     let present = BrownfieldRunReport.make(Self.inputs()).text

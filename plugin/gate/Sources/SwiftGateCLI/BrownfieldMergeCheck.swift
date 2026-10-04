@@ -118,13 +118,15 @@ enum BrownfieldMergeCheck {
         try TierResult(
           tier: .t1, verdict: verdict, durationMilliseconds: milliseconds, testCounts: nil)
       ],
-      findings: parts.findings)
+      findings: parts.findings, baselineCount: parts.baselineCount)
   }
 
   /// What the steps found, and whether one couldn't answer.
   private struct Outcome {
     var findings: [Finding] = []
     var blocked = false
+    /// The failures the baseline absorbed; `nil` when the steps stopped before any ran.
+    var baselineCount: Int?
   }
 
   /// 1 command an area ran at the head.
@@ -164,7 +166,7 @@ enum BrownfieldMergeCheck {
     }
     let gated = tier == .final ? areas : touched
 
-    var outcome = Outcome()
+    var outcome = Outcome(baselineCount: 0)
     let runs = await withTaskGroup(of: (findings: [Finding], runs: [StepRun]).self) { group in
       for area in gated {
         let files = added.map(\.path).filter { owner(of: $0, in: areas)?.name == area.name }
@@ -213,6 +215,7 @@ enum BrownfieldMergeCheck {
           queries, base: BaselineBase(commit: mergeBase, tree: tree))
       }
       let remaining = lookup.verdict.remaining
+      outcome.baselineCount = lookup.verdict.baselineCount
       context.steps.record(
         .baseline, tier: nil, milliseconds: milliseconds, verdict: remaining.isEmpty ? .green : .red
       )

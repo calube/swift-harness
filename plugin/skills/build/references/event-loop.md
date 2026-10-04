@@ -313,13 +313,15 @@ orchestrator watches from outside. After each launch, run this with `run_in_back
 `<dir>` is the transcript directory the Workflow tool printed:
 
 ```bash
-d=<dir>; m=<stall minutes>; while /bin/sleep 60; do [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
+d=<dir>; m=<stall minutes>; e="${d%/subagents/workflows/*}/workflows/${d##*/}.json"; while /bin/sleep 60; do [ -e "$e" ] && { echo "ended: $d"; exit 0; }; [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
 ```
 
 `<stall minutes>` is `stallMin` from `build next`'s report, or 15 when the report has none. Every
 tool call and result appends to an agent's transcript, so that long with no change means no agent in
-that workflow has moved. Keep the watch's task id beside the workflow's. When the
-workflow's completion notice arrives, `TaskStop` its watch.
+that workflow has moved. The Workflow tool writes `workflows/<id>.json` in the session directory
+once the workflow ends, so the watch stops on its own then and prints `ended: <dir>`, which needs
+nothing. Keep the watch's task id beside the workflow's. When the workflow's completion notice
+arrives, `TaskStop` its watch too, so it doesn't poll on until its next minute.
 
 When a watch fires, read the last line of the newest `agent-*.jsonl` in `<dir>`. Halt, and quote its
 last tool call. Options:
