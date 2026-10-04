@@ -230,6 +230,41 @@ struct RunViewReaderTests {
   }
 
   @Test(
+    "a live plan's task briefs read into the view's tasks, a missing why reading empty — catches a brownfield task drawer with no Why, Scope or Acceptance"
+  )
+  func readsLivePlanBriefs() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let brief = TaskBrief(
+      title: "Reset the counter", why: "Users asked for a reset. Implements §2.1",
+      designRef: "§2.1", scope: ["`CounterCore` gains `reset()`"],
+      acceptance: ["`resetAfterIncrementsShowsZero` fails first"], outOfScope: ["The view"])
+    let bare = TaskBrief(
+      title: "Show a reset button", why: nil, designRef: nil, scope: [], acceptance: [],
+      outOfScope: [])
+    let plan = PlanFile(
+      schemaVersion: 1, slug: Self.plan,
+      source: .livePlan(
+        PlanFile.LivePlanSource(briefs: [Self.task: brief, "counter-ui-reset-button": bare])),
+      surfaceCommit: nil, resume: "imported")
+    try PlanFileJSON.encode(plan).write(to: repository.planDirectory.appending(path: "plan.json"))
+
+    let input = try repository.read()
+    #expect(
+      input.briefs[Self.task]
+        == RunView.Brief(
+          title: "Reset the counter", why: "Users asked for a reset. Implements §2.1",
+          designRef: "§2.1", scope: ["`CounterCore` gains `reset()`"],
+          acceptance: ["`resetAfterIncrementsShowsZero` fails first"], outOfScope: ["The view"]))
+    #expect(
+      input.briefs["counter-ui-reset-button"]
+        == RunView.Brief(title: "Show a reset button", why: ""))
+    #expect(input.briefs["counter-ui-reset-button-snapshot"] == nil)
+    let view = RunViewBuilder.build(input)
+    #expect(view.tasks.first { $0.id == Self.task }?.brief?.title == "Reset the counter")
+  }
+
+  @Test(
     "the run's ledger and its spec page's slices read with the join — catches a reader that drops the plan"
   )
   func readsThePlan() throws {

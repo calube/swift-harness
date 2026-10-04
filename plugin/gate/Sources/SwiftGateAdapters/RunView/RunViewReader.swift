@@ -28,10 +28,12 @@ public struct RunViewReader: RunViewReading {
 
     var ledger: Ledger?
     var requirements: [RunViewRequirement] = []
+    var briefs: [String: RunView.Brief] = [:]
     if let join {
       let plan = try planState(join.plan, damage: &damage)
       ledger = plan.ledger
       requirements = plan.requirements
+      briefs = plan.briefs
     }
 
     var batches: [[StoredEvent]] = []
@@ -66,7 +68,7 @@ public struct RunViewReader: RunViewReading {
       events: events.filter {
         Self.belongs($0, buildRun: buildRun, gateRuns: gateRuns, parents: parents)
       },
-      join: join, ledger: ledger, requirements: requirements, damage: damage,
+      join: join, ledger: ledger, requirements: requirements, damage: damage, briefs: briefs,
       workerGateRuns: workerGateRuns)
   }
 
@@ -181,6 +183,7 @@ public struct RunViewReader: RunViewReading {
   private struct PlanState {
     var ledger: Ledger?
     var requirements: [RunViewRequirement] = []
+    var briefs: [String: RunView.Brief] = [:]
   }
 
   /// - Throws: ``PlanStateLayoutError`` for a relative common dir, a caller's mistake.
@@ -235,9 +238,13 @@ public struct RunViewReader: RunViewReading {
       state.requirements = document.requirements.map {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
-    case .livePlan:
-      // A live plan names no requirements of its own; its task briefs reach the view separately.
-      break
+    case .livePlan(let live):
+      // A live plan names no requirements of its own, only each task's brief.
+      state.briefs = live.briefs.mapValues {
+        RunView.Brief(
+          title: $0.title, why: $0.why ?? "", designRef: $0.designRef, scope: $0.scope,
+          acceptance: $0.acceptance, outOfScope: $0.outOfScope)
+      }
     }
     return state
   }
