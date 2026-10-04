@@ -5,7 +5,7 @@ This attempt reruns the first brownfield trial (design §14) on `usememos/memos`
 the same `spec.md` as [the first attempt](../memos/README.md): a view limit on memo share links. The harness ran
 from this branch's `plugin/bin/swiftgate`, which is main at `08bdb067`.
 
-**Verdict: the one-shot run BLOCKED again, one step later.** This time the orchestrator wrote `PLAN.md`, imported
+**Verdict: the one-shot run BLOCKED again, 1 step later.** This time the orchestrator wrote `PLAN.md`, imported
 it, landed a GREEN contract commit, started the build and launched 2 task workflows. The plan-state guard then
 denied every write the build workers tried in their task worktrees. Those worktrees sit under the plan dir in
 the git common dir, so the guard counts every file in them as plan state. The run merged nothing. Its `final`
@@ -20,7 +20,7 @@ The `slice` p95 is inconclusive.
 | Findings on untouched code, empty commit | 0 | 0 | PASS | `slice-empty.json`, `gate.run` `20261004T104217Z-a01a1e87`, `ruleCounts {}` |
 | Findings on untouched code, 1-line change | 0 on code. 1 `area.build-only` nit with no file or line: the report line saying the warm-up hadn't measured the Go tests yet | 0 | PASS | `slice-one-line.json`, `gate.run` `20261004T104234Z-666bf6ad`, 81.2 s cold. Its `area-lint` step (`golangci-lint`, cold) took 74.6 s of that |
 | `slice` p95 | Before the warm-up: 2 `check slice` events, 0.12 s and 81.2 s, so p95 is 81.2 s. Steady state, after the warm-up: the contract's `slice`, 26.4 s (`20261004T105420Z-4af53c9f`), and the Stop hook's `slice`, 0.08 s (`20261004T105723Z-edb1b801`) | 30 s or less | INCONCLUSIVE | `gate.run` events in `events.jsonl`. The contract's run has no `gate.run` event (finding 2); its time comes from that gate's JSON in `run.jsonl`. 2 steady-state samples aren't a p95 |
-| One-shot run | Contract commit `137add49` on `swift-harness/spec`, GREEN at `slice`, `merge` and `final`. 0 merges: the store and web tasks are blocked and the API task never started. `final` GREEN (`20261004T105853Z-711cc047`) gated only the contract | `spec.md` to a GREEN plan branch, every merge and `final` GREEN, 0 human input | FAIL (BLOCKED) | `build-events.jsonl` (the `final` gate line), `gate-final.json`, `ledger.json`, `run-report.md`, `worker-journals.jsonl` |
+| One-shot run | Contract commit `137add49` on `swift-harness/spec`, GREEN at `slice`, `merge` and `final`. 0 merges: the store and web tasks are blocked and the API task never started. `final` GREEN (`20261004T105853Z-711cc047`) gated only the contract | `spec.md` to a GREEN plan branch, every merge and `final` GREEN, 0 human input | FAIL (BLOCKED) | `build-events.jsonl` (the `final` gate line), `gate-final.json`, `ledger.json`, `run-report.txt`, `worker-journals.jsonl` |
 | Human input | 0. The session made no `AskUserQuestion` call. Its 2 `build.halt` events (`question`) were answered `continue` by the orchestrator in 80 ms and 120 ms. Both turns ended by themselves with `stop_reason: end_turn` | 0 | PASS | `run.jsonl` (2 `result` lines, session `b41cd967-a730-4f58-8f52-2df5f23b33eb`). `build.halt` and `build.resume` in `events.jsonl` |
 
 Other numbers from the run:
@@ -45,7 +45,7 @@ Other numbers from the run:
 ## What happened
 
 1. `discover --apply` found 2 areas: `web` (TypeScript, pnpm, 3 found and 1 guessed command) and `memos` (Go,
-   4 found commands). This time the `web/` area was found.
+   4 found commands). This time discover found the `web/` area.
 2. `swiftgate run start spec.md` copied the spec, wrote the clock, applied discovery, started the warm-up, claimed
    the plan lock for session `b41cd967` and launched `claude`.
 3. The orchestrator wrote `PLAN.md` (4 tasks: contract, store, API and web, with 12 assumptions). It landed the
@@ -74,8 +74,8 @@ Other numbers from the run:
    - Suggested fix: classify `plans/<plan>/worktrees/<task>/**` as the task's working tree, not plan state, or
      move brownfield task worktrees out of the plan dir. In the first case, scope the exemption to the task's
      own worktree (worker brief pitfall 5).
-   - Test: a subagent's Write under `plans/<plan>/worktrees/<task>/` passes, and its Write to
-     `plans/<plan>/PLAN.md` is still denied.
+   - Test: a subagent's Write under `plans/<plan>/worktrees/<task>/` passes, and the guard still denies its Write
+     to `plans/<plan>/PLAN.md`.
 2. **Gates run in the plan checkout lose their `gate.run` events and history.**
    - The run skill (`plugin/skills/run/SKILL.md`, steps 1 and 5 of the build section) has the orchestrator
      make `<plan-dir>/checkout` with `git worktree add`, and later delete it with `git worktree remove`.
@@ -112,8 +112,8 @@ Other numbers from the run:
      took 167.8 s and finished at 10:47:22Z (`build-243e184cce58c115.log`).
    - That older binary predates the hook-source dedupe, so the plugin's SessionStart printed the owned-profile
      context ("(.swiftgate.toml)", "`check --tier fast`") next to the correct brownfield context.
-   - Every pre-tool-use from 10:44:36Z to 10:45:40Z was recorded twice: 14 pairs with the same `inputHash`
-     in `events.jsonl`. After the build landed, the plugin's hooks went silent, as designed. I replayed a
+   - `events.jsonl` holds every pre-tool-use from 10:44:36Z to 10:45:40Z twice: 14 pairs with the same
+     `inputHash`. After the build landed, the plugin's hooks went silent, as designed. I replayed a
      SessionStart afterwards: the plugin source prints nothing, and the settings source prints the brownfield
      context.
    - Suggested fix: have `swiftgate run` build the binary for the plugin-data cache before it launches
@@ -127,17 +127,21 @@ Other numbers from the run:
 
 H1, the bare `swiftgate` in build-task stage prompts: no sign of it. Every worker command in the workflow
 transcripts called this branch's `plugin/bin/swiftgate` by absolute path. The workers stopped before any task
-gate, though, so the task-gate path was never exercised.
+gate, though, so no run tested the task-gate path.
 
 ## Deviations
 
 - **No `DRIVER=sqlite` export.** Attempt 1 exported it into the run's environment. This attempt didn't, so
   that discovery and the orchestrator would have to handle it as designed.
-- **`claude` on `PATH`.** `claude` is installed under node 22, and the trial toolchain pins node 24. I appended
+- **`claude` on `PATH`.** `claude` lives under node 22, and the trial toolchain pins node 24. I appended
   node 22's `bin` to `PATH` after `mise`'s entries, so node 24 still came first.
-- **Launch flags.** `swiftgate run start spec.md -- -p --output-format stream-json --verbose --plugin-dir
-  <branch>/plugin --dangerously-skip-permissions`, with `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0`. These are the
-  same flags as attempt 1, which ran in `bypassPermissions` mode.
+- **Launch flags.** The launch matched attempt 1, which ran in `bypassPermissions` mode. It set
+  `CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0` and ran:
+
+  ```sh
+  swiftgate run start spec.md -- -p --output-format stream-json --verbose \
+    --plugin-dir <branch>/plugin --dangerously-skip-permissions
+  ```
 - **Probes.** I ran both probe gates on a throwaway `probe` branch with `--base main`. I deleted the branch before
   the launch, so the run started from a clean `main` at the pinned commit.
 - **Replay.** After exporting `events.jsonl`, I replayed 1 SessionStart payload into the clone (finding 7). That
@@ -157,5 +161,5 @@ gate, though, so the task-gate path was never exercised.
 | `gate-merge-contract.json`, `gate-final.json` | the contract's `merge` gate and the `final` gate, as the orchestrator saved them |
 | `build-events.jsonl`, `ledger.json` | the build run's ledger transitions and the final ledger |
 | `worker-journals.jsonl` | the 2 `build-task` workflows' journals, with each worker's result |
-| `PLAN.md`, `run-report.md` | the orchestrator's plan and `swiftgate run report spec` |
+| `PLAN.md`, `run-report.txt` | the orchestrator's plan, and `swiftgate run report spec` verbatim (plain text, so the prose gate doesn't lint generated output) |
 | `warmup.log`, `config.toml`, `lock.log` | the warm-up log, the config after the orchestrator's `--set`, and the build lock holder's log |
