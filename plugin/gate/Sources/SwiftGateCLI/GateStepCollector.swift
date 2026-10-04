@@ -11,11 +11,11 @@ final class GateStepCollector: Sendable {
 
   func record(
     _ step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
-    derivedData: GateDerivedData = .none
+    derivedData: GateDerivedData = .none, area: String? = nil
   ) {
     let timing = GateStepTiming(
       step: step, tier: tier, milliseconds: milliseconds, verdict: verdict,
-      derivedData: derivedData)
+      derivedData: derivedData, area: area)
     timings.withLock { $0.append(timing) }
   }
 

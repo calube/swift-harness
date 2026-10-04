@@ -1,12 +1,362 @@
 import Foundation
+import SwiftGateAdapters
 import SwiftGateDomain
 
 /// The `merge` tier after each merge, and `final`, which is `merge` for every area plus each
 /// area's `e2e`.
 enum BrownfieldMergeCheck {
+  struct Dependencies: Sendable {
+    let config: BrownfieldConfig
+    let layout: BrownfieldStateLayout
+    let git: any Git
+    let runner: any AreaCommandRunning
+    let baseline: BaselineStore
+    let prove: BrownfieldProve.Dependencies
+    /// The tracked files, for each area's shared cache variables.
+    let trackedTree: TrackedTreeSnapshot
+    /// `git rev-parse <commit>^{tree}`: the baseline file's name.
+    let tree: @Sendable (_ commit: String) async throws -> String
+    /// Whether `slice` only builds the area, so its changed tests and their prove run here.
+    let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
+    /// Per command run.
+    let deadline: Duration
+
+    /// An area command may run as long as the area's own tests take.
+    static let liveDeadline: Duration = .seconds(3600)
+
+    /// The clone's config and state, live git, scratch trees under the worktree's git dir and
+    /// `/bin/sh` commands.
+    static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
+      let process = LiveProcessRunner()
+      let tracked = GitTrackedTree(runner: process, directory: root)
+      let layout: BrownfieldStateLayout
+      let snapshot: TrackedTreeSnapshot
+      do {
+        layout = try await tracked.stateLayout()
+        snapshot = try await tracked.snapshot()
+      } catch {
+        throw BrownfieldCheckSetupError(reason: error.message)
+      }
+      let config: BrownfieldConfig
+      do {
+        guard
+          case .brownfield(let loaded)? = try ConfigLoader().loadProfile(
+            repositoryRoot: root, commonDir: layout.commonDir)
+        else {
+          throw BrownfieldCheckSetupError(
+            reason:
+              "\(layout.config.path) holds no brownfield config; run swiftgate discover --apply")
+        }
+        config = loaded
+      } catch let error as BrownfieldCheckSetupError {
+        throw error
+      } catch {
+        throw BrownfieldCheckSetupError(reason: "\(error)")
+      }
+      let runner = LiveAreaCommandRunner(processRunner: process)
+      let prove = BrownfieldProve.Dependencies.live(
+        root: root, layout: layout, runner: runner, deadline: liveDeadline)
+      return Dependencies(
+        config: config, layout: layout, git: prove.git, runner: runner,
+        baseline: BaselineStore(layout: layout, runner: runner, scratch: prove.scratch),
+        prove: prove, trackedTree: snapshot,
+        tree: { commit in
+          let output = try await process.run(
+            ProcessInvocation(
+              executable: "git", arguments: ["rev-parse", "--verify", "\(commit)^{tree}"],
+              workingDirectory: root.path, timeout: .seconds(60)))
+          let tree = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+          guard output.status.isSuccess, !tree.isEmpty else {
+            throw BrownfieldCheckSetupError(
+              reason: "git rev-parse \(commit)^{tree}: \(output.stderr.text)")
+          }
+          return tree
+        },
+        // The warm-up's test times aren't read here, so no area is known to have run its
+        // changed tests at `slice`: every touched area proves again at `merge`.
+        sliceBuildsOnly: { _ in true }, deadline: liveDeadline)
+    }
+  }
+
   static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
     async throws -> GateRunParts
   {
-    try BrownfieldCheck.notRun(tier, because: "the \(tier.rawValue) tier's steps aren't built yet")
+    let dependencies: Dependencies
+    do {
+      dependencies = try await .live(root: root)
+    } catch {
+      return try BrownfieldCheck.notRun(tier, because: error.reason)
+    }
+    return try await run(
+      root: root, tier: tier, base: base, context: context, dependencies: dependencies)
   }
+
+  static func run(
+    root: URL, tier: CheckTier, base: String, context: GateRun.Context,
+    dependencies: Dependencies
+  ) async throws -> GateRunParts {
+    let (parts, milliseconds) = try await GateRun.timed {
+      try await steps(
+        root: root, tier: tier, base: base, context: context, dependencies: dependencies)
+    }
+    let gating = parts.findings.contains { $0.severity.failsGate }
+    let verdict: Verdict = gating ? .red : parts.blocked ? .blocked : .green
+    return GateRunParts(
+      tiers: [
+        try TierResult(
+          tier: .t1, verdict: verdict, durationMilliseconds: milliseconds, testCounts: nil)
+      ],
+      findings: parts.findings)
+  }
+
+  /// What the steps found, and whether one couldn't answer.
+  private struct Outcome {
+    var findings: [Finding] = []
+    var blocked = false
+  }
+
+  /// 1 command an area ran at the head.
+  private struct StepRun: Sendable {
+    let area: BrownfieldArea
+    let step: AreaStep
+    let template: String
+    let selection: [String]
+    let outcome: AreaCommandOutcome
+    /// Lint output whose failure the parser could place on no line: it goes to the baseline
+    /// like a test failure, as `area.lint-failed`.
+    let lintFindings: [Finding]
+    let lintUnread: Bool
+  }
+
+  private static func steps(
+    root: URL, tier: CheckTier, base: String, context: GateRun.Context,
+    dependencies: Dependencies
+  ) async throws -> Outcome {
+    let git = dependencies.git
+    let mergeBase: String
+    let changed: [String]
+    let added: [AddedLines]
+    do throws(GitError) {
+      guard let found = try await git.mergeBase("HEAD", base) else {
+        return blocked("HEAD and \(base) share no history, so there is no baseline to compare")
+      }
+      mergeBase = found
+      changed = try await git.changedFiles(since: mergeBase)
+      added = try await git.addedLines(since: mergeBase)
+    } catch {
+      return blocked("git: \(error)")
+    }
+    let areas = dependencies.config.areas
+    let touched = areas.filter { area in
+      changed.contains { owner(of: $0, in: areas)?.name == area.name }
+    }
+    let gated = tier == .final ? areas : touched
+
+    var outcome = Outcome()
+    let runs = await withTaskGroup(of: (findings: [Finding], runs: [StepRun]).self) { group in
+      for area in gated {
+        let files = added.map(\.path).filter { owner(of: $0, in: areas)?.name == area.name }
+        group.addTask {
+          await run(
+            area, tier: tier, files: files, added: added, root: root, context: context,
+            dependencies: dependencies)
+        }
+      }
+      var all: [(findings: [Finding], runs: [StepRun])] = []
+      for await result in group { all.append(result) }
+      return all.sorted { ($0.runs.first?.area.name ?? "") < ($1.runs.first?.area.name ?? "") }
+    }
+    outcome.findings += runs.flatMap(\.findings)
+    let stepRuns = runs.flatMap(\.runs)
+
+    let failing = stepRuns.filter { run in
+      switch run.outcome {
+      case .passed: false
+      default: run.step != .lint || run.lintUnread
+      }
+    }
+    if !failing.isEmpty {
+      let tree: String
+      do {
+        tree = try await dependencies.tree(mergeBase)
+      } catch {
+        return blocked("can't read the tree of the merge base \(mergeBase): \(error)")
+      }
+      let queries = failing.map { run in
+        let key = BaselineStepKey(
+          area: run.area.name, step: run.step, command: run.template, selection: run.selection)
+        return BaselineQuery(key: key, head: run.outcome) { scratch in
+          // The failing step was prepared from this area, so preparing it again can't be `nil`.
+          prepare(
+            run.area, step: run.step, repositoryRoot: scratch.path(percentEncoded: false),
+            files: run.selection, dependencies: dependencies)?.request
+            ?? AreaCommandRequest(
+              area: run.area.name, step: run.step, command: "false",
+              workingDirectory: scratch.path(percentEncoded: false),
+              deadline: dependencies.deadline, environment: [:], junitPath: nil)
+        }
+      }
+      let (lookup, milliseconds) = await GateRun.timed {
+        await dependencies.baseline.lookupOrRerun(
+          queries, base: BaselineBase(commit: mergeBase, tree: tree))
+      }
+      let remaining = lookup.verdict.remaining
+      context.steps.record(
+        .baseline, tier: nil, milliseconds: milliseconds, verdict: remaining.isEmpty ? .green : .red
+      )
+      outcome.findings += lookup.notes
+      for failure in remaining {
+        guard
+          let run = failing.first(where: {
+            $0.area.name == failure.key.area && $0.step == failure.key.step
+          })
+        else { continue }
+        outcome.findings.append(try finding(failure, run: run))
+      }
+    }
+    outcome.findings += stepRuns.flatMap(\.lintFindings)
+
+    let proved = touched.filter(dependencies.sliceBuildsOnly)
+    if !proved.isEmpty {
+      let config = BrownfieldConfig(
+        brownfield: dependencies.config.brownfield, areas: proved,
+        allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets)
+      let (judgement, milliseconds) = await GateRun.timed {
+        await BrownfieldProve.run(
+          root: root, base: base, config: config,
+          junitDirectory: dependencies.layout.worktreeRoot.appending(
+            path: "junit", directoryHint: .isDirectory),
+          dependencies: dependencies.prove)
+      }
+      context.steps.record(
+        .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict)
+      outcome.findings += judgement.findings
+      outcome.blocked = outcome.blocked || judgement.verdict == .blocked
+    }
+    return outcome
+  }
+
+  /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
+  /// share a build directory at once.
+  private static func run(
+    _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
+    context: GateRun.Context, dependencies: Dependencies
+  ) async -> (findings: [Finding], runs: [StepRun]) {
+    var findings: [Finding] = []
+    var runs: [StepRun] = []
+    let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
+    for step in steps {
+      guard let template = AreaCommandExpansion.template(for: step, in: area) else {
+        // `e2e` is optional: discovery proposes it only where it found one.
+        if step != .e2e, let dropped = dropped(area, step: step) { findings.append(dropped) }
+        continue
+      }
+      let selection = step == .lint ? files : []
+      if step == .lint, template.contains(AreaCommandExpansion.filesPlaceholder), files.isEmpty {
+        continue
+      }
+      guard
+        let prepared = prepare(
+          area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
+          dependencies: dependencies)
+      else { continue }
+      let (outcome, milliseconds) = await GateRun.timed {
+        await dependencies.runner.run(prepared.request)
+      }
+      var lintFindings: [Finding] = []
+      var lintUnread = false
+      if step == .lint, case .failed(let exit, let tail, _) = outcome {
+        let reading = LintOutputParser.read(
+          LintRunOutput(
+            area: area.name, areaRoot: area.root,
+            repositoryRoot: root.path(percentEncoded: false), exitStatus: exit, streams: [tail]),
+          added: added)
+        lintFindings = reading.findings.compactMap { try? $0.finding(severity: .major) }
+        lintUnread = reading.findings.isEmpty && !reading.notes.isEmpty
+      }
+      context.steps.record(
+        gateStep(step), tier: nil, milliseconds: milliseconds,
+        verdict: outcome == .passed ? .green : .red, area: area.name)
+      runs.append(
+        StepRun(
+          area: area, step: step, template: template, selection: selection, outcome: outcome,
+          lintFindings: lintFindings, lintUnread: lintUnread))
+    }
+    return (findings, runs)
+  }
+
+  private static func prepare(
+    _ area: BrownfieldArea, step: AreaStep, repositoryRoot: String, files: [String],
+    dependencies: Dependencies
+  ) -> PreparedAreaCommand? {
+    AreaCommandExpansion.prepare(
+      area: area, step: step, repositoryRoot: repositoryRoot, files: files, tests: [],
+      junitPath: AreaCommandExpansion.junitPath(
+        layout: dependencies.layout, area: area.name, step: step),
+      deadline: dependencies.deadline,
+      environment: AreaCacheEnvironment.make(
+        area: area, layout: dependencies.layout, tree: dependencies.trackedTree
+      ).variables)
+  }
+
+  /// The area whose root holds `path`, the deepest when roots nest; `nil` for a path no area
+  /// holds.
+  static func owner(of path: String, in areas: [BrownfieldArea]) -> BrownfieldArea? {
+    areas.filter { area in
+      let root = area.root.split(separator: "/").filter { $0 != "." }.joined(separator: "/")
+      return root.isEmpty || path == root || path.hasPrefix(root + "/")
+    }.max { $0.root.count < $1.root.count }
+  }
+
+  private static func gateStep(_ step: AreaStep) -> GateStep {
+    switch step {
+    case .build, .generate: .areaBuild
+    case .lint: .areaLint
+    case .test, .testFiles, .e2e: .areaTest
+    }
+  }
+
+  private static func finding(_ failure: BaselineFailure, run: StepRun) throws -> Finding {
+    let rule: BrownfieldRuleID =
+      switch run.step {
+      case .build, .generate: .buildFailed
+      case .lint: .lintFailed
+      case .test, .testFiles, .e2e: .testFailed
+      }
+    let what = failure.test.map { "\($0) fails" } ?? "\(run.step.rawValue) failed"
+    let tail: String =
+      switch run.outcome {
+      case .passed: ""
+      case .failed(let exit, let tail, _): "exit \(exit):\n\(tail)"
+      case .crashed(let signal, let tail):
+        "crashed\(signal.map { " with signal \($0)" } ?? ""):\n\(tail)"
+      case .timedOut(let tail): "timed out:\n\(tail)"
+      }
+    return try Finding(
+      ruleID: rule.rawValue, severity: .major, file: run.area.root, line: nil,
+      message:
+        "\(run.area.name) \(what) at the head and not at the merge base (`\(run.template)`), "
+        + tail,
+      failureScenario: nil)
+  }
+
+  private static func dropped(_ area: BrownfieldArea, step: AreaStep) -> Finding? {
+    try? Finding(
+      ruleID: BrownfieldRuleID.stepDropped.rawValue, severity: .nit, file: area.root, line: nil,
+      message: "\(area.name) has no \(step.rawValue) command, so this tier doesn't run it",
+      failureScenario: nil)
+  }
+
+  /// A BLOCKED outcome: the verdict says so even if the finding naming why can't be made.
+  private static func blocked(_ reason: String) -> Outcome {
+    let finding = try? Finding(
+      ruleID: CheckRun.notRunRuleID, severity: .minor, file: ".", line: nil,
+      message: "merge: \(reason)", failureScenario: nil)
+    return Outcome(findings: finding.map { [$0] } ?? [], blocked: true)
+  }
+}
+
+/// Why a brownfield tier couldn't start: no config, no git, no state paths.
+struct BrownfieldCheckSetupError: Error, Sendable {
+  let reason: String
 }
