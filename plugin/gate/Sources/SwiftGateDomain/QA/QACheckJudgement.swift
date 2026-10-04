@@ -31,6 +31,8 @@ public struct QACheckJudgement: Sendable, Equatable {
     public var stderr: String
     /// Every report the check wrote, combined; `nil` when it wrote none.
     public var report: Data?
+    /// The result bundle an `xcode` area's `test:` row writes in place of a report.
+    public var resultBundle: ResultBundle?
     /// What the row runs, named in a message when no test ran: a `test:` row's id or the check.
     public var reference: String
     public var atBase: Bool
@@ -39,17 +41,26 @@ public struct QACheckJudgement: Sendable, Equatable {
     public var roots: [String]
 
     public init(
-      end: End, stdout: String, stderr: String, report: Data?, reference: String, atBase: Bool,
-      roots: [String]
+      end: End, stdout: String, stderr: String, report: Data?, resultBundle: ResultBundle? = nil,
+      reference: String, atBase: Bool, roots: [String]
     ) {
       self.end = end
       self.stdout = stdout
       self.stderr = stderr
       self.report = report
+      self.resultBundle = resultBundle
       self.reference = reference
       self.atBase = atBase
       self.roots = roots
     }
+  }
+
+  /// What a check's result bundle yielded.
+  public enum ResultBundle: Sendable, Equatable {
+    /// `xcresulttool get test-results tests`.
+    case tests(Data)
+    /// Why the bundle couldn't be read, such as `xcodebuild` never writing it.
+    case unread(String)
   }
 
   /// Exit 0 passes unless the check wrote a report showing no test ran, which is the expected red
@@ -77,10 +88,19 @@ public struct QACheckJudgement: Sendable, Equatable {
     return QACheckJudgement(result: .red, message: "\(status): \(reason)")
   }
 
-  /// Why the report shows no test ran, or `nil` when there is no report or a test ran.
+  /// Why the report or result bundle shows no test ran, or `nil` when there is neither or a
+  /// test ran.
   private static func noTestRan(_ input: Input) -> String? {
-    guard let report = input.report else { return nil }
-    guard let cases = JUnitReports.cases(report) else {
+    if case .unread(let reason) = input.resultBundle {
+      return "its result bundle doesn't read (\(reason)), so no test is shown to have run for "
+        + "`\(input.reference)`"
+    }
+    if input.resultBundle != nil, bundleCases(input) == nil {
+      return "its result bundle's test tree doesn't read, so no test is shown to have run for "
+        + "`\(input.reference)`"
+    }
+    guard let cases = bundleCases(input) ?? input.report.flatMap(JUnitReports.cases) else {
+      guard input.report != nil else { return nil }
       return "its test report doesn't read, so no test is shown to have run for "
         + "`\(input.reference)`"
     }
@@ -94,7 +114,7 @@ public struct QACheckJudgement: Sendable, Equatable {
   /// placeholder, or else the last non-empty line of stderr, then of stdout; scrubbed and cut.
   private static func failureLine(_ input: Input) -> String? {
     var line: String?
-    let failed = input.report.flatMap(JUnitReports.cases)?.compactMap {
+    let failed = (bundleCases(input) ?? input.report.flatMap(JUnitReports.cases))?.compactMap {
       testCase -> (XUnitTestCase, String)? in
       guard case .failed(let message) = testCase.outcome else { return nil }
       return (testCase, message.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -111,6 +131,28 @@ public struct QACheckJudgement: Sendable, Equatable {
     let scrubbed = RunViewGateFailures.Scrub.message(line, roots: roots).0
     guard scrubbed.count > maxReasonCharacters else { return scrubbed }
     return String(scrubbed.prefix(maxReasonCharacters - 1)) + "…"
+  }
+
+  /// The result bundle's cases in report form, or `nil` when there is no readable bundle.
+  private static func bundleCases(_ input: Input) -> [XUnitTestCase]? {
+    guard case .tests(let data) = input.resultBundle,
+      let results = try? XcresultTestResults.parse(data)
+    else { return nil }
+    return results.testCases.map { testCase in
+      let suite = testCase.identifier.split(separator: "/").dropLast().joined(separator: ".")
+      let outcome: XUnitTestCase.Outcome =
+        switch testCase.result {
+        case .passed, .expectedFailure: .passed
+        case .failed: .failed(message: testCase.messages.first ?? "")
+        case .skipped: .skipped(reason: testCase.messages.first)
+        case .other(let raw): .skipped(reason: raw)
+        }
+      return XUnitTestCase(
+        className: suite.isEmpty ? testCase.targetName : "\(testCase.targetName).\(suite)",
+        name: testCase.identifier.split(separator: "/").last.map(String.init)
+          ?? testCase.identifier,
+        outcome: outcome, milliseconds: testCase.milliseconds)
+    }
   }
 
   private static func lastLine(_ text: String) -> String? {

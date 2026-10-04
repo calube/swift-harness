@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Re-captures gate/Tests/Fixtures/Xcresult/ from real `xcodebuild test` runs of the SampleApp's
+# Re-captures plugin/gate/Tests/Fixtures/Xcresult/ from real `xcodebuild test` runs of the SampleApp's
 # CounterFeature package on a throwaway clone of the pinned simulator.
-# Run from the repository root: gate/Fixtures/xcresult/capture.sh [scenario...]
+# Run from the repository root: plugin/gate/Fixtures/xcresult/capture.sh [scenario...]
 set -uo pipefail
 
 root="$(pwd -P)"
-out="$root/gate/Tests/Fixtures/Xcresult"
+out="$root/plugin/gate/Tests/Fixtures/Xcresult"
 work="$(mktemp -d)"
 derived="$root/.harness/DerivedData/xcresult-capture"
 device_name="iPhone 17"
@@ -27,7 +27,7 @@ trap cleanup EXIT
 # A scratch copy, so probe tests never touch the repository.
 rsync -a --exclude .build --exclude .swiftpm "$root/examples/SampleApp/Packages/" "$work/Packages/"
 package="$work/Packages/CounterFeature"
-cp "$root/gate/Fixtures/xcresult/XcresultProbeTests.swift" \
+cp "$root/plugin/gate/Fixtures/xcresult/XcresultProbeTests.swift" \
   "$package/Tests/CounterUISnapshotTests/XcresultProbeTests.swift"
 
 # A second copy whose probe does not compile.
@@ -83,7 +83,7 @@ capture() {
 }
 
 scenarios=("$@")
-[ ${#scenarios[@]} -eq 0 ] && scenarios=(pass fail skip crash zero no-destination build-error record missing-bundle)
+[ ${#scenarios[@]} -eq 0 ] && scenarios=(pass fail skip crash zero missing-test one-test no-destination build-error record missing-bundle)
 for scenario in "${scenarios[@]}"; do
   case "$scenario" in
   pass) capture pass "$package" "id=$clone" CounterViewSnapshotTests ProbePassXCTests ;;
@@ -91,6 +91,8 @@ for scenario in "${scenarios[@]}"; do
   skip) capture skip "$package" "id=$clone" ProbeSkipXCTests ProbeSkipSwiftTests ;;
   crash) capture crash "$package" "id=$clone" ProbeCrashXCTests ProbeCrashSwiftTests ProbePassXCTests ;;
   zero) capture zero "$package" "id=$clone" NoSuchSuite ;;
+  missing-test) capture missing-test "$package" "id=$clone" ProbePassXCTests/testNoSuchTest ;;
+  one-test) capture one-test "$package" "id=$clone" ProbePassXCTests/testAdds ;;
   no-destination) capture no-destination "$package" "id=00000000-0000-0000-0000-000000000000" ProbePassXCTests ;;
   build-error) DERIVED_KEY=broken capture build-error "$broken/CounterFeature" "id=$clone" ProbePassXCTests ;;
   record) RECORD=all capture record "$package" "id=$clone" CounterViewSnapshotTests ProbeFailXCTests ;;

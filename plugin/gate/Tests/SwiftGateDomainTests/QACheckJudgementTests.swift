@@ -22,6 +22,75 @@ struct QACheckJudgementTests {
     ])
   }
 
+  /// The test tree of 1 captured `xcodebuild test` result bundle.
+  static func bundle(_ scenario: String) throws -> QACheckJudgement.ResultBundle {
+    .tests(try Fixture.data("Xcresult/\(scenario).tests.json"))
+  }
+
+  static func xcode(
+    _ end: QACheckJudgement.End, _ bundle: QACheckJudgement.ResultBundle, stderr: String = "",
+    atBase: Bool = false
+  ) -> QACheckJudgement {
+    QACheckJudgement.judge(
+      QACheckJudgement.Input(
+        end: end, stdout: "", stderr: stderr, report: nil, resultBundle: bundle,
+        reference: "CounterUISnapshotTests/ProbePassXCTests/testNoSuchTest", atBase: atBase,
+        roots: ["/work/tree"]))
+  }
+
+  @Test(
+    "the captured bundle of an -only-testing run on a missing test (exit 0, no test case) is red at base and unverified after, naming the id — catches xcodebuild's exit 0 read as a pass"
+  )
+  func bundleWithNoTestRan() throws {
+    let base = Self.xcode(.exited(0), try Self.bundle("missing-test"), atBase: true)
+    let after = Self.xcode(.exited(0), try Self.bundle("missing-test"))
+
+    #expect(base.result == .red, "\(base)")
+    #expect(
+      base.message
+        == "exit 0, but no test matched `CounterUISnapshotTests/ProbePassXCTests/testNoSuchTest`")
+    #expect(after.result == .unverified, "\(after)")
+    #expect(after.message.contains("no test matched"), "\(after)")
+  }
+
+  @Test(
+    "the captured bundle of 1 real test that passed passes on exit 0 — catches every bundle read as running nothing"
+  )
+  func bundleWithOneTestPasses() throws {
+    #expect(
+      Self.xcode(.exited(0), try Self.bundle("one-test"), atBase: true)
+        == QACheckJudgement(result: .pass, message: "exit 0"))
+  }
+
+  @Test(
+    "a red xcodebuild row names the captured bundle's first failure message, not stderr's last line — catches a red row whose reason is `** TEST FAILED **`"
+  )
+  func bundleFailureNamesFirstMessage() throws {
+    let judgement = Self.xcode(
+      .exited(65), try Self.bundle("fail"), stderr: "** TEST FAILED **\n")
+
+    #expect(judgement.result == .red)
+    #expect(
+      judgement.message
+        == "exit 65: XcresultProbeTests.swift:15: XCTAssertEqual failed: (\"4\") is not equal to "
+        + "(\"5\") - 2 + 2 should be 5",
+      "\(judgement)")
+  }
+
+  @Test(
+    "a bundle that couldn't be read after exit 0 shows no test ran: red at base, unverified after, naming why — catches a missing bundle read as a pass"
+  )
+  func unreadBundle() throws {
+    let unread = QACheckJudgement.ResultBundle.unread("xcresulttool failed (exit 64)")
+
+    let base = Self.xcode(.exited(0), unread, atBase: true)
+    let after = Self.xcode(.exited(0), unread)
+
+    #expect(base.result == .red, "\(base)")
+    #expect(after.result == .unverified, "\(after)")
+    #expect(after.message.contains("xcresulttool failed (exit 64)"), "\(after)")
+  }
+
   @Test(
     "the captured passing swift test report, which ran 2 tests, passes on exit 0 — catches a count read from the wrong element"
   )
