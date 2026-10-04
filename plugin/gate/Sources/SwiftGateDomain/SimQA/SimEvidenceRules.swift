@@ -102,6 +102,7 @@ public enum SimEvidenceRules {
     _ evidence: SimEvidence, checkoutHead: String?, audit: SimAuditScope
   ) -> (findings: [SimEvidenceFinding], notes: [SimVerifyNote]) {
     var untargeted = 0
+    var navigated = 0
     var findings: [SimEvidenceFinding] = []
     if evidence.steps.isEmpty {
       findings.append(
@@ -119,17 +120,18 @@ public enum SimEvidenceRules {
     }
     for step in evidence.steps {
       findings += stepFindings(
-        step, files: evidence.files, audit: audit, untargeted: &untargeted)
+        step, files: evidence.files, audit: audit, untargeted: &untargeted,
+        navigated: &navigated)
     }
     return (
       findings + SimExitRule.findings(evidence),
-      audit.note(untargeted: untargeted).map { [$0] } ?? []
+      audit.note(untargeted: untargeted, navigated: navigated).map { [$0] } ?? []
     )
   }
 
   private static func stepFindings(
     _ step: SimStep, files: [String: SimEvidenceFile], audit: SimAuditScope,
-    untargeted: inout Int
+    untargeted: inout Int, navigated: inout Int
   ) -> [SimEvidenceFinding] {
     let name = "step \(SimStep.stem(step.n)) \"\(step.label)\""
     func missing(_ path: String, _ why: String) -> SimEvidenceFinding {
@@ -192,6 +194,7 @@ public enum SimEvidenceRules {
     }
     let audited = SimAccessibilityRules.audit(tree, step: step, scope: audit)
     untargeted += audited.untargeted
+    navigated += audited.navigated
     findings += audited.findings
     return findings
   }

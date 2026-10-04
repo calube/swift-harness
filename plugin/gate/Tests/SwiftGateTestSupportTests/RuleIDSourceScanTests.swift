@@ -13,6 +13,7 @@ struct RuleIDSourceScanTests {
       let anchor = "standards.md#rule-id-index", test = "RuleIndexTests.sourceIdsAreIndexed"
       let changed = "\(target).\(function)", key = "budgets.\(name)", git = "commit.gpgsign"
       let thread = "swiftgate.process", sentence = "denied.", config = "simulator.device"
+      let sheet = "sheet.png", video = "video.mp4"
       // a comment quoting "plan-lint.commented-out"
       let real = Finding(ruleID: "plan-lint.dag-cycle")
       """#

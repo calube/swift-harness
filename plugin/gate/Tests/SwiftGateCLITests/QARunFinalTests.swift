@@ -117,7 +117,7 @@ struct QARunFinalTests {
     try QARunFlowTests.plan(repo)
     let runner = try CapturedFinalPass.runner(
       batch: "batch/pass", home: repo.root.appending(path: ".harness/home"))
-    let device = try BusyRecorderDevice(device: LiveAgentDevice(runner: runner))
+    let device = BusyRecorderDevice(device: LiveAgentDevice(runner: runner))
     let simulator = try FakeFlowSimulator(
       batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
       scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),

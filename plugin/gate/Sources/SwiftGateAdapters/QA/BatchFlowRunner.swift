@@ -143,7 +143,7 @@ public struct BatchFlowRunner: Sendable {
     -> (Data?, BatchFlowOutcome.Stop, Int?)
   {
     guard case .failed(_, let failure) = error else {
-      return (nil, .driver(error.message), nil)
+      return (error.output, .driver(error.message), nil)
     }
     // A busy recorder refuses the record start, whichever step the refusal names.
     if plan.recordTo != nil, failure.reason == .appleSimulatorRecordingBusy {

@@ -58,7 +58,7 @@ reason = "plain word is \"use\""
 [docs.budgets.files]
 "plugin/docs/standards.md" = 2850
 "plugin/docs/testing-playbook.md" = 3150
-"docs/e2e-report.md" = 2700
+"docs/e2e-report.md" = 3550
 "docs/capabilities.md" = 1500
 "plugin/docs/hooks.md" = 1000
 "docs/adrs/0001-review-severity-for-standards-violations.md" = 900

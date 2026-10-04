@@ -157,7 +157,9 @@ surface, and says to work in that worktree and follow
 3. Confirm each check fails before its tasks merge: `"$SG" qa run --plan <slug> --at-base --json`,
    in the foreground with the Bash tool's `timeout` at 600000, though a flow row boots a leased
    device: a headless session ends with its turn when only background Bash work is left, and
-   kills that work. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
+   kills that work. This `--at-base` run is never skipped, and no task that a row's `Runs after`
+   names merges before it has run: such a task that finishes first keeps its checked return and
+   merges once this run is done. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
    tell the change from its absence. Name it in the report, and go on. A row that reads
    `unverified` there has no red run behind it, whatever the worker returned: name it in the
    report as `no red run` with its message.
@@ -259,14 +261,19 @@ GREEN and recorded, before `ledger set … done`, on `main`:
 ```
 
 It runs only the rows whose `Runs after` names `<task>` and whose other tasks are done, in layer
-order: acceptance, then flow, then state, stopping at the first layer with a red row (simulator QA
-amendment §6). A plan with no table reads GREEN with a note.
+order: acceptance, then flow, then state. A red row stops its own requirement's later layers,
+never another requirement's (simulator QA amendment §6). A plan with no table reads GREEN with a note.
 
 - GREEN: go on. Rows that read `unverified` or `waiting` go in the report with their messages.
-- RED: a red row stops the next merge, as a red `main` does. Run
-  `"$SG" build merge <slug> <task> --undo --session <session> --json`, then the fixer as for a red
+- RED: a red row stops the next merge, as a red `main` does, and is a halt answered by rule:
+  `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
+  `"$SG" build merge <slug> <task> --undo --session <session> --json`, then
+  `"$SG" build resume --run <run> --task <task> --answer retry`, then the fixer as for a red
   merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON.
-  After its fix merge, the merge gate runs again and then this command.
+  After its fix merge, the merge gate runs again and then this command. Never keep the merge on
+  your own judgement. The 1 exception is a pre-existing issue, shown by the newest `--at-base`
+  report: that row is `red` there too, and every finding the red row names appears in it. Then
+  keep the merge, skip the halt and name the row and both run ids in the report.
 - Exit 2 (BLOCKED): the table or the ledger doesn't read. Keep its `message` for the report and go
   on; the merge gate already passed.
 
@@ -284,6 +291,7 @@ the findings or the answer's words.
 |---|---|---|
 | a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
 | a `gate-red` return, or the fix merge's gate still red | the task | `gate-red` |
+| a RED `qa run --after`, resumed with `retry` before its fixer | the task | `gate-red` |
 | the fixer's merge still conflicted | the task | `merge-conflict` |
 | a `design-conflict` return | the reporting task | `amend` |
 | the time budget's cutoff with tasks running | none | `budget` |

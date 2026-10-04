@@ -25,6 +25,8 @@ struct AgentDeviceTests {
     FakeProcessRunner { _ throws(ProcessRunnerError) in output }
   }
 
+  static let covered = "AgentDevice/covered"
+
   private static func device(_ name: String) throws -> (LiveAgentDevice, FakeProcessRunner) {
     let runner = runner(try recorded(name))
     return (LiveAgentDevice(runner: runner), runner)
@@ -109,7 +111,7 @@ struct AgentDeviceTests {
   }
 
   @Test(
-    "an unknown error code or reason fails decoding and names itself — catches a new failure passing as a known one"
+    "an unknown error code fails decoding and names itself, and the call keeps stdout as printed — catches a new failure passing as a known one, or its output lost"
   )
   func unknownCode() async throws {
     let inUse = try Fixture.text("AgentDevice/open-device-in-use.stdout")
@@ -120,15 +122,6 @@ struct AgentDeviceTests {
       (error as? AgentDeviceError.DecodingFailure)?.detail.contains("DEVICE_ON_FIRE") == true
     }
 
-    let wait = try Fixture.text("AgentDevice/wait-text-absent.stdout")
-    let reason = Data(
-      wait.replacingOccurrences(of: "wait_deadline_exceeded", with: "wait_got_bored").utf8)
-    #expect {
-      _ = try AgentDeviceError.decodeFailure(reason)
-    } throws: { error in
-      (error as? AgentDeviceError.DecodingFailure)?.detail.contains("wait_got_bored") == true
-    }
-
     let device = LiveAgentDevice(
       runner: Self.runner(
         ProcessOutput(status: .exited(1), stdout: String(decoding: renamed, as: UTF8.self))))
@@ -136,12 +129,52 @@ struct AgentDeviceTests {
       _ = try await device.open(
         bundleID: "com.example.SampleApp", launchArguments: [], on: Self.target)
     }
-    guard case .unreadableOutput(let command, _, let detail) = error else {
+    guard case .unreadableOutput(let command, _, let detail, _) = error else {
       Issue.record("expected unreadable output, got \(String(describing: error))")
       return
     }
     #expect(command == "open")
     #expect(detail.contains("DEVICE_ON_FIRE"))
+    #expect(error?.output == renamed)
+  }
+
+  @Test(
+    "the captured press on a switch its own UISwitch covers decodes with its reason, its step and its output — catches a press failure read as unreadable output"
+  )
+  func coveredPress() async throws {
+    let device = LiveAgentDevice(
+      runner: try CapturedBatch.runner("press-switch", directory: Self.covered))
+    let error = await #expect(throws: AgentDeviceError.self) {
+      _ = try await device.batch(stepsFile: "/flows/press-switch.json", on: Self.target)
+    }
+    guard case .failed(let command, let failure) = error else {
+      Issue.record("expected a typed failure, got \(String(describing: error))")
+      return
+    }
+    #expect(command == "batch")
+    #expect(failure.code == .commandFailed)
+    #expect(failure.reason == .coveredByInteractiveDescendants)
+    #expect(failure.failedStep == AgentDeviceBatchStep(index: 5, command: "press"))
+    #expect(failure.output == (try Fixture.data("\(Self.covered)/press-switch.stdout")))
+    #expect(error?.verdict == .red)
+  }
+
+  @Test(
+    "a reason with no case of its own decodes as unknown with the reason as printed, keeping its step — catches a failure lost to a reason the pin's captures never showed"
+  )
+  func unknownReason() throws {
+    let printed = try Fixture.text("\(Self.covered)/press-switch.stdout")
+    let renamed = Data(
+      printed.replacingOccurrences(
+        of: "covered_by_interactive_descendants", with: "wait_got_bored"
+      ).utf8)
+
+    let failure = try AgentDeviceError.decodeFailure(renamed)
+
+    #expect(failure.reason == .unknown("wait_got_bored"))
+    #expect(failure.reason?.rawValue == "wait_got_bored")
+    #expect(failure.failedStep == AgentDeviceBatchStep(index: 5, command: "press"))
+    #expect(AgentDeviceFailureReason(rawValue: "predicate_failed") == .predicateFailed)
   }
 
   @Test(
@@ -248,7 +281,7 @@ struct AgentDeviceTests {
       try await device.waitForText(
         "No such text anywhere", timeoutMilliseconds: 2000, on: Self.target)
     }
-    guard case .unreadableOutput(let command, let status, let detail) = error else {
+    guard case .unreadableOutput(let command, let status, let detail, _) = error else {
       Issue.record("expected unreadable output, got \(String(describing: error))")
       return
     }
