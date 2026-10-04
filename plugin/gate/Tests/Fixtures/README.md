@@ -249,6 +249,7 @@ with `/SCRATCH` and `$HOME` with `/HOME`. The same script writes
 | `record-start`, `record-stop`, `contact-sheet` | `record start <path>`, a `press`, `record stop`, `record contact-sheet <video> --out <sheet> --json` |
 | `logs-path`, `network-dump`, `trace-start`, `trace-stop` | `logs path`, `network dump 25 --include headers`, `trace start <path>`, `trace stop <path>` |
 | `close` | `close` |
+| `close-session-not-found` | `close --udid 00000000-0000-0000-0000-000000000000 --session swiftgate-capture-closed --json`, a session never opened |
 | `device-release-session-refused`, `device-release-stale` | `device release --stale` with `--udid --session`, then with `--udid` alone |
 
 Observed behavior the adapter relies on:
@@ -258,8 +259,9 @@ Observed behavior the adapter relies on:
   Without `--json`, a failure prints `Error (<code>): <message>` on stderr and nothing on stdout.
 - The codes seen are `COMMAND_FAILED` (a `wait` past its deadline, with `details.reason`
   `wait_deadline_exceeded`), `DEVICE_IN_USE` (`open` on a device another session holds),
-  `DEVICE_NOT_FOUND` (an unknown UDID) and `INVALID_ARGS` (a step input that fails its schema, and
-  `--session` on `device`, which refuses it).
+  `DEVICE_NOT_FOUND` (an unknown UDID), `SESSION_NOT_FOUND` (`close` on a session that isn't
+  open) and `INVALID_ARGS` (a step input that fails its schema, and `--session` on `device`, which
+  refuses it).
 - A failing batch names the step in `error.details.step` (1-based) and `error.details.command`;
   a passing one lists every step under `data.results` with `step`, `command`, `ok` and
   `durationMs`, and a `snapshot` step returns the full tree under its `data.nodes`.

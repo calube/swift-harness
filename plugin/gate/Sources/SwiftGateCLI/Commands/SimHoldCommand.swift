@@ -39,7 +39,10 @@ struct SimHoldCommand: AsyncParsableCommand {
     }
     let runner = LiveProcessRunner()
     let holder = SimHolder(
-      devices: SimulatorClones.live(config: config.simulator, runner: runner),
+      devices: SimulatorClones.live(
+        config: config.simulator, runner: runner,
+        releaseClaims: SimulatorClones.agentDeviceClaimRelease(
+          LiveAgentDevice(runner: runner), failed: { Self.log("sim hold: \($0)") })),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
       holderPID: getpid(), timeout: .seconds(config.qa.sessionTimeoutMinutes * 60),

@@ -778,7 +778,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `calibrate-design.usage`, `calibrate-design.passed`, `calibrate-design.seed-defect`, `calibrate-design.label-missed`, `calibrate-design.no-seeds`, `calibrate-design.missing-label`, `calibrate-design.missing-input`, `calibrate-design.missing-entry`, `calibrate-design.invalid-label`, `calibrate-design.unknown-agent`, `calibrate-design.uncalibrated-agent` | design plan workflows §6.2 (`calibrate design`) |
 | `calibrate-build.usage`, `calibrate-build.passed`, `calibrate-build.seed-defect`, `calibrate-build.label-missed`, `calibrate-build.no-seeds`, `calibrate-build.missing-label`, `calibrate-build.missing-input`, `calibrate-build.missing-entry`, `calibrate-build.invalid-label`, `calibrate-build.unknown-agent`, `calibrate-build.uncalibrated-agent` | build executor §12 (`calibrate build`) |
 
-### Simulator QA commands (`sim up`, `snap`, `down`)
+### Simulator QA commands (`sim up`, `snap`, [`down`](simulator-qa.md#sim-down))
 
 | Rule id | Section |
 |---|---|

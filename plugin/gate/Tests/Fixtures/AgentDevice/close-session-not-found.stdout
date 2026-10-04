@@ -1,0 +1,14 @@
+{
+  "success": false,
+  "error": {
+    "code": "SESSION_NOT_FOUND",
+    "message": "No active session",
+    "hint": "Run open first or pass an explicit device selector.",
+    "diagnosticId": "muu8fyac-ee5ad267",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-closed/requests/7b0d9eacbbc86661.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-closed",
+      "requestId": "7b0d9eacbbc86661"
+    }
+  }
+}

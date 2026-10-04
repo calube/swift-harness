@@ -5,6 +5,7 @@ struct SimCommand: AsyncParsableCommand {
     commandName: "sim",
     abstract: "Drive one simulator for a QA run across several commands, on the shared sim cap.",
     subcommands: [
-      SimUpCommand.self, SimSnapCommand.self, SimVerifyCommand.self, SimHoldCommand.self,
+      SimUpCommand.self, SimSnapCommand.self, SimVerifyCommand.self, SimDownCommand.self,
+      SimHoldCommand.self,
     ])
 }

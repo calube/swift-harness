@@ -98,6 +98,7 @@ struct AgentDeviceTests {
       ("wait-text-absent", AgentDeviceErrorCode.commandFailed),
       ("open-device-in-use", .deviceInUse),
       ("open-unknown-udid", .deviceNotFound),
+      ("close-session-not-found", .sessionNotFound),
       ("batch-invalid", .invalidArgs),
       ("device-release-session-refused", .invalidArgs),
     ])

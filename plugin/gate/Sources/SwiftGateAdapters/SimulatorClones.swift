@@ -16,6 +16,9 @@ public enum SimulatorCloneError: Error, Sendable, Equatable {
 /// counting lock for the clone's whole lifetime so at most `simulator.max_concurrent` clones exist
 /// at once across every session.
 public struct SimulatorClones: Sendable {
+  /// Releases `agent-device`'s stale claims on a device the orphan sweep just deleted.
+  public typealias ClaimRelease = @Sendable (_ udid: String) async -> Void
+
   private let simctl: any Simctl
   private let lock: any CountingLock
   private let config: SimulatorConfig
@@ -23,13 +26,15 @@ public struct SimulatorClones: Sendable {
   private let isAlive: @Sendable (Int32) -> Bool
   private let makeToken: @Sendable () -> String
   private let lockTimeout: Duration
+  private let releaseClaims: ClaimRelease?
 
+  /// - Parameter releaseClaims: run for each orphan the sweep deletes; `nil` leaves claims alone.
   public init(
     simctl: any Simctl, lock: any CountingLock, config: SimulatorConfig,
     ownerPID: Int32 = getpid(),
     isAlive: @escaping @Sendable (Int32) -> Bool = SimulatorClones.processIsAlive,
     makeToken: @escaping @Sendable () -> String = SimulatorClones.randomToken,
-    lockTimeout: Duration = .seconds(30 * 60)
+    lockTimeout: Duration = .seconds(30 * 60), releaseClaims: ClaimRelease? = nil
   ) {
     self.simctl = simctl
     self.lock = lock
@@ -38,15 +43,19 @@ public struct SimulatorClones: Sendable {
     self.isAlive = isAlive
     self.makeToken = makeToken
     self.lockTimeout = lockTimeout
+    self.releaseClaims = releaseClaims
   }
 
   /// The production wiring: `xcrun simctl` and the machine-wide `sim` lock.
-  public static func live(config: SimulatorConfig, runner: any ProcessRunner) -> SimulatorClones {
+  public static func live(
+    config: SimulatorConfig, runner: any ProcessRunner, releaseClaims: ClaimRelease? = nil
+  ) -> SimulatorClones {
     SimulatorClones(
       simctl: LiveSimctl(
         runner: runner,
         timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simctlTimeoutSeconds))),
-      lock: FileCountingLock(name: "sim", capacity: config.maxConcurrent), config: config)
+      lock: FileCountingLock(name: "sim", capacity: config.maxConcurrent), config: config,
+      releaseClaims: releaseClaims)
   }
 
   public static let randomToken: @Sendable () -> String = {
@@ -134,6 +143,7 @@ public struct SimulatorClones: Sendable {
     var deleted: [String] = []
     for orphan in orphans where await discardSucceeded(orphan.udid) {
       deleted.append(orphan.udid)
+      await releaseClaims?(orphan.udid)
     }
     return deleted
   }
@@ -168,6 +178,24 @@ public struct SimulatorClones: Sendable {
       return try await call()
     } catch {
       throw .simctl(error)
+    }
+  }
+}
+
+extension SimulatorClones {
+  /// Runs `agent-device device release --stale --udid <udid>` on each device the sweep deletes,
+  /// so `agent-device`'s claims don't outlive it. An `agent-device` that can't be launched holds
+  /// no claims to release and is skipped; any other failure is passed to `failed`.
+  public static func agentDeviceClaimRelease(
+    _ agentDevice: any AgentDevice, failed: @escaping @Sendable (String) -> Void
+  ) -> ClaimRelease {
+    { udid in
+      do throws(AgentDeviceError) {
+        try await agentDevice.releaseStale(udid: udid)
+      } catch {
+        if case .runner(_, .launchFailed) = error { return }
+        failed("agent-device claims on \(udid): \(error.message)")
+      }
     }
   }
 }

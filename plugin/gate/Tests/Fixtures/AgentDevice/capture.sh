@@ -92,6 +92,8 @@ record network-dump network dump 25 --include headers "${target[@]}"
 record trace-start trace start "$work/trace.log" "${target[@]}"
 record trace-stop trace stop "$work/trace.log" "${target[@]}"
 record close close "${target[@]}"
+record close-session-not-found close --udid 00000000-0000-0000-0000-000000000000 \
+  --session "$session-closed" --json
 # `device` refuses `--session`, so the release names the device alone.
 record device-release-session-refused device release --stale "${target[@]}"
 record device-release-stale device release --stale --udid "$udid" --json
