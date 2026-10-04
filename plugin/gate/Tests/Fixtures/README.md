@@ -1049,8 +1049,8 @@ The run was GREEN in 65.9s: T0 and T1 (31 tests passed), no simulator target sel
 
 ## Neutral diffs
 
-`NeutralDiffs/<language>/<case>.diff` is one file's diff from a real commit in a public, permissively
-licensed repository (Apache-2.0, MIT or BSD). The `<case>.SOURCE` beside it records the repository,
+`NeutralDiffs/<language>/<case>.diff` is a single file's diff from a real commit in a public
+repository under Apache-2.0, MIT or BSD. The `<case>.SOURCE` beside it records the repository,
 the commit sha, the file path and the exact command. Each capture runs in a full clone of the
 repository's default branch (`git clone --single-branch https://github.com/<repo>.git`) with no
 diff settings in the git config:
@@ -1059,7 +1059,7 @@ diff settings in the git config:
 git show --format= <sha> -- <path> > NeutralDiffs/<language>/<case>.diff
 ```
 
-Commits were found with `git log -G'<token regex>' --format=%H -- '<glob>'` in each clone, keeping
+The capture searched each clone with `git log -G'<token regex>' --format=%H -- '<glob>'` and kept
 small single-file diffs whose added lines carry the token. The case name says what the added lines
 hold:
 
@@ -1078,11 +1078,11 @@ hold:
   `typescript/fp-string-as-any` (typescript-eslint's rule test code) and
   `typescript/fp-comment-as-any` (commented-out code).
 
-Some cases carry more than one token, as the commits do: `swift/try-bang` also adds a
-`fatalError`, `typescript/ts-ignore` and `typescript/ts-expect-error` also add an
-`eslint-disable-next-line`, `python/noqa-type-ignore` adds both, `python/skipped-test` is a
-`skipif` on a test that asserts, and `swift/nonisolated-unsafe` is a new test file that asserts.
+Some cases carry several tokens, as their commits do. `swift/try-bang` also adds a `fatalError`;
+`typescript/ts-ignore` and `typescript/ts-expect-error` also add an `eslint-disable-next-line`;
+`python/noqa-type-ignore` adds both. `python/skipped-test` is a `skipif` on a test that asserts,
+and `swift/nonisolated-unsafe` is a new test file that asserts.
 
 No small Java commit adding an assertion-free test turned up in `square/okhttp` or
-`square/javapoet`, so Java has no `test-no-assertion` case. No Kotlin string-literal false
-positive was captured.
+`square/javapoet`, so Java has no `test-no-assertion` case. Kotlin has no string-literal false
+positive case.
