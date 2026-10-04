@@ -194,6 +194,9 @@ public struct RunViewReader: RunViewReading {
       state.requirements = document.requirements.map {
         RunViewRequirement(id: $0.id, title: Self.cut($0.statement))
       }
+    case .livePlan:
+      // A live plan names no spec page or design to read requirements from.
+      break
     }
     return state
   }
