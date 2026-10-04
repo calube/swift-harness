@@ -85,16 +85,10 @@ struct FileCountingLockTests {
       flock(guardFD, LOCK_UN)
     }.start()
 
-    let outcome: FileLockError?
-    do {
+    await #expect(throws: FileLockError.timedOut(waited: .milliseconds(100), capacity: 1)) {
       _ = try await lock(capacity: 1).acquire(timeout: .milliseconds(100))
-      outcome = nil
-    } catch {
-      outcome = error
     }
     released.signal()
-
-    #expect(outcome == .timedOut(waited: .milliseconds(100), capacity: 1))
   }
 
   @Test("dropping a lease frees its slot — catches leaked slots on early return")

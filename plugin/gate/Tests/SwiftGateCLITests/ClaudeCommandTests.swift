@@ -44,7 +44,9 @@ struct ClaudeCommandTests {
       if settings { try Data("{\"hooks\":{}}".utf8).write(to: layout.settings) }
     }
 
-    func run(_ arguments: [String], cwd: URL) async throws -> (status: SwiftGateAdapters.ExitStatus, stderr: String) {
+    func run(_ arguments: [String], cwd: URL) async throws -> (
+      status: SwiftGateAdapters.ExitStatus, stderr: String
+    ) {
       var environment = ProcessInfo.processInfo.environment
       environment["PATH"] = bin.path + ":/usr/bin:/bin"
       environment["LLVM_PROFILE_FILE"] = root.appending(path: "%p.profraw").path

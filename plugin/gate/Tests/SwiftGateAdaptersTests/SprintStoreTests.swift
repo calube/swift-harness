@@ -216,36 +216,35 @@ struct SprintStoreTests {
     "a full volume fails the staged write, leaves sprint.json absent and removes the half-written staging file — catches a partial staging file left beside sprint.json",
     .enabled(if: FileSystemConditions.hasDiskImages, "needs hdiutil to attach a FAT volume"))
   func fullVolumeRemovesStagingFile() async throws {
-    try await FATVolume.with { volume in try await Self.removesStagingFile(on: volume) }
-  }
+    try await FATVolume.with { volume in
+      let layout = try PlanStateLayout(commonDirectory: volume.mountPoint.path)
+      try FileManager.default.createDirectory(
+        atPath: layout.root, withIntermediateDirectories: true)
+      // The lock lives off the volume so only the staged write runs out of space.
+      let lockDirectory = try FileSystemConditions.scratchDirectory("sprint-lock")
+      defer { TestTemporaryDirectory.remove(lockDirectory) }
+      let store = SprintStore(
+        layout: layout,
+        lock: FileCountingLock(
+          directory: lockDirectory, name: PlanIndexStore.lockName, capacity: 1,
+          pollInterval: .milliseconds(2)),
+        timeout: .seconds(30))
+      try volume.fill()
 
-  private static func removesStagingFile(on volume: FATVolume) async throws {
-    let layout = try PlanStateLayout(commonDirectory: volume.mountPoint.path)
-    try FileManager.default.createDirectory(atPath: layout.root, withIntermediateDirectories: true)
-    // The lock lives off the volume so only the staged write runs out of space.
-    let lockDirectory = try FileSystemConditions.scratchDirectory("sprint-lock")
-    defer { TestTemporaryDirectory.remove(lockDirectory) }
-    let store = SprintStore(
-      layout: layout,
-      lock: FileCountingLock(
-        directory: lockDirectory, name: PlanIndexStore.lockName, capacity: 1,
-        pollInterval: .milliseconds(2)),
-      timeout: .seconds(30))
-    try volume.fill()
+      let error = await #expect(throws: SprintStoreError.self) {
+        try await store.apply(SprintScenario.start(slices: 1))
+      }
 
-    let error = await #expect(throws: SprintStoreError.self) {
-      try await store.apply(SprintScenario.start(slices: 1))
+      guard case .io(let operation, let path, _) = error else {
+        Issue.record("expected an io error, got \(String(describing: error))")
+        return
+      }
+      #expect(operation == "write")
+      #expect(path.hasPrefix(layout.root + "/.sprint.json."))
+      #expect(error?.leftoverStaging == nil)
+      #expect(FileSystemConditions.contents(of: layout.root).isEmpty)
+      #expect(try store.read() == nil)
     }
-
-    guard case .io(let operation, let path, _) = error else {
-      Issue.record("expected an io error, got \(String(describing: error))")
-      return
-    }
-    #expect(operation == "write")
-    #expect(path.hasPrefix(layout.root + "/.sprint.json."))
-    #expect(error?.leftoverStaging == nil)
-    #expect(FileSystemConditions.contents(of: layout.root).isEmpty)
-    #expect(try store.read() == nil)
   }
 
   @Test(

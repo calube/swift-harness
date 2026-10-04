@@ -78,6 +78,21 @@ struct MutationOrphanTests {
 
     func remove() { TestTemporaryDirectory.remove(root) }
 
+    /// Makes a package for `body`, then kills whatever it left running and removes it, whether
+    /// `body` throws or not.
+    static func with(_ body: (Package) async throws -> Void) async throws {
+      let package = try Package()
+      let outcome: Result<Void, any Error>
+      do {
+        outcome = .success(try await body(package))
+      } catch {
+        outcome = .failure(error)
+      }
+      await package.killSurvivors()
+      package.remove()
+      try outcome.get()
+    }
+
     /// Waits until no process anywhere on the machine names this package's one-of-a-kind temp
     /// path — the mark of a real orphan, not just this test's own already-reaped child — and
     /// returns the `ps` line of each one still there once `deadline` has passed. The runner
@@ -88,7 +103,9 @@ struct MutationOrphanTests {
     /// fails.
     func survivors(reapedWithin deadline: Duration) async throws -> [String] {
       let pids = try await survivors()
-      try await OffPool.run { () throws(POSIXError) in try Self.awaitExits(of: pids, within: deadline) }
+      try await OffPool.run { () throws(POSIXError) in
+        try Self.awaitExits(of: pids, within: deadline)
+      }
       return try await survivorLines().map(String.init)
     }
 
@@ -154,47 +171,36 @@ struct MutationOrphanTests {
     .timeLimit(.minutes(10))
   )
   func timeoutTakesTheProcessTreeDown() async throws {
-    let package = try Package()
-    let outcome: Result<Void, any Error>
-    do {
-      outcome = .success(try await Self.timesOut(package))
-    } catch {
-      outcome = .failure(error)
-    }
-    await package.killSurvivors()
-    package.remove()
-    try outcome.get()
-  }
+    try await Package.with { package in
+      let toolchain = LiveMutationToolchain(runner: LiveProcessRunner())
+      let selection = HostTestSelection(
+        packagePath: "Hang",
+        targets: [TestTargetReference(name: "HangTests", path: "Hang/Tests/HangTests")])
+      func reportPath() -> String {
+        package.root.appending(path: "reports/\(UUID().uuidString).xml").path
+      }
 
-  private static func timesOut(_ package: Package) async throws {
-    let toolchain = LiveMutationToolchain(runner: LiveProcessRunner())
-    let selection = HostTestSelection(
-      packagePath: "Hang",
-      targets: [TestTargetReference(name: "HangTests", path: "Hang/Tests/HangTests")])
-    func reportPath() -> String {
-      package.root.appending(path: "reports/\(UUID().uuidString).xml").path
-    }
+      let built = await toolchain.buildTests(root: package.root, packageDirectory: "Hang")
+      guard case .built = built else {
+        Issue.record("expected the mutant to build, got \(built)")
+        return
+      }
 
-    let built = await toolchain.buildTests(root: package.root, packageDirectory: "Hang")
-    guard case .built = built else {
-      Issue.record("expected the mutant to build, got \(built)")
-      return
-    }
+      let (result, _) = await toolchain.test(
+        root: package.root, selection: selection, timeout: .seconds(5), reportPath: reportPath())
+      guard case .timedOut = result else {
+        Issue.record("expected timedOut, got \(result)")
+        return
+      }
 
-    let (result, _) = await toolchain.test(
-      root: package.root, selection: selection, timeout: .seconds(5), reportPath: reportPath())
-    guard case .timedOut = result else {
-      Issue.record("expected timedOut, got \(result)")
-      return
+      let survivors = try await package.survivors(reapedWithin: Self.reapDeadline)
+      #expect(
+        survivors.isEmpty,
+        """
+        \(survivors.count) descendant(s) of the timed-out test run still running \(Self.reapDeadline) \
+        after the runner returned (pid ppid pgid state command):
+        \(survivors.joined(separator: "\n"))
+        """)
     }
-
-    let survivors = try await package.survivors(reapedWithin: Self.reapDeadline)
-    #expect(
-      survivors.isEmpty,
-      """
-      \(survivors.count) descendant(s) of the timed-out test run still running \(Self.reapDeadline) \
-      after the runner returned (pid ppid pgid state command):
-      \(survivors.joined(separator: "\n"))
-      """)
   }
 }

@@ -97,7 +97,8 @@ struct FATVolume {
         executable: "/usr/bin/hdiutil", arguments: arguments, timeout: .seconds(120)))
     guard output.status.isSuccess else {
       throw ConditionError(
-        "hdiutil \(arguments.joined(separator: " ")) exited \(output.status): \(output.stderr.text)")
+        "hdiutil \(arguments.joined(separator: " ")) exited \(output.status): \(output.stderr.text)"
+      )
     }
   }
 }

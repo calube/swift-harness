@@ -103,6 +103,7 @@ struct ConfigLoaderProfileTests {
       ProcessInvocation(
         executable: "/usr/bin/git", arguments: arguments, workingDirectory: directory.path,
         timeout: .seconds(60)))
-    #expect(output.status.isSuccess, "git \(arguments.joined(separator: " ")): \(output.stderr.text)")
+    #expect(
+      output.status.isSuccess, "git \(arguments.joined(separator: " ")): \(output.stderr.text)")
   }
 }
