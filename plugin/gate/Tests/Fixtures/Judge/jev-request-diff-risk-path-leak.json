@@ -1,0 +1,19 @@
+{
+  "model" : "jev-1.13.0",
+  "questions" : {
+    "risk" : {
+      "criteria" : [
+        "high: touches security, authentication, secrets, payments, data migrations, persisted formats, concurrency or a public interface, or is too large to review at a glance",
+        "medium: changes behaviour in ordinary code a reviewer should read",
+        "low: documentation, comments, formatting, tests only, or a small local change that can't alter behaviour"
+      ],
+      "instructions" : "How much review does this change need before it merges, beyond automated build, lint and test checks? high: it touches security, authentication, secrets, payments, data migrations, persisted formats, concurrency or a public interface, or it is too large to review at a glance; medium: it changes behaviour in ordinary code a reviewer should read; low: documentation, comments, formatting, tests only, or a small local change that can't alter behaviour.",
+      "type" : "score"
+    }
+  },
+  "state" : {
+    "context" : "Paths changed:\nplugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift\nplugin/gate/Tests/SwiftGateAdaptersTests/LiveProcessRunnerTests.swift",
+    "subject" : "diff --git a/plugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift b/plugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift\nindex 061d87e3..8a5ad488 100644\n--- a/plugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift\n+++ b/plugin/gate/Sources/SwiftGateAdapters/LiveProcessRunner.swift\n@@ -89,7 +89,7 @@ public struct LiveProcessRunner: ProcessRunner {\n         return Self.skippingXcrunShim(candidate, environment: environment)\n       }\n     }\n-    throw .launchFailed(executable: executable, reason: \"not found on PATH \\(searchPath)\")\n+    throw .launchFailed(executable: executable, reason: \"not found on PATH\")\n   }\n \n   /// `/usr/bin/git` is an `xcrun` shim, byte-identical to `/usr/bin/swift`: it picks the tool to\ndiff --git a/plugin/gate/Tests/SwiftGateAdaptersTests/LiveProcessRunnerTests.swift b/plugin/gate/Tests/SwiftGateAdaptersTests/LiveProcessRunnerTests.swift\nindex 8686943c..e37c6ef9 100644\n--- a/plugin/gate/Tests/SwiftGateAdaptersTests/LiveProcessRunnerTests.swift\n+++ b/plugin/gate/Tests/SwiftGateAdaptersTests/LiveProcessRunnerTests.swift\n@@ -68,6 +68,24 @@ struct LiveProcessRunnerTests {\n     }\n   }\n \n+  @Test(\n+    \"a bare name missing from PATH says so without printing PATH — catches a report carrying the machine's home directories\"\n+  )\n+  func missingBareNameKeepsPathOut() async {\n+    let path = \"/nonexistent/home/someone/bin:/nonexistent/opt/tools\"\n+    let restricted = LiveProcessRunner(baseEnvironment: [\"PATH\": path])\n+\n+    await #expect {\n+      _ = try await restricted.run(ProcessInvocation(executable: \"claude\", timeout: .seconds(10)))\n+    } throws: { error in\n+      guard case .launchFailed(let executable, let reason) = error as? ProcessRunnerError else {\n+        return false\n+      }\n+      return executable == \"claude\" && reason == \"not found on PATH\"\n+        && !reason.contains(\"/nonexistent\")\n+    }\n+  }\n+\n   @Test(\n     \"env overlay replaces and removes parent values — catches SNAPSHOT_TESTING_RECORD leaking in\")\n   func environmentOverlay() async throws {\n",
+    "subject_kind" : "a change to a repository as a unified diff, with the paths it touches"
+  }
+}
