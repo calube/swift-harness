@@ -3,14 +3,14 @@
 This trial runs the brownfield profile (design §14) on an iOS app for the first time, to prove the Xcode path end to
 end. The repository is `Aidoku/Aidoku` at `3091ef26e593d303e34afed70bc8c5997c105f80`: a SwiftUI and UIKit app with an
 Xcode project, 14 SwiftPM dependencies and a Swift Testing target. [The trial repositories page](../../../../docs/handoffs/brownfield-trial-repos.md#ios-trial)
-says why it was picked. The clone is fresh, made on 2026-10-04 at `trials/aidoku-ios-1`. The spec asks for a
+says why this trial uses it. The clone is fresh, made on 2026-10-04 at `trials/aidoku-ios-1`. The spec asks for a
 download queue summary row: a value type, a SwiftUI row with an accessibility identifier, and a unit test. The
 harness ran from this branch's `plugin/bin/swiftgate`, which is main at `99f847d0`, built as source hash
 `18477dbc3f8e90ef`.
 
 **Verdict: the one-shot run PASSES, in 29.6 minutes for $2.43, inside the 45-minute expectation.** `spec.md` went to
-the plan branch `swift-harness/spec` at `835ba9da` with all 3 tasks done: the contract through `plan import
---contract`, then 2 merges, each with a GREEN `merge` gate that built the app, ran its tests on the simulator and
+the plan branch `swift-harness/spec` at `835ba9da` with all 3 tasks done. The contract went through `plan import
+--contract`, then came 2 merges, each with a GREEN `merge` gate that built the app, ran its tests on the simulator and
 proved the new test. `final` is GREEN. The run asked the user nothing and raised no halt.
 
 It passed because the orchestrator repaired discovery. Discover's `xcodebuild` commands omit
@@ -93,7 +93,7 @@ took 0.1 to 0.7 s on the changed files.
 - **Target membership.** The `xcode-membership` step ran on the 2 new Swift files, `DownloadQueueSummary.swift` in
   the contract slice and `DownloadQueueSummaryTests.swift` in the logic worker's slice: GREEN in 0 to 1 ms each. On
   a synchronized project a file joins its target by its folder.
-- **`xcode add-file`.** Not used, and not needed: the project is synchronized. Nothing told the workers it exists:
+- **`xcode add-file`.** Not used, and not needed: the project is a synchronized one. Nothing told the workers it exists:
   only `xcode.file-not-in-target`'s message names it (finding 15).
 - **Simulator tiers.** None of the owned profile's simulator tiers ran. The `merge` and `final` tiers ran the area's
   `xcodebuild test` on the simulator (54.9, 58.8 and 88.6 s) and prove ran it again with the source reverted. No
@@ -156,8 +156,8 @@ took 0.1 to 0.7 s on the changed files.
      a `XCSwiftPackageProductDependency` on a plugin yields commands with both flags.
 2. **A failed warm-up test time sets the slice budget, and a change with no test files then gates nothing.**
    - The launch's warm-up recorded `testMs: 2946` for a test step that failed. The contract slice
-     `20261004T172615Z-799c3dc7` read 2.9 s as fitting the 30 s budget, chose the test path, found no changed
-     tests, and was GREEN in 1.1 s with no build step and no finding, on a commit that added a type.
+     `20261004T172615Z-799c3dc7` read 2.9 s as fitting the 30 s budget and chose the test path. It found no changed
+     tests and was GREEN in 1.1 s with no build step and no finding, on a commit that added a type.
    - Files: `plugin/gate/Sources/SwiftGateCLI/BrownfieldSliceCheck.swift` (the `warmTestMilliseconds` closure reads
      `testMilliseconds` without the `test` step's outcome) and
      `plugin/gate/Sources/SwiftGateDomain/Brownfield/Warmup.swift` (records `testMs` for a failed run).
@@ -181,7 +181,7 @@ took 0.1 to 0.7 s on the changed files.
    - Suggested fix: a `[simulator]` pin in the brownfield config, with the gate creating its own named device per
      clone and passing `-destination id=<udid>`, as the owned profile's simulator tiers do.
 5. **The gate never places DerivedData, so every new tree builds cold.**
-   - `AreaCacheEnvironment.derivedDataSeed` is computed and never read. Builds went to the default DerivedData, 1
+   - The gate computes `AreaCacheEnvironment.derivedDataSeed` and never reads it. Builds went to the default DerivedData, 1
      directory per tree path: 9 directories, 15.2 GiB, never cleaned. The first build in each worktree took 103.6
      and 119.3 s against 4.3 to 5.1 s warm, which sets the slice p95.
    - Files: `plugin/gate/Sources/SwiftGateDomain/Brownfield/AreaCacheEnvironment.swift` and
@@ -194,7 +194,7 @@ took 0.1 to 0.7 s on the changed files.
      No guard fired (`hook.decision` `none`).
    - File: `plugin/gate/Sources/SwiftGateDomain/Hooks/Guards.swift`.
    - Suggested fix: deny `pkill` and `killall` by name, and `kill` of a process the session didn't start, for
-     subagents. Test: a worker's `pkill xcodebuild` is denied; `kill <own background pid>` passes.
+     subagents. Test: the guard denies a worker's `pkill xcodebuild`; `kill <own background pid>` passes.
 7. **An interrupted gate leaves no event.** The 2 killed slices left empty run directories and no `gate.run`.
    File: `plugin/gate/Sources/SwiftGateCLI/GateRun.swift`. Suggested fix: on SIGTERM or SIGINT, record a `gate.run`
    with an interrupted verdict before exiting.
@@ -203,15 +203,15 @@ took 0.1 to 0.7 s on the changed files.
    `plugin/workflows/build-task.js` (the worker prompt). Suggested fix: tell workers to run each gate in its own
    foreground call with a 600000 ms timeout.
 9. **`.harness/` isn't git-excluded in a brownfield clone.** The row worker's `.harness/tmp/out.txt` showed as
-   untracked, the diff-risk judge read it ("a stray .harness/tmp/out.txt file is included"), and `worktree remove`
+   untracked, the diff-risk judge read it (`a stray .harness/tmp/out.txt file is included`), and `worktree remove`
    refused until the orchestrator deleted it. File: `plugin/gate/Sources/SwiftGateCLI/Commands/PlanImportCommand.swift`,
    which already adds `PLAN.md` to `.git/info/exclude`. Suggested fix: add `.harness/` there too.
 10. **The spawned warm-up's `warmup.run` events still carry no `source.binary`** (memos-5 finding 4). File:
     `plugin/gate/Sources/SwiftGateCLI/Commands/RunCommand.swift` (`LiveWarmupSpawner`).
 11. **Worker stages still return quoted span ids** (memos-5 finding 8): the row's `review:test-quality` stage
     returned `"\"3ae9bdb1d3761713\""`. File: `plugin/workflows/build-task.js`.
-12. **The medium-risk review read no diff.** The test-quality reviewer's one attempt to read the diff, a `git show`,
-    was blocked by `guard.reviewer-bash`; it returned 0 findings 4 s later, having read only the context pack.
+12. **The medium-risk review read no diff.** `guard.reviewer-bash` blocked the test-quality reviewer's 1 attempt to read the diff, a
+    `git show`; it returned 0 findings 4 s later, having read only the context pack.
     File: `plugin/workflows/build-task.js` (the reviewer's prompt). Suggested fix: put the diff in the reviewer's
     prompt or in a file it can Read, and report a review that read no diff as a fallback.
 13. **The Xcode test step reports no test counts, and prove can't select tests.** `final` shows `testCounts: null`,
@@ -224,7 +224,7 @@ took 0.1 to 0.7 s on the changed files.
     Suggested fix: mark the step
     `guessed`, or `missing` with "swiftlint not installed", when the tool isn't on `PATH`.
 15. **Nothing tells the run or its workers about `swiftgate xcode add-file`.** Only `xcode.file-not-in-target`'s
-    message names it. Not exercised here: the project is synchronized. Files: `plugin/skills/run/SKILL.md` and
+    message names it. Not exercised here: the project is a synchronized one. Files: `plugin/skills/run/SKILL.md` and
     `plugin/workflows/build-task.js`. Suggested fix: 1 line in each for explicit projects.
 16. **The orchestrator's wait loop could never end.** It waited on the re-run warm-up with `until … ! pgrep -f
     "swiftgate warmup"`, which matches its own shell, so the loop ran in the background until the session ended. It
@@ -240,7 +240,7 @@ took 0.1 to 0.7 s on the changed files.
 
 ## Deviations
 
-- **SwiftLint installed.** Discover proposed a SwiftLint lint step, and `swiftlint` wasn't installed. I added
+- **SwiftLint installed.** Discover proposed a SwiftLint lint step, and the machine had no `swiftlint`. I added
   `swiftlint = "0.65.1"` to the trials directory's `mise.toml`, as earlier trials did for Go tools, before the
   1-line probe. Aidoku's CI installs SwiftLint unpinned with Homebrew.
 - **Second lock ticket.** The launch's warm-up exited in 8 s, so I took a second ticket for the orchestrator's

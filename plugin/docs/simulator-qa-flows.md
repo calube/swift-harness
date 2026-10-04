@@ -21,10 +21,10 @@ takes these steps, in this order:
 4. On a batch that exits 0 it runs the requirement's state rows while the device is up, if this is
    the requirement's last flow row. They get `QA_SIM_UDID`, `QA_SIM_SESSION`, `QA_SIM_BUNDLE_ID` and
    `QA_SIM_DIR` beside the usual variables.
-5. It runs `sim down`, on every path once `sim up` was asked, a failed `sim up` included, so 1
+5. It runs `sim down`, on every path once it has asked for `sim up`, a failed `sim up` included, so 1
    `qa run` holds at most 1 device.
 6. It runs `sim verify` over the row's `sim/` folder. It runs after `sim down`, which copies the
-   app's crash reports into `sim/crashes/`, so an app exit is named.
+   app's crash reports into `sim/crashes/`, so the report names an app exit.
 
 The row passes only when the batch exits 0 and `sim verify` is GREEN. A failing step is `red`,
 named by its number in the flow file, with any `sim verify` RED findings added. A steps file
@@ -46,7 +46,7 @@ Each flow row writes `qa/<NN>-<requirement>.flow/` in the run directory:
 The record is also 1 qa.flow event: `{plan, row, requirement, atBase, source, steps, video, sheet,
 videoUnverified, sheetUnverified}`. `source` is `batch`, and each step that ran is
 `{n, label, offsetMs, ok}`, with `n` in the flow file's numbering. `offsetMs` counts from the
-video's first frame when `video` is set, else from the batch's start. The failing step is the last
+video's first frame when `video` is present, else from the batch's start. The failing step is the last
 one, with `ok` false. The last 4 keys appear only after a final pass.
 
 ## The final pass
@@ -62,7 +62,7 @@ one, with `ok` false. The last 4 keys appear only after a final pass.
    `trace.log`, `os.log` (`log show` for the subsystem named after the bundle id) and `container/`,
    the app's data container.
 
-A `record start` refused as `apple_simulator_recording_busy` is retried every 15 s for up to 5
+When `record start` refuses with `apple_simulator_recording_busy`, `qa run` retries every 15 s for up to 5
 minutes. Past that, after any other refusal, or with the lock held 10 minutes, the flow runs
 unrecorded. `videoUnverified` then names `recorderBusy`, `recordLockTimedOut` or `recordFailed`, and
 a failed sheet names `sheetFailed`. Each missing video is a `qa.video-unverified` nit, and each

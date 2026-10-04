@@ -5,8 +5,8 @@ These files are inputs, not tool output: a validation worker writes a flow as an
 pinned tool reports (`plugin/qa/agent-device-schemas-<pin>.json`, captured by
 `../AgentDevice/capture.sh`) and against SampleApp's `AccessibilityID` enum.
 
-Two of them are the exact steps `../AgentDevice/capture.sh` ran on a device, so the tool's own
-verdict on them is captured:
+Two of them are the exact steps `../AgentDevice/capture.sh` ran on a device, so the capture holds the tool's own
+verdict on them:
 
 | File | Same steps as | The pinned tool's verdict |
 |---|---|---|

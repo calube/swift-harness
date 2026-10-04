@@ -6,7 +6,7 @@ gate's `report.json` and the run's events. Nothing here changes what a gate deci
 ## The failure reason
 
 Every span or task whose outcome isn't ok carries a failure reason: 1 line of at most 15 plain
-words, shown as FAILURE REASON right after OUTCOME in the span popover, after the latest gate in
+words. It shows as FAILURE REASON right after OUTCOME in the span popover, after the latest gate in
 the task popover, and after the status in the task drawer. The "Why it failed" section below it
 stays the longer view.
 
@@ -19,11 +19,11 @@ stays the longer view.
 | a span open in a finished run or a report | "Never ended; no end event recorded." |
 | anything else not ok | "No reason recorded." |
 
-A warm-up step's record comes from the clone's `warmup/<tree>.json` and `baseline/<tree>.json`:
-a `warmup.run` names its commit, not the base tree, so its area matches the 1 times file whose
+A warm-up step's record comes from the clone's `warmup/<tree>.json` and `baseline/<tree>.json`.
+A `warmup.run` names its commit, not the base tree, so its area matches the 1 times file whose
 record holds the same step outcomes, and the same test time where 2 or more do. A file that
-doesn't decode is a damage row. A warm-up step whose failure the baseline recorded is expected and
-excused by later gates, so its bar and outcome read amber, "baseline", and the Timeline tab
+doesn't decode is a damage row. A warm-up step whose failure the baseline recorded is a known failure that
+later gates excuse, so its bar and outcome read amber, "baseline", and the Timeline tab
 doesn't count it as failed.
 
 The builder computes each reason, puts it on 1 line, takes machine paths out as it does for

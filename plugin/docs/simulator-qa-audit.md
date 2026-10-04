@@ -22,7 +22,7 @@ A brownfield clone inherits controls the change never touched, so a whole-screen
 every flow RED. There, `qa run` judges only the controls its flow file names by `id=`: the
 identifiers the change's contract gives its new controls. Selectors come from a step's input,
 outside what a step types or compares. Matching follows the pinned `agent-device`: trimmed,
-case-folded, `||` between alternatives. A control is judged when an alternative holding an `id=`
+case-folded, `||` between alternatives. The audit judges a control when an alternative holding an `id=`
 term matches it, even if a `label=` selector reaches it too.
 
 A control the flow reaches only by `role=`, `label=`, `value=` or `text=` is existing UI it
