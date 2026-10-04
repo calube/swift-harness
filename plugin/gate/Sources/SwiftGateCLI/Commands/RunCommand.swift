@@ -373,6 +373,7 @@ struct LiveWarmupSpawner: WarmupSpawning {
         ProcessInvocation(
           executable: "/bin/sh",
           arguments: ["-c", script, "sh", log.path(percentEncoded: false), executable] + arguments,
+          environmentOverlay: [GateBinary.sourceHashVariable: binary?.sourceHash],
           workingDirectory: directory.path(percentEncoded: false), timeout: .seconds(60)))
     } catch {
       throw RunStartError(message: "starting the warm-up: \(error)")
