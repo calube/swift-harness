@@ -23,6 +23,10 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
   /// The plan's `index.json` status after the import; `nil` before that step.
   var indexStatus: PlanStatus?
   var assumptions: [String] = []
+  /// The rows written to `validation.json`; `nil` when the plan has no `## Validation` section.
+  var validationRows: Int?
+  /// Non-gating notes, such as a plan imported with no validation table.
+  var notes: [String] = []
   /// What became of the contract task `--contract` named; `nil` without the flag.
   var contract: ContractRecord?
   var message = ""
@@ -43,7 +47,7 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case command, plan, status, verdict, tasks, waves, excludeAdded, indexStatus, assumptions,
-      contract, message
+      validationRows, notes, contract, message
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -58,6 +62,8 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
     try c.encode(excludeAdded, forKey: .excludeAdded)
     try c.encode(indexStatus, forKey: .indexStatus)
     try c.encode(assumptions, forKey: .assumptions)
+    try c.encode(validationRows, forKey: .validationRows)
+    try c.encode(notes, forKey: .notes)
     try c.encode(contract, forKey: .contract)
     try c.encode(message, forKey: .message)
   }
@@ -130,6 +136,30 @@ enum PlanImportRun {
       livePlan = try LivePlanParser.parse(String(decoding: liveData, as: UTF8.self))
     } catch {
       return invalid(report, error, livePath)
+    }
+    if let validation = livePlan.validation {
+      let findings: [Finding]
+      do throws(ReportContractViolation) {
+        findings = try PlanLintValidation.findings(
+          table: validation.table, requirements: livePlan.requirements.map(\.id),
+          taskIDs: Set(livePlan.tasks.map(\.id)),
+          hasIOSArea: config.areas.contains { $0.kind == .xcode }, file: livePath,
+          rowLines: validation.rowLines, sectionLine: validation.headingLine)
+      } catch {
+        report.message = "linting the `## Validation` table of \(livePath): \(error)"
+        return report
+      }
+      let gating = findings.filter(\.severity.failsGate)
+      if !gating.isEmpty {
+        report.status = .invalid
+        report.verdict = .red
+        report.message =
+          "\(livePath): "
+          + gating.map { finding in
+            (finding.line.map { "line \($0): " } ?? "") + "\(finding.ruleID): \(finding.message)"
+          }.joined(separator: "; ") + "; nothing was written"
+        return report
+      }
     }
 
     var landing: ContractLanding.Outcome?
@@ -209,11 +239,21 @@ enum PlanImportRun {
       }
     }
     let planFile = livePlan.planFile(slug: slug, resume: ledger.resume, existing: existingPlan)
+    let validationPath = plan.directory + "/" + ValidationTable.fileName
+    var removedValidation = false
     do {
       // Each file is written beside the old one and renamed over it: a reader sees one whole
       // file or the other.
       try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile), options: .atomic)
       try PlanFileJSON.encode(planFile).write(to: URL(filePath: plan.planFile), options: .atomic)
+      if let validation = livePlan.validation {
+        try ValidationTableJSON.encode(validation.table).write(
+          to: URL(filePath: validationPath), options: .atomic)
+      } else if files.fileExists(atPath: validationPath) {
+        // The plan dropped its table: rows left from an earlier import would still run.
+        try files.removeItem(atPath: validationPath)
+        removedValidation = true
+      }
     } catch {
       report.message = "writing the plan's state in \(plan.directory): \(error)"
       return report
@@ -290,6 +330,13 @@ enum PlanImportRun {
     report.tasks = ledger.tasks.count
     report.waves = ledger.waves.count
     report.assumptions = livePlan.assumptions
+    report.validationRows = livePlan.validation?.table.rows.count
+    if livePlan.validation == nil {
+      report.notes.append(
+        "\(livePath) has no `## Validation` section, so no check runs after each merge"
+          + (removedValidation
+            ? "; the \(ValidationTable.fileName) an earlier import wrote was removed" : ""))
+    }
     report.message =
       "\(ledger.tasks.count) tasks in \(ledger.waves.count) waves; \(plan.ledgerFile) and "
       + "\(plan.planFile) written"

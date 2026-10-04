@@ -2316,3 +2316,30 @@ grep '"runID":"20261004T124744Z-9d7ec113"' $S/memos-3/gate-history-task-worktree
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/*` matched nothing.
+
+## Brownfield trial: a plan with a validation table
+
+`BrownfieldTrial/memos-4-validation-PLAN.md` is `memos-4-PLAN.md` with a `## Validation` section
+that Opus wrote for it, given that plan and `plugin/skills/run/references/plan-shape.md` as the
+commit adding the fixture has it. The section went in before `## Assumptions`, and nothing else
+changed. Opus gave every requirement an `acceptance` row, since the repository has no `xcode`
+area. From the repository root, with Claude Code 2.1.288:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+{ printf 'Write the `## Validation` section of the brownfield PLAN.md below, following the reference that comes after it. The repository has 2 areas: `memos` (kind go) and `web` (kind node); it has no xcode area. Print only the section, starting with the `## Validation` heading, and nothing else.\n\n<plan>\n'
+  cat $F/memos-4-PLAN.md
+  printf '</plan>\n\n<reference>\n'
+  cat plugin/skills/run/references/plan-shape.md
+  printf '</reference>\n'; } > prompt.txt
+(cd "$(mktemp -d)" && claude -p --model opus --tools "" < "$OLDPWD/prompt.txt") > section.md
+python3 -c "
+import sys
+plan = open(sys.argv[1]).read(); section = open(sys.argv[2]).read()
+i = plan.index('## Assumptions')
+open(sys.argv[3], 'w').write(plan[:i] + section.rstrip('\\n') + '\\n\\n' + plan[i:])
+" $F/memos-4-PLAN.md section.md $F/memos-4-validation-PLAN.md
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/memos-4-validation-PLAN.md`
+matched nothing.
