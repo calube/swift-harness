@@ -59,7 +59,9 @@ struct RunViewContractTests {
       ])
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["cursor"] is NSNull)
-    #expect(keys(object["run"]) == ["id", "plan", "preset", "startedAt", "endedAt", "state"])
+    #expect(
+      keys(object["run"]) == ["id", "plan", "preset", "startedAt", "endedAt", "state", "stallMin"])
+    #expect((object["run"] as? [String: Any])?["stallMin"] is NSNull)
     #expect((object["run"] as? [String: Any])?["endedAt"] is NSNull)
     #expect(keys(first(object["spec"])) == ["id", "title", "tasks"])
 
@@ -111,5 +113,23 @@ struct RunViewContractTests {
     #expect(
       (object["run"] as? [String: Any])?["startedAt"] as? String == "2026-09-21T14:13:20.250Z")
     #expect(first(object["halts"])["at"] as? String == "2026-09-21T14:13:20.250Z")
+  }
+
+  @Test(
+    "the run carries its preset's stall minutes — catches a live page that can never flag a stall"
+  )
+  func runCarriesStallMinutes() throws {
+    let preset = BuildPreset(
+      designTier: .none, maxParallel: 1, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
+      workerModel: .sonnet, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .block,
+      stallMin: 3)
+    let record = BuildRunRecord(
+      runID: "b1", plan: "p", startedAt: start, presetName: "brownfield", preset: preset)
+    let join = BuildJoin.Run(
+      plan: "p", runID: "b1", writeSets: [:], returns: [:], events: [], record: record)
+    let view = RunViewBuilder.build(RunViewInput(buildRun: "b1", join: join))
+    #expect(view.run.stallMin == 3)
+    let object = try JSONSerialization.jsonObject(with: RunViewJSON.encode(view))
+    #expect(((object as? [String: Any])?["run"] as? [String: Any])?["stallMin"] as? Int == 3)
   }
 }

@@ -1,7 +1,13 @@
 # Brownfield profile: implementation plan
 
 <!-- RESUME
-Status (2026-10-03): planned, not started. Next: wave 1 (8 tasks, listed in "Wave map").
+Status (2026-10-04, 03:45): waves 1 and 2 merged on local main (unpushed), plus merge-and-final, slice, warm-up and
+these fixes: one config writer, executor on the plan branch, CI mining and readers emit area-root commands, ingest
+of streamed usage. In flight: run-prepares-and-launches, brownfield-gates-record-and-judge (brownfield telemetry,
+live slice judge, `swiftgate judge diff-risk`, reader/halt layout), xcode-add-file-edits-explicit-projects,
+brownfield-prove-records-results. Next: the 3 trials (glean, memos, koel; memos first), then the docs task.
+Speed mode is on until the cleanup (worker brief). Merge procedure: union-merge list conflicts, resolve code by
+hand, then `swift build --package-path plugin/gate --build-tests` before the next merge.
 Spec: docs/designs/2026-10-03-brownfield-profile-design.md (approved 2026-10-03, 16 user decisions). Read its RESUME
 header, §3, §5, §8 and §17.
 Scope: the per-clone state root and config under the git common dir; `swiftgate discover` and `discover --apply`

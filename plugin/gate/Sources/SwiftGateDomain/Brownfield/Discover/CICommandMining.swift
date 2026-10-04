@@ -303,8 +303,8 @@ public enum CICommandMining {
   }
 }
 
-/// The `run:` scripts of a GitHub Actions workflow, each with its step's `working-directory`.
-/// A line reader, not a YAML parser: it reads the keys of each list item at the item's own
+/// The `run:` scripts of a GitHub Actions workflow, each with its step's `working-directory`, or
+/// else its job's or the workflow's `defaults.run.working-directory`. A line reader, not a YAML parser: it reads the keys of each list item at the item's own
 /// column, which is how every workflow writes a step.
 enum WorkflowRuns {
   struct Run: Equatable {
@@ -314,6 +314,7 @@ enum WorkflowRuns {
 
   static func runs(in text: String) -> [Run] {
     let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let defaults = defaultDirectories(lines)
     var runs: [Run] = []
     for (index, line) in lines.enumerated() {
       let indent = line.prefix { $0 == " " }.count
@@ -338,11 +339,11 @@ enum WorkflowRuns {
           ))
       }
       guard let run = keyed.first(where: { $0.key == "run" }) else { continue }
-      var directory = "."
-      if let value = keyed.first(where: { $0.key == "working-directory" })?.value {
-        guard let path = CICommandMining.join(".", unquoted(stripComment(value))) else { continue }
-        directory = path
-      }
+      let own = keyed.first(where: { $0.key == "working-directory" })?.value
+      guard
+        let directory = own.map({ CICommandMining.join(".", unquoted(stripComment($0))) })
+          ?? defaults(index)
+      else { continue }
       let script: [String]
       let value = stripComment(run.value)
       if value.hasPrefix("|") || value.hasPrefix(">") {
@@ -355,6 +356,68 @@ enum WorkflowRuns {
       runs.append(Run(script: script, directory: directory))
     }
     return runs
+  }
+
+  /// The default directory of the step at each line: its job's `defaults.run.working-directory`,
+  /// else the workflow's, else `.`; `nil` when the default leaves the repository.
+  private static func defaultDirectories(_ lines: [String]) -> (Int) -> String? {
+    let workflow = defaultDirectory(lines, in: 0..<lines.count, indent: 0)
+    var jobs: [(span: Range<Int>, directory: String)] = []
+    if let start = lines.firstIndex(where: { $0.hasPrefix("jobs:") }) {
+      let next = lines[(start + 1)...].firstIndex(where: { !isBlank($0) && leading($0) == 0 })
+      let body = (start + 1)..<(next ?? lines.count)
+      let keys = body.filter { !isBlank(lines[$0]) && !isComment(lines[$0]) }
+      let column = keys.first.map { leading(lines[$0]) } ?? 0
+      let starts = keys.filter { leading(lines[$0]) == column }
+      for (offset, jobStart) in starts.enumerated() {
+        let end = offset + 1 < starts.count ? starts[offset + 1] : body.upperBound
+        let inner = (jobStart + 1)..<end
+        let child = inner.first { !isBlank(lines[$0]) && !isComment(lines[$0]) }
+          .map { leading(lines[$0]) }
+        if let child, let directory = defaultDirectory(lines, in: inner, indent: child) {
+          jobs.append((jobStart..<end, directory))
+        }
+      }
+    }
+    return { index in
+      CICommandMining.join(
+        ".", jobs.first { $0.span.contains(index) }?.directory ?? workflow ?? ".")
+    }
+  }
+
+  /// The `working-directory` under a `defaults:` key at `indent` within `span`, then `run:`, as
+  /// written.
+  private static func defaultDirectory(_ lines: [String], in span: Range<Int>, indent: Int)
+    -> String?
+  {
+    guard
+      let start = span.first(where: {
+        leading(lines[$0]) == indent && lines[$0].dropFirst(indent).hasPrefix("defaults:")
+      })
+    else { return nil }
+    var run: Int?
+    for line in lines[(start + 1)..<span.upperBound] where !isBlank(line) && !isComment(line) {
+      let column = leading(line)
+      if column <= indent { break }
+      let content = line.dropFirst(column)
+      if let runColumn = run {
+        if column <= runColumn {
+          if content.hasPrefix("run:") { run = column } else { run = nil }
+          continue
+        }
+        guard content.hasPrefix("working-directory:") else { continue }
+        let value = content.dropFirst("working-directory:".count)
+          .trimmingCharacters(in: .whitespaces)
+        return unquoted(stripComment(value))
+      } else if content.hasPrefix("run:") {
+        run = column
+      }
+    }
+    return nil
+  }
+
+  private static func isComment(_ line: String) -> Bool {
+    line.drop { $0 == " " }.hasPrefix("#")
   }
 
   private static func leading(_ line: String) -> Int { line.prefix { $0 == " " }.count }

@@ -326,6 +326,9 @@ When the timer fires, or any `build next` reports `phase` `cutoff`:
 
 ## Final gate
 
+Step 4 holds the `final` span open across this section, and each halt below closes it first with
+`"$SG" events span end <span> --outcome halted`; a new `final` span opens after the answer.
+
 Only 1 `ready` tier runs at a time on this machine. Wait for the others in the foreground first.
 Then pass every merged task's surface commit as a proof base, so a test of API that `main` lacked
 before the build is proven where that API first existed without its behavior. `build proof-bases`
@@ -344,11 +347,13 @@ For a plan with a surface, the last line measures from it, as every merge gate d
 "$SG" check --tier ready --base <surfaceCommit> <the --proof-base arguments it printed>
 ```
 
-`build proof-bases` exits 2 when a merged task has no stored return: halt, since the final gate
-can't prove that task's tests. Record the final gate whatever its verdict, so the ledger page
+`build proof-bases` exits 2 when a merged task has no stored return:
+`"$SG" events span end <span> --outcome halted`, then halt, since the final gate can't prove that
+task's tests. Record the final gate whatever its verdict, so the ledger page
 shows it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
 
-Keep its verdict and run id for the report. Not GREEN: halt, and quote its findings. Options:
+Keep its verdict and run id for the report. Not GREEN: `"$SG" events span end <span> --outcome halted`,
+then halt, and quote its findings. Options:
 **finish anyway** (Recommended when every finding is outside this plan's write sets), or **stop**,
 which leaves the index at `building`.
 
