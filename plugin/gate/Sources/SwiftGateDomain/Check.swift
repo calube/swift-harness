@@ -37,14 +37,15 @@ public enum CheckTier: String, Sendable, CaseIterable {
     public let requires: String
   }
 
-  public var runsImpact: Bool { self != .fast }
+  /// `push` and `ready`: a brownfield tier runs the clone's own commands, never these.
+  public var runsImpact: Bool { self == .push || self == .ready }
   /// Every T1 target rather than only those affected by the change.
-  public var runsAllT1: Bool { self != .fast }
+  public var runsAllT1: Bool { self == .push || self == .ready }
   /// Diff coverage and per-module T1 presence.
-  public var runsCoverage: Bool { self != .fast }
+  public var runsCoverage: Bool { self == .push || self == .ready }
 
   /// Simulator tests of the packages the change affects.
-  public var runsT2: Bool { self != .fast }
+  public var runsT2: Bool { self == .push || self == .ready }
   /// The app's UI flows.
   public var runsT3: Bool { self == .ready }
 
@@ -73,7 +74,10 @@ public enum CheckExtraStep: String, Sendable, CaseIterable {
   /// Whether `tier` runs this step unasked, so asking for it adds nothing.
   public func isRun(by tier: CheckTier) -> Bool {
     switch self {
-    case .prove, .mutate: tier == .ready
+    // A brownfield tier proves the changed tests of each area it gates, at `merge` those `slice`
+    // only built; none mutates.
+    case .prove: tier == .ready || tier.profile == .brownfield
+    case .mutate: tier == .ready
     case .impact: tier.runsImpact
     case .coverage: tier.runsCoverage
     // No tier compiles the app scheme on its own: T3 builds it only when flows are declared.

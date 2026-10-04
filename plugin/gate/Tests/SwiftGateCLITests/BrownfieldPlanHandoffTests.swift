@@ -198,7 +198,7 @@ struct BrownfieldPlanHandoffTests {
     #expect(!text.contains("The store keeps whether a memo is pinned."))
     #expect(text.contains("pnpm run lint"))
     #expect(text.contains("pnpm run test"))
-    #expect(!text.contains("go test"))
+    #expect(!text.contains("= go test"))
     #expect(text.contains("neutral.no-assertion"))
     #expect(text.contains("neutral.unsafe-shortcut"))
   }
@@ -218,7 +218,7 @@ struct BrownfieldPlanHandoffTests {
       return
     }
     let text = try #require(pack)
-    #expect(text.contains("go test"))
+    #expect(text.contains("= go test"))
     #expect(!text.contains("pnpm run"))
   }
 
