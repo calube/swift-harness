@@ -193,6 +193,49 @@ struct StateRootResolverTests {
   }
 
   @Test(
+    "in a configured clone, a session record written from the main checkout reads back from the plan checkout and a task worktree, and one written from a worktree reads back from the main checkout, while an owned repository's linked worktree keeps its own records in its tree — catches events ingest and doctor missing the session from a linked worktree"
+  )
+  func sessionRecordsAreSharedAcrossWorktrees() async throws {
+    let repository = try await Self.clone(configured: true)
+    defer { repository.remove() }
+    var linked: [URL] = []
+    defer { for url in linked { try? FileManager.default.removeItem(at: url) } }
+    for name in ["spec", "spec-task"] {
+      let url = repository.root.deletingLastPathComponent()
+        .appending(
+          path: "\(repository.root.lastPathComponent)-\(name)", directoryHint: .isDirectory)
+      linked.append(url)
+      try await repository.git("worktree", "add", "-q", "-b", name, url.path)
+    }
+    let started = try SessionRecordStoreTests.record("session-main")
+    try SessionRecordStore(worktreeRoot: repository.root).write(started)
+    for worktree in linked {
+      #expect(
+        try SessionRecordStore(worktreeRoot: worktree).record(sessionID: "session-main")
+          == started, "\(worktree.lastPathComponent)")
+    }
+    let fromTask = try SessionRecordStoreTests.record("session-task", at: 1_790_000_100)
+    try SessionRecordStore(worktreeRoot: linked[1]).write(fromTask)
+    #expect(
+      try SessionRecordStore(worktreeRoot: repository.root).record(sessionID: "session-task")
+        == fromTask)
+    #expect(
+      Set(SessionRecordStore(worktreeRoot: linked[0]).scan().records.map(\.sessionId))
+        == ["session-main", "session-task"])
+
+    let owned = try await Self.clone(owned: true)
+    defer { owned.remove() }
+    let ownedLinked = owned.root.deletingLastPathComponent()
+      .appending(path: "\(owned.root.lastPathComponent)-task", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: ownedLinked) }
+    try await owned.git("worktree", "add", "-q", "-b", "task", ownedLinked.path)
+    let ownedStore = SessionRecordStore(worktreeRoot: ownedLinked)
+    #expect(
+      ownedStore.directoryURL.standardizedFileURL.path
+        == ownedLinked.appending(path: ".harness/hook-state/sessions").standardizedFileURL.path)
+  }
+
+  @Test(
     "a scratch tree of a configured clone sits under <git-dir>/swift-harness/scratch/ and is gone afterwards, while an owned clone's stays beside the repository — catches prove's trees left beside a clone the harness doesn't own"
   )
   func scratchTreeSitsUnderTheGitDir() async throws {
