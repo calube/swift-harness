@@ -41,7 +41,8 @@ public enum AreaOutcomeReading {
     if let crash = crashMarker(in: output) {
       return .crashed(signal: crash.signal, tail: tail(output))
     }
-    return .failed(exit: exit, tail: tail(output), junit: junit)
+    return .failed(
+      exit: exit, tail: tail(output), junit: junit ?? GoTestReport.junit(fromJSON: output))
   }
 
   public static func timedOut(output: String) -> AreaCommandOutcome {

@@ -46,6 +46,8 @@ public struct EventCopyUp: Sendable {
     self.destination = destination
   }
 
+  /// The worktree's own `events/`: empty for a brownfield worktree, whose events go straight to
+  /// the shared store, unless a build from before that wrote them here.
   private var sourceEvents: URL {
     StateRootResolver.resolve(worktree: source)
       .url(RunLayout.eventsDirectory, directoryHint: .isDirectory)
@@ -137,7 +139,8 @@ public struct EventCopyUp: Sendable {
   /// identities existed doesn't.
   private func identity() throws(EventCopyUpError) -> String {
     do throws(HarnessEventWriteError) {
-      return try EventSegmentStore(root: source).identity().storeID
+      return try EventSegmentStore(root: source, state: StateRootResolver.resolve(worktree: source))
+        .identity().storeID
     } catch {
       throw EventCopyUpError(path: error.path, reason: error.reason)
     }

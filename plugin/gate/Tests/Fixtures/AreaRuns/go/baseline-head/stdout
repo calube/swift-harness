@@ -1,0 +1,35 @@
+{"Time":"2026-10-04T06:18:45.546413-05:00","Action":"start","Package":"example.com/gobase/alpha"}
+{"Time":"2026-10-04T06:18:45.546569-05:00","Action":"start","Package":"example.com/gobase/beta"}
+{"Time":"2026-10-04T06:18:45.731357-05:00","Action":"run","Package":"example.com/gobase/alpha","Test":"TestPasses"}
+{"Time":"2026-10-04T06:18:45.731445-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestPasses","Output":"=== RUN   TestPasses\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731497-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestPasses","Output":"--- PASS: TestPasses (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.73151-05:00","Action":"pass","Package":"example.com/gobase/alpha","Test":"TestPasses","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.731522-05:00","Action":"run","Package":"example.com/gobase/alpha","Test":"TestFlaky"}
+{"Time":"2026-10-04T06:18:45.731533-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestFlaky","Output":"=== RUN   TestFlaky\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.73154-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestFlaky","Output":"    alpha_test.go:12: fails at the base commit\n","OutputType":"error"}
+{"Time":"2026-10-04T06:18:45.731555-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestFlaky","Output":"--- FAIL: TestFlaky (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731563-05:00","Action":"fail","Package":"example.com/gobase/alpha","Test":"TestFlaky","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.73157-05:00","Action":"run","Package":"example.com/gobase/alpha","Test":"TestTable"}
+{"Time":"2026-10-04T06:18:45.731575-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable","Output":"=== RUN   TestTable\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731584-05:00","Action":"run","Package":"example.com/gobase/alpha","Test":"TestTable/case_a"}
+{"Time":"2026-10-04T06:18:45.731598-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable/case_a","Output":"=== RUN   TestTable/case_a\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731607-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable/case_a","Output":"--- PASS: TestTable/case_a (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731613-05:00","Action":"pass","Package":"example.com/gobase/alpha","Test":"TestTable/case_a","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.731618-05:00","Action":"run","Package":"example.com/gobase/alpha","Test":"TestTable/case_b"}
+{"Time":"2026-10-04T06:18:45.731624-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable/case_b","Output":"=== RUN   TestTable/case_b\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.731629-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable/case_b","Output":"    alpha_test.go:19: case_b fails\n","OutputType":"error"}
+{"Time":"2026-10-04T06:18:45.731635-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable/case_b","Output":"--- FAIL: TestTable/case_b (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.73164-05:00","Action":"fail","Package":"example.com/gobase/alpha","Test":"TestTable/case_b","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.731645-05:00","Action":"output","Package":"example.com/gobase/alpha","Test":"TestTable","Output":"--- FAIL: TestTable (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.73165-05:00","Action":"fail","Package":"example.com/gobase/alpha","Test":"TestTable","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.731656-05:00","Action":"output","Package":"example.com/gobase/alpha","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.732265-05:00","Action":"output","Package":"example.com/gobase/alpha","Output":"FAIL\texample.com/gobase/alpha\t0.186s\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.732297-05:00","Action":"fail","Package":"example.com/gobase/alpha","Elapsed":0.186}
+{"Time":"2026-10-04T06:18:45.862957-05:00","Action":"run","Package":"example.com/gobase/beta","Test":"TestNew"}
+{"Time":"2026-10-04T06:18:45.863067-05:00","Action":"output","Package":"example.com/gobase/beta","Test":"TestNew","Output":"=== RUN   TestNew\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.863086-05:00","Action":"output","Package":"example.com/gobase/beta","Test":"TestNew","Output":"    beta_test.go:10: fails only after the change\n","OutputType":"error"}
+{"Time":"2026-10-04T06:18:45.86311-05:00","Action":"output","Package":"example.com/gobase/beta","Test":"TestNew","Output":"--- FAIL: TestNew (0.00s)\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.863119-05:00","Action":"fail","Package":"example.com/gobase/beta","Test":"TestNew","Elapsed":0}
+{"Time":"2026-10-04T06:18:45.863127-05:00","Action":"output","Package":"example.com/gobase/beta","Output":"FAIL\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.863885-05:00","Action":"output","Package":"example.com/gobase/beta","Output":"FAIL\texample.com/gobase/beta\t0.317s\n","OutputType":"frame"}
+{"Time":"2026-10-04T06:18:45.863917-05:00","Action":"fail","Package":"example.com/gobase/beta","Elapsed":0.317}

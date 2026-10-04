@@ -23,7 +23,7 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<base>` | the commit `<plan-branch>` started at: `git merge-base <plan-branch> HEAD` in the user's checkout, before anything lands |
 | `<common>` | `git rev-parse --path-format=absolute --git-common-dir` |
 | `<plan-dir>` | `<common>/swift-harness/plans/<slug>` |
-| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): a worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, where you commit and run gates. Task worktrees sit beside it as `<top>-<slug>-<task>` |
+| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task worktrees sit beside it as `<top>-<slug>-<task>` |
 | `<config>` | `<common>/swift-harness/config.toml`, written only by `discover --apply` and `allow` |
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
 | `<run>` | the `runId` that `build start` prints in step 7 |
@@ -137,7 +137,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, kept as `<span>`.
 
-1. `git worktree add <checkout> <plan-branch>` from the user's checkout. Work only there.
+1. `"$SG" run checkout create <slug> --session <session> --json` from the user's checkout. Its
+   `worktree` is `<checkout>`; work only there. Never add or remove a worktree with git itself:
+   only `swiftgate` keeps the gate reports a checkout holds when it goes.
 2. Write the contract: the new types, signatures and stubs every task compiles against, with
    behaviour unchanged. It builds in every touched area: run each touched area's `build` command
    from `<config>` in `<checkout>`.
@@ -154,11 +156,15 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 1. `"$SG" plan import <slug> --json`. Status `invalid` quotes the task and line to fix: fix
    `PLAN.md` and import again. Status `blocked` names the state it couldn't read: report it and
    stop. The import links the root `PLAN.md` to `<plan-dir>/PLAN.md` and keeps that link out of
-   `git status`; workers read the plan by absolute path.
+   `git status`; workers read the plan by absolute path. It also sets the plan's index entry to
+   `planned`, so `build start` needs no `index set`.
 2. Run the build loop of `/swift-harness:build` (its `SKILL.md` and `references/event-loop.md`) with
    these changes:
    - Start it with `"$SG" build start <slug> --preset brownfield --session <session> --json`.
    - Its `main` is `<plan-branch>`, checked out in `<checkout>`: run its steps there.
+   - Build each worker's pack with `"$SG" context-pack --role worker --ledger <plan-dir>/ledger.json
+     --task-id <task> --build-run <run> --json`, with no `--design`: the pack holds the task's
+     `PLAN.md` section, its areas' commands and the brownfield rules.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build ends the run at step 9 with the report.
@@ -183,13 +189,16 @@ When `build next` reports nothing to start and nothing running, open the phase:
    its findings as `rule: message`.
 4. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
    `"$SG" events span end <span> --outcome ok`.
-5. `git worktree remove <checkout>`. `<plan-branch>` holds everything.
+5. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
+   reports in the user's checkout, and `<plan-branch>` holds every commit.
 
 ## 9. Report
 
 `"$SG" run report <slug>` writes the report to `<plan-dir>` and prints it: the assumptions, the
 baseline failures, the build-only areas, the dropped steps, the review fallbacks and the plan
-branch to merge. Print it as your last message, with the final verdict on the first line. Merging
+branch to merge. Its first line says whether the run finished: a run that left any task blocked
+or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
+line, covers only what merged. Print it as your last message as written. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 
 ## Rules

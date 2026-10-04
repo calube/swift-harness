@@ -1697,6 +1697,40 @@ Lint findings, by path relative to `<repo>` and line, on the lines `change.diff`
 | `ruby/lint` (RuboCop) | 1 | `app/lib/hashtag_normalizer.rb` 9 `Lint/UselessAssignment`, 10 `Style/RedundantReturn`, 10 `Style/StringConcatenation`, 10 `Style/StringLiterals` | repository-relative, `path:line:col: S: [Correctable] Cop: message` |
 | `swift/lint` (SwiftLint) | 2 | `ElementX/Sources/Other/Extensions/Array.swift` 100 `force_cast` (error), 101 `force_unwrapping` (warning) | absolute (`<repo>/...`), `path:line:col: severity: message (rule)` |
 
+### Go runs read per test
+
+`AreaRuns/go/{baseline-base,baseline-head,build-fail}/` are 3 `go test -json` runs of a throwaway
+module, so a baseline can hold 1 failing test while the head fails another, and a package can fail
+to build beside failing tests. Each directory has `command`, `exit`, `stdout` and `stderr`; there is
+no `change.diff`, since an environment variable or a build tag changes the run, not an edit.
+Captured 2026-10-04 on macOS 26 (arm64) with go 1.27.0 (mise), `GOTOOLCHAIN=local`, `GOFLAGS=` and
+`GOCACHE` under the scratch directory. The output names no machine path, so the capture ran no scrub.
+
+The module, `example.com/gobase`:
+
+- `go.mod`: `module example.com/gobase` and `go 1.27`.
+- `alpha/alpha_test.go`: `TestPasses` passes; `TestFlaky` calls `t.Fatal("fails at the base commit")`
+  on line 12; `TestTable` runs subtests `case_a` and `case_b`, and `case_b` calls
+  `t.Errorf("%s fails", name)`.
+- `beta/beta_test.go`: `TestNew` calls `t.Fatal("fails only after the change")` when
+  `GOBASE_FAIL_NEW=1`.
+- `beta/broken_test.go`: under `//go:build broken`, `func undefinedCall() int { return missing() }`.
+
+`cap.sh <dir> <command>` writes `command`, runs it through `/bin/sh -c` with stdout and stderr to
+their files, and writes the status to `exit`. From the module root:
+
+```sh
+$CAP $F/go/baseline-base "go test -json ./..."
+GOBASE_FAIL_NEW=1 $CAP $F/go/baseline-head "go test -json ./..."
+$CAP $F/go/build-fail "go test -json -tags broken ./..."
+```
+
+| Case | exit | What the events say |
+|---|---|---|
+| `go/baseline-base` | 1 | `alpha`: `TestFlaky`, `TestTable/case_b` and `TestTable` fail; `beta` passes |
+| `go/baseline-head` | 1 | as `baseline-base`, and `beta`'s `TestNew` fails |
+| `go/build-fail` | 1 | `beta` emits `build-output` and `build-fail`, then a package `fail` with `FailedBuild` and no test; `alpha` fails as in `baseline-base` |
+
 ## Run view: a prove gate
 
 `RunView/prove-gate/{gate,test}.jsonl` are the `gate` and `test` streams of 1 real
@@ -1808,3 +1842,44 @@ phases before `build start` do, and `final` names the build run. The capture cop
 unedited:
 `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView/brownfield-prebuild`
 matched nothing.
+
+## Run report: a run that left tasks unfinished
+
+`RunReport/memos-2/{ledger.json,build-events.jsonl}` are the final `ledger.json` and the build run's
+`events.jsonl` of the second brownfield trial on `usememos/memos`, as
+`evals/results/2026-10-04-brownfield-trial/memos-2/` keeps them. The build marked 2 tasks `blocked`,
+left 1 `pending` and finished 1, and its `final` gate came back GREEN on the contract alone, so the
+report must not lead with that verdict. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-trial/memos-2 F=plugin/gate/Tests/Fixtures/RunReport/memos-2
+mkdir -p $F
+sed -E 's#"/[^"]*/memos-2/#"/CLONE/#g' $S/ledger.json > $F/ledger.json
+cp $S/build-events.jsonl $F/build-events.jsonl
+```
+
+The `sed` replaces the trial clone's absolute path in each task's `worktree` with `/CLONE/` and
+changes nothing else.
+
+## Build returns: GREEN brownfield slice returns
+
+`BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
+`usememos/memos` handed to `build check-return`, which rejected both for a missing `app-build` step. Each
+`.history.jsonl` beside it is the task worktree's `runs/history.jsonl` line for the `check slice` run the return
+cites. The returns are the `result` of each `build-task` workflow's output file, written as the orchestrator wrote
+them before calling `check-return`. `T` is the orchestrator session's task output directory,
+`<Claude Code temp dir>/<cwd slug>/5f9bc272-d96a-48ac-ae63-61af01b8865a/tasks`, and `C` is the trial clone. From
+this directory:
+
+```sh
+F=BuildReturn/memos-3 W=$C/.git/worktrees/memos-3-spec-share-view-limit
+mkdir -p $F
+for p in store:wj86fkhlk:20261004T124847Z-cc87cdd0 web:w2tnxl83w:20261004T124503Z-79e036f7; do
+  IFS=: read task out run <<<"$p"
+  python3 -c "import json,sys;d=json.load(open(sys.argv[1]));r=d['result'];sys.stdout.write(r if isinstance(r,str) else json.dumps(r))" \
+    $T/$out.output > $F/share-view-limit-$task.json
+  grep "\"runID\":\"$run\"" $W-$task/swift-harness/runs/history.jsonl > $F/share-view-limit-$task.history.jsonl
+done
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-3/*` matched nothing.

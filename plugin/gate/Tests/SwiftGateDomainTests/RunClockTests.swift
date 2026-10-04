@@ -99,4 +99,17 @@ import Testing
     #expect(RunLaunch.conflictingOption(in: ["-p", "--verbose", "--add-dir", "/a"]) == nil)
     #expect(RunLaunch.conflictingOption(in: ["--", "--resume"]) == nil)
   }
+
+  @Test(
+    "every --plugin-dir is read in either spelling and in order, and one after `--` is not — catches a plugin under test whose gate the run never builds"
+  )
+  func pluginDirectories() {
+    #expect(
+      RunLaunch.pluginDirectories(in: [
+        "-p", "--plugin-dir", "/a/plugin", "--verbose", "--plugin-dir=rel/plugin", "--",
+        "--plugin-dir", "/z",
+      ]) == ["/a/plugin", "rel/plugin"])
+    #expect(RunLaunch.pluginDirectories(in: ["-p", "--plugin-directory", "/x"]) == [])
+    #expect(RunLaunch.pluginDirectories(in: ["--plugin-dir"]) == [])
+  }
 }

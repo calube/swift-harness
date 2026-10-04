@@ -23,7 +23,20 @@ public enum Discover {
     let areas = distinctNames(readers.flatMap { $0.areas(in: tree) })
     let mined = CICommandMining.commands(in: tree, areas: areas)
     return DiscoverProposal(
-      head: head, areas: CICommandMining.outrank(areas, with: mined), dirty: dirty)
+      head: head, areas: CICommandMining.outrank(areas, with: mined).map(requestingGoJSON),
+      dirty: dirty)
+  }
+
+  /// Every `go test` an area's test steps run, asking for the events the baseline reads per test.
+  private static func requestingGoJSON(_ area: ProposedArea) -> ProposedArea {
+    var commands = area.commands
+    for step in [AreaStep.test, .testFiles] {
+      guard let command = commands[step] else { continue }
+      commands[step] = Sourced(
+        value: GoTestReport.requestingJSON(command.value), source: command.source,
+        confidence: command.confidence)
+    }
+    return area.replacing(commands: commands, missing: area.missing)
   }
 
   /// ``propose(tree:head:dirty:readers:)``, naming every file a reader or the miner read. Readers

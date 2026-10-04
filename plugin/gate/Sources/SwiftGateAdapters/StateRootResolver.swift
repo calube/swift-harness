@@ -26,6 +26,16 @@ public enum StateRootResolver {
     return .gitDir(gitDir)
   }
 
+  /// Where `worktree`'s shared event streams live. Every worktree of a brownfield clone writes to
+  /// the main checkout's store under the common dir: a worktree's own git dir goes when the
+  /// worktree is removed, and a removal that skips the copy-up would take its events with it.
+  /// Elsewhere it is the worktree's own state root.
+  public static func eventStore(worktree: URL) -> StateRoot {
+    let state = resolve(worktree: worktree)
+    guard case .gitDir(let gitDir) = state else { return state }
+    return .gitDir(commonDirectory(of: gitDir).standardizedFileURL)
+  }
+
   /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no
   /// git checkout or its common dir holds no `config.toml`.
   public static func brownfieldLayout(worktree: URL) -> BrownfieldStateLayout? {

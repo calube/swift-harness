@@ -25,7 +25,7 @@ public enum SpanLogError: Error, Sendable, Equatable, CustomStringConvertible {
 /// The `span.start` and `span.end` events of a checkout's store. Start and end each run holding
 /// the lock in ``lockFile``, so 2 ends can't both close 1 span.
 public struct SpanLog: Sendable {
-  /// Relative to the state root, beside the halt lock.
+  /// Relative to the event store's state root, beside the halt lock.
   public static let lockFile = "\(RunLayout.eventsDirectory)/spans.lock"
 
   public let root: URL
@@ -127,7 +127,7 @@ public struct SpanLog: Sendable {
   /// Runs `body` holding the span lock, so the read that finds a start and the write that ends
   /// it are 1 step to every other start and end.
   private func locked<T>(_ body: () throws(SpanLogError) -> T) throws(SpanLogError) -> T {
-    let lock = StateRootResolver.resolve(worktree: root).url(Self.lockFile)
+    let lock = StateRootResolver.eventStore(worktree: root).url(Self.lockFile)
     do {
       try FileManager.default.createDirectory(
         at: lock.deletingLastPathComponent(), withIntermediateDirectories: true)

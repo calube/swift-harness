@@ -4,9 +4,17 @@ import SwiftGateDomain
 /// `check --tier slice|merge|final`: the brownfield profile's tiers, routed away from the owned
 /// profile's ``CheckRun``.
 enum BrownfieldCheck {
-  static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
-    async throws -> GateRunParts
-  {
+  /// - Parameter refusing: the owned-only options the command line asked for.
+  static func run(
+    root: URL, tier: CheckTier, base: String, refusing: [String] = [], context: GateRun.Context
+  ) async throws -> GateRunParts {
+    if !refusing.isEmpty {
+      return try notRun(
+        tier,
+        because: refusing.joined(separator: ", ")
+          + (refusing.count == 1 ? " belongs" : " belong")
+          + " to the owned profile; a brownfield tier takes only the steps it runs")
+    }
     switch tier {
     case .slice:
       return try await BrownfieldSliceCheck.run(root: root, base: base, context: context)

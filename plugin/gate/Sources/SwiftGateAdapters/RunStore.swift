@@ -147,7 +147,8 @@ public struct RunStore: Sendable {
         baselineCount: baselineCount)
     } catch {
       throw HarnessEventWriteError(
-        path: state.displayPath(RunLayout.eventsFile(.gate)), reason: "gate.run: \(error)")
+        path: StateRootResolver.eventStore(worktree: worktreeRoot).displayPath(
+          RunLayout.eventsFile(.gate)), reason: "gate.run: \(error)")
     }
     let source = HarnessEventSource(route: .check, tier: checkTier)
     let run = HarnessEvent(

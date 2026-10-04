@@ -254,7 +254,6 @@ public struct TaskReturnEvidence: Sendable, Equatable {
       tier == .ready || Set(steps).isSuperset(of: ["prove", "mutate"])
     }
 
-    /// The tier of a run history `command` such as `check push`; `nil` for any other command.
     /// The steps of `required` this run never ran: its tier doesn't run them and its recorded
     /// steps don't name them. A run that isn't a `check --tier` run ran none of them.
     public func missingSteps(of required: [CheckExtraStep]) -> [CheckExtraStep] {
@@ -262,6 +261,14 @@ public struct TaskReturnEvidence: Sendable, Equatable {
       return required.filter { !$0.isRun(by: tier) && !steps.contains($0.rawValue) }
     }
 
+    /// The run a run history line records.
+    public init(record: RunHistoryRecord) {
+      self.init(
+        tier: Self.tier(ofCommand: record.command), verdict: record.verdict,
+        steps: record.steps ?? [], proofBases: record.proofBases ?? [])
+    }
+
+    /// The tier of a run history `command` such as `check push`; `nil` for any other command.
     public static func tier(ofCommand command: String?) -> CheckTier? {
       guard let command, command.hasPrefix("check ") else { return nil }
       return CheckTier(rawValue: String(command.dropFirst("check ".count)))
@@ -408,6 +415,16 @@ public enum TaskReturnCheck {
   /// The steps the build task workflow's gate adds to every worker's task gate, in the order its
   /// flags are named.
   public static let taskGateSteps: [CheckExtraStep] = [.impact, .coverage, .appBuild]
+
+  /// The steps a worker's gate at `tier` must show it ran: an owned tier's are the workflow's
+  /// flags, and a brownfield tier's are the steps the tier itself runs, since it takes no flag
+  /// that adds one.
+  public static func requiredSteps(at tier: CheckTier) -> [CheckExtraStep] {
+    switch tier.profile {
+    case .owned: taskGateSteps
+    case .brownfield: CheckExtraStep.allCases.filter { $0.isRun(by: tier) }
+    }
+  }
 
   /// `fast` < `push` < `ready`, and `slice` < `merge` < `final`: each tier runs everything the
   /// one before it does. No tier covers one of the other profile.
@@ -616,7 +633,7 @@ public enum TaskReturnCheck {
               + "runs `swiftgate check --tier <task gate> --base main --prove --mutate`"))
       }
       if evidence.taskGateStepsRequired {
-        findings += run.missingSteps(of: taskGateSteps).map { step in
+        findings += run.missingSteps(of: requiredSteps(at: evidence.taskGate)).map { step in
           .init(
             rule: .gateMissingStep,
             message:

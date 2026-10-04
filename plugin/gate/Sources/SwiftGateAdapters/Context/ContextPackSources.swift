@@ -167,6 +167,21 @@ public enum ContextPackTaskReturn {
     }
     return .success(taskReturn.notes)
   }
+
+  /// The same notes from a plan directory given whole, as a brownfield plan's lives under the git
+  /// common dir rather than the repository.
+  public static func notes(forTask taskID: String, buildRun runID: String, planDirectory: URL)
+    -> Result<String, Failure>
+  {
+    let file = planDirectory.appending(path: "build/\(runID)/returns/\(taskID).json")
+    guard let data = try? Data(contentsOf: file) else {
+      return .failure(.unreadable(path: file.path))
+    }
+    guard let taskReturn = try? TaskReturnJSON.decode(data), taskReturn.task == taskID else {
+      return .failure(.malformed(path: file.path))
+    }
+    return .success(taskReturn.notes)
+  }
 }
 
 /// Which `docs/standards.md` anchors are in scope for a set of module kinds (spec §5.10: drafter
