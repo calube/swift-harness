@@ -42,7 +42,10 @@ public enum SimElementRole: String, Sendable, Equatable, CaseIterable {
   /// Button, switch, text field and cell: the controls the accessibility rules hold to an
   /// identifier and a readable label.
   public var isInteractive: Bool {
-    false
+    switch self {
+    case .button, .switch, .textField, .cell: true
+    default: false
+    }
   }
 }
 
@@ -89,16 +92,107 @@ public struct SimTree: Sendable, Equatable {
   /// Parses the envelope `{"success":true,"data":{"nodes":[…],"truncated":…}}` exactly as the
   /// adapter's `snapshotJSON` returns it.
   public static func parse(snapshotJSON: Data) throws(SimTreeError) -> SimTree {
-    SimTree(roots: [], isTruncated: false)
+    let envelope: Envelope
+    do {
+      envelope = try JSONDecoder().decode(Envelope.self, from: snapshotJSON)
+    } catch {
+      throw .malformed(String(describing: error))
+    }
+    guard envelope.success, let data = envelope.data else {
+      throw .malformed("the envelope is not a successful snapshot")
+    }
+
+    var childIndexes: [Int: [Int]] = [:]
+    var rootIndexes: [Int] = []
+    var nodesByIndex: [Int: Node] = [:]
+    for node in data.nodes {
+      guard nodesByIndex.updateValue(node, forKey: node.index) == nil else {
+        throw .malformed("node index \(node.index) appears twice")
+      }
+      if let parent = node.parentIndex {
+        childIndexes[parent, default: []].append(node.index)
+      } else {
+        rootIndexes.append(node.index)
+      }
+    }
+    if let orphan = data.nodes.first(where: {
+      $0.parentIndex.map { nodesByIndex[$0] == nil } ?? false
+    }) {
+      throw .malformed("node \(orphan.index) names a parent index that no node has")
+    }
+
+    // Each node has one parent, so a walk from the roots terminates; a cycle is a set of nodes
+    // the walk never reaches.
+    func element(_ index: Int) throws(SimTreeError) -> SimElement {
+      guard let node = nodesByIndex[index] else {
+        throw .malformed("node \(index) is missing")
+      }
+      guard let role = SimElementRole(rawValue: node.type) else { throw .unknownRole(node.type) }
+      var children: [SimElement] = []
+      for child in childIndexes[index, default: []] {
+        children.append(try element(child))
+      }
+      return SimElement(
+        role: role, identifier: node.identifier.nonEmpty, label: node.label.nonEmpty,
+        value: node.value.nonEmpty, children: children)
+    }
+
+    var roots: [SimElement] = []
+    for index in rootIndexes {
+      roots.append(try element(index))
+    }
+    let reached = roots.reduce(0) { $0 + 1 + Self.descendantCount($1) }
+    guard reached == data.nodes.count else {
+      throw .malformed("some nodes' parent indexes form a cycle that no root reaches")
+    }
+    return SimTree(roots: roots, isTruncated: data.truncated)
   }
 
   /// Every element, depth first, parents before their children.
   public var elements: [SimElement] {
-    []
+    var result: [SimElement] = []
+    func visit(_ element: SimElement) {
+      result.append(element)
+      element.children.forEach(visit)
+    }
+    roots.forEach(visit)
+    return result
   }
 
   /// True when some element's label or value equals `text` exactly.
   public func contains(text: String) -> Bool {
-    false
+    elements.contains { $0.label == text || $0.value == text }
+  }
+
+  private static func descendantCount(_ element: SimElement) -> Int {
+    element.children.reduce(0) { $0 + 1 + descendantCount($1) }
+  }
+
+  private struct Envelope: Decodable {
+    let success: Bool
+    let data: Payload?
+  }
+
+  private struct Payload: Decodable {
+    let nodes: [Node]
+    let truncated: Bool
+  }
+
+  private struct Node: Decodable {
+    let index: Int
+    let parentIndex: Int?
+    let type: String
+    let identifier: String?
+    let label: String?
+    let value: String?
+  }
+}
+
+extension Optional where Wrapped == String {
+  fileprivate var nonEmpty: String? {
+    switch self {
+    case .some(let text) where !text.isEmpty: text
+    default: nil
+    }
   }
 }
