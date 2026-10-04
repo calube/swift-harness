@@ -850,7 +850,7 @@ export function surfaceBaselineProblems(skill) {
   const report = /\n## Report\n([^]*?)\n## /.exec(skill)?.[1] ?? ''
   if (!/baseline[^.;]*without asking/.test(report.replace(/\s+/g, ' '))) problems.push('the report never names a baseline taken without asking')
   const [finish] = numberedSections(skill, /^## 4\. Finish\b/)
-  if (!/\bno baseline\b/.test((finish?.lines ?? []).join(' '))) problems.push('the final gate never says it takes no baseline')
+  if (!/\bno baseline\b/.test((finish?.lines ?? []).join(' ').replace(/\s+/g, ' '))) problems.push('the final gate never says it takes no baseline')
   if (/\bexactly the (?:step 1 )?baseline/.test(skill.replace(/\s+/g, ' '))) {
     problems.push('a merge gate passes only on exactly the baseline, so a task that clears 1 of its findings reads as red')
   }
@@ -1540,6 +1540,8 @@ const tests = {
       'the report never names a baseline taken without asking',
       'the final gate never says it takes no baseline',
     ])
+    const reflowed = skill.replace('1. Run the ready gate.', '1. Run the ready gate. This gate takes no\n   baseline.')
+    assert.ok(!surfaceBaselineProblems(reflowed).includes('the final gate never says it takes no baseline'))
   },
 }
 

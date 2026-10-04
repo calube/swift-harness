@@ -26,6 +26,12 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   public static let notRuleIDs: [String: String] = [
     "api.typesafe.ai": "the host a judge backend sends to, which `[judge] send_to` names",
     "commit.gpgsign": "a git config key",
+    "sourcecode.asm": "an Xcode `lastKnownFileType` a file reference carries",
+    "sourcecode.c.c": "an Xcode `lastKnownFileType` a file reference carries",
+    "sourcecode.c.objc": "an Xcode `lastKnownFileType` a file reference carries",
+    "sourcecode.cpp.cpp": "an Xcode `lastKnownFileType` a file reference carries",
+    "sourcecode.cpp.objcpp": "an Xcode `lastKnownFileType` a file reference carries",
+    "sourcecode.metal": "an Xcode `lastKnownFileType` a file reference carries",
     "harness.profile": "a `.swiftgate.toml` key a config error names",
     "jev-1.13.0": "a pinned judge model id",
     "judge.model": "a `.swiftgate.toml` key a config error names",
