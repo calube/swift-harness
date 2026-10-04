@@ -31,7 +31,10 @@ enum BrownfieldCheck {
   /// The toplevel of the git worktree holding `directory`: area roots are toplevel-relative, so a
   /// tier started in a subdirectory still reads them from the toplevel.
   static func repositoryRoot(from directory: URL, git: any Git) async throws(GitError) -> URL {
-    directory
+    let depth = try await git.workingDirectoryPrefix().split(separator: "/").count
+    var root = directory.standardizedFileURL
+    for _ in 0..<depth { root = root.deletingLastPathComponent() }
+    return root
   }
 
   /// A BLOCKED run naming `tier`: a tier that ran nothing must never read as GREEN.

@@ -175,4 +175,21 @@ struct LiveAreaCommandRunnerTests {
     defer { try? FileManager.default.removeItem(at: directory) }
     #expect(await runner.run(request("echo ok", in: directory)) == .passed)
   }
+
+  @Test(
+    "a command whose working directory doesn't exist fails naming that directory — catches the misleading could not start /bin/sh a missing area root gave"
+  )
+  func missingWorkingDirectoryIsNamed() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    // The area root `web` read against the subdirectory `web/` a worker had changed into.
+    let missing = directory.appending(path: "web/web", directoryHint: .isDirectory)
+    let outcome = await runner.run(request("echo ok", in: missing))
+    guard case .failed(let exit, let tail, _) = outcome else {
+      Issue.record("expected a failure, got \(outcome)")
+      return
+    }
+    #expect(exit == 127)
+    #expect(tail == "working directory \(missing.path) doesn't exist")
+  }
 }
