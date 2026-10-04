@@ -1,3 +1,5 @@
+import Foundation
+
 /// The table `swiftgate discover` prints (design §5.2): 1 row per value, with its source and
 /// confidence, then 1 `missing:` line per step with no command.
 public enum ProposalTable {
@@ -5,7 +7,42 @@ public enum ProposalTable {
   public static func render(_ proposal: DiscoverProposal, milliseconds: Int, appliedTo: String?)
     -> String
   {
-    ""
+    let seconds = String(format: "%.1f", Double(milliseconds) / 1_000)
+    let areaCount = proposal.areas.count == 1 ? "1 area" : "\(proposal.areas.count) areas"
+    let header =
+      "swiftgate discover · \(areaCount) · \(seconds)s · "
+      + (appliedTo.map { "applied to \($0)" } ?? "not applied")
+    var rows = [
+      ["area", "language", "root", "value", "command or setting", "source", "confidence"]
+    ]
+    for area in proposal.areas {
+      let lead = [area.name, area.language.rawValue, area.root]
+      for step in AreaStep.allCases {
+        guard let value = area.commands[step] else { continue }
+        rows.append(
+          lead + [step.rawValue, value.value, value.source, value.confidence.rawValue])
+      }
+      if let xcode = area.xcode {
+        let setting =
+          xcode.value.inclusion.rawValue
+          + (xcode.value.manifest.map { " (manifest \($0))" } ?? "")
+        rows.append(
+          lead + ["inclusion", setting, xcode.source, xcode.confidence.rawValue])
+      }
+    }
+    let widths = rows[0].indices.map { column in rows.map { $0[column].count }.max() ?? 0 }
+    let table = rows.map { row in
+      row.indices.map { column in
+        column == row.count - 1
+          ? row[column] : row[column].padding(toLength: widths[column], withPad: " ", startingAt: 0)
+      }.joined(separator: "  ")
+    }
+    let missing = proposal.areas.flatMap { area in
+      AreaStep.allCases.compactMap { step in
+        area.missing[step].map { "missing: \(area.name) \(step.rawValue) (\($0))" }
+      }
+    }
+    return ([header] + table + missing).joined(separator: "\n")
   }
 }
 
@@ -58,14 +95,55 @@ public struct DiscoverRecord: Sendable, Equatable, Codable {
   public init(proposal: DiscoverProposal, edits: [DiscoverEdit]) {
     self.schemaVersion = Self.schemaVersion
     self.head = proposal.head
-    self.areas = []
+    self.areas = proposal.areas.map { area in
+      Area(
+        name: area.name, root: area.root, language: area.language, kind: area.kind,
+        source: area.source,
+        values: AreaStep.allCases.compactMap { step in
+          area.commands[step].map {
+            Value(step: step, command: $0.value, source: $0.source, confidence: $0.confidence)
+          }
+        },
+        missing: AreaStep.allCases.compactMap { step in
+          area.missing[step].map { Missing(step: step, reason: $0) }
+        },
+        testGlobs: area.testGlobs,
+        xcode: area.xcode.map {
+          Xcode(
+            workspace: $0.value.workspace, project: $0.value.project,
+            inclusion: $0.value.inclusion, manifest: $0.value.manifest,
+            schemes: $0.value.schemes, source: $0.source, confidence: $0.confidence)
+        },
+        generatedProjectTracked: area.generatedProjectTracked)
+    }
     self.dirty = proposal.dirty
     self.edits = edits
   }
 
   /// The proposal this record holds.
   public var proposal: DiscoverProposal {
-    DiscoverProposal(head: head, areas: [], dirty: dirty)
+    DiscoverProposal(
+      head: head,
+      areas: areas.map { area in
+        ProposedArea(
+          name: area.name, root: area.root, language: area.language, kind: area.kind,
+          source: area.source,
+          commands: Dictionary(
+            area.values.map {
+              ($0.step, Sourced(value: $0.command, source: $0.source, confidence: $0.confidence))
+            }, uniquingKeysWith: { first, _ in first }),
+          missing: Dictionary(
+            area.missing.map { ($0.step, $0.reason) }, uniquingKeysWith: { first, _ in first }),
+          testGlobs: area.testGlobs,
+          xcode: area.xcode.map {
+            Sourced(
+              value: XcodeAreaConfig(
+                workspace: $0.workspace, project: $0.project, inclusion: $0.inclusion,
+                manifest: $0.manifest, schemes: $0.schemes), source: $0.source,
+              confidence: $0.confidence)
+          },
+          generatedProjectTracked: area.generatedProjectTracked)
+      }, dirty: dirty)
   }
 }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 /// `swiftgate discover`'s pure core: every reader's areas, CI commands over guesses, the
 /// orchestrator's edits, and the config an applied proposal writes.
 public enum Discover {
@@ -16,7 +18,27 @@ public enum Discover {
     tree: TrackedTreeSnapshot, head: String, dirty: [String],
     readers: [any EcosystemReader] = EcosystemReaders.all
   ) -> DiscoverProposal {
-    DiscoverProposal(head: head, areas: [], dirty: dirty)
+    let areas = distinctNames(readers.flatMap { $0.areas(in: tree) })
+    let mined = CICommandMining.commands(in: tree, areas: areas)
+    return DiscoverProposal(
+      head: head, areas: CICommandMining.outrank(areas, with: mined), dirty: dirty)
+  }
+
+  /// `config.toml` rejects 2 areas with 1 name, so a later duplicate takes its kind, then a
+  /// number, as a suffix.
+  private static func distinctNames(_ areas: [ProposedArea]) -> [ProposedArea] {
+    var taken: Set<String> = []
+    return areas.map { area in
+      var name = area.name
+      if taken.contains(name) { name = "\(area.name)-\(area.kind.rawValue)" }
+      var counter = 2
+      while taken.contains(name) {
+        name = "\(area.name)-\(counter)"
+        counter += 1
+      }
+      taken.insert(name)
+      return name == area.name ? area : area.renamed(name)
+    }
   }
 
   /// Applies `carried` (edits a previous `--apply` recorded) and then `new`, where a new edit
@@ -25,7 +47,20 @@ public enum Discover {
   public static func applying(
     carried: [DiscoverEdit], new: [DiscoverEdit], to proposal: DiscoverProposal
   ) throws(DiscoverEditError) -> DiscoverEditResult {
-    DiscoverEditResult(proposal: proposal, applied: [], stale: [])
+    let names = Set(proposal.areas.map(\.name))
+    if let unknown = new.first(where: { !names.contains($0.area) }) {
+      throw .unknownArea(unknown.area)
+    }
+    let replaced = Set(new.map(\.target))
+    let kept = carried.filter { !replaced.contains($0.target) }
+    let stale = kept.filter { !names.contains($0.area) }
+    let applied = kept.filter { names.contains($0.area) } + new
+    let areas = proposal.areas.map { area in
+      applied.filter { $0.area == area.name }.reduce(area) { $0.applying($1) }
+    }
+    return DiscoverEditResult(
+      proposal: DiscoverProposal(head: proposal.head, areas: areas, dirty: proposal.dirty),
+      applied: applied, stale: stale)
   }
 
   /// The config an applied `proposal` writes. Settings, `[[allow]]` entries and presets come from
@@ -34,11 +69,14 @@ public enum Discover {
   public static func config(from proposal: DiscoverProposal, keeping existing: BrownfieldConfig?)
     -> BrownfieldConfig
   {
-    BrownfieldConfig(
+    let settings = existing?.brownfield
+    return BrownfieldConfig(
       brownfield: BrownfieldSettings(
-        discoveredAt: proposal.head, sliceBudgetSeconds: defaultSliceBudgetSeconds,
-        timeBudgetMinutes: 0, sensitive: []),
-      areas: [], allow: [], buildPresets: [:])
+        discoveredAt: proposal.head,
+        sliceBudgetSeconds: settings?.sliceBudgetSeconds ?? defaultSliceBudgetSeconds,
+        timeBudgetMinutes: settings?.timeBudgetMinutes ?? 0, sensitive: settings?.sensitive ?? []),
+      areas: proposal.areas.map(BrownfieldArea.init(proposed:)), allow: existing?.allow ?? [],
+      buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset])
   }
 }
 
@@ -67,8 +105,45 @@ public struct DiscoverEdit: Sendable, Equatable, Codable {
   public static func parse(sets: [String], drops: [String], reason: String?)
     throws(DiscoverEditError) -> [DiscoverEdit]
   {
-    []
+    var edits: [DiscoverEdit] = []
+    for value in sets {
+      guard let equals = value.firstIndex(of: "=") else { throw .malformedSet(value) }
+      let command = String(value[value.index(after: equals)...])
+      guard !command.trimmingCharacters(in: .whitespaces).isEmpty,
+        let (area, step) = try target(String(value[..<equals]))
+      else { throw .malformedSet(value) }
+      edits.append(DiscoverEdit(area: area, step: step, change: .set(command: command)))
+    }
+    if !drops.isEmpty {
+      guard let reason, !reason.trimmingCharacters(in: .whitespaces).isEmpty else {
+        throw .dropNeedsReason
+      }
+      for value in drops {
+        guard let (area, step) = try target(value) else { throw .malformedDrop(value) }
+        edits.append(DiscoverEdit(area: area, step: step, change: .drop(reason: reason)))
+      }
+    }
+    var seen: Set<String> = []
+    for edit in edits where !seen.insert(edit.target).inserted {
+      throw .conflicting(edit.target)
+    }
+    return edits
   }
+
+  /// `<area>.<step>`, split at the last dot, since a step never holds one; `nil` when either half
+  /// is empty.
+  private static func target(_ text: String) throws(DiscoverEditError) -> (String, AreaStep)? {
+    guard let dot = text.lastIndex(of: ".") else { return nil }
+    let area = String(text[..<dot])
+    let rawStep = String(text[text.index(after: dot)...])
+    guard !area.isEmpty, !rawStep.isEmpty else { return nil }
+    guard let step = AreaStep(rawValue: rawStep) else { throw .unknownStep(rawStep) }
+    guard AreaStep.settable.contains(step) else { throw .stepHasNoKey(step) }
+    return (area, step)
+  }
+
+  /// `<area>.<step>`, as the command line spells it.
+  var target: String { "\(area).\(step.rawValue)" }
 
   private enum CodingKeys: String, CodingKey {
     case area, step, set, drop
@@ -146,4 +221,37 @@ public enum DiscoverEditError: Error, Sendable, Equatable {
 extension AreaStep {
   /// The steps `config.toml` has a key for, which `--set` and `--drop` accept.
   public static let settable: [AreaStep] = [.test, .testFiles, .lint, .build, .e2e]
+}
+
+extension ProposedArea {
+  func renamed(_ name: String) -> ProposedArea {
+    ProposedArea(
+      name: name, root: root, language: language, kind: kind, source: source,
+      commands: commands, missing: missing, testGlobs: testGlobs, xcode: xcode,
+      generatedProjectTracked: generatedProjectTracked)
+  }
+
+  func replacing(commands: [AreaStep: Sourced<String>], missing: [AreaStep: String])
+    -> ProposedArea
+  {
+    ProposedArea(
+      name: name, root: root, language: language, kind: kind, source: source,
+      commands: commands, missing: missing, testGlobs: testGlobs, xcode: xcode,
+      generatedProjectTracked: generatedProjectTracked)
+  }
+
+  fileprivate func applying(_ edit: DiscoverEdit) -> ProposedArea {
+    var commands = self.commands
+    var missing = self.missing
+    switch edit.change {
+    case .set(let command):
+      commands[edit.step] = Sourced(
+        value: command, source: DiscoverEdit.orchestratorSource, confidence: .orchestrator)
+      missing[edit.step] = nil
+    case .drop(let reason):
+      commands[edit.step] = nil
+      missing[edit.step] = reason
+    }
+    return replacing(commands: commands, missing: missing)
+  }
 }

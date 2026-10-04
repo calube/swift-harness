@@ -63,7 +63,76 @@ public struct BrownfieldConfigWriter: Sendable {
     _ change: (BrownfieldConfig?, DiscoverRecord?) throws(BrownfieldConfigWriteError) ->
       BrownfieldStateWrite
   ) async throws(BrownfieldConfigWriteError) -> BrownfieldConfig {
-    throw .rejected("not written")
+    try makeDirectory(layout.cloneRoot)
+    let lease: LockLease
+    do {
+      lease = try await lock.acquire(timeout: timeout)
+    } catch {
+      throw .lock(error)
+    }
+    defer { lease.release() }
+
+    let write = try change(try readConfig(), try readLastDiscover())
+    let text = BrownfieldConfigTOML.render(write.config)
+    do {
+      _ = try TOMLConfigDecoder().decodeBrownfield(text)
+    } catch {
+      throw .invalidRender(reason: error.description)
+    }
+    for (url, data) in write.files.sorted(by: { $0.key.path < $1.key.path }) {
+      try store(data, at: url)
+    }
+    try store(Data(text.utf8), at: layout.config)
+    return write.config
+  }
+
+  /// The applied config; `nil` before the first `discover --apply`.
+  public func readConfig() throws(BrownfieldConfigWriteError) -> BrownfieldConfig? {
+    guard let data = try contents(of: layout.config) else { return nil }
+    do {
+      return try TOMLConfigDecoder().decodeBrownfield(String(decoding: data, as: UTF8.self))
+    } catch {
+      throw .malformed(path: layout.config.path, reason: error.description)
+    }
+  }
+
+  /// `discover/last.json`; `nil` before the first `discover --apply`.
+  public func readLastDiscover() throws(BrownfieldConfigWriteError) -> DiscoverRecord? {
+    guard let data = try contents(of: layout.discoverLast) else { return nil }
+    do {
+      return try JSONDecoder().decode(DiscoverRecord.self, from: data)
+    } catch {
+      throw .malformed(path: layout.discoverLast.path, reason: String(describing: error))
+    }
+  }
+
+  private func contents(of url: URL) throws(BrownfieldConfigWriteError) -> Data? {
+    do {
+      return try Data(contentsOf: url)
+    } catch CocoaError.fileReadNoSuchFile {
+      return nil
+    } catch {
+      throw .io(operation: "read", path: url.path, reason: error.localizedDescription)
+    }
+  }
+
+  private func makeDirectory(_ url: URL) throws(BrownfieldConfigWriteError) {
+    do {
+      try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    } catch {
+      throw .io(operation: "mkdir", path: url.path, reason: error.localizedDescription)
+    }
+  }
+
+  /// `.atomic` writes a sibling temporary file and renames it over `url`, so a reader sees the old
+  /// file or the new one, never part of either.
+  private func store(_ data: Data, at url: URL) throws(BrownfieldConfigWriteError) {
+    try makeDirectory(url.deletingLastPathComponent())
+    do {
+      try data.write(to: url, options: .atomic)
+    } catch {
+      throw .io(operation: "write", path: url.path, reason: error.localizedDescription)
+    }
   }
 
   /// ``update(_:)`` for a change to the config alone, such as a new `[[allow]]` entry.
