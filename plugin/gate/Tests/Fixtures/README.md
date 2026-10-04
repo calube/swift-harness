@@ -318,6 +318,36 @@ file holds a local path.
 | `AgentDevice/seeded/clean.tree.json` | the clean run's `sim/steps/001.tree.json` |
 | `gate/Fixtures/seeds/sim-verify/unlabeled-controls/sim/`, `gate/Fixtures/seeds/sim-verify/valid/sim/` | each run's `session.json`, `steps.ndjson`, `steps/001.png` and `steps/001.tree.json`, unmodified |
 
+### AgentDevice/batch
+
+The batches `qa run` drives, captured on 2026-10-04 with `agent-device` 0.21.18 on a clone
+`swiftgate sim up` made from the configured iPhone 17 (iOS 26.2), against `examples/SampleApp` as
+committed. From the repository root, with the worktree's `swift build --product swiftgate`:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/batch/capture.sh plugin/gate/.build/debug/swiftgate
+```
+
+The script runs `sim up --json` in `examples/SampleApp`, runs each batch with `--udid` and
+`--session` from its output, and runs `sim down` on exit. `<name>.steps.json` is the input: the
+counter flow (`QA/counter.flow.json`) with the `snapshot`, `screenshot` and `snapshot` steps
+`qa run` adds after each assertion, its screenshot paths under `/SCRATCH`, which the script points
+at a scratch folder. In each output the scratch path is replaced with `/SCRATCH`, `$HOME` with
+`/HOME`, the clone's UDID with `UDID` and the session with `SESSION`.
+
+| Files | Batch |
+|---|---|
+| `pass.{steps.json,stdout,stderr,status}` | the driven counter flow on a fresh launch: every step passes |
+| `fail.{steps.json,stdout,stderr,status}` | the same flow run next, expecting `5`: step 6, the `is`, fails |
+
+Observed behavior the runner relies on:
+
+- A `screenshot` step writes its PNG at its `input.path`, and a `snapshot` step's `data` holds the
+  tree a `snapshot --json` envelope holds under `data`.
+- A failing `is` exits 1 with `COMMAND_FAILED`, `details.reason` `predicate_failed`,
+  `details.step` and `details.command`, and the steps before it under
+  `details.partialResults`, each with its `data`.
+
 ### AgentDevice/crash
 
 A real `sim up` run against `examples/SampleApp` on 2026-10-04, with `agent-device` 0.21.18 on a

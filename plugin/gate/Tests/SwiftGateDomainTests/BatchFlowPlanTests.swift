@@ -1,0 +1,110 @@
+import Foundation
+import SwiftGateDomain
+import SwiftGateTestSupport
+import Testing
+
+/// How `qa run` drives a flow file as a batch, and reads the batch's results back in the flow
+/// file's terms. The results come from `Fixtures/AgentDevice/batch/`, captured from the driven
+/// counter flow.
+@Suite("batch flow plan")
+struct BatchFlowPlanTests {
+  static func counterSteps() throws -> [FlowStep] {
+    try FlowSteps.parse(try Fixture.data("QA/counter.flow.json"))
+  }
+
+  /// `data.results`, or a failure's `error.details.partialResults`, of a captured batch.
+  static func results(_ name: String) throws -> [BatchStepOutcome] {
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: try Fixture.data("AgentDevice/batch/\(name).stdout"))
+        as? [String: Any])
+    let list: [Any]
+    if let data = object["data"] as? [String: Any] {
+      list = try #require(data["results"] as? [Any])
+    } else {
+      let error = try #require(object["error"] as? [String: Any])
+      let details = try #require(error["details"] as? [String: Any])
+      list = try #require(details["partialResults"] as? [Any])
+    }
+    return try list.map { item in
+      let step = try #require(item as? [String: Any])
+      return BatchStepOutcome(
+        index: try #require(step["step"] as? Int),
+        command: try #require(step["command"] as? String),
+        ok: try #require(step["ok"] as? Bool), durationMs: try #require(step["durationMs"] as? Int))
+    }
+  }
+
+  @Test(
+    "the counter flow gets a snapshot, a screenshot and a settle snapshot after each assertion, every written step kept as written — catches an asserted step that leaves sim verify no tree"
+  )
+  func drivesEvidenceAfterAssertions() throws {
+    let steps = try Self.counterSteps()
+
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png"])
+
+    #expect(BatchFlowPlan.assertionCount(steps) == 2)
+    #expect(
+      try FlowJSON.parse(plan.drivenJSON())
+        == FlowJSON.parse(try Fixture.data("AgentDevice/batch/pass.steps.json")))
+    #expect(plan.evidence.map(\.after) == [1, 3])
+    #expect(plan.evidence.map(\.assert) == [nil, "1"])
+    #expect(plan.evidence.map(\.snapshot) == [2, 7])
+    #expect(plan.evidence.map(\.screenshot) == [3, 8])
+    #expect(plan.evidence.map(\.settle) == [4, 9])
+    #expect(plan.origin == [1, nil, nil, nil, 2, 3, nil, nil, nil, 4])
+  }
+
+  @Test(
+    "a failing driven step is named by the flow file's number, and a failed capture by the step it follows — catches a failing step named by the driven file's numbering"
+  )
+  func stopsInFlowTerms() throws {
+    let plan = BatchFlowPlan.make(
+      steps: try Self.counterSteps(), screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png"])
+
+    #expect(plan.stop(atDrivenIndex: 6, command: "is") == .step(n: 3, command: "is"))
+    #expect(
+      plan.stop(atDrivenIndex: 8, command: "screenshot")
+        == .evidence(after: 3, command: "screenshot"))
+  }
+
+  @Test(
+    "the captured passing batch records each written step once with its offset from the batch's start, and no capture — catches offsets that skip the captures' time"
+  )
+  func recordsPassingBatch() throws {
+    let plan = BatchFlowPlan.make(
+      steps: try Self.counterSteps(), screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png"])
+
+    let record = plan.record(results: try Self.results("pass"), failedAt: nil)
+
+    #expect(
+      record
+        == QAFlowRecord(
+          source: .batch,
+          steps: [
+            QAFlowStep(
+              n: 1, label: "wait selector id=\"counter.value\"", offsetMs: 0, ok: true),
+            QAFlowStep(
+              n: 2, label: "press id=\"counter.increment\"", offsetMs: 1707, ok: true),
+            QAFlowStep(
+              n: 3, label: "is text id=\"counter.value\" \"1\"", offsetMs: 2908, ok: true),
+            QAFlowStep(n: 4, label: "snapshot", offsetMs: 4488, ok: true),
+          ]))
+    #expect(record.video == nil)
+    #expect(record.sheet == nil)
+  }
+
+  @Test(
+    "the captured failing batch records the steps up to the failing one, which is not ok, and none after — catches a failed flow whose record shows every step passing"
+  )
+  func recordsFailingBatch() throws {
+    let plan = BatchFlowPlan.make(
+      steps: try Self.counterSteps(), screenshots: ["/SCRATCH/3.png", "/SCRATCH/4.png"])
+
+    let record = plan.record(results: try Self.results("fail"), failedAt: 6)
+
+    #expect(record.steps.map(\.n) == [1, 2, 3])
+    #expect(record.steps.map(\.ok) == [true, true, false])
+    #expect(record.steps.map(\.offsetMs) == [0, 1536, 2287])
+  }
+}
