@@ -121,6 +121,25 @@ struct ScenarioQAConfigTests {
     }
   }
 
+  @Test(
+    "accessibility_ids is unset by default and reads a set path — catches the key rejected or read but ignored"
+  )
+  func accessibilityIDsReads() throws {
+    let unset = try ConfigSchema.config(from: root(merging: [:]))
+    #expect(unset.qa.accessibilityIDs == nil)
+    let set = try ConfigSchema.config(
+      from: root(merging: [
+        "qa": .table(["accessibility_ids": .string("Packages/IDs/Sources/IDs/AccessibilityID.swift")])
+      ]))
+    #expect(set.qa.accessibilityIDs == "Packages/IDs/Sources/IDs/AccessibilityID.swift")
+  }
+
+  @Test("a blank accessibility_ids is emptyValue — catches a path that names no file read as set")
+  func blankAccessibilityIDsIsAnIssue() {
+    let found = issues(root(merging: ["qa": .table(["accessibility_ids": .string("  ")])]))
+    #expect(found == [.emptyValue(path: "qa.accessibility_ids")])
+  }
+
   @Test("an unknown [qa] key is a config issue — catches a typo read as the default timeout")
   func unknownQAKeyIsAnIssue() {
     let found = issues(root(merging: ["qa": .table(["session_timeout": .integer(10)])]))

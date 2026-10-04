@@ -8,7 +8,8 @@ let package = Package(
     .library(name: "AccessibilityIDs", targets: ["AccessibilityIDs"])
   ],
   targets: [
-    .target(name: "AccessibilityIDs")
+    .target(name: "AccessibilityIDs"),
+    .testTarget(name: "AccessibilityIDsTests", dependencies: ["AccessibilityIDs"]),
   ],
   swiftLanguageModes: [.v6]
 )
