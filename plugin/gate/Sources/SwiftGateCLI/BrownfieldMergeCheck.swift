@@ -233,13 +233,19 @@ enum BrownfieldMergeCheck {
 
     let proved = touched.filter(dependencies.sliceBuildsOnly)
     if !proved.isEmpty {
+      let proofBase: String
+      do throws(GitError) {
+        proofBase = try await Self.proofBase(tier: tier, base: base, git: git)
+      } catch {
+        return blocked("git: \(error)")
+      }
       let config = BrownfieldConfig(
         brownfield: dependencies.config.brownfield, areas: proved,
         allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
         judge: dependencies.config.judge)
       let (judgement, milliseconds) = await GateRun.timed {
         await BrownfieldProve.run(
-          root: root, base: base, config: config,
+          root: root, base: proofBase, config: config,
           junitDirectory: dependencies.layout.worktreeRoot.appending(
             path: "junit", directoryHint: .isDirectory),
           proofs: context.proofs, dependencies: dependencies.prove)
@@ -250,6 +256,21 @@ enum BrownfieldMergeCheck {
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
     return outcome
+  }
+
+  /// Where `tier`'s prove measures changed tests from and reverts the source to. At `merge` on a
+  /// merge commit, that's its first parent, the plan branch's tip before this merge, so a test an
+  /// earlier merge brought isn't counted again. `final`, a head that isn't a merge, or a first
+  /// parent from before `base`'s fork point, keeps `base`.
+  static func proofBase(tier: CheckTier, base: String, git: any Git) async throws(GitError)
+    -> String
+  {
+    guard tier == .merge, try await git.revision("HEAD^2") != nil,
+      let parent = try await git.revision("HEAD^1"),
+      let fork = try await git.mergeBase("HEAD", base),
+      try await git.isAncestor(fork, of: parent)
+    else { return base }
+    return parent
   }
 
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never

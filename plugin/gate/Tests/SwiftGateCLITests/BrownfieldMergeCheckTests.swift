@@ -236,3 +236,170 @@ struct BrownfieldMergeCheckTests {
     #expect(clean.baselineCount == 0)
   }
 }
+
+/// The iOS trial's plan branch, rebuilt in a real repository: a contract commit on the plan base,
+/// then 2 task branches merged with `--no-ff`, the first adding a test with its source and the
+/// second only source.
+private struct TrialPlanBranch {
+  static let environment = [
+    "PATH": "/usr/bin:/bin:/opt/homebrew/bin:/usr/local/bin",
+    "HOME": TestTemporaryDirectory.sharedHome.path,
+    "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_AUTHOR_NAME": "Test", "GIT_AUTHOR_EMAIL": "test@example.com",
+    "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
+  ]
+  static let test = "AidokuTests/LargeDownloadConfirmationTests.swift"
+
+  let root: URL
+  let runner = LiveProcessRunner(baseEnvironment: Self.environment)
+  private(set) var planBase = ""
+  private(set) var contract = ""
+  private(set) var firstMerge = ""
+  private(set) var secondMerge = ""
+
+  init(root: URL) async throws {
+    self.root = root
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    try await git("init", "-q", "-b", "main")
+    try await git("config", "commit.gpgsign", "false")
+    try write("Aidoku/Features/Manga/MangaView.swift", "struct MangaView {}\n")
+    planBase = try await commit("base")
+    try write("Aidoku/Core/Downloads/Settings.swift", "enum DownloadSettings {}\n")
+    contract = try await commit("contract")
+
+    try await git("checkout", "-q", "-b", "download-check")
+    try write(
+      "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift", "enum LargeDownloadConfirmation {}\n"
+    )
+    try write(
+      Self.test, "import XCTest\nfinal class LargeDownloadConfirmationTests: XCTestCase {}\n")
+    _ = try await commit("check")
+    try await git("checkout", "-q", "main")
+    try await git("merge", "-q", "--no-ff", "-m", "merge check", "download-check")
+    firstMerge = try await git("rev-parse", "HEAD")
+
+    try await git("checkout", "-q", "-b", "download-prompt", contract)
+    try write("Aidoku/Features/Manga/MangaView.swift", "struct MangaView { var pending = 0 }\n")
+    _ = try await commit("prompt")
+    try await git("checkout", "-q", "main")
+    try await git("merge", "-q", "--no-ff", "-m", "merge prompt", "download-prompt")
+    secondMerge = try await git("rev-parse", "HEAD")
+  }
+
+  var adapter: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
+
+  @discardableResult
+  func git(_ arguments: String...) async throws -> String {
+    let output = try await runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: arguments, workingDirectory: root.path,
+        timeout: .seconds(30)))
+    guard output.status.isSuccess else {
+      throw TrialGitFailure(arguments: arguments, stderr: output.stderr.text)
+    }
+    return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private func write(_ path: String, _ content: String) throws {
+    let url = root.appending(path: path)
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(content.utf8).write(to: url)
+  }
+
+  private func commit(_ message: String) async throws -> String {
+    try await git("add", "-A")
+    try await git("commit", "-q", "-m", message)
+    return try await git("rev-parse", "HEAD")
+  }
+}
+
+private struct TrialGitFailure: Error {
+  let arguments: [String]
+  let stderr: String
+}
+
+extension BrownfieldMergeCheckTests {
+  /// The trial's captured config, its area build-only, run at `revision` of `branch`.
+  private static func trialRun(
+    _ clone: Clone, _ branch: TrialPlanBranch, tier: CheckTier, at revision: String
+  ) async throws -> (parts: GateRunParts, proofs: [ProvedTest], scratchRuns: Int) {
+    try await branch.git("checkout", "-q", "--detach", revision)
+    let state = clone.layout.commonDir.appending(
+      path: StateRootResolver.commonConfigFile, directoryHint: .notDirectory)
+    try FileManager.default.createDirectory(
+      at: state.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml").utf8)
+      .write(to: state)
+    guard
+      case .brownfield(let config)? = try ConfigLoader().loadProfile(
+        repositoryRoot: clone.root, commonDir: clone.layout.commonDir)
+    else {
+      Issue.record("the trial's config didn't load as brownfield")
+      return (GateRunParts(tiers: [], findings: []), [], 0)
+    }
+    // The area's root is `.`, so prove runs in the scratch tree's own directory, with no trailing
+    // slash for ``Clone/inScratch(_:)`` to match.
+    let reverted: @Sendable (AreaCommandRequest) -> Bool = { request in
+      URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
+        .path(percentEncoded: false).hasPrefix(clone.scratch.path(percentEncoded: false))
+    }
+    let runner = FakeAreaCommandRunner { request in
+      reverted(request) ? .failed(exit: 65, tail: "reverted", junit: nil) : .passed
+    }
+    let scratch = FakeScratchWorktrees(root: clone.scratch)
+    let git = branch.adapter
+    let dependencies = BrownfieldMergeCheck.Dependencies(
+      config: config, layout: clone.layout, git: git, runner: runner,
+      baseline: BaselineStore(layout: clone.layout, runner: runner, scratch: scratch),
+      prove: BrownfieldProve.Dependencies(
+        git: git, scratch: scratch, runner: runner, deadline: .seconds(5)),
+      trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
+      sliceBuildsOnly: { _ in true }, deadline: .seconds(5))
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+    let parts = try await BrownfieldMergeCheck.run(
+      root: clone.root, tier: tier, base: branch.planBase, context: context,
+      dependencies: dependencies)
+    return (parts, context.proofs.results, runner.requests.filter(reverted).count)
+  }
+
+  @Test(
+    "a merge gate proves only the tests its own merge brought, measured from the merge's first parent, while final and a head that isn't a merge measure from the plan base — catches a second merge counting the first task's already-merged test as its own"
+  )
+  func mergeProvesFromTheFirstParent() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await TrialPlanBranch(root: clone.root)
+
+    let second = try await Self.trialRun(clone, branch, tier: .merge, at: branch.secondMerge)
+    #expect(second.proofs == [], "the second merge changed no test")
+    #expect(second.scratchRuns == 0)
+    let summaries = second.parts.findings.filter { $0.ruleID == "prove.summary" }.map(\.message)
+    #expect(
+      summaries.contains { $0.hasPrefix("prove: no new or changed tests since") },
+      "\(summaries)")
+
+    let first = try await Self.trialRun(clone, branch, tier: .merge, at: branch.firstMerge)
+    #expect(
+      first.proofs
+        == [
+          ProvedTest(
+            test: TrialPlanBranch.test, target: "Aidoku", outcome: .proven,
+            proofBase: branch.contract, assertion: nil)
+        ])
+
+    let fixer = try await Self.trialRun(clone, branch, tier: .merge, at: "download-check")
+    #expect(
+      fixer.proofs.map(\.proofBase) == [branch.planBase],
+      "a fix worktree's head is no merge, so its gate keeps the plan base")
+
+    let final = try await Self.trialRun(clone, branch, tier: .final, at: branch.secondMerge)
+    #expect(
+      final.proofs
+        == [
+          ProvedTest(
+            test: TrialPlanBranch.test, target: "Aidoku", outcome: .proven,
+            proofBase: branch.planBase, assertion: nil)
+        ])
+  }
+}
