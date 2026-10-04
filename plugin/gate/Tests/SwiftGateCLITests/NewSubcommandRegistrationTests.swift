@@ -266,6 +266,7 @@ struct NewSubcommandRegistrationTests {
     "discover", "discover --apply",
     "allow",
     "claude",
+    "plan import",
   ]
 
   @Test(

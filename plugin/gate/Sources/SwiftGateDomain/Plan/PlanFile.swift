@@ -106,16 +106,35 @@ public struct PlanFile: Sendable, Equatable {
     }
   }
 
+  /// A brownfield plan imported from its live `PLAN.md`, with no design and no approval chain:
+  /// the run's spec is the user's, and `plan import` derives the ledger from the file.
+  public struct LivePlanSource: Sendable, Equatable {
+    /// The live file's name inside the plan's directory.
+    public static let fileName = "PLAN.md"
+
+    /// Relative to the plan's directory; always ``fileName``.
+    public let path: String
+    /// Each task's brief, keyed by task id, for the run viewer's task drawer.
+    public let briefs: [String: TaskBrief]
+
+    public init(briefs: [String: TaskBrief]) {
+      self.path = Self.fileName
+      self.briefs = briefs
+    }
+  }
+
   /// What the plan was decomposed from.
   public enum Source: Sendable, Equatable {
     case design(DesignSource)
     case specPage(SpecPageSource)
+    case livePlan(LivePlanSource)
   }
 
   /// `plan.json`'s `source` key; a file without one is a design plan.
   public enum SourceKind: String, Sendable, Equatable, CaseIterable {
     case design
     case specPage
+    case livePlan
   }
 
   public let schemaVersion: Int
@@ -155,6 +174,12 @@ public struct PlanFile: Sendable, Equatable {
     return nil
   }
 
+  /// `nil` unless the plan was imported from a live `PLAN.md`.
+  public var livePlanSource: LivePlanSource? {
+    if case .livePlan(let source) = source { return source }
+    return nil
+  }
+
   /// `nil` for a design plan.
   public var specPageSource: SpecPageSource? {
     if case .specPage(let source) = source { return source }
@@ -165,11 +190,15 @@ public struct PlanFile: Sendable, Equatable {
 extension PlanFile: Codable {
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, slug, source, design, designSha, approval, clarifyChain, tier, specPage
-    case surfaceCommit, resume
+    case livePlan, surfaceCommit, resume
   }
 
   private enum SpecPageKeys: String, CodingKey {
     case path, pageSha
+  }
+
+  private enum LivePlanKeys: String, CodingKey {
+    case path, briefs
   }
 
   /// A key that belongs to one source kind only; a file of the other kind that carries it fails.
@@ -224,6 +253,28 @@ extension PlanFile: Codable {
         SpecPageSource(
           path: path, pageSha: try page.decodeIfPresent(String.self, forKey: .pageSha),
           approval: try container.decodeIfPresent(PageApproval.self, forKey: .approval)))
+    case .livePlan:
+      if let key = Self.designOnlyKeys.first(where: container.contains) {
+        throw DecodingError.dataCorruptedError(
+          forKey: key, in: container,
+          debugDescription: "a live plan carries `\(key.stringValue)`, which only a design plan "
+            + "has; a plan has one source")
+      }
+      if container.contains(.specPage) || container.contains(.approval) {
+        throw DecodingError.dataCorruptedError(
+          forKey: .livePlan, in: container,
+          debugDescription: "a live plan carries a spec page or an approval; it has neither")
+      }
+      let live = try container.nestedContainer(keyedBy: LivePlanKeys.self, forKey: .livePlan)
+      let path = try live.decode(String.self, forKey: .path)
+      guard path == LivePlanSource.fileName else {
+        throw DecodingError.dataCorruptedError(
+          forKey: .path, in: live,
+          debugDescription: "live plan path `\(path)` must be `\(LivePlanSource.fileName)`, "
+            + "inside the plan's own directory")
+      }
+      source = .livePlan(
+        LivePlanSource(briefs: try live.decode([String: TaskBrief].self, forKey: .briefs)))
     }
     self.init(
       schemaVersion: try container.decode(Int.self, forKey: .schemaVersion),
@@ -253,6 +304,11 @@ extension PlanFile: Codable {
       try nested.encode(page.path, forKey: .path)
       try nested.encodeIfPresent(page.pageSha, forKey: .pageSha)
       try container.encodeIfPresent(page.approval, forKey: .approval)
+    case .livePlan(let live):
+      try container.encode(SourceKind.livePlan.rawValue, forKey: .source)
+      var nested = container.nestedContainer(keyedBy: LivePlanKeys.self, forKey: .livePlan)
+      try nested.encode(live.path, forKey: .path)
+      try nested.encode(live.briefs, forKey: .briefs)
     }
   }
 }

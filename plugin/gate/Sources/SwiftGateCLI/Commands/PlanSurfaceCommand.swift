@@ -163,6 +163,11 @@ enum PlanSurfaceRun {
           + "lands its surface with plan surface, and plan.json was left as it is")
     case .specPage(let source):
       page = source
+    case .livePlan:
+      throw blocked(
+        report,
+        "plan `\(slug)` is a live plan; only a spec-page plan lands its surface with plan surface, "
+          + "and plan.json was left as it is")
     }
     if let recorded = current.surfaceCommit {
       throw refused(

@@ -258,6 +258,10 @@ enum LedgerRenderRun {
       case .success(let found): source = found
       case .failure(let refusal): return .blocked(refusal.message)
       }
+    case .livePlan:
+      return .blocked(
+        "plan `\(slug)` is a live plan; its PLAN.md is the page, so there is no design page to "
+          + "render")
     }
 
     var notes: [String] = []

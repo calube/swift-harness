@@ -98,6 +98,13 @@ enum PlanSetRun {
         )
       }
       source = .specPage(page)
+    case .livePlan(let live):
+      guard parsedTier == nil else {
+        return blocked(
+          slug,
+          "plan `\(slug)` is a live plan, which has no design tier; plan.json was left as it is")
+      }
+      source = .livePlan(live)
     }
     let updated = PlanFile(
       schemaVersion: current.schemaVersion, slug: current.slug, source: source,

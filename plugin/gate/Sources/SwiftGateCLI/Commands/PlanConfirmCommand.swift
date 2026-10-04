@@ -119,6 +119,11 @@ enum PlanConfirmRun {
           + "plan has a spec page to confirm, and plan.json was left as it is")
     case .specPage(let page):
       source = page
+    case .livePlan:
+      return blocked(
+        slug,
+        "plan `\(slug)` is a live plan imported from its PLAN.md; only a spec-page plan has a "
+          + "spec page to confirm, and plan.json was left as it is")
     }
 
     // The sha recorded is of the same bytes the check read, so an edit after this read can't

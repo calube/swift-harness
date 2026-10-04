@@ -40,6 +40,10 @@ enum PlanLintRun {
       return await runSpecPage(
         slug: slug, pageSource: pageSource, store: store, ledger: ledger, root: root,
         swiftPM: swiftPM, harnessRoot: harnessRoot)
+    case .livePlan:
+      return blocked(
+        "plan `\(slug)` is a live plan: `swiftgate plan import \(slug)` checks its PLAN.md as it "
+          + "derives the ledger, so there is no design to lint against")
     }
     guard let designSha = planDesign.designSha else {
       return blocked(

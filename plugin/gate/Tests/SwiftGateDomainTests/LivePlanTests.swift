@@ -1,0 +1,323 @@
+import Foundation
+import SwiftGateDomain
+import Testing
+
+/// A plan in the brownfield `PLAN.md` shape: 3 tasks in 2 waves, with an unrelated `###`
+/// heading and an assumptions section.
+private let threeTaskPlan = """
+  # Search filters
+
+  ## Assumptions
+  - "Recent" means the last 7 days, since the spec gives no window.
+  - Filters combine with AND.
+
+  ## Tasks
+
+  ### Merge points
+  Nothing here is a task.
+
+  ### `filter-model`
+  Search results carry the filter they matched.
+  - Deps: none · Gate: slice · Model: opus · estLines: 120
+  - Why: The view needs to know which filter matched (design §4.2).
+  - Scope: the filter enum and its parsing
+  - Acceptance:
+    - `parsesRecent` fails first
+    - the slice gate passes
+  - Out of scope: persisting filters
+  - Writes: `api/filters/`, `api/tests/test_filters.py`
+  - Does: adds the enum.
+  - Tests: parsesRecent.
+
+  ### `filter-endpoint`
+  The search endpoint accepts a filter.
+  - Deps: none · Gate: slice · estLines: 80
+  - Why: Clients send filters by query string.
+  - Writes: `api/routes/search.py`
+
+  ### `filter-ui`
+  The search screen shows filter chips.
+  - Deps: `filter-model`, `filter-endpoint` · Gate: slice · Model: sonnet · estLines: 200
+  - Why: Users pick a filter without typing (§5).
+  - Scope:
+    - the chip row
+    - its selection state
+  - Writes: `web/src/search/`
+  """
+
+private func section(_ id: String, writes: String? = "`src/a.ts`", gate: String = "slice")
+  -> String
+{
+  var lines = [
+    "### `\(id)`", "Does a thing.", "- Deps: none · Gate: \(gate) · estLines: 10",
+    "- Why: Because.",
+  ]
+  if let writes { lines.append("- Writes: \(writes)") }
+  return lines.joined(separator: "\n")
+}
+
+@Suite("Live plan")
+struct LivePlanTests {
+  @Test(
+    "a plan with 3 tasks and 2 waves derives the ledger the executor reads — catches a dropped dependency"
+  )
+  func threeTasksTwoWaves() throws {
+    let plan = try LivePlanParser.parse(threeTaskPlan)
+    let ledger = try plan.ledger(maxParallel: 3, existing: nil) { "worktrees/\($0)" }
+    let read = try LedgerJSON.decode(try LedgerJSON.encode(ledger))
+
+    #expect(read.tasks.map(\.id) == ["filter-model", "filter-endpoint", "filter-ui"])
+    #expect(read.waves == [["filter-endpoint", "filter-model"], ["filter-ui"]])
+    let ui = try #require(read.tasks.first { $0.id == "filter-ui" })
+    #expect(ui.deps == ["filter-model", "filter-endpoint"])
+    #expect(ui.writeSet == ["web/src/search/"])
+    #expect(ui.gate == .slice)
+    #expect(ui.model == .sonnet)
+    #expect(ui.estLines == 200)
+    #expect(ui.status == .pending)
+    #expect(ui.worktree == "worktrees/filter-ui")
+    let model = try #require(read.tasks.first { $0.id == "filter-model" })
+    #expect(model.writeSet == ["api/filters/", "api/tests/test_filters.py"])
+    #expect(model.model == .opus)
+    #expect(read.tasks.first { $0.id == "filter-endpoint" }?.model == nil)
+    #expect(read.maxParallel == 3)
+    #expect(read.resume == "planned; 3 tasks in 2 waves; next: build the first wave")
+  }
+
+  @Test(
+    "each task's goal, why, scope, acceptance and out of scope become its brief — catches a brief the viewer can't show"
+  )
+  func briefs() throws {
+    let plan = try LivePlanParser.parse(threeTaskPlan)
+    let model = try #require(plan.tasks.first { $0.id == "filter-model" })
+    #expect(
+      model.brief
+        == TaskBrief(
+          title: "Search results carry the filter they matched.",
+          why: "The view needs to know which filter matched (design §4.2).", designRef: "§4.2",
+          scope: ["the filter enum and its parsing"],
+          acceptance: ["`parsesRecent` fails first", "the slice gate passes"],
+          outOfScope: ["persisting filters"]))
+    let endpoint = try #require(plan.tasks.first { $0.id == "filter-endpoint" })
+    #expect(endpoint.brief.designRef == nil)
+    #expect(endpoint.brief.scope.isEmpty)
+    #expect(
+      plan.tasks.first { $0.id == "filter-ui" }?.brief.scope == [
+        "the chip row", "its selection state",
+      ])
+    #expect(
+      plan.assumptions == [
+        "\"Recent\" means the last 7 days, since the spec gives no window.",
+        "Filters combine with AND.",
+      ])
+  }
+
+  @Test(
+    "the live plan.json carries every brief and reads back — catches briefs lost on the way to the viewer"
+  )
+  func planFileRoundTrip() throws {
+    let plan = try LivePlanParser.parse(threeTaskPlan)
+    let file = plan.planFile(slug: "search-filters", resume: "planned", existing: nil)
+    let encoded = try PlanFileJSON.encode(file)
+    var read: PlanFile?
+    #expect(throws: Never.self) { read = try PlanFileJSON.decode(encoded) }
+
+    #expect(read == file)
+    let source = try #require(read?.livePlanSource)
+    #expect(source.path == "PLAN.md")
+    #expect(source.briefs.keys.sorted() == ["filter-endpoint", "filter-model", "filter-ui"])
+    #expect(source.briefs["filter-ui"]?.title == "The search screen shows filter chips.")
+    #expect(read?.designSource == nil)
+    #expect(PlanFile.seedSpecPage(slug: "s").livePlanSource == nil)
+  }
+
+  @Test(
+    "a task with no Writes line fails naming the task — catches a task the executor can't scope")
+  func noWrites() {
+    let text = section("first") + "\n\n" + section("second", writes: nil)
+    #expect(throws: LivePlanError.noWrites(task: "second")) { try LivePlanParser.parse(text) }
+  }
+
+  @Test(
+    "an owned-profile gate fails naming the task — catches a push gate a brownfield clone can't run"
+  )
+  func pushGate() {
+    #expect(throws: LivePlanError.ownedProfileGate(task: "only", tier: .push)) {
+      try LivePlanParser.parse(section("only", gate: "push"))
+    }
+    #expect(throws: LivePlanError.unknownGate(task: "only", value: "fastest")) {
+      try LivePlanParser.parse(section("only", gate: "fastest"))
+    }
+  }
+
+  @Test(
+    "a dependency on a task the plan lacks fails naming both — catches a ledger the executor would stall on"
+  )
+  func missingDependency() throws {
+    let text = section("only").replacingOccurrences(of: "Deps: none", with: "Deps: `ghost`")
+    let plan = try LivePlanParser.parse(text)
+    #expect(throws: LivePlanError.missingDependency(task: "only", dependency: "ghost")) {
+      try plan.ledger(maxParallel: 2, existing: nil) { $0 }
+    }
+  }
+
+  @Test("a plan with no task sections fails — catches an empty ledger that looks finished")
+  func noTasks() {
+    #expect(throws: LivePlanError.noTasks) {
+      try LivePlanParser.parse("# Plan\n\n## Assumptions\n- one\n")
+    }
+  }
+
+  @Test("a re-import keeps each kept task's status and branch — catches a reset of work in flight")
+  func reimportKeepsStatus() throws {
+    let plan = try LivePlanParser.parse(threeTaskPlan)
+    let first = try plan.ledger(maxParallel: 3, existing: nil) { "worktrees/\($0)" }
+    let started = first.tasks.map { task in
+      task.id == "filter-model"
+        ? LedgerTask(
+          id: task.id, deps: task.deps, writeSet: task.writeSet, gate: task.gate,
+          tests: task.tests, covers: task.covers, estLines: task.estLines, status: .inProgress,
+          worktree: "elsewhere", model: task.model, branch: "search-filters/filter-model")
+        : task
+    }
+    let existing = Ledger(
+      schemaVersion: 1, resume: first.resume, maxParallel: 3, tasks: started, waves: first.waves)
+    let second = try plan.ledger(maxParallel: 3, existing: existing) { "worktrees/\($0)" }
+    let model = try #require(second.tasks.first { $0.id == "filter-model" })
+    #expect(model.status == .inProgress)
+    #expect(model.branch == "search-filters/filter-model")
+    #expect(model.worktree == "elsewhere")
+    #expect(second.tasks.first { $0.id == "filter-ui" }?.status == .pending)
+  }
+
+  @Test("the exclude line is added once — catches a line appended on every import")
+  func excludeOnce() throws {
+    let once = try #require(LivePlanExclude.adding(to: "# git ls-files --others\n*.log"))
+    #expect(once == "# git ls-files --others\n*.log\n/PLAN.md\n")
+    #expect(LivePlanExclude.adding(to: once) == nil)
+    #expect(LivePlanExclude.adding(to: nil) == "/PLAN.md\n")
+  }
+
+  @Test(
+    "each malformed task line fails naming the task and the value — catches a section imported with a guessed field",
+    arguments: [
+      (
+        "### `t`\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `a`",
+        LivePlanError.missingGoal(task: "t")
+      ),
+      (
+        "### `t`\nGoal.\n- Writes: `a`",
+        .missingField(task: "t", field: "- Deps: … · Gate: … · estLines: …")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · estLines: 1\n- Writes: `a`",
+        .missingField(task: "t", field: "Gate")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice\n- Writes: `a`",
+        .missingField(task: "t", field: "estLines")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · Model: haiku · estLines: 1\n- Writes: `a`",
+        .unknownModel(task: "t", value: "haiku")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: -3\n- Writes: `a`",
+        .invalidEstLines(task: "t", value: "-3")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `/etc/hosts`",
+        .invalidWrite(task: "t", path: "/etc/hosts")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `../up`",
+        .invalidWrite(task: "t", path: "../up")
+      ),
+      (
+        "### `t`\nGoal.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `a`\n\n### `t`\nAgain.\n- Deps: none · Gate: slice · estLines: 1\n- Writes: `b`",
+        .duplicateTask("t")
+      ),
+    ])
+  func malformedTask(_ text: String, _ expected: LivePlanError) {
+    #expect(throws: expected) { try LivePlanParser.parse(text) }
+    #expect(expected.message.contains("`t`"))
+  }
+
+  @Test("a dependency cycle fails naming its tasks — catches a ledger no wave can start")
+  func cycle() throws {
+    let text = """
+      ### `a`
+      A.
+      - Deps: `b` · Gate: slice · estLines: 1
+      - Writes: `a/`
+
+      ### `b`
+      B.
+      - Deps: `a` · Gate: slice · estLines: 1
+      - Writes: `b/`
+      """
+    let plan = try LivePlanParser.parse(text)
+    #expect(throws: LivePlanError.cycle(ids: ["a", "b"])) {
+      try plan.ledger(maxParallel: 2, existing: nil) { $0 }
+    }
+    #expect(LivePlanError.cycle(ids: ["a", "b", "a"]).message.contains("a -> b -> a"))
+    #expect(LivePlanError.noTasks.message.contains("### <task-id>"))
+    #expect(LivePlanError.missingDependency(task: "a", dependency: "z").message.contains("`z`"))
+    #expect(LivePlanError.noWrites(task: "a").message.contains("`a`"))
+    #expect(LivePlanError.unknownGate(task: "a", value: "x").message.contains("`x`"))
+    #expect(LivePlanError.ownedProfileGate(task: "a", tier: .push).message.contains("`push`"))
+  }
+
+  @Test(
+    "wrapped lines join the value above them — catches a why or assumption cut at its first line")
+  func continuations() throws {
+    let text = """
+      ## Assumptions
+      - Filters combine
+        with AND.
+
+      ### `t`
+      Goal.
+      - Deps: none · Gate: slice · estLines: 1
+      - Why: The view needs
+        the matched filter.
+      - Scope:
+        - the chip row
+          and its state
+      - a note with no field
+        that belongs to nothing
+      - Writes: `a`
+      """
+    let plan = try LivePlanParser.parse(text)
+    #expect(plan.assumptions == ["Filters combine with AND."])
+    let brief = try #require(plan.tasks.first?.brief)
+    #expect(brief.why == "The view needs the matched filter.")
+    #expect(brief.scope == ["the chip row and its state"])
+    #expect(plan.tasks.first?.writes == ["a"])
+  }
+
+  @Test(
+    "a live plan.json with a design key, an approval or another path fails naming it — catches a live plan read as approved",
+    arguments: [
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","design":"docs/designs/x.md","livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+        "`design`"
+      ),
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","approval":{"pageSha":"a","by":"user","at":"2026-10-04T00:00:00Z"},"livePlan":{"path":"PLAN.md","briefs":{}}}"#,
+        "approval"
+      ),
+      (
+        #"{"schemaVersion":1,"slug":"s","resume":"r","source":"livePlan","livePlan":{"path":"../PLAN.md","briefs":{}}}"#,
+        "`../PLAN.md`"
+      ),
+    ])
+  func rejectsMixedLivePlan(_ json: String, _ named: String) {
+    let error = #expect(throws: DecodingError.self) { try PlanFileJSON.decode(Data(json.utf8)) }
+    guard case .dataCorrupted(let context) = error else {
+      Issue.record("expected a corrupted-data error, got \(String(describing: error))")
+      return
+    }
+    #expect(context.debugDescription.contains(named))
+  }
+}
