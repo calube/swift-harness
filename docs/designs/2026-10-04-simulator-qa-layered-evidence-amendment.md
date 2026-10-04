@@ -258,7 +258,7 @@ already isolates its devices; this section states what the other session must le
 | Build executor | after each merge, `swiftgate qa run --after <task>`; the `validate` stage runs `swiftgate qa run --final` on merged `main` instead of printing `validate: not configured` |
 | Brownfield | `PLAN.md` gains `## Validation`. Acceptance and state rows apply in any language with no simulator, and run at `merge`. Flow rows run at `final`, for iOS areas only |
 | `/swift-validate` | its block gains 1 row per validation row, with result and evidence, under "Simulator QA" (approved design §8.2) |
-| Run viewer | a `qa.check` event per row feeds a validation column in the spec region. A red row reuses the "Why it failed" popover with layer, check, failing step or exit status, and evidence paths relative to the run |
+| Run viewer | the report becomes tabbed, with a Validation tab (§9.2); a `qa.check` event per row feeds it. A red row reuses the "Why it failed" popover with layer, check, failing step or exit status, and evidence paths relative to the run |
 
 The run viewer change adds a field to the closed `RunView` contract and a new `HarnessEvent` kind. Each evidence path
 passes the payload guard; a path the guard rejects becomes a `damage` row, as today. The page links the MP4 and the
@@ -277,6 +277,28 @@ The final report has 1 row per check:
 Below the table, the report lists what only a person can verify: gestures the tool can't perform, visual polish,
 and any row that reads `unverified`.
 
+A row's result is `pass`, `red`, `unverified` or `waiting`. A row reads `waiting` while a task it runs after hasn't
+merged yet.
+
+### 9.2 The run viewer's tabs
+
+The user chose the tabbed layout on 2026-10-04: the validation layout mockups, variant B (decision 10).
+
+- **Tabs.** The report and the live page show 8 tabs: Overview, Timeline, Board, Graph, Spec, Gates, Tokens and
+  Validation. The regions the run viewer design §7 lays out on 1 page move into these tabs.
+- **Badges.** Every tab label carries live counts. Validation shows its red, unverified and waiting counts, and Gates
+  shows its retries, so a red check shows from any tab.
+- **Validation tab.** A summary strip counts pass, red, unverified and waiting rows. Below it, the tab groups rows
+  by task.
+- **Shared checks.** A row that runs after several tasks shows under each of them as "waiting on <task>" until the
+  last of them merges.
+- **Why buttons.** A red row opens the existing "Why it failed" popover. An `unverified` row opens a "Why
+  unverified" popover naming what didn't run and why, such as a failed flow before its state check, or a recording
+  past the decision 14 bound.
+- **Task details.** A click on a board card or a graph node opens a task details popover: status, board column,
+  deps, gate, commits, covered requirements, and the task's validation rows with their Why buttons. Its "Open task"
+  action opens the task drawer.
+
 ## 10. Against the approved choices
 
 | # | Item | Approved choice | Relationship | Why |
@@ -294,6 +316,7 @@ and any row that reads `unverified`.
 | 11 | Android evidence | §1 non-goal: Android | conflicts | out of scope; this amendment drops it |
 | 12 | Report with requirement rows | §8.2 a "Simulator QA" row in `/swift-validate` | extends | 1 row per check instead of 1 per verify run |
 | 13 | The pin | plan: 0.21.16 | changes | this Mac runs 0.21.18, and every help text this amendment cites comes from 0.21.18 |
+| 14 | Tabbed report | run viewer design §7: 1 page of regions | replaces | the user chose tabs on 2026-10-04 (§9.2); every region keeps its content inside a tab |
 
 ## 11. Verified against the installed tool
 
@@ -328,7 +351,7 @@ with `--udid`.
 | 7 | Who confirms a check fails first? | (a) the gate: `prove --proof-base` for acceptance, `qa run --at-base` for flow and state; (b) the worker's recorded reason | (a) | user |
 | 8 | What may the validation worker write? | (a) acceptance test files named in its write set, plus `qa/`; (b) (a) plus contract additions it finds missing | (a): it reports a missing name and the orchestrator amends the contract | user |
 | 9 | Do sprint and design-free ship get the table? | (a) not in the first cut; (b) yes, as an optional spec-page section | (a) | user |
-| 10 | Where does the report live? | (a) `.harness/runs/<runID>/qa/report.json`, rows in `/swift-validate`, and a run viewer validation column; (b) the first 2 only, no viewer change | (a) | user |
+| 10 | Where does the report live, and how does the run viewer show it? | Location: (a) `.harness/runs/<runID>/qa/report.json` plus rows in `/swift-validate`; (b) `/swift-validate` rows only. Layout: tabs with a Validation tab (variant B of the validation layout mockups) | Location: (a). Layout: decided, tabs (§9.2) | location: user; layout: decided (user, 2026-10-04) |
 | 11 | Do flows run after each merge, or only at `validate`? | (a) after each merge for the rows it unblocks, stop at the first red layer; (b) acceptance after each merge, flow and state at `validate` only | (a) | user |
 | 12 | The pin | (a) 0.21.18, the installed version every cited help text comes from; (b) keep 0.21.16 and recapture | (a) | user |
 | 13 | ADR | (a) a new ADR that amends [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) for run-scoped batch flows and the recording lock; (b) edit [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | (a): ADRs record history | user |
