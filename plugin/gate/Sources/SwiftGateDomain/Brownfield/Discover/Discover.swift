@@ -14,6 +14,12 @@ public enum Discover {
     mergeGate: .merge, workerModel: .claudeSonnet55, timeBudgetMin: 0, stopStartsBeforeMin: 0,
     onDesignConflict: .block, taskProof: .prove, stallMin: 2)
 
+  /// `[judge]` for a clone discovered for the first time: the owned profile's default backend and
+  /// thresholds, so `judge diff-risk` can rate a slice (design §11.5) without a hand edit. Claude
+  /// sends nothing to a third party; Jev stays opt-in (ADR 0007).
+  public static let defaultJudge = JudgeConfig.enabled(
+    backend: .claude, thresholds: .defaults, model: nil)
+
   /// Runs every reader over `tree`, then lets the commands CI, `Makefile`, `justfile` and `bin/*`
   /// already run replace a reader's guess or fill a missing step.
   public static func propose(
@@ -105,9 +111,9 @@ public enum Discover {
       applied: applied, stale: stale)
   }
 
-  /// The config an applied `proposal` writes. Settings, `[[allow]]` entries and presets come from
-  /// `existing` when there is one, so a rediscovery keeps them; areas always come from the
-  /// proposal.
+  /// The config an applied `proposal` writes. Settings, `[[allow]]` entries, presets and `[judge]`
+  /// come from `existing` when there is one, so a rediscovery keeps them; areas always come from
+  /// the proposal.
   public static func config(from proposal: DiscoverProposal, keeping existing: BrownfieldConfig?)
     -> BrownfieldConfig
   {
@@ -119,7 +125,7 @@ public enum Discover {
         timeBudgetMinutes: settings?.timeBudgetMinutes ?? 0, sensitive: settings?.sensitive ?? []),
       areas: proposal.areas.map(BrownfieldArea.init(proposed:)), allow: existing?.allow ?? [],
       buildPresets: existing?.buildPresets ?? ["brownfield": brownfieldPreset],
-      judge: existing?.judge ?? .disabled)
+      judge: existing?.judge ?? defaultJudge)
   }
 }
 

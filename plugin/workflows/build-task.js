@@ -736,6 +736,7 @@ const DIFF_RISK_SCHEMA = {
 let classified = null
 async function classify() {
   if (A.review !== 'classified' || classified) return classified
+  // `swiftgate run report` reads both notes' wording back to name each task's depth and why.
   const fallback = why => ({ level: 'medium', note: `review: classified at medium, because diff-risk gave no level (${why})` })
   let answer
   try {

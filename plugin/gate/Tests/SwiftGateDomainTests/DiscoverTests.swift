@@ -518,7 +518,7 @@ struct DiscoverTests {
   }
 
   @Test(
-    "a first discovery writes the brownfield preset and the default slice budget — catches a clone with no preset for build start"
+    "a first discovery writes the brownfield preset, the default slice budget and the owned profile's default judge — catches a clone with no preset for build start or no [judge] for diff-risk"
   )
   func configFresh() {
     let config = Discover.config(
@@ -529,6 +529,8 @@ struct DiscoverTests {
     #expect(config.buildPresets["brownfield"] == Discover.brownfieldPreset)
     #expect(Discover.brownfieldPreset.taskGate == .tier(.slice))
     #expect(Discover.brownfieldPreset.taskProof == .prove)
+    #expect(config.judge == .enabled(backend: .claude, thresholds: .defaults, model: nil))
+    #expect(config.judge == Discover.defaultJudge)
   }
 
   @Test(

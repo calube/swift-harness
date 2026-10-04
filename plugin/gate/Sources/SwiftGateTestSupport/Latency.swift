@@ -38,29 +38,26 @@ public enum Latency {
     return samples
   }
 
-  /// Runs `body` and returns its result together with the CPU time this call spent on the
-  /// *calling thread*, in milliseconds, read from `CLOCK_THREAD_CPUTIME_ID`. That clock counts
-  /// only this thread's own execution, so a CPU-bound test running concurrently on another thread
-  /// of this same process never adds to the reading.
+  /// Runs `body` and returns its result together with the CPU time it used, in milliseconds.
   ///
-  /// Only correct for a hook that never leaves this thread while it runs: Swift's cooperative
-  /// pool is free to resume a suspended task on a different worker thread, and this clock cannot
-  /// see time spent on another one. Use this for a hook that runs synchronously and in-process
-  /// (a fake dependency with no real IO, so nothing inside it ever actually suspends); once a
-  /// hook shells out to a real child process, measure that child's own `wait4` rusage instead
-  /// (see `MeasuredProcessRunner`), which is exact regardless of which thread awaits it.
-  public static func threadCPUMilliseconds<T>(
-    _ body: () async throws -> T
-  ) async rethrows -> (T, Int) {
-    let before = Self.threadCPUNanoseconds()
-    let value = try await body()
-    let after = Self.threadCPUNanoseconds()
+  /// `body` runs with a task executor preference for a thread of its own that runs nothing else,
+  /// and that thread's `CLOCK_THREAD_CPUTIME_ID` is read on it before and after. A clock read on
+  /// the calling thread is wrong once `body` suspends: the task can resume on another
+  /// cooperative thread, or on the same one after it ran other tests' work, and the difference
+  /// then counts that other work. Under the full parallel suite such readings ranged from
+  /// -2 971 to +4 720 ms for a hook that costs about 3 ms.
+  ///
+  /// Work `body` hands to another executor (the main actor, an actor with its own executor, a
+  /// detached task) is not counted. Once a hook shells out to a real child process, measure that
+  /// child's own `wait4` rusage instead (see `MeasuredProcessRunner`).
+  public static func threadCPUMilliseconds<T, Failure: Error>(
+    _ body: () async throws(Failure) -> T
+  ) async throws(Failure) -> (T, Int) {
+    let executor = DedicatedThreadExecutor()
+    defer { executor.stop() }
+    let before = await executor.threadCPUNanoseconds()
+    let value = try await withTaskExecutorPreference(executor, operation: body)
+    let after = await executor.threadCPUNanoseconds()
     return (value, Int((after - before) / 1_000_000))
-  }
-
-  private static func threadCPUNanoseconds() -> Int64 {
-    var ts = timespec()
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts)
-    return Int64(ts.tv_sec) * 1_000_000_000 + Int64(ts.tv_nsec)
   }
 }

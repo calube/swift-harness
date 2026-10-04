@@ -2185,3 +2185,25 @@ done
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-3/*` matched nothing.
+
+## Build returns: a classified review that fell back to medium
+
+`BuildReturn/memos-4/share-view-limit-{store,web}.json` are the 2 task returns the fourth brownfield trial on
+`usememos/memos` got from its `build-task` workflows. The web return's `notes` end with the workflow's line
+`review: classified at medium, because diff-risk gave no level (…)`, written when `judge diff-risk` found no
+`[judge]` in the fresh clone; the store return is a `design-conflict` that stopped before review. Each is the
+`result` of 1 line of the trial's committed `worker-journals.jsonl`, the 2 workflows' outputs. From this directory:
+
+```sh
+J=../../../../evals/results/2026-10-04-brownfield-trial/memos-4/worker-journals.jsonl
+mkdir -p BuildReturn/memos-4
+python3 -c "
+import json,sys
+for line in open(sys.argv[1]):
+    r=json.loads(line)['result']
+    r=r if isinstance(r,str) else json.dumps(r)
+    open('BuildReturn/memos-4/'+json.loads(r)['task']+'.json','w').write(r)
+" $J
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-4/*` matched nothing.
