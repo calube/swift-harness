@@ -705,7 +705,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | Rule id | Section |
 |---|---|
 | `neutral.not-proven` | brownfield profile §6, §9; a changed test passes with the task's source change reverted in a scratch tree. It replaces `prove.not-proven` in this profile; `prove.compile-only`, `prove.crashed` and `prove.no-evidence` keep their meaning |
-| `neutral.no-assertion` | brownfield profile §6; a changed test with no entry of its language's assertion table, or only a tautology, after the judge cascade |
+| `neutral.no-assertion` | brownfield profile §6; a changed test with no entry of its language's assertion table, or only a tautology. An empty body or a body of tautologies is a finding outright; a body that runs code with no assertion goes to the judge cascade, since a helper it calls may assert. An `[[allow]]` entry or an inline `swiftgate:allow` with a reason on the test's declaration line waives it |
 | `neutral.unsafe-shortcut` | brownfield profile §6; an escape hatch, a lint suppression, or a skipped or focused test on an added line, outside strings and comments. An `[[allow]]` entry or an inline `swiftgate:allow` with a reason waives it |
 | `neutral.lint` | brownfield profile §6; the area's own `lint` command on the changed files, findings on added lines only |
 | `xcode.file-not-in-target` | brownfield profile §8; a new Swift file under a source root that no target of the area's Xcode project compiles |

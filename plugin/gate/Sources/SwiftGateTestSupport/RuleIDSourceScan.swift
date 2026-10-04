@@ -51,6 +51,9 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "swiftgate.process": "a thread name",
     "swiftgate.measured-process": "a thread name",
     "config.syntax": "a self-test answer label for a parse error `swiftgate.config` reports",
+    "pytest.raises": "a pytest call the neutral assertion table matches",
+    "pytest.skip": "a pytest call the neutral unsafe-shortcut table matches",
+    "pytest.warns": "a pytest call the neutral assertion table matches",
     "evidence-check.stale":
       "a self-test answer label for what `evidence-check.stale-claim` reports",
   ]

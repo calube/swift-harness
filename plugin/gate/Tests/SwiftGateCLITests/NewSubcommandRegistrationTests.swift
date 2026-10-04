@@ -244,6 +244,7 @@ struct NewSubcommandRegistrationTests {
     "spec-page check", "spec-page check --json",
     "design-telemetry",
     "discover", "discover --apply",
+    "allow",
   ]
 
   @Test(
