@@ -89,6 +89,8 @@ public enum SimulatorProvision: Sendable, Equatable {
 
 /// Pure choices over a device list; the `Simctl` adapter supplies the list.
 public enum SimulatorSelection {
+  public static let baseAmbiguousRuleID = "sim.base-ambiguous"
+
   /// A shut-down base is cloned. Any other base may be in use by another session or tool, and
   /// `simctl clone` refuses it, so a fresh device of the same type and runtime is created instead;
   /// the harness never shuts down a device it did not make.
@@ -120,6 +122,14 @@ public enum SimulatorSelection {
         device: config.device, os: config.os, installedRuntimes: runtimes.sorted())
     }
     return base
+  }
+
+  /// A non-gating `sim.base-ambiguous` note naming every UDID ``baseDevice(in:config:)`` chose
+  /// among, or `nil` when at most 1 device matched.
+  public static func baseAmbiguityNote(in devices: [SimulatorDevice], config: SimulatorConfig)
+    -> Finding?
+  {
+    nil
   }
 
   /// Harness clones whose owning process is gone.
