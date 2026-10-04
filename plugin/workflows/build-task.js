@@ -90,10 +90,14 @@ const SHA = /^[0-9a-f]{7,40}$/
 const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/
 // A build run id goes into a shell command, so only id characters pass.
 const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+// The span id `swiftgate events span start` prints: 16 lowercase hex, never wrapped in quotes.
+const SPAN_ID = /^[0-9a-f]{16}$/
 // Every stage agent returns the id of the span it opened; the workflow strips it from what it keeps.
+// The pattern makes the runtime send a quoted id back to the agent, as it does a quoted commit sha.
 const SPAN_PROPERTY = {
   type: ['string', 'null'],
-  description: 'the span id `events span start` printed; null when it printed nothing or failed',
+  pattern: SPAN_ID.source,
+  description: 'the span id `events span start` printed, as 16 hex characters with no quotes; null when it printed nothing or failed',
 }
 
 const nonEmptyString = value => typeof value === 'string' && value.trim().length > 0
@@ -601,7 +605,6 @@ const failure = error => (error && error.message ? error.message : String(error)
 // first and `end` last, from the 2 lines its prompt carries, and returns the span id it got. The
 // workflow spawns no agent for a span, and a span never decides a task: a stage with no usable
 // id is logged, and the next stage starts without a parent.
-const SPAN_ID = /^[0-9a-f]{16}$/
 // How each stage ends its own span, from what it returns.
 const SPAN_END_RULES = {
   worker: '`ok` when you return ready-to-merge, `red` when you return gate-red, and `abandoned` when you return design-conflict',

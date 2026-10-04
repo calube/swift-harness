@@ -615,6 +615,24 @@ const tests = {
     assert.ok(runID.test('20261004T141801Z-79b9bebf') && !runID.test('r-green'), 'the schema leaves gate.runId unpatterned')
   },
 
+  async 'every stage schema patterns its span id as 16 lowercase hex, so the runtime makes a stage retry a quoted one — catches the 3 span ids the fifth memos trial lost to quotes'() {
+    // The span id the store worker stage returned in the fifth memos trial, quotes and all.
+    const quoted = '"44b7bfe58637a914"'
+    const { calls } = await run(baseArgs({ review: 'full' }), { reviews: { architecture: [{ findings: [finding({ severity: 'minor' })] }] } })
+    const schemas = new Map(calls.filter(c => STAGE_AGENTS.includes(c.opts.agentType)).map(c => [c.opts.agentType, c.opts.schema]))
+    assert.deepEqual([...schemas.keys()].sort(), [...STAGE_AGENTS].sort(), 'a stage never ran, so its schema went unchecked')
+    for (const [agentType, schema] of schemas) {
+      const span = schema.properties.span
+      assert.ok(span.pattern, `${agentType}'s span is unpatterned`)
+      const id = new RegExp(span.pattern)
+      assert.ok(id.test('44b7bfe58637a914'), `${agentType} refuses a real span id`)
+      for (const bad of [quoted, '44B7BFE58637A914', '44b7bfe58637a91', `${'44b7bfe58637a914'}0`]) {
+        assert.ok(!id.test(bad), `${agentType} takes ${bad} as a span id`)
+      }
+      assert.deepEqual(span.type, ['string', 'null'], `${agentType} no longer takes a null span`)
+    }
+  },
+
   async 'a redReason on a return that is not gate-red is unusable — catches a reason the workflow would silently drop'() {
     const withReason = workerReturn({ redReason: 'no-progress' })
     const { workerCalls } = await run(baseArgs({ review: 'gate' }), { workers: [withReason, workerReturn()] })
