@@ -10,6 +10,7 @@ Contents:
 - [Launch](#launch): the workflow's args
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
+- [After each merge](#after-each-merge): the validation rows a merge unblocks
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -218,6 +219,27 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
+
+## After each merge
+
+A plan with a `validation.json` runs the rows a merge unblocks right after that merge's gate is
+GREEN and recorded, before `ledger set … done`, on `main`:
+
+```
+"$SG" qa run --plan <slug> --after <task> --json
+```
+
+It runs only the rows whose `Runs after` names `<task>` and whose other tasks are done, in layer
+order: acceptance, then flow, then state, stopping at the first layer with a red row (simulator QA
+amendment §6). A plan with no table reads GREEN with a note.
+
+- GREEN: go on. Rows that read `unverified` or `waiting` go in the report with their messages.
+- RED: a red row stops the next merge, as a red `main` does. Run
+  `"$SG" build merge <slug> <task> --undo --session <session> --json`, then the fixer as for a red
+  merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON.
+  After its fix merge, the merge gate runs again and then this command.
+- Exit 2 (BLOCKED): the table or the ledger doesn't read. Keep its `message` for the report and go
+  on; the merge gate already passed.
 
 ## Recording halts
 

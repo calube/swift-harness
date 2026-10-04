@@ -35,7 +35,7 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
 enum QAAdoptRun {
   static let command = "qa adopt"
   /// Where a validation worker leaves its checks in its worktree, 1 folder per plan.
-  static let preparedDirectory = ".harness/qa"
+  static let preparedDirectory = RunLayout.treePath(RunLayout.qaPreparedDirectory)
 
   /// Copies nothing unless `worktree` is a checkout `git worktree list` names and every plan
   /// folder it holds names a plan that exists, so a refusal never leaves half an adoption.
