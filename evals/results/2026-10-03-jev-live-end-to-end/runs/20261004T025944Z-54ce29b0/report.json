@@ -1,0 +1,60 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 723,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "~/.local/bin/swiftgate points at ~/.claude/plugins/cache/swift-harness/swift-harness/0.1.0/bin/swiftgate, not this harness (~/Developer/swift-harness-jev-live-end-to-end-check/plugin/bin/swiftgate); hooks run a different gate",
+      "rule" : "doctor.shim",
+      "severity" : "minor"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "SwiftLint is not installed; it is optional and style-only",
+      "rule" : "doctor.swiftlint",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "mmdc (the Mermaid CLI) is not on PATH, so design-lint can't validate diagram syntax; install it with `npm install -g @mermaid-js/mermaid-cli`",
+      "rule" : "doctor.mmdc",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "no session record under .harness/hook-state/sessions, so doctor can't tell whether the plugin changed after this session started; the SessionStart hook writes one",
+      "rule" : "doctor.session-record",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".swiftgate.toml",
+      "line" : null,
+      "message" : "[judge] backend = \"jev\" needs TYPESAFE_API_KEY, which isn't set here, so the judge can't ask jev: at ready its blocking questions go to claude and the advisory ones go unasked. Claude Code runs the gate in a non-interactive shell, so export TYPESAFE_API_KEY where one reads it (~/.zshenv, not ~/.zshrc), or set it under \"env\" in Claude Code's settings.json, then start a fresh session",
+      "rule" : "doctor.judge-key",
+      "severity" : "major"
+    }
+  ],
+  "headCommit" : "13ef402c9369999e45a39fdd3dad0486c0d6a7c2",
+  "runID" : "20261004T025944Z-54ce29b0",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 694,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}

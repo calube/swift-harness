@@ -1,0 +1,67 @@
+===== Package.swift
+// swift-tools-version: 6.0
+import PackageDescription
+
+let package = Package(
+  name: "PriceKit",
+  platforms: [.iOS(.v17), .macOS(.v14)],
+  products: [.library(name: "PriceKit", targets: ["PriceKit"])],
+  targets: [
+    .target(name: "PriceKit"),
+    .testTarget(name: "PriceKitTests", dependencies: ["PriceKit"]),
+  ]
+)
+
+===== .swiftgate.toml ([judge] table; the rest is the bootstrap template)
+[judge]
+backend = "jev"
+advisory_threshold = 0.6
+block_threshold = 0.9
+send_to = "api.typesafe.ai"
+
+===== Sources/PriceKit/Discount.swift
+/// Applies a percentage discount to a price in cents, rounding down to a whole cent.
+public func discountedPrice(cents: Int, percentOff: Int) -> Int {
+  precondition((0...100).contains(percentOff), "percentOff must be 0...100")
+  return cents * (100 - percentOff) / 100
+}
+
+===== Sources/PriceKit/Cart.swift
+/// A shopping cart holding line items as price in cents and quantity.
+public struct Cart: Sendable {
+  public private(set) var items: [(cents: Int, quantity: Int)] = []
+
+  public init() {}
+
+  public mutating func add(cents: Int, quantity: Int) {
+    items.append((cents, quantity))
+  }
+
+  public var totalCents: Int {
+    items.reduce(0) { $0 + $1.cents * $1.quantity }
+  }
+}
+
+===== Tests/PriceKitTests/DiscountTests.swift
+import PriceKit
+import Testing
+
+@Test("a 25% discount on 1999 cents rounds down to 1499 — catches rounding up or applying the percentage to the wrong side")
+func discountRoundsDownToWholeCent() {
+  #expect(discountedPrice(cents: 1999, percentOff: 25) == 1499)
+  #expect(discountedPrice(cents: 1000, percentOff: 0) == 1000)
+  #expect(discountedPrice(cents: 1000, percentOff: 100) == 0)
+}
+
+===== Tests/PriceKitTests/CartTests.swift
+import PriceKit
+import Testing
+
+@Test("cart totals line items — catches a wrong total")
+func cartTotalsLineItems() {
+  var cart = Cart()
+  cart.add(cents: 250, quantity: 2)
+  cart.add(cents: 100, quantity: 3)
+  _ = cart.totalCents
+}
+

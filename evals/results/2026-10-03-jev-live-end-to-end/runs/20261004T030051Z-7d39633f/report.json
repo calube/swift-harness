@@ -1,0 +1,27 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 178,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Tests/PriceKitTests/CartTests.swift:4 neither judge answered PriceKitTests.cartTotalsLineItems() on fails-if-broken, asserts-implementation: jev: Jev is unreachable: The operation couldn’t be completed. Operation not permitted; claude: claude could not start: not found on PATH ~/Development/google-cloud-sdk/bin:~/.rbenv/shims:~/.rbenv/bin:~/.bun/bin:~/Library/Android/sdk/platform-tools:~/Library/Android/sdk/emulator:/opt/homebrew/opt/libpq/bin:~/Library/pnpm:~/.claude/bin:~/.local/share/mise/installs/python/3.12.12/bin:~/.nvm/versions/node/v24.11.1/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/homebrew/bin:~/.local/share/zinit/polaris/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/Applications/Ghostty.app/Contents/MacOS. Ready stays BLOCKED until 1 of them can answer\nTests/PriceKitTests/DiscountTests.swift:4 neither judge answered PriceKitTests.discountRoundsDownToWholeCent() on fails-if-broken, asserts-implementation: jev: Jev is unreachable: The operation couldn’t be completed. Operation not permitted; claude: claude could not start: not found on PATH ~/Development/google-cloud-sdk/bin:~/.rbenv/shims:~/.rbenv/bin:~/.bun/bin:~/Library/Android/sdk/platform-tools:~/Library/Android/sdk/emulator:/opt/homebrew/opt/libpq/bin:~/Library/pnpm:~/.claude/bin:~/.local/share/mise/installs/python/3.12.12/bin:~/.nvm/versions/node/v24.11.1/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/opt/homebrew/bin:~/.local/share/zinit/polaris/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/Applications/Ghostty.app/Contents/MacOS. Ready stays BLOCKED until 1 of them can answer",
+      "rule" : "swiftgate.environment",
+      "severity" : "minor"
+    }
+  ],
+  "runID" : "20261004T030051Z-7d39633f",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 178,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "BLOCKED"
+    }
+  ],
+  "verdict" : "BLOCKED"
+}

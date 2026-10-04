@@ -1,0 +1,7 @@
+$ PATH=<PATH without claude> sandbox-exec -f nonet.sb swiftgate judge tests --ready --base main
+# started 2026-10-04T03:00:51Z, exit 2
+swiftgate BLOCKED · run 20261004T030051Z-7d39633f · 178ms
+  T0 BLOCKED 178ms
+findings: 1 (0 gating)
+  minor    .  swiftgate.environment: Tests/PriceKitTests/CartTests.swift:4 neither judge answered PriceKitTests.cartTotalsLineItems() on fails-if-broken, asserts-implementation: jev: Jev is unreac…
+details: .harness/runs/20261004T030051Z-7d39633f/

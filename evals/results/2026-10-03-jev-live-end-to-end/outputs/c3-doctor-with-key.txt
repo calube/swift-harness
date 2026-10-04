@@ -1,0 +1,10 @@
+$ swiftgate doctor   # TYPESAFE_API_KEY set
+# started 2026-10-04T03:01:45Z, exit 0
+swiftgate GREEN · run 20261004T030146Z-9e39e61d · 247ms
+  T0 GREEN 199ms
+findings: 4 (0 gating)
+  minor    .  doctor.shim: ~/.local/bin/swiftgate points at ~/.claude/plugins/cache/swift-harness/swift-harness/0.1.0/bin/swiftgate, not this harness (~/…
+  nit      .  doctor.swiftlint: SwiftLint is not installed; it is optional and style-only
+  nit      .  doctor.mmdc: mmdc (the Mermaid CLI) is not on PATH, so design-lint can't validate diagram syntax; install it with `npm install -g @mermaid-js/mermaid-cli`
+  nit      .  doctor.session-record: no session record under .harness/hook-state/sessions, so doctor can't tell whether the plugin changed after this session started; the SessionStart hook writes …
+details: .harness/runs/20261004T030146Z-9e39e61d/

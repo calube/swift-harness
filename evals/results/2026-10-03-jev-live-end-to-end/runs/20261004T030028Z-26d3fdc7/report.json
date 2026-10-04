@@ -1,0 +1,35 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 8166,
+  "findings" : [
+    {
+      "failureScenario" : "The test computes totalCents but discards it with `_ =` and makes no assertion, so a wrong total would never fail it. It could only fail by crashing.",
+      "file" : "Tests/PriceKitTests/CartTests.swift",
+      "line" : 4,
+      "message" : "the test would likely still pass if the behavior it names broke (p=0.97, claude/sonnet); escalated to claude because jev gave no answer: Jev is unreachable: The operation couldn’t be completed. Operation not permitted",
+      "rule" : "judge.fails-if-broken",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "jev gave no answer for 2 of 2 tests (Jev is unreachable: The operation couldn’t be completed. Operation not permitted); their blocking questions went to claude, and their advisory questions (tier, name-specificity) weren't asked",
+      "rule" : "judge.not-run",
+      "severity" : "minor"
+    }
+  ],
+  "runID" : "20261004T030028Z-26d3fdc7",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 8166,
+      "testCounts" : null,
+      "tier" : "T0",
+      "verdict" : "RED"
+    }
+  ],
+  "verdict" : "RED"
+}
