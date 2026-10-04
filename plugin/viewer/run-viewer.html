@@ -1,41 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Run Viewer</title>
 <link rel="stylesheet" href="run-viewer.css">
-
+</head>
+<body>
 <div class="wrap">
   <section class="panel" aria-label="Run summary">
     <div class="head">
-      <h1>Offline drafts</h1>
-      <span class="chip ok">GREEN</span>
+      <h1 id="title">Run</h1>
+      <span class="chip plain" id="state"></span>
       <span class="chip plain">Report</span>
     </div>
     <div class="head"><div class="meta mono" id="meta"></div></div>
     <div class="stats" id="stats"></div>
   </section>
 
-  <section class="panel" aria-label="Plan graph">
-    <div class="head" style="justify-content:space-between">
-      <h2>Plan</h2>
-      <div class="legend">
-        <span style="--c:var(--ok)">done</span>
-        <span style="--c:var(--accent)">running</span>
-        <span style="--c:var(--bad)">RED</span>
-        <span style="--c:var(--muted)">queued</span>
-      </div>
-    </div>
-    <div class="graph-scroll" id="graph-scroll" tabindex="0" aria-label="Plan dependency graph, scrolls horizontally"></div>
-  </section>
-
-  <section class="panel" aria-label="Board">
-    <div class="head" style="justify-content:space-between">
-      <h2>Board</h2>
-      <div class="zoom" role="group" aria-label="Board state" id="board-mode">
-        <button type="button" data-mode="report" aria-pressed="false">Report</button>
-        <button type="button" data-mode="live" aria-pressed="true">Live snapshot</button>
-      </div>
-    </div>
-    <p class="sub" id="board-note" style="margin:0;color:var(--muted);font-size:12px"></p>
-    <div class="board-scroll" id="board-scroll" tabindex="0" aria-label="Task board, scrolls horizontally"><div class="board" id="board"></div></div>
-  </section>
+  <section class="panel" aria-label="Plan graph" data-module="graph" hidden></section>
+  <section class="panel" aria-label="Board" data-module="board" hidden></section>
 
   <section class="panel" aria-label="Timeline">
     <div class="head" style="justify-content:space-between">
@@ -109,3 +93,5 @@
 
 <script src="run-view-model.js"></script>
 <script src="run-viewer.js"></script>
+</body>
+</html>

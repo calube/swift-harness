@@ -1,4 +1,4 @@
-/* Layout: summary header, full-width flame timeline in its own scroller, then a 2-column grid of spec, proof, tokens and gates that stacks at phone width. */
+/* Layout: summary header, optional module panels, full-width flame timeline in its own scroller, then a 2-column grid of spec, proof, tokens and gates that stacks at phone width. */
 :root {
   --bg: #f6f7f9;
   --surface: #ffffff;
@@ -28,8 +28,8 @@
   --radius-lg: 14px;
   --radius-md: 10px;
   --radius-sm: 6px;
-  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -56,6 +56,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; line-height: 1.45;
   padding-inline: 16px; padding-block: 20px 40px;
@@ -88,7 +89,7 @@ h2 { font-size: 12px; margin: 0; font-weight: 600; text-transform: uppercase; le
 /* timeline */
 .tl-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .tl-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.tl { position: relative; min-width: calc(900px * var(--zoom, 1)); }
+.tl { position: relative; min-width: 900px; }
 .tl-row { display: grid; grid-template-columns: 190px 1fr; height: 24px; align-items: center; border-bottom: 1px solid var(--sunken); }
 .tl-row:last-child { border-bottom: 0; }
 .tl-label { position: sticky; left: 0; z-index: 2; background: var(--surface); height: 100%; display: flex; align-items: center; padding-right: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; border-right: 1px solid var(--line); }
@@ -98,6 +99,8 @@ h2 { font-size: 12px; margin: 0; font-weight: 600; text-transform: uppercase; le
 .bar.sel { box-shadow: 0 0 0 2px var(--fg); }
 /* Bars too narrow for their label drop the text; the title and popover still carry it. */
 .bar.notext { font-size: 0; padding: 0; }
+/* An open span is cut at the run's last event; the hatched end says it never closed. */
+.bar.open { background-image: repeating-linear-gradient(135deg, transparent 0 6px, rgba(255, 255, 255, .28) 6px 9px); }
 .axis { height: 26px; }
 .axis .tick { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--line); font-size: 11px; color: var(--muted); padding: 5px 0 0 4px; font-variant-numeric: tabular-nums; }
 .grid-lines { position: absolute; inset: 26px 0 0 190px; pointer-events: none; }
@@ -156,41 +159,8 @@ td .sub { color: var(--muted); font-size: 12px; }
 .step { font-size: 11px; border-radius: var(--radius-sm); padding: 2px 7px; background: var(--ok-soft); color: var(--ok); font-variant-numeric: tabular-nums; }
 .step.red { background: var(--bad-soft); color: var(--bad); }
 
-/* plan graph: layered left to right, scrolls inside its own box at narrow widths */
-.graph-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-md); }
-.graph-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.graph { display: block; width: 100%; height: auto; }
-.edge { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .75; }
-.arrow { fill: var(--muted); }
-.gnode { cursor: pointer; outline: none; }
-.gnode .box { fill: var(--sf); stroke: var(--sc); stroke-width: 1.5; }
-.gnode .dot { fill: var(--sc); }
-.gnode .gid { fill: var(--fg); font: 600 12px var(--font-mono); }
-.gnode .gsub { fill: var(--muted); font: 11px var(--font-ui); font-variant-numeric: tabular-nums; }
-.gnode:hover .box { stroke-width: 2.5; }
-.gnode:focus-visible .box { stroke: var(--accent); stroke-width: 3; }
-.gnode.sel .box { stroke: var(--fg); stroke-width: 2.5; }
-.st-done { --sf: var(--ok-soft); --sc: var(--ok); }
-.st-running { --sf: var(--accent-soft); --sc: var(--accent); }
-.st-red { --sf: var(--bad-soft); --sc: var(--bad); }
-.st-queued { --sf: var(--sunken); --sc: var(--muted); }
-
-/* board: 6 lanes that scroll horizontally inside their own box */
-.board-scroll { overflow-x: auto; border-radius: var(--radius-md); }
-.board-scroll:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.board { display: grid; grid-template-columns: repeat(6, minmax(176px, 1fr)); gap: 8px; }
-.lane { background: var(--sunken); border-radius: var(--radius-md); padding: 8px; display: grid; gap: 8px; align-content: start; min-height: 150px; min-width: 0; }
-.lane.blocked { background: transparent; border: 1px dashed var(--line); }
-.lane-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 2px 2px 0; }
-.lane-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 14px 4px; border: 1px dashed var(--line); border-radius: var(--radius-sm); }
-.card { font: inherit; text-align: left; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--c, var(--line)); border-radius: var(--radius-sm); padding: 8px 10px; display: grid; gap: 6px; cursor: pointer; width: 100%; min-width: 0; transition: box-shadow .12s; }
-.card:hover { box-shadow: 0 0 0 1px var(--muted); }
-.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.card.sel { box-shadow: 0 0 0 2px var(--fg); }
-.card-top, .card-meta { display: flex; justify-content: space-between; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
-.card-id { font-family: var(--font-mono); font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
-.card-meta .num { color: var(--muted); font-size: 12px; }
 footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
+footer .damage-line { color: var(--bad); flex-basis: 100%; overflow-wrap: anywhere; }
 
 /* task drawer: a ticket view that slides in from the right; a full-height sheet at phone width */
 html.drawer-open { overflow: hidden; }
