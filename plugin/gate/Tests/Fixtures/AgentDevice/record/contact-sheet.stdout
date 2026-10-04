@@ -1,0 +1,28 @@
+{
+  "success": true,
+  "data": {
+    "path": "/SCRATCH/sheet.png",
+    "videoPath": "/SCRATCH/video.mp4",
+    "durationMs": 4833,
+    "width": 1112,
+    "height": 823,
+    "sampledFrameCount": 20,
+    "decodedFrameCount": 20,
+    "skippedSampleCount": 0,
+    "changedPixelThreshold": 0.02,
+    "cells": [
+      {
+        "timeMs": 0,
+        "changedPixelRatio": 1
+      },
+      {
+        "timeMs": 2783.333333333333,
+        "changedPixelRatio": 0.02016835016835017
+      },
+      {
+        "timeMs": 4816.666666666666,
+        "changedPixelRatio": 0.012946127946127947
+      }
+    ]
+  }
+}

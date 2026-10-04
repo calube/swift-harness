@@ -22,11 +22,13 @@ final class FakeFlowSimulator: QAFlowSimulating {
   let history: URL
   private let recorded = Mutex<[String]>([])
 
+  /// - Parameter agentDevice: the device, in place of 1 that answers every batch with `batch`.
   init(
     batch: String, head: String, scratch: URL, upFailure: SimUpFailure? = nil,
-    marker: URL? = nil, beforeVerify: @escaping @Sendable (URL) -> Void = { _ in }
+    marker: URL? = nil, agentDevice: (any AgentDevice)? = nil,
+    beforeVerify: @escaping @Sendable (URL) -> Void = { _ in }
   ) throws {
-    agentDevice = LiveAgentDevice(runner: try CapturedBatch.runner(batch))
+    self.agentDevice = try agentDevice ?? LiveAgentDevice(runner: CapturedBatch.runner(batch))
     self.head = head
     self.upFailure = upFailure
     self.marker = marker
