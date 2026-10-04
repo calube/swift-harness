@@ -97,7 +97,48 @@ public struct RunViewReader: RunViewReading {
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
       damage: damage, briefs: briefs, workerGateRuns: workerGateRuns,
       launchedAt: prebuild.launchedAt, gateReports: reports,
-      checkoutRoots: checkoutRoots(worktrees: worktrees))
+      checkoutRoots: checkoutRoots(worktrees: worktrees),
+      warmupBaselines: warmupBaselines(of: kept, damage: &damage))
+  }
+
+  /// What the warm-up recorded into the baseline for each failed kept `warmup.run`, from the
+  /// clone's `warmup/` and `baseline/` files. A file that doesn't decode is damage.
+  private func warmupBaselines(of events: [HarnessEvent], damage: inout [RunView.Damage])
+    -> [String: BaselineStepResult]
+  {
+    let failed = events.contains { event in
+      guard case .warmupRun(let run) = event.payload else { return false }
+      return run.outcome == .failed
+    }
+    guard failed else { return [:] }
+    let layout = BrownfieldStateLayout(commonDir: commonDirectory, gitDir: commonDirectory)
+    func trees(in directory: URL) -> [String] {
+      let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+      return names.filter { $0.hasSuffix(".json") }.map { String($0.dropLast(".json".count)) }
+        .sorted()
+    }
+    var times: [WarmupTimesFile] = []
+    for tree in trees(in: layout.warmupDirectory) {
+      let path = layout.warmup(tree: tree).path
+      guard let data = read(path, damage: &damage) else { continue }
+      do {
+        times.append(try WarmupTimesFile.decode(data, tree: tree))
+      } catch {
+        damage.append(RunView.Damage(source: display(path), reason: error.detail))
+      }
+    }
+    var baselines: [String: BaselineFile] = [:]
+    for tree in trees(in: layout.baselineDirectory) where times.contains(where: { $0.tree == tree })
+    {
+      let path = layout.baseline(tree: tree).path
+      guard let data = read(path, damage: &damage) else { continue }
+      do {
+        baselines[tree] = try BaselineFile.decode(data, tree: tree)
+      } catch {
+        damage.append(RunView.Damage(source: display(path), reason: error.detail))
+      }
+    }
+    return RunViewWarmupBaselines.match(events: events, times: times, baselines: baselines)
   }
 
   /// The `report.json` of each kept gate run that wasn't GREEN, from the first checkout whose

@@ -123,10 +123,12 @@ public enum ConfigSchema {
   private static func readQA(_ reader: inout Reader, _ root: [String: ConfigValue]) -> QAConfig {
     let path = "qa"
     guard let table = reader.table(root, path, at: "") else { return QAConfig() }
-    reader.rejectUnknownKeys(in: table, at: path, allowed: ["session_timeout_minutes"])
+    reader.rejectUnknownKeys(
+      in: table, at: path, allowed: ["session_timeout_minutes", "accessibility_ids"])
     return QAConfig(
       sessionTimeoutMinutes: reader.integer(table, "session_timeout_minutes", at: path)
-        ?? QAConfig.defaultSessionTimeoutMinutes)
+        ?? QAConfig.defaultSessionTimeoutMinutes,
+      accessibilityIDs: reader.string(table, "accessibility_ids", at: path))
   }
 
   private static func readMutation(_ reader: inout Reader, _ root: [String: ConfigValue])

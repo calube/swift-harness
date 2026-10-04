@@ -9,6 +9,7 @@ let package = Package(
     .library(name: "CounterUI", targets: ["CounterUI"]),
   ],
   dependencies: [
+    .package(path: "../AccessibilityIDs"),
     .package(path: "../APIClient"),
     .package(path: "../LogClient"),
     .package(
@@ -31,6 +32,7 @@ let package = Package(
       name: "CounterUI",
       dependencies: [
         "CounterCore",
+        .product(name: "AccessibilityIDs", package: "AccessibilityIDs"),
         .product(name: "ComposableArchitecture", package: "swift-composable-architecture"),
       ]
     ),

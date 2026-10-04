@@ -1,3 +1,4 @@
+import AccessibilityIDs
 import ComposableArchitecture
 import CounterCore
 import SwiftUI
@@ -14,13 +15,13 @@ public struct CounterView: View {
       Text("\(store.count)")
         .font(.system(size: 64, weight: .bold, design: .rounded))
         .monospacedDigit()
-        .accessibilityIdentifier("counter.value")
+        .accessibilityIdentifier(AccessibilityID.counterValue.rawValue)
 
       HStack(spacing: 32) {
         Button("Decrement", systemImage: "minus") { store.send(.decrementButtonTapped) }
-          .accessibilityIdentifier("counter.decrement")
+          .accessibilityIdentifier(AccessibilityID.counterDecrement.rawValue)
         Button("Increment", systemImage: "plus") { store.send(.incrementButtonTapped) }
-          .accessibilityIdentifier("counter.increment")
+          .accessibilityIdentifier(AccessibilityID.counterIncrement.rawValue)
       }
       .labelStyle(.iconOnly)
       .font(.title)
@@ -28,14 +29,14 @@ public struct CounterView: View {
 
       Button("Cat fact") { store.send(.factButtonTapped) }
         .disabled(store.isLoadingFact)
-        .accessibilityIdentifier("counter.fact")
+        .accessibilityIdentifier(AccessibilityID.counterFact.rawValue)
 
       if store.isLoadingFact {
         ProgressView()
       } else if let fact = store.fact {
         Text(fact)
           .multilineTextAlignment(.center)
-          .accessibilityIdentifier("counter.factText")
+          .accessibilityIdentifier(AccessibilityID.counterFactText.rawValue)
       }
     }
     .padding()

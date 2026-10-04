@@ -1,12 +1,12 @@
 ---
 name: plan
-description: This skill should be used to turn an approved swift-harness design, or a confirmed spec page, into a build plan, or to replan one after an amend. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD (a spec page plan instead needs its confirm and its surface commit recorded), has the decomposer agent split the design or the page's slices into ledger tasks (after an amend, only the needs-replan tasks and fix tasks for changed ids that done tasks cover, around the kept tasks), runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "replan", "/swift-harness:plan", or after /swift-harness:design reports an approved design or an amend.
+description: This skill should be used to turn an approved swift-harness design, or a confirmed spec page, into a build plan, or to replan one after an amend. It checks that this session holds the plan's claim and that the approval matches the design's designSha (directly or through a verified clarify chain), re-checks the evidence at HEAD (a spec page plan instead needs its confirm and its surface commit recorded), has the decomposer agent split the design or the page's slices into ledger tasks (after an amend, only the needs-replan tasks and fix tasks for changed ids that done tasks cover, around the kept tasks), writes the validation table the decomposer returns as validation.json, runs swiftgate plan-schedule and plan-lint with one fix round, writes the shared plan.json and ledger.json, sets the plan index and publishes the ledger page as an Artifact. Use when the user says "plan this design", "decompose the design", "make the ledger", "replan", "/swift-harness:plan", or after /swift-harness:design reports an approved design or an amend.
 ---
 
 # Plan
 
-This skill turns an approved design, or a confirmed spec page, into `plan.json` and `ledger.json`
-under the git common dir, where every worktree of the repository reads them. It decides the order of the steps and asks the
+This skill turns an approved design, or a confirmed spec page, into `plan.json` and `ledger.json`,
+plus `validation.json` for a design, under the git common dir, where every worktree of the repository reads them. It decides the order of the steps and asks the
 user. `swiftgate` does every check. The decomposer agent proposes the tasks, and this skill never
 edits a task itself.
 
@@ -116,6 +116,9 @@ changed after it. Don't write `plan.json` in this step.
    `"$SG" plan surface <slug> <surface> --gate <run id> --session <session>`.
 3. Keep `surfaceCommit` as `<surface>`, then go to step 4.
 
+A spec-page plan writes no `validation.json`: each slice keeps its 1 acceptance test, and the
+decomposer returns no validation table for it.
+
 A spec-page plan has no amend, so it never replans: step 4's table applies, with every row but
 **fresh** a halt.
 
@@ -206,10 +209,12 @@ the surface's stub files may go in the write set of the task that fills them. On
 fix round.
 **Log** a `decompose` line with the tokens and duration the Agent tool reports.
 
-The reply must be a single JSON object, `{tasks, unresolved}`, in the agent's contract. Check that every
-task has the ledger task fields, `status` `pending` and `model` set, with no `actualLines`. On a
-replan, also check that no reply task has the id of a `<fixed>` task. A reply that isn't in that
-shape halts.
+The reply must be a single JSON object, `{tasks, validation, unresolved}`, in the agent's contract;
+a spec-page plan's reply has no `validation`. Check that every task has the ledger task fields,
+`status` `pending` and `model` set, with no `actualLines`, and that `validation` holds `rows` and
+`unitOnly` in the shape the reference gives for `validation.json`. On a replan, also check that no
+reply task has the id of a `<fixed>` task; its `validation` is the whole table, rows naming
+`<fixed>` tasks included. A reply that isn't in that shape halts.
 
 ## 5. Schedule, write the ledger, lint
 
@@ -229,19 +234,31 @@ shape halts.
    `planned; 7 tasks in 3 waves; next: build the first wave`. A replan's line counts the tasks
    already done, such as `replanned at <current>; 4 of 9 tasks done; next: build the next wave`.
 3. Write the draft to `<plans>/<slug>/ledger.json` with the Write tool, byte for byte.
+   For a design plan, also write `<plans>/<slug>/validation.json` with the Write tool:
+   `schemaVersion` 1, then the reply's `validation.rows` and `validation.unitOnly` copied as they
+   are. A replan writes it over the old file. A replan that skipped the decomposer keeps the old
+   file as it is.
 4. Lint the plan, and **log** a `lint` line:
 
    ```bash
    "$SG" plan-lint <slug> --json
    ```
 
-   Exit 0: go to step 6. Exit 2 halts: the plan state, the design at `designSha`, the spec page
+   `plan-lint` reads `validation.json` beside the ledger and checks the table against the design's
+   requirements and the ledger's tasks: `plan-lint.validation-uncovered` (a requirement with no row
+   and no unit-only reason), `plan-lint.validation-unknown-task` (a `runsAfter` or `writer` id that
+   names no task), `plan-lint.validation-state-without-flow` (a `state` row with no `flow` row for
+   the same requirement and tasks) and `plan-lint.validation-flow-without-ios` (a `flow` row with
+   no app to drive). Each is `major`, and goes to the fix round like any other finding.
+
+   Exit 0: go to step 6. Exit 2 halts, and so does a malformed `validation.json`: the plan state, the design at `designSha`, the spec page
    or the module graph is unreadable, or no one has confirmed the page. Exit 1: go on to the fix round,
    except that `plan-lint.spec-page-moved` halts at once: the page changed after its confirm, and
    no task edit fixes that. Confirm the page again with `/swift-harness:ship` first.
 5. **A single fix round.** Send the decomposer every finding from the report with
    `SendMessage` to the agent id you kept, as `rule (severity) task: message` lines. On a replan,
-   its reply is again the new tasks only, and items 1 to 4 put `<fixed>` first again. Load
+   its reply is again the new tasks only, and items 1 to 4 put `<fixed>` first again. Its
+   `validation` is the whole corrected table, which item 3 writes again. Load
    `SendMessage` with `ToolSearch` if it's deferred. **Log** a `decompose` line for its reply.
    Check the reply as in step 4, then repeat items 1 to 4 of this list once with the new tasks.
 6. After the fix round, any gating finding from `plan-lint`, or any `unresolved` entry, halts.
@@ -278,6 +295,8 @@ End with the Artifact link, or the page's path when this session has no Artifact
 short summary:
 
 - the task count and the waves, in the order `plan-schedule` gave them;
+- for a design plan, the validation rows per layer, the requirements left to unit tests, and the
+  validation task when there is one;
 - the `minor` findings `plan-lint` left;
 - on a replan, the tasks replaced, the fix tasks added and the `done` tasks kept;
 - the plan's status, `planned`.
@@ -286,7 +305,8 @@ The claim stays with this session. The build of the first wave starts from this 
 
 ## Rules
 
-- Only this main session writes `plan.json` and `ledger.json`, and only while it holds the claim.
+- Only this main session writes `plan.json`, `ledger.json` and `validation.json`, and only while
+  it holds the claim.
   A subagent returns content, and this skill writes it.
 - Never write `index.json` or `orchestrator.lock`. `index set` and `plan claim` own them.
 - A `ledger.json` with a task that isn't `pending` means a build has started. Only a replan (step

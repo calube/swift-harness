@@ -137,13 +137,16 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var tokens: Tokens?
     /// Why the task stopped; `nil` unless it ended `blocked` or `needs-replan`.
     public var blocked: TaskBlock?
+    /// Why it stopped or was abandoned, in at most ``RunView/maxReasonWords`` plain words;
+    /// `nil` for a task that didn't.
+    public var failureReason: String?
 
     public init(
       id: String, status: TaskStatus, model: TaskModel? = nil, deps: [String] = [],
       writes: [String] = [], gate: CheckTier, covers: [String] = [], commits: [String] = [],
       gateRun: String? = nil, mergeGateRun: String? = nil, createdAt: Date? = nil,
       mergedAt: Date? = nil, brief: Brief? = nil, tokens: Tokens? = nil,
-      blocked: TaskBlock? = nil
+      blocked: TaskBlock? = nil, failureReason: String? = nil
     ) {
       self.id = id
       self.status = status
@@ -160,6 +163,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.brief = brief
       self.tokens = tokens
       self.blocked = blocked
+      self.failureReason = failureReason
     }
   }
 
@@ -238,11 +242,18 @@ public struct RunView: Sendable, Equatable, Encodable {
     /// The RED gate run that turned this stage red; `nil` for a span whose own `gateRun` says,
     /// or one no gate run explains.
     public var causeGateRun: String?
+    /// Why it isn't ok, in at most ``RunView/maxReasonWords`` plain words; `nil` for a span
+    /// that is ok or still open.
+    public var failureReason: String?
+    /// A warm-up step that failed at the base commit and whose failures the baseline recorded,
+    /// so later gates excuse them: expected, not a fault of the run.
+    public var baseline: Bool
 
     public init(
       id: String, parent: String? = nil, phase: Phase, task: String? = nil,
       gateRun: String? = nil, start: Date, end: Date? = nil, outcome: SpanOutcome? = nil,
-      approximate: Bool = false, tools: ToolSummary? = nil, causeGateRun: String? = nil
+      approximate: Bool = false, tools: ToolSummary? = nil, causeGateRun: String? = nil,
+      failureReason: String? = nil, baseline: Bool = false
     ) {
       self.id = id
       self.parent = parent
@@ -255,6 +266,8 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.approximate = approximate
       self.tools = tools
       self.causeGateRun = causeGateRun
+      self.failureReason = failureReason
+      self.baseline = baseline
     }
   }
 
@@ -464,7 +477,7 @@ extension RunView.Brief {
 extension RunView.Task {
   private enum CodingKeys: String, CodingKey {
     case id, status, model, deps, writes, gate, covers, commits, gateRun, mergeGateRun
-    case createdAt, mergedAt, brief, tokens, blocked
+    case createdAt, mergedAt, brief, tokens, blocked, failureReason
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -484,12 +497,14 @@ extension RunView.Task {
     try c.encode(brief, forKey: .brief)
     try c.encode(tokens, forKey: .tokens)
     try c.encode(blocked, forKey: .blocked)
+    try c.encode(failureReason, forKey: .failureReason)
   }
 }
 
 extension RunView.Span {
   private enum CodingKeys: String, CodingKey {
     case id, parent, phase, task, gateRun, start, end, outcome, approximate, tools, causeGateRun
+    case failureReason, baseline
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -505,6 +520,8 @@ extension RunView.Span {
     try c.encode(approximate, forKey: .approximate)
     try c.encode(tools, forKey: .tools)
     try c.encode(causeGateRun, forKey: .causeGateRun)
+    try c.encode(failureReason, forKey: .failureReason)
+    try c.encode(baseline, forKey: .baseline)
   }
 }
 

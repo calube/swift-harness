@@ -36,6 +36,10 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
 - `RunView` encodes `schemaVersion` 1 and the design §6 keys, plus `run.stallMin` and the span phases the
   builder derives (`run`, `task`, `merge`, `gate`, `tier`, `step`, `warmup`). Times are ISO-8601 with
   milliseconds; `RunViewJSON.encode(_:)` is the 1 encoder.
+- `Span.failureReason`, `Span.baseline` and `Task.failureReason` (the page's FAILURE REASON row) come from
+  `RunViewFailureReasons.fill(_:input:)`, at most `RunView.maxReasonWords` (15) words and `maxReasonBytes` (120);
+  `RunViewInput.warmupBaselines` holds each failed `warmup.run`'s baseline record by event id, matched by
+  `RunViewWarmupBaselines.match(events:times:baselines:)`.
 - A blocked task's `blocked.cause` is `return-rejected` when its newest `build.return-checked` wasn't
   GREEN, and `blocked.rejection` then holds that event's verdict, rules, findings and message.
 - `RunViewBuilder.build(_ input: RunViewInput) -> RunView`. `RunViewInput` carries `events`, `join`,

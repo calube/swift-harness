@@ -236,6 +236,7 @@ struct NewSubcommandRegistrationTests {
       "start"
     ),
     ("events span end", ["events", "span", "end", "0123456789abcdef", "--outcome", "ok"], "end"),
+    ("sim hold", ["sim", "hold", "--run", "20261004T120000Z-1a2b3c4d"], "hold"),
   ]
 
   /// Invocations that do real work now. Some act on this checkout's real, shared plan state
@@ -284,6 +285,7 @@ struct NewSubcommandRegistrationTests {
     "events span start", "events span end",
     "warmup",
     "xcode add-file",
+    "sim hold",
   ]
 
   @Test(

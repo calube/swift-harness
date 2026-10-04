@@ -1,3 +1,4 @@
+import AccessibilityIDs
 import XCTest
 
 final class CounterFlowUITests: XCTestCase {
@@ -11,15 +12,15 @@ final class CounterFlowUITests: XCTestCase {
     let app = XCUIApplication()
     app.launch()
 
-    let value = app.staticTexts["counter.value"]
+    let value = app.staticTexts[AccessibilityID.counterValue.rawValue]
     XCTAssertTrue(value.waitForExistence(timeout: 10))
     XCTAssertEqual(value.label, "0")
 
-    app.buttons["counter.increment"].tap()
-    app.buttons["counter.increment"].tap()
+    app.buttons[AccessibilityID.counterIncrement.rawValue].tap()
+    app.buttons[AccessibilityID.counterIncrement.rawValue].tap()
     XCTAssertEqual(value.label, "2")
 
-    app.buttons["counter.decrement"].tap()
+    app.buttons[AccessibilityID.counterDecrement.rawValue].tap()
     XCTAssertEqual(value.label, "1")
   }
 
@@ -30,11 +31,11 @@ final class CounterFlowUITests: XCTestCase {
     app.launchArguments = ["-harness-scenario", "fixed-fact"]
     app.launch()
 
-    let factButton = app.buttons["counter.fact"]
+    let factButton = app.buttons[AccessibilityID.counterFact.rawValue]
     XCTAssertTrue(factButton.waitForExistence(timeout: 10))
     factButton.tap()
 
-    let factText = app.staticTexts["counter.factText"]
+    let factText = app.staticTexts[AccessibilityID.counterFactText.rawValue]
     XCTAssertTrue(factText.waitForExistence(timeout: 10))
     XCTAssertEqual(factText.label, "A group of cats is called a clowder.")
   }

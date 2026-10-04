@@ -1,0 +1,74 @@
+import Darwin
+import Foundation
+import SwiftGateAdapters
+import SwiftGateTestSupport
+import Testing
+
+@Suite("DetachedLauncher")
+struct DetachedLauncherTests {
+  let directory = TestTemporaryDirectory.root.appending(
+    path: "detached-\(UUID().uuidString)", directoryHint: .isDirectory)
+
+  /// Reaps a child this test started, so its PID can't be reused while the test still names it.
+  static func reap(_ pid: Int32) -> Int32 {
+    var status: Int32 = 0
+    while waitpid(pid, &status, 0) == -1 && errno == EINTR {}
+    return status
+  }
+
+  @Test(
+    "a detached process runs in the given directory with stdin empty and stdout and stderr appended to the log — catches a holder whose output is lost or that blocks on the caller's terminal"
+  )
+  func outputAndDirectory() throws {
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let log = directory.appending(path: "agent-device.log")
+    try Data("earlier\n".utf8).write(to: log)
+
+    let pid = try DetachedLauncher().launch(
+      DetachedLaunch(
+        executable: "/bin/sh",
+        arguments: ["-c", "pwd -P; echo to-stderr >&2; read line; echo \"stdin:$line\""],
+        workingDirectory: directory.path, logPath: log.path))
+    _ = Self.reap(pid)
+
+    let text = try String(contentsOf: log, encoding: .utf8)
+    #expect(text == "earlier\n\(CanonicalPath.of(directory))\nto-stderr\nstdin:\n")
+  }
+
+  @Test(
+    "a detached process leads a session of its own — catches a holder killed along with the tool call that started it"
+  )
+  func ownSession() throws {
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+    let pid = try DetachedLauncher().launch(
+      DetachedLaunch(
+        executable: "/bin/sleep", arguments: ["30"], workingDirectory: directory.path,
+        logPath: directory.appending(path: "log").path))
+    defer {
+      kill(pid, SIGKILL)
+      _ = Self.reap(pid)
+    }
+
+    #expect(getsid(pid) == pid)
+    #expect(getsid(pid) != getsid(0))
+  }
+
+  @Test(
+    "a missing executable is an error naming it, never a PID — catches sim up waiting on a holder that never started"
+  )
+  func missingExecutable() throws {
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let missing = directory.appending(path: "no-such-tool").path
+
+    #expect(throws: DetachedLaunchError.spawn(executable: missing, errno: ENOENT)) {
+      try DetachedLauncher().launch(
+        DetachedLaunch(
+          executable: missing, arguments: [], workingDirectory: directory.path,
+          logPath: directory.appending(path: "log").path))
+    }
+  }
+}
