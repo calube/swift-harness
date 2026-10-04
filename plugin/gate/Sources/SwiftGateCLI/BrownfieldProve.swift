@@ -45,9 +45,11 @@ enum BrownfieldProve {
   /// - Parameters:
   ///   - root: the worktree's toplevel.
   ///   - junitDirectory: where `{junit}` paths point.
+  ///   - proofs: takes each changed test the reverted runs said something about, for the gate
+  ///     run's `prove.result` events.
   static func run(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    dependencies: Dependencies
+    proofs: ProveResultCollector, dependencies: Dependencies
   ) async -> ChangedTestJudgement {
     let git = dependencies.git
     let mergeBase: String

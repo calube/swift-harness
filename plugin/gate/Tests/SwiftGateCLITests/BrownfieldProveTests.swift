@@ -112,7 +112,7 @@ struct BrownfieldProveTests {
     let process = LiveProcessRunner(baseEnvironment: environment)
     return await BrownfieldProve.run(
       root: clone.root, base: "main", config: config(testFiles: testFiles),
-      junitDirectory: clone.base.appending(path: "junit"),
+      junitDirectory: clone.base.appending(path: "junit"), proofs: ProveResultCollector(),
       dependencies: BrownfieldProve.Dependencies(
         git: LiveGit(runner: process, repositoryRoot: clone.root.path),
         scratch: LiveScratchWorktrees(

@@ -500,7 +500,7 @@ enum BrownfieldSliceCheck {
         root: root, base: base, config: config,
         junitDirectory: dependencies.layout.worktreeRoot.appending(
           path: "junit/\(area.name)", directoryHint: .isDirectory),
-        dependencies: dependencies.prove)
+        proofs: context.proofs, dependencies: dependencies.prove)
     }
     context.steps.record(
       .prove, tier: nil, milliseconds: proveMilliseconds, verdict: judgement.verdict,
