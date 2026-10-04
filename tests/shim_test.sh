@@ -128,9 +128,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 mkdir -p "$work/project/.git" "$work/elsewhere/.git"
 touch "$work/project/.swiftgate.toml"
 
+# A build lock with no process of this plugin copy left to remove it was orphaned by a kill, and
+# waiting on it would only run into the deadline.
 wait_for_background_build() {
   for _ in $(seq 1 600); do
     ls "$cache"/building-* >/dev/null 2>&1 || return 0
+    pgrep -f "$work/repo/plugin/" >/dev/null 2>&1 || return 1
     sleep 1
   done
   return 1
