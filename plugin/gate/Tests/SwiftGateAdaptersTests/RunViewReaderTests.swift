@@ -173,7 +173,8 @@ struct RunViewReaderTests {
         "20261004T045901Z-e384a82a", "20261004T050310Z-ed998508", "20261004T051053Z-7447d956",
         "20261004T051601Z-46b2b09c",
       ])
-    #expect(!input.events.contains { $0.eventID == (try? Self.eventID(otherRun)) })
+    let otherID = try Self.eventID(otherRun)
+    #expect(!input.events.contains { $0.eventID == otherID })
     #expect(!input.events.contains { $0.kind == .cacheLookup || $0.kind == .hookDecision })
     #expect(input.events.filter { $0.kind == .agentUsage }.count == 91)
     #expect(input.events.filter { $0.kind == .buildHalt }.count == 1)
