@@ -375,9 +375,14 @@ enum QARunRun {
       let program: QACheckRequest.Program
       var directory = workingDirectory
       var shown = row.check
-      if row.layer == .acceptance, let reference = AcceptanceTestReference.parse(row.check) {
-        let junit = qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path
-        switch areas.flatMap({ reference.resolve(in: $0, junitPath: junit) }) {
+      var reference = row.check
+      // Where an acceptance check may write a test report, which must then show a test ran.
+      let junit =
+        row.layer == .acceptance
+        ? qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path : nil
+      if let junit, let test = AcceptanceTestReference.parse(row.check) {
+        reference = test.id
+        switch areas.flatMap({ test.resolve(in: $0, junitPath: junit) }) {
         case .success(let resolved):
           program = .command(resolved.command)
           shown = resolved.command
@@ -394,36 +399,49 @@ enum QARunRun {
             && !isDirectory.boolValue
           ? .script(path: script) : .command(row.check)
       }
+      var environment = [
+        "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
+        "QA_EVIDENCE_DIR": qaDirectory.path,
+      ]
+      if let junit {
+        JUnitReportFiles.clear(at: junit)
+        environment[QACheckJudgement.reportVariable] = junit
+      }
       let output = await dependencies.checks.run(
         QACheckRequest(
           program: program, workingDirectory: directory,
-          environment: [
-            "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
-            "QA_EVIDENCE_DIR": qaDirectory.path,
-          ].merging(device, uniquingKeysWith: { own, _ in own }), timeout: dependencies.timeout))
+          environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
+          timeout: dependencies.timeout))
 
-      let result: QAResult
-      let status: String
       var exitStatus: Int?
+      let end: QACheckJudgement.End
+      let status: String
       switch output.exit {
       case .exited(let code):
         exitStatus = Int(code)
-        result = code == 0 ? .pass : .red
-        status = "exit \(code)"
+        end = .exited(code)
+        status = "\(code)"
       case .signaled(let signal):
-        result = .red
+        end = .signaled(signal)
         status = "killed by signal \(signal)"
       case .timedOut(let after):
-        result = .red
+        end = .timedOut(after)
         status = "timed out after \(after)"
       case .launchFailed(let reason):
-        result = .unverified
+        end = .launchFailed(reason)
         status = "not started: \(reason)"
       }
+      let judgement = QACheckJudgement.judge(
+        QACheckJudgement.Input(
+          end: end, stdout: output.stdout, stderr: output.stderr,
+          report: junit.flatMap(JUnitReportFiles.read(at:)),
+          reference: reference, atBase: atBase,
+          roots: [directory, workingDirectory, qaDirectory.path, planDirectory]))
+      let result = judgement.result
       let text =
-        "$ \(shown)\nQA_PORT=\(port)\nexit: \(exitStatus.map(String.init) ?? status)\n"
+        "$ \(shown)\nQA_PORT=\(port)\nexit: \(status)\n"
         + "--- stdout ---\n\(output.stdout)\n--- stderr ---\n\(output.stderr)\n"
-      var message = status
+      var message = judgement.message
       var evidence: [String] = []
       do {
         try QAFiles.write(Data(text.utf8), to: qaDirectory.appending(path: name))

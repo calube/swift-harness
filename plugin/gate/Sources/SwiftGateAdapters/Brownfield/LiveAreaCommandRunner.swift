@@ -13,16 +13,7 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
   }
 
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
-    if let junitPath = request.junitPath {
-      // A report an earlier run left must never be read as this run's.
-      for path in [junitPath] + JUnitReports.companionPaths(of: junitPath) {
-        try? FileManager.default.removeItem(atPath: path)
-      }
-      // Not every runner creates the directory it is told to write into.
-      try? FileManager.default.createDirectory(
-        atPath: (junitPath as NSString).deletingLastPathComponent,
-        withIntermediateDirectories: true)
-    }
+    if let junitPath = request.junitPath { JUnitReportFiles.clear(at: junitPath) }
     let invocation = ProcessInvocation(
       executable: "/bin/sh", arguments: ["-c", "exec 2>&1\n" + request.command],
       environmentOverlay: request.environment.mapValues { $0 },
@@ -55,31 +46,7 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
       case .exited(let status): .exited(status)
       case .signaled(let signal): .signaled(signal)
       }
-    let junit = request.junitPath.flatMap(Self.reports(at:))
+    let junit = request.junitPath.flatMap(JUnitReportFiles.read(at:))
     return AreaOutcomeReading.outcome(end: end, output: output.stdout.text, junit: junit)
-  }
-
-  /// The file at `junitPath` and its companions, or every `.xml` file in it when a command made
-  /// it a directory of reports, as Gradle and Maven areas do. A report that is listed but can't
-  /// be read leaves no report at all, so the step fails whole rather than without that report's
-  /// failures.
-  private static func reports(at junitPath: String) -> Data? {
-    let files = FileManager.default
-    var isDirectory: ObjCBool = false
-    guard files.fileExists(atPath: junitPath, isDirectory: &isDirectory), isDirectory.boolValue
-    else {
-      return JUnitReports.combined(
-        ([junitPath] + JUnitReports.companionPaths(of: junitPath)).compactMap {
-          files.contents(atPath: $0)
-        })
-    }
-    guard let names = try? files.contentsOfDirectory(atPath: junitPath) else { return nil }
-    var documents: [Data] = []
-    for name in names.sorted() where name.hasSuffix(".xml") {
-      guard let data = files.contents(atPath: (junitPath as NSString).appendingPathComponent(name))
-      else { return nil }
-      documents.append(data)
-    }
-    return JUnitReports.combined(documents)
   }
 }

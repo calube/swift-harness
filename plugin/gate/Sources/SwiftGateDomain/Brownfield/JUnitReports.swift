@@ -28,6 +28,19 @@ public enum JUnitReports {
     return Data((text + "</testsuites>\n").utf8)
   }
 
+  /// Every case of `report`, or `nil` when it doesn't read. Surefire and Gradle write 1
+  /// `<testsuite>` as the root, which ``XUnitReport`` takes only once it is wrapped.
+  public static func cases(_ report: Data) -> [XUnitTestCase]? {
+    if let parsed = try? XUnitReport.parse(report) { return parsed }
+    var text = String(decoding: report, as: UTF8.self)
+    if text.hasPrefix("<?xml"), let end = text.range(of: "?>") {
+      text.removeSubrange(text.startIndex..<end.upperBound)
+    }
+    // Wrapped text that is no suite would read as a report holding 0 cases.
+    guard text.drop(while: \.isWhitespace).hasPrefix("<testsuite") else { return nil }
+    return try? XUnitReport.parse(Data("<testsuites>\(text)</testsuites>".utf8))
+  }
+
   /// Text safe inside an XML attribute or element. Control characters other than tab and newline
   /// are not XML at all, so a test that prints one keeps the rest of its output.
   static func escaped(_ text: String) -> String {
