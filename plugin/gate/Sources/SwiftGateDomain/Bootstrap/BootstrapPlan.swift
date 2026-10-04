@@ -22,10 +22,12 @@ public struct HarnessTemplates: Sendable, Equatable {
   public let gitignore: String
   /// `docs/index.md`: the docs router, seeded once and then owned by whatever adds rows to it.
   public let docsIndex: String
+  /// `Scenario.swift`, stamped beside a single app entry point (see ``ScenarioStamp``).
+  public let scenario: String
 
   public init(
     agents: String, config: String, swiftFormat: String, swiftLint: String, lefthook: String,
-    gitignore: String, docsIndex: String
+    gitignore: String, docsIndex: String, scenario: String
   ) {
     self.agents = agents
     self.config = config
@@ -34,6 +36,7 @@ public struct HarnessTemplates: Sendable, Equatable {
     self.lefthook = lefthook
     self.gitignore = gitignore
     self.docsIndex = docsIndex
+    self.scenario = scenario
   }
 }
 
@@ -79,12 +82,16 @@ public struct BootstrapInputs: Sendable {
   public var shimTarget: String
   /// `--profile`: the `[harness] profile` a created config names. `nil` when not given.
   public var profile: String?
+  /// The app entry points and `Scenario` declarations outside `packages`. A stamp target beside
+  /// an entry point reads its state from ``existing`` like any other path.
+  public var appSources: AppSources
 
   public init(
     root: String, existing: [String: ExistingEntry], templates: HarnessTemplates,
     config: ConfigState, inferred: InferredConfig, swiftLintInstalled: Bool,
     lefthookInstalled: Bool, git: GitState, registry: RegistryState, registryPath: String,
-    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil
+    shim: ShimStatus, shimPath: String, shimTarget: String, profile: String? = nil,
+    appSources: AppSources = AppSources()
   ) {
     self.root = root
     self.existing = existing
@@ -100,6 +107,7 @@ public struct BootstrapInputs: Sendable {
     self.shimPath = shimPath
     self.shimTarget = shimTarget
     self.profile = profile
+    self.appSources = appSources
   }
 }
 

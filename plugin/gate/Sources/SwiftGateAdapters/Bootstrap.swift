@@ -108,6 +108,7 @@ public enum BootstrapFiles {
     public static let lefthook = "templates/lefthook.yml"
     public static let gitignore = "templates/gitignore"
     public static let docsIndex = "templates/docs-index.md"
+    public static let scenario = "templates/Scenario.swift"
   }
 
   /// Directories never searched for packages: build output, dependency checkouts, bundles.
@@ -128,7 +129,7 @@ public enum BootstrapFiles {
       swiftFormat: try read(TemplateNames.swiftFormat),
       swiftLint: try read(TemplateNames.swiftLint),
       lefthook: try read(TemplateNames.lefthook), gitignore: try read(TemplateNames.gitignore),
-      docsIndex: try read(TemplateNames.docsIndex))
+      docsIndex: try read(TemplateNames.docsIndex), scenario: try read(TemplateNames.scenario))
   }
 
   public static func entry(root: URL, path: String) -> ExistingEntry {
@@ -177,6 +178,12 @@ public enum BootstrapFiles {
     }
     visit("", depth: 0)
     return found.sorted()
+  }
+
+  /// The `@main … : App` files and `Scenario` declarations among the Swift files outside any
+  /// package, build output or hidden directory.
+  public static func appSources(root: URL) -> AppSources {
+    AppSources()
   }
 
   /// Names directly under `root`, for ``AppContainer/choose(among:)``.

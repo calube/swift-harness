@@ -42,15 +42,21 @@ enum BootstrapRun {
       xcodeVersion: await xcode, devices: await devices)
     let registryPath = environment.home.appending(path: ProjectRegistry.path).path
     let shimPath = environment.home.appending(path: DoctorRun.shimPath).path
+    let appSources = BootstrapFiles.appSources(root: root)
+    var existing = BootstrapFiles.entries(root: root)
+    for entryPoint in appSources.entryPoints {
+      let path = ScenarioStamp.path(beside: entryPoint)
+      existing[path] = BootstrapFiles.entry(root: root, path: path)
+    }
     return BootstrapInputs(
-      root: root.path, existing: BootstrapFiles.entries(root: root), templates: templates,
+      root: root.path, existing: existing, templates: templates,
       config: BootstrapFiles.configState(root: root), inferred: ConfigInference.infer(survey),
       swiftLintInstalled: environment.swiftLintInstalled,
       lefthookInstalled: environment.lefthookInstalled, git: await git,
       registry: BootstrapFiles.registryState(path: registryPath), registryPath: registryPath,
       shim: HarnessFiles.shimStatus(linkPath: shimPath, harnessRoot: environment.harnessRoot.path),
       shimPath: shimPath, shimTarget: environment.harnessRoot.appending(path: "bin/swiftgate").path,
-      profile: profile)
+      profile: profile, appSources: appSources)
   }
 
   static func run(root: URL, apply: Bool, profile: String? = nil, environment: Environment) async

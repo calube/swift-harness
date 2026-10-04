@@ -119,7 +119,7 @@ struct BootstrapPlanTests {
   static let templates = HarnessTemplates(
     agents: "# Router\n", config: "xcode = {{XCODE}}\n", swiftFormat: "{}\n", swiftLint: "rules\n",
     lefthook: "pre-commit:\n", gitignore: "# swift-harness\n**/.harness/runs/\n.harness/x.lock\n",
-    docsIndex: "# Docs index\n")
+    docsIndex: "# Docs index\n", scenario: "enum Scenario: String { case live }\n")
 
   static let inferred = ConfigInference.infer(
     RepositorySurvey(
@@ -297,7 +297,7 @@ struct BootstrapPlanTests {
       agents: Self.templates.agents, config: "[harness]\nprofile = {{PROFILE}}\n",
       swiftFormat: Self.templates.swiftFormat, swiftLint: Self.templates.swiftLint,
       lefthook: Self.templates.lefthook, gitignore: Self.templates.gitignore,
-      docsIndex: Self.templates.docsIndex)
+      docsIndex: Self.templates.docsIndex, scenario: Self.templates.scenario)
     #expect(
       change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
         == .create("[harness]\nprofile = \"default\"\n"))
