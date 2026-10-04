@@ -52,6 +52,7 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "span.end": "a harness event kind",
     "prove.result": "a harness event kind",
     "agent.tools": "a harness event kind",
+    "qa.check": "a harness event kind",
     "simulator.device": "a `.swiftgate.toml` key a config error names",
     "simulator.os": "a `.swiftgate.toml` key a config error names",
     "docs.budgets.design": "a `.swiftgate.toml` key a config error names",
@@ -86,8 +87,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   ]
 
   static let fileExtensions: Set<Substring> = [
-    "css", "html", "json", "jsonl", "lock", "log", "md", "mmd", "patch", "svg", "swift", "toml",
-    "txt", "xml", "yaml", "yml",
+    "css", "html", "json", "jsonl", "lock", "log", "md", "mmd", "ndjson", "patch", "svg", "swift",
+    "toml", "txt", "xml", "yaml", "yml",
     // Build file extensions discovery reads: `build.gradle.kts`, `mix.exs`, `go.mod`, `build.zig`.
     "gradle", "kts", "exs", "mod", "zig",
     // Node, Python and Ruby files discovery reads: `eslint.config.mjs`, `setup.cfg`, `tox.ini`.

@@ -1,0 +1,8 @@
+$ floor.state.sh
+QA_PORT=62317
+exit: 1
+--- stdout ---
+
+--- stderr ---
+count file missing
+

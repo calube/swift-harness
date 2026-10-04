@@ -1,0 +1,1 @@
+[{"command":"wait","input":{"target":{"kind":"selector","selector":"id=\"counter.value\""}}}]

@@ -327,6 +327,9 @@ public struct Config: Sendable, Equatable {
           path: "qa.session_timeout_minutes", value: "\(qa.sessionTimeoutMinutes)",
           allowed: "\(timeouts.lowerBound)...\(timeouts.upperBound)"))
     }
+    if let accessibilityIDs = qa.accessibilityIDs {
+      requireText(accessibilityIDs, "qa.accessibility_ids")
+    }
 
     issues += presetIssues(buildPresets)
     if let profile { requireText(profile, "harness.profile") }
@@ -447,9 +450,15 @@ public struct QAConfig: Sendable, Equatable {
 
   /// Minutes a `sim hold` keeps its device after `sim up` before it releases it unasked.
   public let sessionTimeoutMinutes: Int
+  /// Repo-relative Swift file declaring `enum AccessibilityID: String`, whose raw values are every
+  /// identifier the app sets; `nil` when the repository declares none.
+  public let accessibilityIDs: String?
 
-  public init(sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes) {
+  public init(
+    sessionTimeoutMinutes: Int = Self.defaultSessionTimeoutMinutes, accessibilityIDs: String? = nil
+  ) {
     self.sessionTimeoutMinutes = sessionTimeoutMinutes
+    self.accessibilityIDs = accessibilityIDs
   }
 }
 

@@ -48,7 +48,7 @@
     if (s.phase === "run") return "build run";
     if (s.phase === "task") return s.task || "task";
     if (s.phase === "gate") return "gate";
-    return s.phase.replace(/-/g, " ");
+    return s.phase.replace(/[-.]/g, " ");
   }
 
   // Spans in minutes from the run's start, with open spans cut at the run's last event.
@@ -399,7 +399,36 @@
     };
   }
 
+  // The Validation tab's groups: 1 per task a row runs after, in ledger order, then tasks the
+  // ledger lacks, then rows whose report named no task. A row that runs after several tasks shows
+  // under each. Each group's waiting rows come last, as its "waiting on" rows.
+  function validationGroups(view) {
+    const v = view.validation;
+    if (!v) return [];
+    const order = (view.tasks || []).map((t) => t.id);
+    const byTask = new Map();
+    const add = (task, row) => { if (!byTask.has(task)) byTask.set(task, []); byTask.get(task).push(row); };
+    v.rows.forEach((row) => { if (row.runsAfter.length) row.runsAfter.forEach((t) => add(t, row)); else add(null, row); });
+    const rank = (task) => (task == null ? Infinity : order.indexOf(task) < 0 ? order.length : order.indexOf(task));
+    return [...byTask.keys()].sort((a, b) => rank(a) - rank(b) || String(a).localeCompare(String(b))).map((task) => {
+      const rows = byTask.get(task);
+      return { task, rows: rows.filter((r) => r.result !== "waiting"), waiting: rows.filter((r) => r.result === "waiting") };
+    });
+  }
+
+  // The Validation tab's badges: its red, unverified and waiting counts.
+  function validationBadges(view) {
+    const v = view.validation;
+    if (!v) return [];
+    const c = v.counts;
+    const badge = (key, kind, n, text, title) => (n > 0 ? [{ key, kind, n, text, title }] : []);
+    return badge("red", "bad", c.red, c.red + " red", c.red + " red validation " + plural(c.red, "row"))
+      .concat(badge("unverified", "warn", c.unverified, c.unverified + " unverified", c.unverified + " validation " + plural(c.unverified, "row") + " with no answer"))
+      .concat(badge("waiting", "plain", c.waiting, c.waiting + " waiting", c.waiting + " validation " + plural(c.waiting, "row") + " waiting on a task"));
+  }
+
   root.RunViewModel = {
+    validationGroups, validationBadges,
     apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };

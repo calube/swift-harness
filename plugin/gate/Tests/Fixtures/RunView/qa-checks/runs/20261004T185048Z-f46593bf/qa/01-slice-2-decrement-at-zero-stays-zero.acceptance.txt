@@ -1,0 +1,7 @@
+$ /bin/test -d .git
+QA_PORT=62321
+exit: 0
+--- stdout ---
+
+--- stderr ---
+

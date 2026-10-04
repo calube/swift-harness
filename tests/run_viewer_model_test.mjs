@@ -308,6 +308,35 @@ const tests = {
     assert.deepEqual(keys(M.tabBadges(view, { now: Date.parse(at(4)), stallMin: 5 }).timeline), {})
     assert.deepEqual(keys(M.tabBadges(view, { now: Date.parse(at(20)), stallMin: null }).timeline), {}, 'a stall counted with no stall_min')
   },
+
+  'validationGroups puts a row under each task it runs after in ledger order, ends each group with its waiting rows, and keeps rows with no task last — catches a shared check shown under 1 task or a waiting row read as run'() {
+    const row = (n, result, runsAfter, waitingOn = []) => ({ row: n, requirement: 'req-a', layer: 'acceptance', check: 'c' + n, runsAfter, result, message: null, exitStatus: null, ms: 0, evidence: [], waitingOn, qaRun: 'q1', at: at(5), output: [], outputCut: false })
+    const view = runView({
+      tasks: [task('store'), task('list'), task('share', { status: 'pending' })],
+      validation: { plan: 'sample', counts: { pass: 1, red: 0, unverified: 0, waiting: 1 }, rows: [
+        row(1, 'waiting', ['store', 'share'], ['share']),
+        row(2, 'pass', ['list']),
+        row(3, 'unverified', []),
+        row(4, 'pass', ['store']),
+      ] },
+    })
+    const groups = M.validationGroups(view).map((g) => [g.task, g.rows.map((r) => r.row), g.waiting.map((r) => r.row)])
+    assert.deepEqual(groups, [['store', [4], [1]], ['list', [2], []], ['share', [], [1]], [null, [3], []]])
+    assert.deepEqual(M.validationGroups(runView()), [])
+  },
+
+  'validationBadges carries the red, unverified and waiting counts and none for pass or zero — catches a red check that shows from no tab'() {
+    const view = runView({ validation: { plan: 'sample', counts: { pass: 3, red: 1, unverified: 2, waiting: 0 }, rows: [] } })
+    assert.deepEqual(M.validationBadges(view).map((b) => [b.key, b.kind, b.n, b.text]), [['red', 'bad', 1, '1 red'], ['unverified', 'warn', 2, '2 unverified']])
+    assert.deepEqual(M.validationBadges(runView({ validation: null })), [])
+  },
+
+  'apply replaces the whole validation section from a partial — catches a live page that keeps a stale row count'() {
+    const before = runView({ validation: { plan: 'sample', counts: { pass: 0, red: 1, unverified: 0, waiting: 0 }, rows: [] } })
+    const after = M.apply(before, { cursor: 'c1', validation: { plan: 'sample', counts: { pass: 1, red: 0, unverified: 0, waiting: 0 }, rows: [] } })
+    assert.deepEqual(after.validation.counts, { pass: 1, red: 0, unverified: 0, waiting: 0 })
+    assert.equal(M.normalize(runView({ spans: [span('qa:q1:1', null, 'qa.check', 1, 2)] }), null).spans[0].label, 'qa check')
+  },
 }
 
 let failed = 0

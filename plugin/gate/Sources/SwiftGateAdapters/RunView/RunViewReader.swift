@@ -9,6 +9,9 @@ import SwiftGateDomain
 /// `build.return-checked`, `agent.usage`, `agent.tools`, `span.*`), or when it is a gate event (`gate.run`, `gate.step`,
 /// `test.result`, `prove.result`) of a gate run the run's ledger log or a task return names.
 ///
+/// A `qa.check` belongs to the run when it names the run's plan and its `qa run` started at or
+/// after the build run and before the plan's next build run.
+///
 /// A brownfield run has phases before its build run exists, so the plan's first build run also
 /// keeps the spans that name the plan slug, and the `discover.run` and `warmup.run` events from
 /// the plan's launch on, until another plan launches. No other event is kept.
@@ -38,12 +41,15 @@ public struct RunViewReader: RunViewReading {
     var requirements: [RunViewRequirement] = []
     var briefs: [String: RunView.Brief] = [:]
     var prebuild = Prebuild()
+    var qaWindow: QAWindow?
     if let join {
       let plan = try planState(join.plan, damage: &damage)
       ledger = plan.ledger
       requirements = plan.requirements
       briefs = plan.briefs
       prebuild = try self.prebuild(plan: join.plan, buildRun: buildRun, damage: &damage)
+      qaWindow = QAWindow(
+        plan: join.plan, from: buildRun, until: try nextBuildRun(plan: join.plan, after: buildRun))
     }
 
     var batches: [[StoredEvent]] = []
@@ -85,7 +91,8 @@ public struct RunViewReader: RunViewReading {
     let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns, prebuild: prebuild)
     let kept = events.filter {
       Self.belongs(
-        $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild)
+        $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild,
+        qaWindow: qaWindow)
     }
     let checkouts =
       [(stateRoot, nil as URL?)]
@@ -93,12 +100,127 @@ public struct RunViewReader: RunViewReading {
         (StateRootResolver.resolve(worktree: $0), $0)
       }
     let reports = gateReports(of: kept, in: checkouts, damage: &damage)
+    // Read before `damage` is handed over, so what these reads couldn't use reaches the view.
+    let baselines = warmupBaselines(of: kept, damage: &damage)
+    let qa = qaRuns(of: kept, in: checkouts, damage: &damage)
     return RunViewInput(
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
       damage: damage, briefs: briefs, workerGateRuns: workerGateRuns,
       launchedAt: prebuild.launchedAt, gateReports: reports,
-      checkoutRoots: checkoutRoots(worktrees: worktrees),
-      warmupBaselines: warmupBaselines(of: kept, damage: &damage))
+      checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa)
+  }
+
+  /// The `qa run`s whose `qa.check` events a build run keeps: its plan's, from the build run's
+  /// start until the plan's next build run starts. Run ids start with their UTC start time.
+  struct QAWindow: Equatable {
+    var plan: String
+    var from: String
+    var until: String?
+
+    func holds(_ check: QACheckEvent, qaRun: String?) -> Bool {
+      guard check.plan == plan, let qaRun else { return false }
+      let started = Self.startTime(qaRun)
+      guard started >= Self.startTime(from) else { return false }
+      return until.map { started < Self.startTime($0) } ?? true
+    }
+
+    /// `20261004T045528Z` of `20261004T045528Z-58d28c78`.
+    private static func startTime(_ runID: String) -> Substring {
+      runID.prefix { $0 != "-" }
+    }
+  }
+
+  /// The plan's first build run after `buildRun`; `nil` when there is none.
+  private func nextBuildRun(plan: String, after buildRun: String) throws -> String? {
+    let directory = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan).directory
+    let runs = (try? FileManager.default.contentsOfDirectory(atPath: directory + "/build")) ?? []
+    return runs.filter { RunID.isValid($0) && $0 > buildRun }.min()
+  }
+
+  /// Each kept `qa run`'s `qa/report.json` and its red rows' saved output, from the first checkout
+  /// whose state holds the run: the main checkout's, then each live task worktree's. A report
+  /// that is missing or doesn't read, and an evidence path that leaves the run directory or
+  /// doesn't read, are damage.
+  private func qaRuns(
+    of events: [HarnessEvent], in checkouts: [(state: StateRoot, worktree: URL?)],
+    damage: inout [RunView.Damage]
+  ) -> [String: RunViewQARun] {
+    var red: [String: [String]] = [:]
+    var order: [String] = []
+    for event in events {
+      guard case .qaCheck(let check) = event.payload, let runID = event.runID else { continue }
+      if red[runID] == nil { order.append(runID) }
+      var paths = red[runID] ?? []
+      if check.result == .red { paths += check.evidence.filter { !paths.contains($0) } }
+      red[runID] = paths
+    }
+    var runs: [String: RunViewQARun] = [:]
+    for runID in order {
+      var run = RunViewQARun()
+      defer { runs[runID] = run }
+      guard RunID.isValid(runID) else {
+        damage.append(RunView.Damage(source: "qa run \(runID)", reason: "not a run id"))
+        continue
+      }
+      let directory = RunLayout.runDirectory(for: runID)
+      let reportPath = directory + QAReport.directory + "/" + QAReport.fileName
+      guard
+        let checkout = checkouts.first(where: {
+          FileManager.default.fileExists(atPath: $0.state.url(directory).path)
+        })
+      else {
+        let location = Self.location(reportPath, in: stateRoot, worktree: nil)
+        damage.append(RunView.Damage(source: location, reason: "missing"))
+        continue
+      }
+      let location = Self.location(reportPath, in: checkout.state, worktree: checkout.worktree)
+      // A read error names the file's absolute path, which the view must not carry.
+      if let data = try? Data(contentsOf: checkout.state.url(reportPath)) {
+        do {
+          run.report = try QAReportJSON.decode(data)
+        } catch {
+          damage.append(RunView.Damage(source: location, reason: "not a qa report: \(error)"))
+        }
+      } else {
+        damage.append(RunView.Damage(source: location, reason: "missing or unreadable"))
+      }
+      for path in red[runID] ?? [] {
+        let components = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !path.hasPrefix("/"), !components.contains(".."), !components.contains("")
+        else {
+          damage.append(
+            RunView.Damage(
+              source: "qa run \(runID)", reason: "evidence \(path) leaves its run directory"))
+          continue
+        }
+        guard let text = Self.tail(of: checkout.state.url(directory + path)) else {
+          damage.append(
+            RunView.Damage(
+              source: Self.location(
+                directory + path, in: checkout.state, worktree: checkout.worktree),
+              reason: "unreadable as UTF-8 text"))
+          continue
+        }
+        run.outputs[path] = text
+      }
+    }
+    return runs
+  }
+
+  /// The last ``RunViewQARun/maxOutputBytes`` of a text file, starting on a whole character;
+  /// `nil` when it doesn't read or isn't UTF-8.
+  private static func tail(of url: URL) -> String? {
+    guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+    defer { try? handle.close() }
+    guard let size = try? handle.seekToEnd() else { return nil }
+    let start =
+      size > UInt64(RunViewQARun.maxOutputBytes) ? size - UInt64(RunViewQARun.maxOutputBytes) : 0
+    guard (try? handle.seek(toOffset: start)) != nil, var data = try? handle.readToEnd() else {
+      return nil
+    }
+    // A cut start can land inside a character: drop its continuation bytes.
+    if start > 0 { data = Data(data.drop { $0 & 0xC0 == 0x80 }) }
+    return String(data: data, encoding: .utf8)
   }
 
   /// What the warm-up recorded into the baseline for each failed kept `warmup.run`, from the
@@ -268,14 +390,23 @@ public struct RunViewReader: RunViewReading {
     BuildJoinReader(commonDirectory: commonDirectory).read(buildRunID: nil).runs.map(\.runID).max()
   }
 
-  /// What every file ``read(buildRun:)`` reads holds now: each event store's files, the run's
-  /// ledger log, returns and `run.json`, and the plan's ledger. Taken before a read, a moved
+  /// What every file ``read(buildRun:)`` reads holds now: each event store's files, each
+  /// `qa/report.json` of a run since the build run started, the run's ledger log, returns and
+  /// `run.json`, and the plan's ledger. Taken before a read, a moved
   /// snapshot means the next read differs.
   public func snapshot(buildRun: String) -> RunViewSnapshot {
     var files: [String: RunViewSnapshot.Stamp] = [:]
     Self.stamp(
       stateRoot.url(RunLayout.eventsDirectory),
       as: stateRoot.displayPath(RunLayout.eventsDirectory), into: &files)
+    // `qa run` appends its events before it writes its report, so the report moves the view too.
+    let runs =
+      (try? FileManager.default.contentsOfDirectory(
+        atPath: stateRoot.url(RunLayout.runsDirectory).path)) ?? []
+    for runID in runs where RunID.isValid(runID) && runID >= buildRun {
+      let path = RunLayout.runDirectory(for: runID) + QAReport.directory + "/" + QAReport.fileName
+      Self.stamp(stateRoot.url(path), as: stateRoot.displayPath(path), into: &files)
+    }
     guard let layout = try? PlanStateLayout(commonDirectory: commonDirectory.path),
       let plan = plan(of: buildRun, under: layout), let paths = try? layout.plan(plan),
       let run = try? paths.buildRun(buildRun)
@@ -430,7 +561,7 @@ public struct RunViewReader: RunViewReading {
 
   static func belongs(
     _ event: HarnessEvent, buildRun: String, gateRuns: Set<String>, parents: Parents,
-    prebuild: Prebuild = Prebuild()
+    prebuild: Prebuild = Prebuild(), qaWindow: QAWindow? = nil
   ) -> Bool {
     let named: (String?) -> Bool = { $0.map(gateRuns.contains) ?? false }
     switch event.payload {
@@ -445,6 +576,7 @@ public struct RunViewReader: RunViewReading {
     case .proveResult:
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
     case .discoverRun, .warmupRun: return prebuild.holds(event.time)
+    case .qaCheck(let check): return qaWindow?.holds(check, qaRun: event.runID) ?? false
     case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
       return false
     }

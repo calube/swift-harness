@@ -615,7 +615,7 @@ if items.isEmpty { return }
 
 ## Rule id index
 
-Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column cite [testing-playbook.md](testing-playbook.md). A test checks this table against the rule registries, so an id is added here in the same change that adds the rule.
+Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.md](testing-playbook.md). A test checks it against the rule registries, so add each id with its rule.
 
 ### Code rules (`lint`, `arch`, `comments`, `testlint`)
 
@@ -723,6 +723,25 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `area.step-dropped`, `area.build-only` | brownfield profile §5.3, §9; a step the orchestrator dropped, and an area whose tests don't fit the `slice` budget so `slice` only builds it and its tests run at `merge`. Report lines that never gate |
 | `baseline.summary` | brownfield profile §10; the failures found at both the head and the merge base, which never gate. A failure is absorbed only when the merge base fails the same step, command and selection with the same test id, or fails the whole step when the head does too. Test ids come from the report discover asks each runner for: `--junitxml` for pytest, the JUnit reporter for vitest, jest-junit for jest when the repository has it, `rspec_junit_formatter` for RSpec when bundled, `--parallel --xunit-output` for `swift test` (with Swift Testing's report beside it), Gradle's and Maven's per-class reports collected into a `{junit}` directory (Gradle with `--continue`), the events Go writes under `-json`, and libtest's own result lines for cargo, run with `--no-fail-fast`. Any other command, jest without jest-junit, RSpec without the formatter, and yarn or bun scripts fail as the whole step. A failure the report can't hold also fails the whole step: a compile or load failure, a Gradle task or Maven goal that failed for anything but failing tests, RSpec's errors outside examples, a Go package or a cargo target that failed with no failing test of its own. The same nit names a baseline file that doesn't decode (it is rerun and replaced, never read as empty) and a merge-base rerun that couldn't run, whose failures then gate |
 
+### Simulator QA validation ([`qa run`](simulator-qa.md#qa-run), [`qa adopt`](simulator-qa.md#qa-adopt))
+
+| Rule id | Section |
+|---|---|
+| `qa.check-failed` | simulator QA amendment §6, §6.2; a row whose check ran and failed (major). Its message names the row, the requirement, the layer and why: the exit status, the signal or the timeout |
+| `qa.check-unverified` | simulator QA amendment §6.2, §9.1; a row whose check didn't run, a nit that never gates: the flow runner isn't built, a red layer stopped the run, a flow row for its requirement didn't pass, no port could be had, or the process couldn't start |
+| `qa.check-passes-at-base` | simulator QA amendment §5.2, decision 7; `qa run --at-base` found a row passing at the merge base, so its check can't tell the change from its absence (major) |
+
+### Simulator QA flows ([`qa lint`](simulator-qa.md#qa-lint))
+
+| Rule id | Section |
+|---|---|
+| `qa.flow-unparsed` | simulator QA amendment §6.1; the file isn't a JSON list of objects that each hold a string `command` and an object `input` (major). The message names the first step that isn't, and the file earns no other finding |
+| `qa.flow-ref-target` | simulator QA amendment §6.1; a step targets an `@e` snapshot ref (a `kind: ref` target, a `ref` key, or an `@e<n>` string) or a coordinate (a `kind: point` target, or an object with numeric `x` and `y`, except a gesture's `delta`), not a selector (major). Refs change with every snapshot and points with every screen |
+| `qa.flow-no-assert` | simulator QA amendment §6.1, decision 4; no step is an `is` or a `wait` that looks for something: `kind` `text`, `ref`, `selector` or `absent`, or with no `kind` a `text`, `ref`, `selector` or `absent` key (major). `get` reads without a predicate, and a `duration` or `stable` wait only pauses, so neither counts |
+| `qa.flow-schema` | simulator QA amendment §6.1, §11.1; a step breaks the pinned tool's schema (major): the step's own keys or a command a batch can't run, checked against the item schema of `batch`'s `steps`, then its `input` against that command's `inputSchema`. Each message names the step number, the command, the key path and the rule broken, and a misspelt key names the closest key the schema allows |
+| `qa.flow-unknown-id` | simulator QA amendment §6.1, decision 17; an `id="…"` (or bare `id=…`) selector names an identifier the configured `AccessibilityID` enum doesn't declare (major). A case with no raw value declares its name; cases inside `#if` count in every branch |
+| `qa.flow-ids-unknown` | simulator QA amendment §6.1; a nit that never gates: no `.swiftgate.toml`, or no `[qa] accessibility_ids` key, so no identifier was checked. Once per run, naming the key to set |
+
 ### Design, docs and prose (`design-lint`, `design-diff`, `docs-lint`, `prose`)
 
 | Rule id | Section |
@@ -758,3 +777,16 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` in the playbook column 
 | `build-merge.main-moved`, `build-merge.dirty-checkout`, `build-merge.not-on-main`, `build-merge.not-held`, `build-merge.conflicted`, `build-merge.undo-refused`, `build-merge.branch-missing`, `build-merge.already-merged`, `build-merge.return-unchecked`, `build-merge.return-not-green`, `build-merge.return-stale` | build executor §6.2, §8.2 (merge); why `build merge` refused, as its report's `reason`. The last 3 come from the build run's newest `return-check` event for the task (or, with `--fix`, its fixer): none recorded, a verdict other than GREEN (the refusal names the check's id, the one its build.return-checked telemetry event carries, and its rules), or a GREEN check of another commit than the branch tip being merged |
 | `calibrate-design.usage`, `calibrate-design.passed`, `calibrate-design.seed-defect`, `calibrate-design.label-missed`, `calibrate-design.no-seeds`, `calibrate-design.missing-label`, `calibrate-design.missing-input`, `calibrate-design.missing-entry`, `calibrate-design.invalid-label`, `calibrate-design.unknown-agent`, `calibrate-design.uncalibrated-agent` | design plan workflows §6.2 (`calibrate design`) |
 | `calibrate-build.usage`, `calibrate-build.passed`, `calibrate-build.seed-defect`, `calibrate-build.label-missed`, `calibrate-build.no-seeds`, `calibrate-build.missing-label`, `calibrate-build.missing-input`, `calibrate-build.missing-entry`, `calibrate-build.invalid-label`, `calibrate-build.unknown-agent`, `calibrate-build.uncalibrated-agent` | build executor §12 (`calibrate build`) |
+
+### Simulator QA commands (`sim up`, `snap`, `down`)
+
+| Rule id | Section |
+|---|---|
+| `sim.agent-device-pin` | simulator QA §4, §9; `swiftgate sim up [--scenario <name>] [--json]` first runs `agent-device --version`. A missing CLI or any version but the pin is BLOCKED (exit 3) with the exact `npm i -g agent-device@<pin>` line, before a slot is taken |
+| `sim.scenario-unknown` | simulator QA §6; a `--scenario` that names no `[[scenarios]]` entry is RED (exit 1), naming the declared names, before any hold or build. Without `--scenario` the app launches with live dependencies |
+| `sim.no-slot` | simulator QA §7.2, §9; `sim up` starts a detached `swiftgate sim hold --run <runID>` in the worktree root and waits for its lease. A holder that exits without a lease (no slot of the shared `sim` lock in time, or no device), or that gives the device back before `sim up` finishes, is BLOCKED (exit 3), naming the live PIDs holding `sim` slots and the run's `sim/agent-device.log` |
+| `sim.app-build-failed` | simulator QA §4, §9; `xcodebuild build` of `app_scheme` for the iOS Simulator, with this worktree's DerivedData under `derived-data/sim-up` and `-skipMacroValidation`, exited non-zero (RED, exit 1, naming `sim/build.log`), or the repository root has no single `.xcworkspace` or `.xcodeproj` (RED, checked before the hold) |
+| `sim.app-install-failed` | simulator QA §4; the build's `Debug-iphonesimulator` products hold no `.app`, more than one, or one without a `CFBundleIdentifier`, or `simctl install` refused it. BLOCKED (exit 3) |
+| `sim.driver-failed` | simulator QA §9; `agent-device open <bundle id> --udid <udid> --session <session> --launch-args -harness-scenario --launch-args <name> --json` failed, such as `DEVICE_IN_USE` or an unknown device. BLOCKED (exit 3), with the failure appended to `sim/agent-device.log`. After any failure once the holder has started, `sim up` removes the run's lease, so the holder frees the device and the slot. In `sim snap`, any `snapshot` or `screenshot` failure but an unknown device is this rule too, and writes no step |
+| `sim.not-owner` | simulator QA §4, §7.5; `swiftgate sim snap <label> [--assert "<text>"] [<runID>] [--json]` names a run whose lease belongs to another worktree. RED (exit 1), naming that worktree, before any device call or write. Without `<runID>`, `snap` takes this worktree's newest lease whose holder is alive |
+| `sim.session-gone` | simulator QA §4, §5.1; `sim snap` found no lease for the run (or, without `<runID>`, no live lease of this worktree), a holder that has exited, a lease with no session yet, or `agent-device` reported the device unknown (`DEVICE_NOT_FOUND`). RED (exit 1). It writes no step line and leaves no PNG or tree behind. A snap that passes appends 1 line to `sim/steps.ndjson` (`n`, `label`, `assert` only when given, `screenshot`, `tree`, `settled` only when both snapshots parse, `elapsedMs`) and writes `steps/<NNN>.png` and the `snapshot --json` bytes unmodified as `steps/<NNN>.tree.json` |

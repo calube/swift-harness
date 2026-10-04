@@ -1,0 +1,137 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "bc2474c1d23a1642f65c269504d1c73e066733c8",
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (slice-1-reset-after-increments-shows-zero, acceptance) `printf 'counter reset\\n'; printf 'expected 0 after reset, got 1\\n' >&2; exit 1`: exit 1",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (slice-1-reset-after-increments-shows-zero, flow) `reset.flow.json`: not run: the acceptance layer has a red row",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (slice-1-reset-after-increments-shows-zero, state) `reset.state.sh`: not run: the acceptance layer has a red row",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    }
+  ],
+  "message" : "5 rows: 1 pass, 1 red, 2 unverified, 1 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "2026-10-03-counter-reset-and-floor",
+  "rows" : [
+    {
+      "check" : "/bin/test -d .git",
+      "evidence" : [
+        "qa/01-slice-2-decrement-at-zero-stays-zero.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 4,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "printf 'counter reset\\n'; printf 'expected 0 after reset, got 1\\n' >&2; exit 1",
+      "evidence" : [
+        "qa/02-slice-1-reset-after-increments-shows-zero.acceptance.txt"
+      ],
+      "exitStatus" : 1,
+      "layer" : "acceptance",
+      "message" : "exit 1",
+      "ms" : 3,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "reset.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: the acceptance layer has a red row",
+      "ms" : 0,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "unverified",
+      "row" : 3,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "floor.state.sh",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "state",
+      "message" : "waiting on counter-ui-reset-button-snapshot",
+      "ms" : 0,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor",
+        "counter-ui-reset-button-snapshot"
+      ],
+      "waitingOn" : [
+        "counter-ui-reset-button-snapshot"
+      ]
+    },
+    {
+      "check" : "reset.state.sh",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "state",
+      "message" : "not run: the acceptance layer has a red row",
+      "ms" : 0,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "unverified",
+      "row" : 5,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261004T185048Z-f46593bf",
+  "schemaVersion" : 1,
+  "verdict" : "RED"
+}

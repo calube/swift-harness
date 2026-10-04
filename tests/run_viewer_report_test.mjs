@@ -19,6 +19,8 @@ const fixtures = join(plugin, 'gate/Tests/Fixtures/RunView')
 // Each captured build run: its fixture directory, build run id and plan slug.
 const RUNS = {
   first: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor' },
+  // The first run's plan state with the qa run sequence captured over that plan's validation table.
+  qa: { dir: 'build-run-1', buildRun: '20261004T045528Z-58d28c78', plan: '2026-10-03-counter-reset-and-floor', qa: 'qa-checks' },
   spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
   blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true, clone: 'memos-3' },
   rejected: { dir: 'brownfield-rejected', buildRun: '20261004T141445Z-85d15f09', plan: 'spec', brownfield: true, clone: 'memos-4' },
@@ -70,7 +72,8 @@ function seededClone({ dir: fixture, buildRun, plan, clone }) {
 }
 
 // A git repository holding the captured run's plan state and stores, as the run left them.
-function seededRepository({ dir: fixture, buildRun, plan }) {
+function seededRepository(run) {
+  const { dir: fixture, buildRun, plan } = run
   const captured = join(fixtures, fixture)
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-report-'))
   execFileSync(gitPath, ['init', '-q'], { cwd: dir })
@@ -91,6 +94,11 @@ function seededRepository({ dir: fixture, buildRun, plan }) {
   for (const [from, to] of copies) cpSync(join(captured, from), to, { recursive: true })
   // A gate run's report.json, where the capture kept it.
   if (existsSync(join(captured, 'runs'))) cpSync(join(captured, 'runs'), join(dir, '.harness/runs'), { recursive: true })
+  // `qa run`'s stream and run folders, as it left them in the checkout.
+  if (run.qa) {
+    cpSync(join(fixtures, run.qa, 'events/qa.jsonl'), join(dir, '.harness/events/qa.jsonl'))
+    cpSync(join(fixtures, run.qa, 'runs'), join(dir, '.harness/runs'), { recursive: true })
+  }
   return { dir, root: dir, report: join(dir, '.harness/reports', `${buildRun}.html`) }
 }
 
@@ -250,6 +258,28 @@ function assertRendered(rendered, run, keys) {
 
 const REGION_KEYS = ['meta', 'stats', 'bars', 'spec', 'tokens', 'roles', 'gates']
 
+// The Validation tab after a click: its strip, each row's number and result, every bar of a
+// qa.check span, the footer's damage lines, and any embedded image or video.
+const VALIDATION = `(() => {
+  document.querySelector('[role=tab][data-tab="validation"]').click()
+  const mount = document.querySelector('[data-module="validation"]')
+  return {
+    shown: !mount.hidden && mount.offsetHeight > 0,
+    strip: Object.fromEntries([...mount.querySelectorAll('.qa-count')].map((c) => [c.dataset.result, Number(c.querySelector('b').textContent)])),
+    rows: [...new Set([...mount.querySelectorAll('.qa-row')].map((r) => r.dataset.row + ':' + r.dataset.result))],
+    damage: [...document.querySelectorAll('#foot .damage-line')].map((d) => d.textContent),
+    media: document.querySelectorAll('img, video').length,
+    errors: document.body.dataset.errors,
+  }
+})()`
+// Clicks row `n`'s Why button and reads the popover's title and text.
+async function whyPopover(page, n) {
+  await page.evaluate(`document.querySelector('.qa-row[data-row="${n}"] .qa-why').click()`)
+  const read = await page.evaluate(`({ title: document.getElementById('pop-title').textContent, text: document.getElementById('pop').innerText })`)
+  await page.press('Escape')
+  return read
+}
+
 const tests = {
   async 'the report of the captured run is 1 file that draws a row for each item in every region and every tab, whose badges carry the view\'s counts, with 0 console errors — catches key drift between the encoder and the page, a blank tab or a drifting badge'() {
     // The first captured run predates proof recording, so its proof table is checked against the data.
@@ -264,6 +294,34 @@ const tests = {
     // Every emitted span draws its own bar, so a span the page can't place fails here.
     const emitted = rendered.view.spans.filter(span => ['worker', 'final', 'ship'].includes(span.phase)).map(span => span.id)
     assert.deepEqual(emitted.filter(id => !rendered.barIDs.includes(id)), [])
+  },
+  async 'the report of a run with captured qa checks draws every validation row with its newest result and the strip\'s counts, a damage line for the check the guard rejects, both Why popovers, and no embedded image or video, with 0 console errors — catches a validation row the page drops or an embedded thumbnail'() {
+    const rendered = await renderReport(RUNS.qa, async (page) => ({
+      tab: await page.evaluate(VALIDATION),
+      red: await whyPopover(page, 2),
+      unverified: await whyPopover(page, 3),
+    }))
+    assertRendered(rendered, RUNS.qa, REGION_KEYS)
+    const { view, acted: { tab, red, unverified } } = rendered
+    assert.ok(view.validation, 'the view has no validation section')
+    assert.equal(tab.shown, true, 'the Validation tab draws nothing')
+    assert.deepEqual(tab.rows.slice().sort(), view.validation.rows.map((r) => r.row + ':' + r.result).sort())
+    assert.deepEqual(tab.rows, ['1:pass', '4:waiting', '2:red', '3:unverified', '5:unverified'])
+    assert.deepEqual(tab.strip, view.validation.counts)
+    assert.deepEqual(rendered.tabs.badges.validation, { red: 1, unverified: 2, waiting: 1 })
+    assert.ok(tab.damage.some((line) => /qa run 20261004T185049Z-a14503a3 row 1: check: absolute-path/.test(line)), JSON.stringify(tab.damage))
+    assert.equal(tab.media, 0)
+    assert.equal(tab.errors, '0')
+    assert.equal(red.title, 'Why it failed')
+    assert.match(red.text, /exit status\s+1/i)
+    assert.match(red.text, /expected 0 after reset, got 1/)
+    assert.match(red.text, /qa\/02-slice-1-reset-after-increments-shows-zero\.acceptance\.txt/)
+    assert.equal(unverified.title, 'Why unverified')
+    assert.match(unverified.text, /flow check reset\.flow\.json/)
+    assert.match(unverified.text, /not run: the acceptance layer has a red row/)
+    const qaBars = rendered.barIDs.filter((id) => id.startsWith('qa:'))
+    assert.deepEqual(qaBars.sort(), ['qa:20261004T185048Z-f46593bf:1', 'qa:20261004T185048Z-f46593bf:2', 'qa:20261004T185049Z-a14503a3:1'])
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
   async 'focusing the RED merge gate\'s bar shows its tier, rule and file:line in the popover, and the task drawer the whole message, its failing test and report — catches a red span with no failure context'() {
     const rendered = await renderReport(RUNS.first, (page) => focusThenDrawer(page, `gate:${RED_GATE}`, 'counter-ui-reset-button'))

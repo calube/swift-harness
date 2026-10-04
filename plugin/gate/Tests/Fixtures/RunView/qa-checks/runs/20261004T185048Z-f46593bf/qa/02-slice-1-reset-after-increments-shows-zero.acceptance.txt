@@ -1,0 +1,9 @@
+$ printf 'counter reset\n'; printf 'expected 0 after reset, got 1\n' >&2; exit 1
+QA_PORT=62322
+exit: 1
+--- stdout ---
+counter reset
+
+--- stderr ---
+expected 0 after reset, got 1
+

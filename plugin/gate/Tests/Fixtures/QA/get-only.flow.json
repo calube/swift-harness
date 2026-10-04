@@ -1,0 +1,2 @@
+[{"command":"press","input":{"target":{"kind":"selector","selector":"id=\"counter.increment\""}}},
+ {"command":"get","input":{"format":"text","target":{"kind":"selector","selector":"id=\"counter.value\""}}}]
