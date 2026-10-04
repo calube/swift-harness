@@ -1,0 +1,68 @@
+[
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "D779A53A-E3F0-4F7A-B9C5-71F57C1DCF8D",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-10-04 at 04.44.57 PM",
+        "timestamp" : 1791150297.058
+      },
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "6AF6168A-AF9B-4AAC-8B13-622B8BAD3D58.mp4",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Screen Recording 2026-10-04 at 04.44.53 PM.mp4",
+        "timestamp" : 1791150293.262
+      }
+    ],
+    "testIdentifier" : "CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork()",
+    "testIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork"
+  },
+  {
+    "attachments" : [
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "B9F7AA4A-1A95-4054-AD9D-C04426C7DFF0",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+        "timestamp" : 1791150303.412
+      },
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "167E7FEC-B63B-400D-A7FB-6569E2860637",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-10-04 at 04.45.03 PM",
+        "timestamp" : 1791150303.098
+      },
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "2E1DEDD6-7213-4CEE-A58A-25EC1D3307E0",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Synthesized Event 2026-10-04 at 04.45.02 PM",
+        "timestamp" : 1791150302.787
+      },
+      {
+        "configurationName" : "Configuration 1",
+        "deviceId" : "CLONE-UDID",
+        "deviceName" : "swift-harness-PID-TOKEN",
+        "exportedFileName" : "9DBD7FD2-BCE8-449C-BED2-BDB81FEC7921.mp4",
+        "isAssociatedWithFailure" : false,
+        "suggestedHumanReadableName" : "Screen Recording 2026-10-04 at 04.44.58 PM.mp4",
+        "timestamp" : 1791150298.396
+      }
+    ],
+    "testIdentifier" : "CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount()",
+    "testIdentifierURL" : "test://com.apple.xcode/SampleApp/SampleAppUITests/CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount"
+  }
+]

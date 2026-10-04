@@ -186,6 +186,29 @@ Observed behavior the evidence rules rely on:
 - A build error's `sourceURL` is `file://<abs path>#…&StartingLineNumber=<0-based>&…`.
 - An unresolved destination records a device whose `deviceId` is empty.
 
+### Kept flows: activities and screen recordings
+
+`Xcresult/activities/<scenario>/` is captured by `plugin/gate/Fixtures/xcresult/capture-flow-video.sh`
+(run from anywhere, with `SWIFTGATE=<binary>` to pin the build): a scratch git copy of
+`examples/SampleApp`, whose test plan sets `uiTestingScreenshotsLifetime` to `keepAlways` and
+`preferredScreenCaptureFormat` to `screenRecording`, runs `swiftgate test --tier t3 --json` on the
+harness's own clone. Per scenario the script saves `tests.json` (`xcrun xcresulttool get
+test-results tests`), `<method>.activities.json` for each UI test (`xcrun xcresulttool get
+test-results activities --test-id <Class>/<method>()`), and `manifest.json` from `xcrun xcresulttool
+export attachments --output-path <dir>`. The MP4s stay out of the repository. The scratch path
+becomes `/SCRATCH`, the clone's name `swift-harness-PID-TOKEN` and its UDID `CLONE-UDID`.
+
+| Scenario | Change | What it shows |
+|---|---|---|
+| `pass` | as committed | GREEN; each test keeps 1 `Screen Recording <date>.mp4` and 1 `Synthesized Event` attachment per tap |
+| `fail` | the counter test expects `"7"` | RED; the failing test still keeps its recording; its activities end with a top-level `XCTAssertEqual failed: …` activity with `isAssociatedWithFailure` true, then `Tear Down` |
+| `no-video` | the plan's lifetime is `deleteOnSuccess` | GREEN; the manifest lists no `.mp4` for either passing test |
+
+Observed: a screen recording's attachment `timestamp` equals the start of the
+`kXCTAttachmentScreenRecording` child of `Start Test at …`, and the MP4's length (5.04 s by
+`ffprobe`) matches the span from that timestamp to `Tear Down`, so the timestamp is the video's first
+frame. Every test's top level reads `Start Test at <date>`, `Set Up`, its actions, `Tear Down`.
+
 ## Doctor
 
 Captured on the machine the gate was built on (Xcode 26.2):
