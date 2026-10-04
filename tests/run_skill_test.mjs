@@ -5,9 +5,9 @@
 // Regressions caught: an approval step or a question to the user creeping into a run that must
 // take 0 human input; a commit that skips the repository's git hooks; an explorer on a model alias
 // instead of a pinned id, or without its deadline and word cap; a run that never fixes a failing
-// guess, never imports its plan, never runs `final` or never reports; a span seam that calls a
-// command before it exists, or names a phase the CLI doesn't know; and a plan shape whose example
-// `plan import` rejects.
+// guess, never imports its plan, never runs `final` or never reports; and a plan shape whose
+// example `plan import` rejects. Its phase spans are checked with the other skills' telemetry
+// calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -50,36 +50,6 @@ export function oneShotProblems(files) {
     }
   }
   return problems
-}
-
-// The `<!-- span: start|end <phase> -->` markers where the run viewer's span calls go.
-const SPAN_MARKER = /<!-- span: (start|end) ([a-z-]+) -->/g
-
-/** Problems with a skill's span seam: unknown phases, unbalanced markers, or a live span call. */
-export function spanSeamProblems(text, phases) {
-  const problems = []
-  const open = new Map()
-  for (const match of text.matchAll(SPAN_MARKER)) {
-    const [, edge, phase] = match
-    if (!phases.includes(phase)) problems.push(`span phase \`${phase}\` is not one the CLI records (${phases.join(', ')})`)
-    open.set(phase, (open.get(phase) ?? 0) + (edge === 'start' ? 1 : -1))
-    if (open.get(phase) < 0) problems.push(`span \`${phase}\` ends before it starts`)
-  }
-  for (const [phase, depth] of open) if (depth > 0) problems.push(`span \`${phase}\` starts and never ends`)
-  for (const { line, words } of extractInvocations(text)) {
-    if (words[0] === 'events' && words[1] === 'span') problems.push(`line ${line} calls \`events span\` before the run viewer wires it`)
-  }
-  return problems
-}
-
-/** The phases `events span start --help` lists after `The phase:`. */
-function cliSpanPhases(binary, cwd) {
-  const help = execFileSync(binary, ['events', 'span', 'start', '--help'], {
-    encoding: 'utf8', cwd, env: { ...process.env, LLVM_PROFILE_FILE: join(cwd, 'help-%p.profraw') },
-  })
-  const listed = /The phase:([^.]*)\./.exec(help.replace(/\s+/g, ' '))
-  assert.ok(listed, `events span start --help lists no phases:\n${help}`)
-  return listed[1].split(/,| or /).map(s => s.trim()).filter(Boolean)
 }
 
 /** Every `swiftgate` call in `files` as `path flags…` strings, for presence checks. */
@@ -180,29 +150,6 @@ const tests = {
     for (const heading of ['Entry points', 'Files to change', 'Nearby tests', 'Working commands', 'Risks', 'Unknowns']) {
       assert.ok(body.includes(heading), `the explorer's return has no ${heading}`)
     }
-  },
-
-  'the run skill marks each run phase for the span calls without calling them, using only phases the CLI records — catches a seam that calls a stub or names an unknown phase'() {
-    const binary = swiftgateBinary()
-    assert.ok(binary, 'no swiftgate binary: build gate/ (swift build) or set SWIFTGATE_BIN')
-    const phases = withTemp('run-skill-help-', dir => cliSpanPhases(binary, dir))
-    const skill = read('skills/run/SKILL.md')
-    assert.deepEqual(spanSeamProblems(skill, phases), [])
-    const marked = new Set([...skill.matchAll(SPAN_MARKER)].map(m => m[2]))
-    for (const phase of ['spec-read', 'discover', 'explore', 'plan', 'contract', 'final']) {
-      assert.ok(marked.has(phase), `no span seam around the ${phase} phase`)
-    }
-  },
-
-  'the span seam check names an unknown phase, an unbalanced marker and a live call — catches a checker that passes anything'() {
-    const text = ['<!-- span: start plan -->', '<!-- span: end nap -->', '<!-- span: start final -->', '`"$SG" events span start --phase plan --build-run r`'].join('\n')
-    assert.deepEqual(spanSeamProblems(text, ['plan', 'final']), [
-      'span phase `nap` is not one the CLI records (plan, final)',
-      'span `nap` ends before it starts',
-      'span `plan` starts and never ends',
-      'span `final` starts and never ends',
-      'line 4 calls `events span` before the run viewer wires it',
-    ])
   },
 
   'the plan shape\'s example imports through the real plan import with its assumptions — catches a documented shape the parser rejects'() {

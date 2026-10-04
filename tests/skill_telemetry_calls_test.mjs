@@ -1,10 +1,12 @@
-// Checks the build and ship skills' telemetry calls: where they ingest agent usage and print the
-// build run's summary, that a refused or failed call never stops either skill, and that every
-// `events ingest`, `events summary`, `build halt` and `build resume` line they write runs through
-// the real binary's argument parser in a temp repository.
+// Checks the build, run and ship skills' telemetry calls: where they ingest agent usage and print
+// the build run's summary, where they open and close phase spans, that a refused or failed call
+// never stops a skill, and that every `events ingest`, `events summary`, `build halt`,
+// `build resume` and `events span` line they write runs through the real binary in a temp
+// repository.
 // Run: node tests/skill_telemetry_calls_test.mjs
-// Regressions caught: a skill dropping its ingest or the summary, a telemetry failure halting a
-// build, an opt-out reported as a failure, and a flag or closed value the CLI doesn't have.
+// Regressions caught: a skill dropping its ingest, the summary or a phase span, a span left open
+// by a halt, a telemetry failure halting a build, an opt-out reported as a failure, and a flag or
+// closed value the CLI doesn't have.
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -17,12 +19,14 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const BUILD = 'skills/build/SKILL.md'
 const LOOP = 'skills/build/references/event-loop.md'
 const SHIP = 'skills/ship/SKILL.md'
+const RUN = 'skills/run/SKILL.md'
 const TELEMETRY_COMMANDS = ['events ingest', 'events summary', 'build halt', 'build resume']
 // The line `events ingest` prints when `[telemetry] enabled = false`; the skills key their quiet
 // skip on it.
 const OPT_OUT = 'telemetry is off'
 
 const skillFiles = () => Object.fromEntries([BUILD, LOOP, SHIP].map(file => [file, readFileSync(join(root, file), 'utf8')]))
+const spanFiles = () => Object.fromEntries([BUILD, LOOP, RUN, SHIP].map(file => [file, readFileSync(join(root, file), 'utf8')]))
 
 // The body of the `## ` section whose heading line starts with `heading`, up to the next `## `.
 function section(text, heading) {
@@ -133,6 +137,115 @@ export function telemetryRuns(files, values, transcripts) {
   return { runs, problems }
 }
 
+// The phase spans each skill opens, with the build run id each names. The run skill's phases
+// before `build start` have no build run yet, so they name the plan slug.
+const SPANS = [
+  [RUN, 'spec-read', '<slug>'], [RUN, 'discover', '<slug>'], [RUN, 'explore', '<slug>'],
+  [RUN, 'plan', '<slug>'], [RUN, 'contract', '<slug>'], [RUN, 'final', '<run>'],
+  [BUILD, 'final', '<run>'], [SHIP, 'ship', '<run>'],
+]
+// A block that hands control away from the skill's own steps: a span still open there never ends.
+const LEAVES = /\bhalts?\b|\bends the run\b/i
+const isSpan = (inv, edge) => inv.words[0] === 'events' && inv.words[1] === 'span' && (!edge || inv.words[2] === edge)
+const flagValue = (words, flag) => words[words.indexOf(flag) + 1]
+
+// The `## ` sections of `text`: {heading, line (1-based), body}.
+function sections(text) {
+  const lines = text.split('\n')
+  const out = []
+  for (const [index, row] of lines.entries()) {
+    if (row.startsWith('## ')) out.push({ heading: row, line: index + 1, rows: [] })
+    else out.at(-1)?.rows.push(row)
+  }
+  return out.map(s => ({ heading: s.heading, line: s.line, body: s.rows.join('\n') }))
+}
+
+// The paragraphs and numbered items of `body`: {first, last, text}, lines counted from 1.
+function blocks(body) {
+  const out = []
+  let current = null
+  for (const [index, row] of body.split('\n').entries()) {
+    if (!row.trim() || /^\s*\d+\. /.test(row)) {
+      if (current) out.push(current)
+      current = null
+      if (!row.trim()) continue
+    }
+    current ??= { first: index + 1, last: index + 1, text: '' }
+    current.last = index + 1
+    current.text += `${row}\n`
+  }
+  if (current) out.push(current)
+  return out
+}
+
+/**
+ * Problems with the phase spans in `files` ({relative path: markdown}): a phase a skill never
+ * opens or opens under the wrong build run id, a section that opens a span and never ends it `ok`,
+ * a halt or run end after a span call that doesn't end the span in the same block, and a skill
+ * that never says an empty span id is skipped and a failed span call goes on.
+ */
+export function spanCallProblems(files) {
+  const problems = []
+  for (const [file, phase, run] of SPANS) {
+    const start = extractInvocations(files[file] ?? '').find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === phase)
+    if (!start) problems.push(`${file}: never starts the \`${phase}\` span`)
+    else if (flagValue(start.words, '--build-run') !== run) problems.push(`${file}: the \`${phase}\` span names --build-run ${flagValue(start.words, '--build-run')}, not ${run}`)
+  }
+  for (const [file, text] of Object.entries(files)) {
+    for (const { heading, body } of sections(text)) {
+      const calls = extractInvocations(body).filter(inv => isSpan(inv))
+      if (!calls.length) continue
+      for (const start of calls.filter(inv => isSpan(inv, 'start'))) {
+        const ended = calls.some(inv => isSpan(inv, 'end') && inv.line > start.line && flagValue(inv.words, '--outcome') === 'ok')
+        if (!ended) problems.push(`${file}: \`${heading}\` never ends the \`${flagValue(start.words, '--phase')}\` span ok`)
+      }
+      // A halt after the span already ended ok, such as a report listing halts, leaves nothing open.
+      const closed = Math.max(...calls.filter(inv => isSpan(inv, 'end') && flagValue(inv.words, '--outcome') === 'ok').map(inv => inv.line))
+      const until = Number.isFinite(closed) ? closed : Infinity
+      for (const block of blocks(body)) {
+        if (block.last < calls[0].line || block.first > until || !LEAVES.test(block.text)) continue
+        if (!extractInvocations(block.text).some(inv => isSpan(inv, 'end'))) {
+          problems.push(`${file}: \`${heading}\` leaves its span open at "${block.text.trim().replace(/\s+/g, ' ').slice(0, 60)}"`)
+        }
+      }
+    }
+  }
+  for (const file of [BUILD, RUN, SHIP]) {
+    const rule = blocks(files[file] ?? '').map(b => b.text.replace(/\s+/g, ' '))
+      .some(text => text.includes('events span') && /Empty output[^.]*skip its end.*any other non-zero exit[^.]*1 line[^.]*goes on/i.test(text))
+    if (!rule) problems.push(`${file}: never says an empty span id skips its end and a failed span call goes on`)
+  }
+  return problems
+}
+
+// Every `events span` line in `files` as runnable pairs: each start alone, and each end after a
+// fresh start of the nearest start above it in its file (the event loop's ends close the build
+// skill's `final` span). Returns {starts, pairs, problems}.
+export function spanRuns(files) {
+  const ids = { '<slug>': 'demo-plan', '<run>': '20261001T000000Z-abcd1234', '<task>': 'parse-config' }
+  const fill = words => words.map(word => word.replace(/^\[|\]$/g, '')).map(word => ids[word] ?? word)
+  const starts = []
+  const pairs = []
+  const problems = []
+  const buildFinal = extractInvocations(files[BUILD] ?? '').find(inv => isSpan(inv, 'start') && flagValue(inv.words, '--phase') === 'final')
+  for (const [file, text] of Object.entries(files)) {
+    let open = file === LOOP ? buildFinal : null
+    for (const inv of extractInvocations(text).filter(inv => isSpan(inv))) {
+      const where = `${file}:${inv.line}`
+      const args = fill(inv.words)
+      if (inv.words[2] === 'start') {
+        open = inv
+        starts.push({ where, args })
+      } else if (!open) problems.push(`${where}: ends a span no start above it opens`)
+      else pairs.push({ where, start: fill(open.words), end: args })
+      const left = args.filter(word => /^<.*>$/.test(word) && word !== '<span>')
+      if (left.length) problems.push(`${where}: \`${args.join(' ')}\` keeps ${left.join(', ')}`)
+      if (inv.words[2] === 'end' && inv.words[3] !== '<span>') problems.push(`${where}: ends ${inv.words[3]}, not the kept <span>`)
+    }
+  }
+  return { starts, pairs, problems }
+}
+
 // A temp git repository with a project config, `[telemetry] enabled = <enabled>` appended.
 function withRepository(enabled, body) {
   const dir = mkdtempSync(join(tmpdir(), 'skill-telemetry-'))
@@ -206,6 +319,71 @@ const tests = {
     // With telemetry off, ingest refuses with its opt-out line and the rest record nothing and pass.
     const wrong = results.filter(r => r.args[1] === 'ingest' ? r.status !== 2 || !r.out.includes(OPT_OUT) : r.status !== 0)
     assert.deepEqual(wrong.map(r => `${r.where}: exit ${r.status} for \`${r.args.join(' ')}\`: ${r.out.trim()}`), [])
+  },
+
+  'the run skill times spec-read, discover, explore, plan, contract and final, the build skill final and ship its report, each ended ok and on every halt — catches a phase never timed or a span left open by a halt'() {
+    assert.deepEqual(spanCallProblems(spanFiles()), [])
+  },
+
+  'every events span line in the build, run and ship skills runs through the real binary: a start prints a 16-hex id, its end records, and with telemetry off a start prints nothing and exits 0 — catches a flag, phase or outcome the CLI lacks, or a skill reading an opt-out as a failure'() {
+    const { starts, pairs, problems } = spanRuns(spanFiles())
+    assert.deepEqual(problems, [])
+    assert.ok(starts.length >= 8 && pairs.length >= 10, `only ${starts.length} starts and ${pairs.length} ends`)
+    withRepository(true, dir => {
+      const failures = []
+      for (const { where, args } of starts) {
+        const result = spawnSync(swiftgateBinary(), args, { cwd: dir, encoding: 'utf8', env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'run-%p.profraw') } })
+        if (result.status !== 0 || !/^[0-9a-f]{16}\n?$/.test(result.stdout)) failures.push(`${where}: exit ${result.status}, stdout ${JSON.stringify(result.stdout)} ${result.stderr.trim()}`)
+      }
+      for (const { where, start, end } of pairs) {
+        const id = spawnSync(swiftgateBinary(), start, { cwd: dir, encoding: 'utf8', env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'run-%p.profraw') } }).stdout.trim()
+        const result = run(dir, end.map(word => word === '<span>' ? id : word))
+        if (result.status !== 0) failures.push(`${where}: exit ${result.status} for \`${end.join(' ')}\`: ${result.out.trim()}`)
+      }
+      assert.deepEqual(failures, [])
+      const ended = run(dir, ['events', 'list', '--kind', 'span.end']).out.trim().split('\n').filter(Boolean)
+      assert.equal(ended.length, pairs.length, 'the store holds a span.end for each end line')
+      // A refused span call prints 1 line, which the skills report and go past.
+      const refused = run(dir, ['events', 'span', 'end', '0123456789abcdef', '--outcome', 'ok'])
+      assert.equal(refused.status, 1, refused.out)
+      assert.equal(refused.out.trim().split('\n').length, 1, refused.out)
+    })
+    withRepository(false, dir => {
+      for (const { where, args } of starts) {
+        const result = spawnSync(swiftgateBinary(), args, { cwd: dir, encoding: 'utf8', env: { ...process.env, LLVM_PROFILE_FILE: join(dir, 'run-%p.profraw') } })
+        assert.deepEqual([result.status, result.stdout], [0, ''], `${where}: ${result.stderr}`)
+      }
+    })
+  },
+
+  'the span call check names a missing phase, a wrong build run, a span never ended ok, a halt that leaves it open and a missing failure rule — catches a check that passes anything'() {
+    const build = [
+      '# Build', '', '## 4. Finish', '',
+      '1. `"$SG" events span start --phase final --build-run <slug>`. Not GREEN: halt.', '',
+      '2. `"$SG" events span end <span> --outcome halted`.', '',
+    ].join('\n')
+    const run = [
+      '# Run', '', 'Span calls: `events span start` prints the id. Empty output: skip its end. Any other non-zero exit prints 1 line and the step goes on.', '',
+      '## 1. Read', '', '`"$SG" events span start --phase spec-read --build-run <slug>`', '',
+      'A red read ends the run.', '', '`"$SG" events span end <span> --outcome ok`', '',
+    ].join('\n')
+    assert.deepEqual(spanCallProblems({ [BUILD]: build, [RUN]: run, [SHIP]: '# Ship\n' }), [
+      `${RUN}: never starts the \`discover\` span`,
+      `${RUN}: never starts the \`explore\` span`,
+      `${RUN}: never starts the \`plan\` span`,
+      `${RUN}: never starts the \`contract\` span`,
+      `${RUN}: never starts the \`final\` span`,
+      `${BUILD}: the \`final\` span names --build-run <slug>, not <run>`,
+      `${SHIP}: never starts the \`ship\` span`,
+      `${BUILD}: \`## 4. Finish\` never ends the \`final\` span ok`,
+      `${BUILD}: \`## 4. Finish\` leaves its span open at "1. \`"$SG" events span start --phase final --build-run <slug>"`,
+      `${RUN}: \`## 1. Read\` leaves its span open at "A red read ends the run."`,
+      `${BUILD}: never says an empty span id skips its end and a failed span call goes on`,
+      `${SHIP}: never says an empty span id skips its end and a failed span call goes on`,
+    ])
+    const { pairs, problems } = spanRuns({ [LOOP]: '`"$SG" events span end <span> --outcome halted`\n', [SHIP]: '`"$SG" events span end <id> --outcome ok`\n' })
+    assert.deepEqual(problems, [`${LOOP}:1: ends a span no start above it opens`, `${SHIP}:1: ends a span no start above it opens`, `${SHIP}:1: \`events span end <id> --outcome ok\` keeps <id>`, `${SHIP}:1: ends <id>, not the kept <span>`])
+    assert.equal(pairs.length, 0)
   },
 
   'the telemetry call check names a dropped ingest, a missing flag, a summary before its ingest, a missing names row, a halting ingest and an unquiet opt-out — catches a check that passes anything'() {
