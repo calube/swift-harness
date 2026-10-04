@@ -20,11 +20,14 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
   var waves: Int?
   /// Whether this import appended the `PLAN.md` line to `info/exclude`; `nil` before that step.
   var excludeAdded: Bool?
+  /// The plan's `index.json` status after the import; `nil` before that step.
+  var indexStatus: PlanStatus?
   var assumptions: [String] = []
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, plan, status, verdict, tasks, waves, excludeAdded, assumptions, message
+    case command, plan, status, verdict, tasks, waves, excludeAdded, indexStatus, assumptions,
+      message
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -37,6 +40,7 @@ struct PlanImportReport: Sendable, Equatable, Encodable {
     try c.encode(tasks, forKey: .tasks)
     try c.encode(waves, forKey: .waves)
     try c.encode(excludeAdded, forKey: .excludeAdded)
+    try c.encode(indexStatus, forKey: .indexStatus)
     try c.encode(assumptions, forKey: .assumptions)
     try c.encode(message, forKey: .message)
   }

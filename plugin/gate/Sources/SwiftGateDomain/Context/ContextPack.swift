@@ -608,6 +608,8 @@ public enum ContextPackRoleInputs: Sendable {
   case specPageDecomposer(SpecPageDecomposerInputs)
   /// A worker's pack when the plan's source is a spec page, not a design.
   case specPageWorker(SpecPageWorkerInputs)
+  /// A worker's pack in a brownfield clone, cut from its live plan and `config.toml`.
+  case brownfieldWorker(BrownfieldWorkerInputs)
 
   public var role: ContextPackRole {
     switch self {
@@ -618,7 +620,7 @@ public enum ContextPackRoleInputs: Sendable {
     case .standardsReviewer: return .standardsReviewer
     case .challenger: return .challenger
     case .decomposer, .specPageDecomposer: return .decomposer
-    case .worker, .specPageWorker: return .worker
+    case .worker, .specPageWorker, .brownfieldWorker: return .worker
     }
   }
 }
@@ -644,6 +646,7 @@ extension ContextPack {
     case .worker(let i): return try workerPack(i)
     case .specPageDecomposer(let i): return try specPageDecomposerPack(i)
     case .specPageWorker(let i): return try specPageWorkerPack(i)
+    case .brownfieldWorker(let i): return try brownfieldWorkerPack(i)
     }
   }
 

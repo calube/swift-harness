@@ -167,6 +167,14 @@ public enum ContextPackTaskReturn {
     }
     return .success(taskReturn.notes)
   }
+
+  /// The same notes from a plan directory given whole, as a brownfield plan's lives under the git
+  /// common dir rather than the repository.
+  public static func notes(forTask taskID: String, buildRun runID: String, planDirectory: URL)
+    -> Result<String, Failure>
+  {
+    .failure(.unreadable(path: planDirectory.path))
+  }
 }
 
 /// Which `docs/standards.md` anchors are in scope for a set of module kinds (spec §5.10: drafter
