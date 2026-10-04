@@ -591,7 +591,7 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
         worktree: CanonicalPath.of(root), runID: request.runID, checkoutHead: checkoutHead,
         simDirectory: { _ in simDirectory },
         historyFile: StateRootResolver.resolve(worktree: root)
-          .url(RunLayout.historyFile, directoryHint: .notDirectory)))
+          .url(RunLayout.historyFile, directoryHint: .notDirectory), audit: request.audit))
   }
 
   func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {

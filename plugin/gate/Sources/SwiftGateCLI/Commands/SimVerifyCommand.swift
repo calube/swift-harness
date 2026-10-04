@@ -41,7 +41,8 @@ struct SimVerifyCommand: AsyncParsableCommand {
       SimVerify.Request(
         worktree: CanonicalPath.of(root), runID: runID, checkoutHead: checkoutHead,
         simDirectory: { state.url(SimSession.directory(runID: $0), directoryHint: .isDirectory) },
-        historyFile: state.url(RunLayout.historyFile, directoryHint: .notDirectory)))
+        historyFile: state.url(RunLayout.historyFile, directoryHint: .notDirectory),
+        audit: Self.audit(root: root)))
     if case .success(let verified) = result {
       for line in verified.unrecorded {
         FileHandle.standardError.write(
@@ -55,6 +56,11 @@ struct SimVerifyCommand: AsyncParsableCommand {
       case .failure(let failure): failure.verdict
       }
     if verdict != .green { throw ExitCode(verdict.exitCode) }
+  }
+
+  /// The audit scope of a run `sim verify` judges with no flow, in the worktree at `root`.
+  static func audit(root: URL) -> SimAuditScope {
+    .scope(profile: StateRootResolver.profile(worktree: root), flowSteps: nil)
   }
 
   /// What `sim verify` prints for `result`.

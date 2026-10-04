@@ -1,0 +1,10 @@
+[
+  {"command": "wait", "input": {"timeoutMs": 20000, "selector": "role=button label=\"Settings\""}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "role=button label=\"Settings\""}, "settle": true}},
+  {"command": "scroll", "input": {"direction": "down", "until": "label=\"Downloads\"", "settle": true}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "label=\"Downloads\""}, "settle": true}},
+  {"command": "wait", "input": {"timeoutMs": 10000, "selector": "label=\"Compress Downloads\""}},
+  {"command": "wait", "input": {"timeoutMs": 10000, "selector": "id=\"settings.downloads.confirmLargeDownloads\""}},
+  {"command": "wait", "input": {"timeoutMs": 10000, "selector": "label=\"Confirm Large Downloads\""}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"settings.downloads.confirmLargeDownloads\" value=\"0\""}}
+]
