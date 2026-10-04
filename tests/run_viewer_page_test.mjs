@@ -3,6 +3,8 @@
 // sheet at phone width, the zoom scales the track and not the page, the task drawer opens with and
 // without a brief, and a module that throws can't blank the page. Served by a stub server, the page
 // polls for changes, merges each partial, and shows the now strip; the embedded report hides it.
+// The tabs: Overview by default or the URL's #token, badges counted from the view, the arrow keys,
+// a task row's popover, and a poll that keeps the open tab and its scroll.
 // Run: node tests/run_viewer_page_test.mjs
 // Regressions caught: a popover the keyboard can't reach or that keeps focus, a zoom that widens
 // the page, a drawer that needs a brief, a module able to blank the core regions, and a console
@@ -118,7 +120,9 @@ const changes = {
   c3: [{ cursor: 'c3' }],
 }
 
-function startLiveServer() {
+// Serves the page as `swiftgate view` does; `modules` adds those module scripts and styles.
+function startLiveServer(modules = []) {
+  const files = PAGE_FILES.concat(modules.flatMap((m) => [`run-viewer-${m}.js`, `run-viewer-${m}.css`]))
   const requests = []
   const missing = []
   const seen = {}
@@ -136,10 +140,17 @@ function startLiveServer() {
       return body ? json(200, body) : json(503, { error: 'store busy' })
     }
     const name = url.pathname === '/' ? 'run-viewer.html' : url.pathname.slice(1)
-    if (!PAGE_FILES.includes(name)) { missing.push(url.pathname); res.writeHead(404); return res.end() }
+    if (!files.includes(name)) { missing.push(url.pathname); res.writeHead(404); return res.end() }
     const type = name.endsWith('.css') ? 'text/css' : name.endsWith('.js') ? 'text/javascript' : 'text/html'
     res.writeHead(200, { 'content-type': type })
-    res.end(readFileSync(new URL(name, viewer)))
+    let body = readFileSync(new URL(name, viewer), 'utf8')
+    if (name === 'run-viewer.html') {
+      for (const m of modules) {
+        body = body.replace('<script src="run-viewer.js"></script>', `<script src="run-viewer.js"></script>\n<script src="run-viewer-${m}.js"></script>`)
+          .replace('<link rel="stylesheet" href="run-viewer.css">', `<link rel="stylesheet" href="run-viewer.css">\n<link rel="stylesheet" href="run-viewer-${m}.css">`)
+      }
+    }
+    res.end(body)
   })
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve({
     server, requests, missing, url: `http://127.0.0.1:${server.address().port}/`,
@@ -160,11 +171,11 @@ const REGIONS = `(() => ({
   meta: document.querySelectorAll('#meta span').length,
   stats: document.querySelectorAll('#stats .stat').length,
   bars: document.querySelectorAll('#tl .bar').length,
-  spec: document.querySelectorAll('#spec tbody tr').length,
+  spec: document.querySelectorAll('#spec-table tbody tr').length,
   proof: document.querySelectorAll('#proof tbody tr').length,
-  tokens: document.querySelectorAll('#tokens .tok-row').length,
+  tokens: document.querySelectorAll('#token-rows .tok-row').length,
   roles: document.querySelectorAll('#roles .tok-row').length,
-  gates: document.querySelectorAll('#gates .gate').length,
+  gates: document.querySelectorAll('#gate-list .gate').length,
   damage: document.querySelectorAll('#foot .damage-line').length,
   steps: [...document.querySelectorAll('#tl .bar')].filter((b) => b.dataset.id.includes(':')).length,
   emptyMounts: [...document.querySelectorAll('[data-module]')].filter((m) => m.offsetHeight > 0).length,
@@ -177,6 +188,25 @@ function assertCoreDrawn(regions) {
   }
 }
 
+// The tab strip: its tab ids in order, the selected and focused tab, the panels shown, the URL's
+// #token, each tab's badges by key, and each tab's accessible name.
+const TABS = `(() => {
+  const tabs = [...document.querySelectorAll('[role=tab]')].filter((t) => !t.hidden)
+  return {
+    ids: tabs.map((t) => t.dataset.tab),
+    selected: tabs.find((t) => t.getAttribute('aria-selected') === 'true')?.dataset.tab ?? null,
+    focused: document.activeElement?.getAttribute('role') === 'tab' ? document.activeElement.dataset.tab : null,
+    shown: [...document.querySelectorAll('[role=tabpanel]')].filter((p) => !p.hidden && p.offsetHeight > 0).map((p) => p.dataset.tab),
+    hash: location.hash,
+    badges: Object.fromEntries(tabs.filter((t) => t.querySelector('.badge')).map((t) => [t.dataset.tab, Object.fromEntries([...t.querySelectorAll('.badge')].map((b) => [b.dataset.key, b.dataset.n]))])),
+    labels: Object.fromEntries(tabs.map((t) => [t.dataset.tab, t.getAttribute('aria-label')])),
+  }
+})()`
+// Loads `url` from a blank page, since a change of #token alone is a same-document navigation that
+// fires no load event.
+const loadFresh = async (url) => { await page.load('about:blank'); await page.load(url) }
+const selectTab = (id) => `document.querySelector('[role=tab][data-tab="${id}"]').click()`
+
 const POPOVER = `(() => { const p = document.getElementById('pop'); const r = p.getBoundingClientRect();
   return { hidden: p.hidden, title: document.getElementById('pop-title').textContent, body: document.getElementById('pop-body').textContent,
     focusInPop: p.contains(document.activeElement), active: document.activeElement.dataset.id ?? null,
@@ -187,7 +217,7 @@ if (!findChrome()) {
   process.exit(0)
 }
 
-const { page, close } = await launch()
+const { page, close } = await launch({ deadlineMs: 45000 })
 const main = writePage()
 const throwing = writePage("window.runViewer.register('board', { render() { throw new Error('board exploded') }, apply() {} })")
 
@@ -202,12 +232,68 @@ const tests = {
     assert.equal(regions.emptyMounts, 0, 'an unregistered module panel takes space on the page')
     assert.equal(regions.errors, '0')
     assert.deepEqual(page.errors, [])
-    const text = await page.evaluate("document.body.innerText")
+    const text = await page.evaluate("document.body.textContent")
     assert.match(text, /pending/, 'null tokens do not read pending')
     assert.match(text, /uncovered/, 'a requirement with no task is not flagged')
     assert.doesNotMatch(text, /undefined|NaN/)
     const openTitle = await page.evaluate("[...document.querySelectorAll('#tl .bar')].map((b) => b.title).find((t) => t.includes('never ended')) ?? null")
     assert.ok(openTitle, 'an open span does not read never ended')
+  },
+
+  async 'the tab strip names Overview to Tokens with Overview selected and every other panel hidden — catches a tab layout that still shows 1 long page'() {
+    const tabs = await page.evaluate(TABS)
+    assert.deepEqual(tabs.ids, ['overview', 'timeline', 'spec', 'gates', 'tokens'], 'without the board and graph modules their tabs show')
+    assert.equal(tabs.selected, 'overview')
+    assert.deepEqual(tabs.shown, ['overview'])
+    assert.equal(tabs.hash, '')
+  },
+
+  async 'badges carry the view\'s counts on every tab: an uncovered requirement, a never-ended span and a pending task — catches a badge that drifts from the data'() {
+    const tabs = await page.evaluate(TABS)
+    assert.deepEqual(tabs.badges, { spec: { uncovered: '1' }, timeline: { unended: '1' }, tokens: { pending: '1' } })
+    assert.match(tabs.labels.spec, /Spec, 1 uncovered/, 'a badge is missing from the tab\'s accessible name')
+  },
+
+  async 'a task row opens a details popover with its column, deps, latest gate, commits and covers, and Open task opens the drawer; Escape returns focus to the row — catches a task popover read from the wrong task'() {
+    await page.evaluate("document.querySelector('#tab-overview .task-link[data-task=\"store\"]').click()")
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false, 'a task row opens no popover')
+    assert.equal(pop.title, 'store')
+    for (const text of [/Save notes to a local store/, /merged/, /g-store/, /4be91c0/, /req-save-note/, /none/]) assert.match(pop.body, text)
+    await page.evaluate("document.querySelector('#pop [data-open-task]').click()")
+    const drawer = await page.evaluate("({ open: document.getElementById('drawer').classList.contains('open'), id: document.getElementById('dr-id').textContent })")
+    assert.deepEqual(drawer, { open: true, id: 'store' })
+    await page.press('Escape')
+    assert.equal(await page.evaluate("document.activeElement.dataset.task ?? null"), 'store', 'closing the drawer loses the row')
+    await page.evaluate("document.querySelector('#tab-overview .task-link[data-task=\"list\"]').focus()")
+    await page.press('Enter')
+    let after = await page.evaluate(POPOVER)
+    assert.equal(after.title, 'list', 'Enter on a task row opens no popover')
+    assert.match(after.body, /store/, 'the deps are missing')
+    await page.press('Escape')
+    after = await page.evaluate(POPOVER)
+    assert.equal(after.hidden, true)
+    assert.equal(await page.evaluate("document.activeElement.dataset.task ?? null"), 'list')
+    assert.deepEqual(page.errors, [])
+  },
+
+  async 'clicking a tab shows its panel and writes its #token, and the arrow keys move between tabs — catches a tab the URL or keyboard loses'() {
+    await page.evaluate(selectTab('gates'))
+    let tabs = await page.evaluate(TABS)
+    assert.equal(tabs.selected, 'gates')
+    assert.deepEqual(tabs.shown, ['gates'])
+    assert.equal(tabs.hash, '#gates')
+    await page.evaluate("document.querySelector('[role=tab][data-tab=\"gates\"]').focus()")
+    await page.press('ArrowRight')
+    tabs = await page.evaluate(TABS)
+    assert.equal(tabs.selected, 'tokens')
+    assert.equal(tabs.focused, 'tokens', 'the arrow key does not move focus')
+    await page.press('ArrowLeft')
+    await page.press('ArrowLeft')
+    tabs = await page.evaluate(TABS)
+    assert.equal(tabs.selected, 'spec')
+    await page.evaluate(selectTab('timeline'))
+    assert.deepEqual(page.errors, [])
   },
 
   async 'Tab to a bar and Enter opens its popover; Escape closes it and focus returns to the bar — catches a popover the keyboard can\'t reach'() {
@@ -286,9 +372,20 @@ const tests = {
     await page.press('Escape')
   },
 
-  async 'at a 390 px viewport the popover is a bottom sheet — catches a popover anchored off a phone screen'() {
+  async '#gates in the URL opens the Gates tab on load — catches a selection the link does not carry'() {
+    await loadFresh(main.url + '#gates')
+    const tabs = await page.evaluate(TABS)
+    assert.equal(tabs.selected, 'gates')
+    assert.deepEqual(tabs.shown, ['gates'])
+    assert.equal(await page.evaluate("window.scrollY"), 0, 'the #token scrolls the page to an element')
+    await loadFresh(main.url + '#nonsense')
+    assert.equal((await page.evaluate(TABS)).selected, 'overview', 'an unknown #token selects no tab')
+  },
+
+  async 'at a 390 px viewport the popover is a bottom sheet and the tab strip scrolls inside itself — catches a popover anchored off a phone screen'() {
     await page.viewport(390, 800)
-    await page.load(main.url)
+    await loadFresh(main.url + '#timeline')
+    assert.equal(await page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth"), true, 'the tab strip widens the page')
     await page.evaluate("document.getElementById('tl-scroll').focus()")
     await page.press('Tab')
     await page.press('Enter')
@@ -348,6 +445,49 @@ const tests = {
     await page.load(main.url)
     const embedded = await page.evaluate("({ strip: document.getElementById('now')?.offsetHeight ?? 0, live: document.body.dataset.live ?? null })")
     assert.deepEqual(embedded, { strip: 0, live: null }, 'the embedded report shows the now strip')
+  },
+
+  async 'served with the board module on #board, the board draws from the fetched view and its cards move on each poll — catches a module that registered before live data and never drew'() {
+    const live = await startLiveServer(['board'])
+    try {
+      await loadFresh(live.url + '#board')
+      await page.evaluate(until("Number(document.body.dataset.polls) >= 4"))
+      const state = await page.evaluate(`(() => ({
+        tab: document.body.dataset.tab,
+        mountHidden: document.querySelector('[data-module="board"]').hidden,
+        cards: [...document.querySelectorAll('[data-module="board"] .card')].map((c) => [c.dataset.task, c.closest('.lane').dataset.lane]),
+        damage: [...document.querySelectorAll('#foot .damage-line')].map((l) => l.textContent),
+      }))()`)
+      assert.deepEqual(state.damage, [], 'the board module failed on a live poll')
+      assert.equal(state.mountHidden, false)
+      assert.equal(state.tab, 'board')
+      assert.deepEqual(Object.fromEntries(state.cards), { store: 'gating', list: 'blocked' })
+    } finally {
+      await new Promise((resolve) => live.server.close(resolve))
+    }
+  },
+
+  async 'served on #timeline, polled updates keep the Timeline tab, its zoom and scroll, and move the badges — catches a poll that resets the selection'() {
+    const live = await startLiveServer()
+    try {
+      await page.load(live.url + '#timeline')
+      await page.evaluate(until("Number(document.body.dataset.polls) >= 1 && document.querySelector('#tl .bar')"))
+      await page.evaluate("document.querySelector('#zoom button[data-z=\"4\"]').click()")
+      await page.evaluate("document.getElementById('tl-scroll').scrollLeft = 400")
+      const before = await page.evaluate(TABS)
+      assert.deepEqual(before.badges.overview ?? {}, {}, 'precondition: no halt yet')
+      await page.evaluate(until("Number(document.body.dataset.polls) >= 4"))
+      const after = await page.evaluate(TABS)
+      assert.equal(after.selected, 'timeline', 'a poll moves the selected tab')
+      assert.deepEqual(after.shown, ['timeline'])
+      assert.equal(after.hash, '#timeline')
+      assert.equal(await page.evaluate("document.getElementById('tl-scroll').scrollLeft"), 400, 'a poll resets the timeline scroll')
+      assert.deepEqual(after.badges.overview, { halted: '1' }, 'the halt from the poll shows no badge on Overview')
+      assert.equal(after.badges.timeline?.stalled, '1', 'the quiet task shows no stall badge on Timeline')
+      assert.equal(await page.evaluate("document.body.dataset.errors"), '0')
+    } finally {
+      await new Promise((resolve) => live.server.close(resolve))
+    }
   },
 }
 
