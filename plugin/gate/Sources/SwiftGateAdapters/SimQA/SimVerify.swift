@@ -27,16 +27,20 @@ public struct SimVerify: Sendable {
     public var simDirectory: @Sendable (String) -> URL
     /// The state root's `runs/history.jsonl`.
     public var historyFile: URL
+    /// Which controls the accessibility rules judge.
+    public var audit: SimAuditScope
 
     public init(
       worktree: String, runID: String?, checkoutHead: SimCheckoutHead,
-      simDirectory: @escaping @Sendable (String) -> URL, historyFile: URL
+      simDirectory: @escaping @Sendable (String) -> URL, historyFile: URL,
+      audit: SimAuditScope = .everyControl
     ) {
       self.worktree = worktree
       self.runID = runID
       self.checkoutHead = checkoutHead
       self.simDirectory = simDirectory
       self.historyFile = historyFile
+      self.audit = audit
     }
   }
 

@@ -114,6 +114,14 @@ public enum SimEvidenceRules {
     return findings + SimExitRule.findings(evidence)
   }
 
+  /// ``findings(_:checkoutHead:)`` with the accessibility rules narrowed to `audit`, and the
+  /// notes that say what the narrowing left out.
+  public static func judge(
+    _ evidence: SimEvidence, checkoutHead: String?, audit: SimAuditScope
+  ) -> (findings: [SimEvidenceFinding], notes: [SimVerifyNote]) {
+    (findings(evidence, checkoutHead: checkoutHead), [])
+  }
+
   private static func stepFindings(_ step: SimStep, files: [String: SimEvidenceFile])
     -> [SimEvidenceFinding]
   {
@@ -197,10 +205,12 @@ public struct SimVerifyReport: Sendable, Equatable {
   public var findings: [SimEvidenceFinding]
   /// Why the run couldn't be fully judged; `nil` when it was.
   public var blocked: String?
+  /// What the run's audit scope left unjudged. Notes never change the verdict.
+  public var notes: [SimVerifyNote]
 
   public init(
     runID: String, stepCount: Int?, headCommit: String?, checkoutHead: String?,
-    findings: [SimEvidenceFinding], blocked: String?
+    findings: [SimEvidenceFinding], blocked: String?, notes: [SimVerifyNote] = []
   ) {
     self.runID = runID
     self.stepCount = stepCount
@@ -208,13 +218,14 @@ public struct SimVerifyReport: Sendable, Equatable {
     self.checkoutHead = checkoutHead
     self.findings = findings
     self.blocked = blocked
+    self.notes = notes
   }
 
-  /// The rules applied to a loaded run. An unreadable HEAD leaves the run `BLOCKED` unless
-  /// another rule finds it `RED`.
-  public static func judged(_ evidence: SimEvidence, checkoutHead: SimCheckoutHead)
-    -> SimVerifyReport
-  {
+  /// The rules applied to a loaded run, the accessibility rules over `audit`. An unreadable HEAD
+  /// leaves the run `BLOCKED` unless another rule finds it `RED`.
+  public static func judged(
+    _ evidence: SimEvidence, checkoutHead: SimCheckoutHead, audit: SimAuditScope = .everyControl
+  ) -> SimVerifyReport {
     let head = checkoutHead.commit
     return SimVerifyReport(
       runID: evidence.runID, stepCount: evidence.steps.count,

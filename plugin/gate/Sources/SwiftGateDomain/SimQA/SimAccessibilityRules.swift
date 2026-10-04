@@ -27,6 +27,13 @@ public enum SimAccessibilityRules {
     return findings
   }
 
+  /// The findings `scope` judges over `tree`, and how many findings it left out.
+  public static func audit(_ tree: SimTree, step: SimStep, scope: SimAuditScope)
+    -> (findings: [SimEvidenceFinding], untargeted: Int)
+  {
+    (findings(tree, step: step), 0)
+  }
+
   /// Non-empty after trimming, and not the identifier read back as a label.
   static func hasReadableLabel(_ element: SimElement) -> Bool {
     guard let label = element.label else { return false }

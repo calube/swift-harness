@@ -19,12 +19,18 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
   public var simDirectory: URL
   /// `nil` launches the app with its live dependencies.
   public var scenario: String?
+  /// Which controls `sim verify`'s accessibility rules judge.
+  public var audit: SimAuditScope
 
-  public init(worktree: URL, runID: String, simDirectory: URL, scenario: String?) {
+  public init(
+    worktree: URL, runID: String, simDirectory: URL, scenario: String?,
+    audit: SimAuditScope = .everyControl
+  ) {
     self.worktree = worktree
     self.runID = runID
     self.simDirectory = simDirectory
     self.scenario = scenario
+    self.audit = audit
   }
 }
 
