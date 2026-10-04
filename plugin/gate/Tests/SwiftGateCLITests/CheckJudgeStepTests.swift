@@ -55,7 +55,7 @@ struct CheckJudgeStepTests {
             diff: FakeDiff(
               text:
                 "diff --git a/\(JudgeCommandsTests.testFile) b/\(JudgeCommandsTests.testFile)\n+@Test\n"
-            ), reasonJudge: reasonJudge, secrets: secrets)
+            ), reasonJudge: reasonJudge, secrets: secrets, retryClock: FakeRetryClock())
         }))
     let t1 = try #require(parts.tiers.first { $0.tier == .t1 })
     return (

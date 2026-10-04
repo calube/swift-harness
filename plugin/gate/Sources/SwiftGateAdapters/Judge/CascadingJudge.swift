@@ -163,7 +163,7 @@ public struct CascadingJudge: Judge {
   }
 
   /// ``cascade(_:questions:)`` for the `ready` tier, where a judge that can't run must not pass
-  /// quietly: a Jev transport or parse error is asked again once, and when Jev still gives no
+  /// quietly: a Jev transport or parse error is asked again once, after ``retryDelay``, and when Jev still gives no
   /// answer, Claude answers the blocking questions.
   public func readyCascade(_ subject: JudgeSubject, questions: JudgeQuestionSet)
     async throws(JudgeError) -> ReadyReply
@@ -183,7 +183,10 @@ public struct CascadingJudge: Judge {
             subject, questions: questions, jevReply: jevReply, scope: scope,
             parentID: jevCalls.calls.last?.eventID))
       } catch {
-        if attempts < Self.readyAttempts, Self.worthAskingAgain(error) { continue }
+        if attempts < Self.readyAttempts, Self.worthAskingAgain(error) {
+          await clock.sleep(for: Self.retryDelay)
+          continue
+        }
         let plan = JudgeCascade.jevFailedPlan(questions: questions)
         let (outcome, claudeReply) = await askClaude(
           subject, plan: plan, scope: scope, parentID: jevCalls.calls.last?.eventID)
@@ -198,7 +201,8 @@ public struct CascadingJudge: Judge {
   /// Jev calls per subject at `ready`: 1, and 1 more after a transport or parse error.
   static let readyAttempts = 2
 
-  /// The wait before that 1 more call.
+  /// The wait before that 1 more call: long enough for a dropped connection or a restarting
+  /// endpoint to come back, short enough that a run where Jev is down still reaches Claude fast.
   public static let retryDelay: Duration = .milliseconds(750)
 
   /// A dropped connection or a garbled reply can pass; a missing or refused key, an invalid

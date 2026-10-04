@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Synchronization
 import Testing
 
@@ -74,6 +75,73 @@ struct CascadingJudgeTests {
       policy: CascadingJudge.Policy(
         thresholds: JudgeThresholds(advisory: 0.6, block: 0.9),
         atReadyTier: true))
+  }
+
+  /// A Jev judge that throws `failures` in order, then answers 0.1 everywhere, noting the clock's
+  /// time at each call.
+  final class ClockedJev: Judge {
+    let identity = CascadingJudgeTests.jevIdentity
+    let clock: FakeRetryClock
+    private let state: Mutex<(failures: [JudgeError], times: [Duration])>
+
+    init(failing failures: [JudgeError], clock: FakeRetryClock) {
+      self.clock = clock
+      state = Mutex((failures, []))
+    }
+
+    var times: [Duration] { state.withLock { $0.times } }
+
+    func answer(_ subject: JudgeSubject, questions: JudgeQuestionSet) async throws(JudgeError)
+      -> [JudgeAnswer]
+    {
+      try await measuredAnswer(subject, questions: questions).answers
+    }
+
+    func measuredAnswer(_ subject: JudgeSubject, questions: JudgeQuestionSet)
+      async throws(JudgeError) -> JudgeReply
+    {
+      let failure: JudgeError? = state.withLock {
+        $0.times.append(clock.now())
+        return $0.failures.isEmpty ? nil : $0.failures.removeFirst()
+      }
+      if let failure { throw failure }
+      return try await MeteredJudge(identity, flagged: [:], usage: CascadingJudgeTests.jevUsage)
+        .measuredAnswer(subject, questions: questions)
+    }
+  }
+
+  @Test(
+    "at ready, Jev is asked again only after a wait of 0.5 to 1 s following a transport error, and never waits otherwise — catches a retry fired the instant a connection drops"
+  )
+  func readyRetryWaitsFirst() async throws {
+    let retryClock = FakeRetryClock()
+    let flaky = ClockedJev(
+      failing: [.transport("Jev is unreachable: connection refused")], clock: retryClock)
+    let policy = CascadingJudge.Policy(
+      thresholds: JudgeThresholds(advisory: 0.6, block: 0.9), atReadyTier: true)
+
+    let reply = try await CascadingJudge(
+      jev: flaky, claude: nil, base: .tests, policy: policy, clock: retryClock
+    ).readyCascade(Self.subject, questions: .testsJev)
+
+    guard case .cascaded = reply else {
+      Issue.record("expected Jev's second answer to stand, got \(reply)")
+      return
+    }
+    #expect(retryClock.sleeps == [CascadingJudge.retryDelay])
+    #expect(CascadingJudge.retryDelay >= .milliseconds(500))
+    #expect(CascadingJudge.retryDelay <= .seconds(1))
+    #expect(flaky.times == [.zero, CascadingJudge.retryDelay])
+
+    for failures in [[], [JudgeError.backend("Jev refused the key (401)")]] {
+      let quietClock = FakeRetryClock()
+      let jev = ClockedJev(failing: failures, clock: quietClock)
+      _ = try await CascadingJudge(
+        jev: jev, claude: nil, base: .tests, policy: policy, clock: quietClock
+      ).readyCascade(Self.subject, questions: .testsJev)
+      #expect(quietClock.sleeps.isEmpty)
+      #expect(jev.times == [.zero])
+    }
   }
 
   @Test(
