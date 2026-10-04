@@ -40,7 +40,7 @@ struct SimAccessibilityRulesTests {
         bundleID: "com.example.SampleApp", scenario: nil, headCommit: head,
         startedAt: Date(timeIntervalSince1970: 1_791_115_200)),
       steps: [step],
-      files: [step.screenshot: .present(Data("png".utf8)), step.tree: .present(treeJSON)])
+      files: [step.screenshot: .present(Data("png".utf8)), step.tree ?? "": .present(treeJSON)])
   }
 
   @Test(

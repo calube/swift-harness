@@ -65,8 +65,11 @@ struct SimDownTests {
     let directories = root
     return await SimDown(
       dependencies: SimDown.Dependencies(
-        agentDevice: agent, leases: store, simctl: simctl, isAlive: isAlive, clock: clock,
-        teardownTimeout: teardownTimeout, pollInterval: .milliseconds(10))
+        agentDevice: agent, leases: store, simctl: simctl,
+        crashReports: CrashReportReader(
+          directory: root.appending(path: "DiagnosticReports", directoryHint: .isDirectory)),
+        isAlive: isAlive, clock: clock, teardownTimeout: teardownTimeout,
+        pollInterval: .milliseconds(10))
     ).run(
       SimDown.Request(
         worktree: worktree, runID: runID,

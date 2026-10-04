@@ -153,7 +153,8 @@ public struct SimVerify: Sendable {
     let session = try store.session()
     let steps = try store.steps()
     var files: [String: SimEvidenceFile] = [:]
-    for path in steps.flatMap({ [$0.screenshot, $0.tree] }) where SimEvidence.isInsideRun(path) {
+    for path in steps.flatMap({ [$0.screenshot] + ($0.tree.map { [$0] } ?? []) })
+    where SimEvidence.isInsideRun(path) {
       do {
         files[path] = .present(try Data(contentsOf: store.simDirectory.appending(path: path)))
       } catch CocoaError.fileReadNoSuchFile {

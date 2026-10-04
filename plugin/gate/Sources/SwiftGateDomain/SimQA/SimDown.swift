@@ -62,10 +62,13 @@ public enum SimDownOutcome: Sendable, Equatable {
 public struct SimDowned: Sendable, Equatable {
   public var outcome: SimDownOutcome
   public var notes: [String]
+  /// The crash reports copied into the run's `sim/crashes/`, relative to `sim/`.
+  public var crashReports: [String]
 
-  public init(outcome: SimDownOutcome, notes: [String] = []) {
+  public init(outcome: SimDownOutcome, notes: [String] = [], crashReports: [String] = []) {
     self.outcome = outcome
     self.notes = notes
+    self.crashReports = crashReports
   }
 
   /// `{schemaVersion, verdict, released, runID, udid, notes}`, `runID` and `udid` `null` when

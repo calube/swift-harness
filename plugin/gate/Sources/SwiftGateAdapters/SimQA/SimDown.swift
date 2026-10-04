@@ -28,24 +28,32 @@ public struct SimDown: Sendable {
     public var leases: SimLeaseStore
     /// Lists devices to see the run's go, and deletes it when its holder died holding it.
     public var simctl: any Simctl
+    /// Copies the run's crash reports into `sim/crashes/`.
+    public var crashReports: CrashReportReader
     public var isAlive: @Sendable (Int32) -> Bool
     public var clock: SimHoldClock
     /// How long to wait for the holder to exit and the device to go.
     public var teardownTimeout: Duration
     public var pollInterval: Duration
+    /// How long to wait for a crash report a recorded exit has not produced yet: macOS writes
+    /// one some seconds after the crash.
+    public var crashReportWait: Duration
 
     public init(
       agentDevice: any AgentDevice, leases: SimLeaseStore, simctl: any Simctl,
-      isAlive: @escaping @Sendable (Int32) -> Bool, clock: SimHoldClock,
-      teardownTimeout: Duration = .seconds(120), pollInterval: Duration = .milliseconds(500)
+      crashReports: CrashReportReader, isAlive: @escaping @Sendable (Int32) -> Bool,
+      clock: SimHoldClock, teardownTimeout: Duration = .seconds(120),
+      pollInterval: Duration = .milliseconds(500), crashReportWait: Duration = .seconds(30)
     ) {
       self.agentDevice = agentDevice
       self.leases = leases
       self.simctl = simctl
+      self.crashReports = crashReports
       self.isAlive = isAlive
       self.clock = clock
       self.teardownTimeout = teardownTimeout
       self.pollInterval = pollInterval
+      self.crashReportWait = crashReportWait
     }
   }
 

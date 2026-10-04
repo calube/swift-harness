@@ -31,7 +31,7 @@ struct SimEvidenceRulesTests {
     var files: [String: SimEvidenceFile] = [:]
     for step in steps {
       files[step.screenshot] = .present(png)
-      files[step.tree] = .present(try tree())
+      if let path = step.tree { files[path] = .present(try tree()) }
     }
     return SimEvidence(
       runID: "20261004T120000Z-1a2b3c4d", session: session(head: head), steps: steps,
@@ -115,7 +115,7 @@ struct SimEvidenceRulesTests {
     var step = Self.step(1)
     step.tree = "../../other-run/sim/steps/001.tree.json"
     var evidence = try Self.evidence([step])
-    evidence.files[step.tree] = .present(try Self.tree())
+    evidence.files[try #require(step.tree)] = .present(try Self.tree())
     let findings = SimEvidenceRules.findings(evidence, checkoutHead: Self.head)
     try #require(Self.rules(findings) == [.evidenceMissing])
     #expect(findings[0].message.contains("outside"))
