@@ -532,7 +532,7 @@ let store = TestStore(initialState: CheckoutFeature.State()) { CheckoutFeature()
 **X1. Interactive elements carry an identifier and a label.**
 - **Do:** every `Button`, `Toggle`, text field and tappable row has `.accessibilityIdentifier("screen.element")` and a readable label (visible text, or `.accessibilityLabel` for icon-only controls).
 - **Tell:** an icon-only button with no label; a UI test that locates an element by its title text.
-- **Enforced by:** review (no `swiftgate lint` rule is assigned yet) · **Source:** [accessibilityIdentifier(_:)](https://developer.apple.com/documentation/swiftui/view/accessibilityidentifier(_:)). Incident: none yet.
+- **Enforced by:** `sim verify` `sim.a11y-identifier` and `sim.a11y-label`, on each QA step's tree · **Source:** [accessibilityIdentifier(_:)](https://developer.apple.com/documentation/swiftui/view/accessibilityidentifier(_:)). Incident: none yet.
 
 ## 8. Engine modules
 
@@ -799,3 +799,5 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `sim.evidence-missing` | simulator QA §5.2; a step names a screenshot or tree that isn't on disk, is empty, can't be read, lies outside the run's `sim/` folder, or a tree that doesn't parse or holds a role the pin can't name (major). The message names the step, the file and why |
 | `sim.assert-absent` | simulator QA §5.2; no element's label or value in the step's tree equals its `--assert` text (major) |
 | `sim.stale-head` | simulator QA §5.2; the checkout's HEAD isn't the commit `sim up` recorded (major), naming both |
+| `sim.a11y-identifier` | simulator QA §5.2, standards §7; a button, switch, text field or cell in a step's tree has no accessibility identifier (major), naming the step, the element's role and its label |
+| `sim.a11y-label` | simulator QA §5.2, standards §7; a button, switch, text field or cell in a step's tree has no readable label: none, only whitespace, or the same text as its identifier (major), naming the step, the element's role and its identifier |

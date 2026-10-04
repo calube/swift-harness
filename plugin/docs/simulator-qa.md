@@ -16,6 +16,12 @@ The verdict is GREEN (exit 0), RED (exit 1) on any finding, or BLOCKED (exit 2) 
 or `steps.ndjson` doesn't read, git can't name HEAD, or the caller named no run and none is live.
 A RED finding outranks BLOCKED.
 
+Each step's tree must also show every button, switch, text field and cell with an accessibility
+identifier (`sim.a11y-identifier`) and a readable label (`sim.a11y-label`). A label is readable when
+it holds more than whitespace and differs from the identifier. Static text, images and containers
+need neither. These 2 rules check standards §7 on the screen the app drew, so an icon-only
+button with no `.accessibilityLabel` fails here even when review missed it.
+
 Each judged run writes `sim/report.json` with keys `schemaVersion`, `command`, `runID`, `verdict`,
 `stepCount`, `headCommit` (the commit `sim up` built), `checkoutHead`, `blocked` and `findings`,
 each `{rule, step, path, message}` with `path` relative to `sim/`. Unknown values are `null`. It
