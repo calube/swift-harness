@@ -192,7 +192,7 @@
 
   let current = null;
   function open(g) {
-    if (g.dataset.task) runViewer.openTaskDrawer(g.dataset.task, g);
+    if (g.dataset.task) runViewer.openTaskPopover(g.dataset.task, g);
     else if (g.dataset.stage && current) runViewer.openPopover(g, stageRows(g.dataset.stage, current), STAGE_LABEL[g.dataset.stage]);
   }
 
