@@ -1,5 +1,6 @@
 // Checks the run viewer's board module: the pure lane rules, then the module in headless Chrome
-// with a RunView built here, moving a card as partials arrive and opening the task drawer.
+// with a RunView built here, moving a card as partials arrive, badging its tab, and opening the task
+// popover and from it the drawer.
 // Run: node tests/run_viewer_board_test.mjs
 // Regressions caught: a halt hidden behind the task's stage, a pending task shown as started before
 // any span opens, a card that never moves on a poll, a card the keyboard can't open, and a console
@@ -148,6 +149,8 @@ const BOARD = `(() => {
   }
 })()`
 const DRAWER = "({ open: document.getElementById('drawer').classList.contains('open'), id: document.getElementById('dr-id').textContent, active: document.activeElement.dataset.task ?? null })"
+const POPOVER = "({ hidden: document.getElementById('pop').hidden, title: document.getElementById('pop-title').textContent, body: document.getElementById('pop-body').textContent, active: document.activeElement.dataset.task ?? null })"
+const BADGES = "Object.fromEntries([...document.querySelectorAll('[role=tab][data-tab=\"board\"] .badge')].map((b) => [b.dataset.key, b.dataset.n]))"
 
 const withCard = (id, action) => `(() => { const c = document.querySelector('.card[data-task="${id}"]'); if (!c) return false; c.${action}(); return true })()`
 
@@ -172,11 +175,27 @@ const pageTests = {
     assert.deepEqual(page.errors, [])
   },
 
-  async 'Enter on a focused card opens its task drawer and Escape returns focus to the card — catches a card the keyboard can\'t open'() {
+  async 'the Board tab badges the view\'s blocked tasks, and a poll that halts a task moves its card and the badge — catches a badge that drifts from the board'() {
+    assert.deepEqual(await page.evaluate(BADGES), {}, 'precondition: nothing in flight or blocked after the merge')
+    await page.evaluate(`window.runViewer.apply(${JSON.stringify({ cursor: 'c3', tasks: [task('later', { status: 'blocked', deps: ['list'] })] })})`)
+    assert.deepEqual(await page.evaluate(BADGES), { blocked: '1' })
+    assert.equal((await page.evaluate(BOARD)).laneOf.later, 'blocked')
+    await page.evaluate(`window.runViewer.apply(${JSON.stringify({ cursor: 'c4', tasks: [task('later', { deps: ['list'] })] })})`)
+    assert.deepEqual(await page.evaluate(BADGES), {})
+  },
+
+  async 'Enter on a focused card opens its task popover, Open task opens the drawer, and Escape returns focus to the card — catches a card the keyboard can\'t open'() {
     assert.ok(await page.evaluate(withCard('list', 'focus')), 'no card for list')
     await page.press('Enter')
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false, 'Enter on a card opens no popover')
+    assert.equal(pop.title, 'list')
+    assert.match(pop.body, /merged/, 'the popover names no column')
+    assert.match(pop.body, /4be91c0/, 'the popover names no commit')
+    assert.match(pop.body, /req-list/, 'the popover names no covered requirement')
+    await page.evaluate("document.querySelector('#pop [data-open-task]').click()")
     let drawer = await page.evaluate(DRAWER)
-    assert.equal(drawer.open, true, 'Enter on a card does not open the drawer')
+    assert.equal(drawer.open, true, 'Open task does not open the drawer')
     assert.equal(drawer.id, 'list')
     await page.press('Escape')
     drawer = await page.evaluate(DRAWER)
@@ -184,13 +203,28 @@ const pageTests = {
     assert.equal(drawer.active, 'list', 'focus does not return to the card')
   },
 
-  async 'a click on a card opens the drawer for its task — catches a click handler bound to the wrong card'() {
+  async 'a click on a card opens the popover for its task and Escape closes it on the card — catches a click handler bound to the wrong card'() {
     assert.ok(await page.evaluate(withCard('later', 'click')), 'no card for later')
-    const drawer = await page.evaluate(DRAWER)
-    assert.equal(drawer.open, true)
-    assert.equal(drawer.id, 'later')
+    let pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false)
+    assert.equal(pop.title, 'later')
+    assert.match(pop.body, /queued/)
+    assert.match(pop.body, /list/, 'the popover names no dep')
+    assert.equal((await page.evaluate(DRAWER)).open, false, 'a click opens the drawer, not the popover')
     await page.press('Escape')
+    pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, true)
+    assert.equal(pop.active, 'later')
     assert.deepEqual(page.errors, [])
+  },
+
+  async 'Space on a focused card opens its popover too — catches a card only Enter opens'() {
+    assert.ok(await page.evaluate(withCard('list', 'focus')))
+    await page.press('Space')
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false)
+    assert.equal(pop.title, 'list')
+    await page.press('Escape')
   },
 }
 
@@ -215,7 +249,7 @@ if (!findChrome()) {
   const built = writePage()
   try {
     await page.viewport(1280, 900)
-    await page.load(built.url)
+    await page.load(built.url + '#board')
     for (const [name, test] of Object.entries(pageTests)) await report(name, test)
   } finally {
     await browser.close()

@@ -1,0 +1,13 @@
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_ARGS",
+    "message": "Batch step 1 wait input is invalid: Expected target to be one of: mobile, tv, desktop.",
+    "cause": {
+      "message": "Expected target to be one of: mobile, tv, desktop.",
+      "code": "INVALID_ARGS"
+    },
+    "hint": "Check command arguments and run --help for usage examples.",
+    "diagnosticId": "muu3c96t-aec8b6d4"
+  }
+}

@@ -978,6 +978,8 @@ const tests = {
       `Swiftgate: ${SG}, the plugin under test. Run every gate command through that path, never a bare \`swiftgate\`: ` +
       "the one on PATH may be another install, whose gate code and run store aren't this build's.\n"
     const tail =
+      'Cited gate: the run you return as "gate" must start at your last commit on a clean tree, so commit everything first and then run the task gate. ' +
+      '`build check-return` rejects a run started at an earlier commit or on uncommitted changes (build-return.stale-gate).\n' +
       'Tests to turn green: test-catalog-list-loads-first-page.\n' +
       'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n\nRun-viewer span: '
     const expected = {

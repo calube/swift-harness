@@ -209,6 +209,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case gateMissingStep = "build-return.gate-missing-step"
     case targetOutsideSurface = "build-return.target-outside-surface"
     case testNeedsStub = "build-return.test-needs-stub"
+    case staleGate = "build-return.stale-gate"
   }
 
   public let rule: Rule
@@ -238,14 +239,22 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     public let steps: [String]
     /// The refs its `prove` retried compile-only tests at.
     public let proofBases: [String]
+    /// The commit `HEAD` was at when the run started; `nil` when its history line doesn't say.
+    public let headCommit: String?
+    /// Whether the run started on a tree with uncommitted changes; `nil` when its history line
+    /// doesn't say.
+    public let dirty: Bool?
 
     public init(
-      tier: CheckTier?, verdict: Verdict, steps: [String] = [], proofBases: [String] = []
+      tier: CheckTier?, verdict: Verdict, steps: [String] = [], proofBases: [String] = [],
+      headCommit: String? = nil, dirty: Bool? = nil
     ) {
       self.tier = tier
       self.verdict = verdict
       self.steps = steps
       self.proofBases = proofBases
+      self.headCommit = headCommit
+      self.dirty = dirty
     }
 
     /// Whether the run proved and mutated the change: `ready` always does, a lower tier only
@@ -265,7 +274,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     public init(record: RunHistoryRecord) {
       self.init(
         tier: Self.tier(ofCommand: record.command), verdict: record.verdict,
-        steps: record.steps ?? [], proofBases: record.proofBases ?? [])
+        steps: record.steps ?? [], proofBases: record.proofBases ?? [],
+        headCommit: record.headCommit, dirty: record.dirty)
     }
 
     /// The tier of a run history `command` such as `check push`; `nil` for any other command.
@@ -279,6 +289,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let branchExists: Bool
   /// Keyed by each commit exactly as the return names it.
   public let commits: [String: CommitState]
+  /// The full sha of the return's last commit, the one its gate must have run at; `nil` when the
+  /// return names none or it names no commit in this repository.
+  public let lastCommit: String?
   /// `nil` when the return names no gate run or the run store has none by that id.
   public let gateRun: GateRun?
   /// The tier the task had to pass: the preset's fixed tier, or the ledger's when it defers.
@@ -313,11 +326,12 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
     taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil,
-    testBuild: ProofBaseTestBuild? = nil
+    testBuild: ProofBaseTestBuild? = nil, lastCommit: String? = nil
   ) {
     self.branch = branch
     self.branchExists = branchExists
     self.commits = commits
+    self.lastCommit = lastCommit
     self.gateRun = gateRun
     self.taskGate = taskGate
     self.taskStatus = taskStatus
@@ -641,6 +655,7 @@ public enum TaskReturnCheck {
               + "gate runs `swiftgate check --tier <task gate> --base main --\(step.rawValue)`")
         }
       }
+      findings += staleGateFindings(gate, run, evidence)
       if !(run.tier.map { covers($0, evidence.taskGate) } ?? false) {
         findings.append(
           .init(
@@ -654,6 +669,43 @@ public enum TaskReturnCheck {
         .init(
           rule: .gateRedOutcomeIsGreen,
           message: "a gate-red return cites gate run \(gate.runID), which is GREEN"))
+    }
+    return findings
+  }
+
+  /// A green gate vouches only for the tree it ran on: the return's last commit, with nothing
+  /// uncommitted beside it. Otherwise the merge takes code no gate ran over. A history line that
+  /// doesn't say counts against the run.
+  private static func staleGateFindings(
+    _ gate: TaskReturn.Gate, _ run: TaskReturnEvidence.GateRun, _ evidence: TaskReturnEvidence
+  ) -> [TaskReturnFinding] {
+    var findings: [TaskReturnFinding] = []
+    if let last = evidence.lastCommit, run.headCommit != last {
+      findings.append(
+        .init(
+          rule: .staleGate,
+          message:
+            "gate run \(gate.runID) ran at "
+            + (run.headCommit.map { "commit \($0)" } ?? "a commit its history line doesn't name")
+            + ", not the return's last commit \(last); run the task gate again at \(last) and "
+            + "cite that run"))
+    }
+    switch run.dirty {
+    case false?: break
+    case true?:
+      findings.append(
+        .init(
+          rule: .staleGate,
+          message:
+            "gate run \(gate.runID) ran on a tree with uncommitted changes, so it gated code the "
+            + "branch doesn't hold; commit, then run the task gate again on the clean tree"))
+    case nil:
+      findings.append(
+        .init(
+          rule: .staleGate,
+          message:
+            "gate run \(gate.runID)'s history line doesn't record whether its tree was clean; run "
+            + "the task gate again with this swiftgate and cite that run"))
     }
     return findings
   }

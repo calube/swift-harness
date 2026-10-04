@@ -120,6 +120,8 @@ public enum BuildMetrics {
         lastEventAt = later(lastEventAt, undo.at)
       case .gate(let gate):
         lastEventAt = later(lastEventAt, gate.at)
+      case .returnCheck(let check):
+        lastEventAt = later(lastEventAt, check.at)
       }
     }
 

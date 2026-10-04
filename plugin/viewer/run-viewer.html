@@ -8,56 +8,79 @@
 </head>
 <body>
 <div class="wrap">
-  <section class="panel" aria-label="Run summary">
+  <header class="topbar" id="topbar">
     <div class="head">
       <h1 id="title">Run</h1>
       <span class="chip plain" id="state"></span>
-      <span class="chip plain">Report</span>
+      <span class="chip plain" id="mode">Report</span>
     </div>
-    <div class="head"><div class="meta mono" id="meta"></div></div>
-    <div class="stats" id="stats"></div>
-  </section>
+  </header>
 
-  <section class="panel" aria-label="Plan graph" data-module="graph" hidden></section>
-  <section class="panel" aria-label="Board" data-module="board" hidden></section>
+  <div class="tabs" role="tablist" aria-label="Report sections" id="tabs"></div>
 
-  <section class="panel" aria-label="Timeline">
-    <div class="head" style="justify-content:space-between">
-      <h2>Timeline</h2>
-      <div class="tl-controls">
-      <div class="zoom" role="group" aria-label="Timeline zoom" id="zoom">
-        <button type="button" data-z="1" aria-pressed="true">1x</button>
-        <button type="button" data-z="2" aria-pressed="false">2x</button>
-        <button type="button" data-z="4" aria-pressed="false">4x</button>
-      </div>
-      <div class="legend">
-        <span style="--c:var(--bar-phase)">phase</span>
-        <span style="--c:var(--bar-task)">task</span>
-        <span style="--c:var(--bar-worker)">worker</span>
-        <span style="--c:var(--bar-review)">review</span>
-        <span style="--c:var(--bar-gate)">gate GREEN</span>
-        <span style="--c:var(--bar-red)">gate RED</span>
-        <span style="--c:var(--bar-merge)">merge</span>
-      </div>
-      </div>
-    </div>
-    <div class="tl-scroll" id="tl-scroll" tabindex="0" aria-label="Timeline, scrolls horizontally"><div class="tl" id="tl"></div></div>
-  </section>
-
-  <div class="pop" id="pop" role="dialog" aria-modal="false" aria-labelledby="pop-title" hidden>
-    <div class="pop-head"><h3 id="pop-title"></h3><button type="button" class="pop-close" aria-label="Close span details">×</button></div>
-    <div id="pop-body" style="display:grid;gap:10px"></div>
+  <div class="tab-panel" data-tab="overview" hidden>
+    <section class="panel" aria-label="Run summary" id="summary">
+      <div class="head"><div class="meta mono" id="meta"></div></div>
+      <div class="stats" id="stats"></div>
+    </section>
+    <section class="panel" aria-label="Tasks">
+      <div class="head" style="justify-content:space-between"><h2>Tasks</h2><div class="tags" id="lane-counts"></div></div>
+      <div class="tbl-scroll"><table id="task-table"></table></div>
+    </section>
   </div>
 
-  <div class="cols">
+  <div class="tab-panel" data-tab="timeline" hidden>
+    <section class="panel" aria-label="Timeline">
+      <div class="head" style="justify-content:space-between">
+        <h2>Timeline</h2>
+        <div class="tl-controls">
+        <div class="zoom" role="group" aria-label="Timeline zoom" id="zoom">
+          <button type="button" data-z="1" aria-pressed="true">1x</button>
+          <button type="button" data-z="2" aria-pressed="false">2x</button>
+          <button type="button" data-z="4" aria-pressed="false">4x</button>
+        </div>
+        <div class="legend">
+          <span style="--c:var(--bar-phase)">phase</span>
+          <span style="--c:var(--bar-task)">task</span>
+          <span style="--c:var(--bar-worker)">worker</span>
+          <span style="--c:var(--bar-review)">review</span>
+          <span style="--c:var(--bar-gate)">gate GREEN</span>
+          <span style="--c:var(--bar-red)">gate RED</span>
+          <span style="--c:var(--bar-merge)">merge</span>
+        </div>
+        </div>
+      </div>
+      <div class="tl-scroll" id="tl-scroll" tabindex="0" aria-label="Timeline, scrolls horizontally"><div class="tl" id="tl"></div></div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-tab="board" hidden>
+    <section class="panel" aria-label="Board" data-module="board" hidden></section>
+  </div>
+
+  <div class="tab-panel" data-tab="graph" hidden>
+    <section class="panel" aria-label="Plan graph" data-module="graph" hidden></section>
+  </div>
+
+  <div class="tab-panel" data-tab="spec" hidden>
     <section class="panel" aria-label="Spec mapping">
       <h2>Spec to tasks, commits and gates</h2>
-      <div class="tbl-scroll"><table id="spec"></table></div>
+      <div class="tbl-scroll"><table id="spec-table"></table></div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-tab="gates" hidden>
+    <section class="panel" aria-label="Gate runs">
+      <h2>Gate runs</h2>
+      <div id="gate-list" style="display:grid;gap:8px"></div>
     </section>
     <section class="panel" aria-label="Proof">
       <h2>Proof for each changed test</h2>
       <div class="tbl-scroll"><table id="proof"></table></div>
     </section>
+  </div>
+
+  <div class="tab-panel" data-tab="tokens" hidden>
     <section class="panel" aria-label="Tokens and time">
       <h2>Tokens and time</h2>
       <div class="tok-legend">
@@ -66,14 +89,15 @@
         <span style="--c:var(--warn)">cache write</span>
         <span style="--c:var(--ok)">output</span>
       </div>
-      <div id="tokens" style="display:grid;gap:8px"></div>
+      <div id="token-rows" style="display:grid;gap:8px"></div>
       <h2 style="margin-top:6px">By role</h2>
       <div id="roles" style="display:grid;gap:8px"></div>
     </section>
-    <section class="panel" aria-label="Gate runs">
-      <h2>Gate runs</h2>
-      <div id="gates" style="display:grid;gap:8px"></div>
-    </section>
+  </div>
+
+  <div class="pop" id="pop" role="dialog" aria-modal="false" aria-labelledby="pop-title" hidden>
+    <div class="pop-head"><h3 id="pop-title"></h3><button type="button" class="pop-close" aria-label="Close details">×</button></div>
+    <div id="pop-body" style="display:grid;gap:10px"></div>
   </div>
 
   <footer id="foot"></footer>

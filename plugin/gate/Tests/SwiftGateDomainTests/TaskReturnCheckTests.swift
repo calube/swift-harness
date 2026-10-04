@@ -27,7 +27,7 @@ struct TaskReturnCheckTests {
     func rules(ran steps: [String]) -> [TaskReturnFinding.Rule] {
       let evidence = TaskReturnEvidence(
         branch: "p/t", branchExists: true, commits: ["abc1": .onBranch],
-        gateRun: .init(tier: .fast, verdict: .green, steps: steps), taskGate: .fast,
+        gateRun: .init(tier: .fast, verdict: .green, steps: steps, dirty: false), taskGate: .fast,
         taskStatus: nil, taskGateStepsRequired: true)
       return TaskReturnCheck.findings(taskReturn, evidence: evidence).map(\.rule)
     }
@@ -60,7 +60,8 @@ struct TaskReturnCheckTests {
     }
     func evidence(
       branchExists: Bool = true, commit: TaskReturnEvidence.CommitState = .onBranch,
-      run: TaskReturnEvidence.GateRun? = .init(tier: .push, verdict: .green, steps: ["app-build"]),
+      run: TaskReturnEvidence.GateRun? = .init(
+        tier: .push, verdict: .green, steps: ["app-build"], dirty: false),
       status: TaskStatusReport? = nil
     ) -> TaskReturnEvidence {
       TaskReturnEvidence(
@@ -81,13 +82,15 @@ struct TaskReturnCheckTests {
     #expect(rules(taskReturn(.reviewBlocked, gate: nil), evidence()) == [.gateMissing])
     #expect(rules(taskReturn(.readyToMerge, review: nil), evidence()) == [.reviewMissing])
     #expect(
-      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green)))
+      rules(
+        taskReturn(.readyToMerge), evidence(run: .init(tier: nil, verdict: .green, dirty: false)))
         == [
           .gateTierMismatch, .gateMissingStep, .gateMissingStep, .gateMissingStep,
           .gateBelowTaskGate,
         ])
     #expect(
-      rules(taskReturn(.readyToMerge), evidence(run: .init(tier: .push, verdict: .green)))
+      rules(
+        taskReturn(.readyToMerge), evidence(run: .init(tier: .push, verdict: .green, dirty: false)))
         == [.gateMissingStep])
     #expect(
       rules(

@@ -119,6 +119,7 @@ const GRAPH = `(() => {
   }
 })()`
 const DRAWER = "({ open: document.getElementById('drawer').classList.contains('open'), id: document.getElementById('dr-id').textContent, body: document.getElementById('dr-body').textContent, active: document.activeElement.dataset ? document.activeElement.dataset.task ?? null : null })"
+const POPOVER = "({ hidden: document.getElementById('pop').hidden, title: document.getElementById('pop-title').textContent, body: document.getElementById('pop-body').textContent, active: document.activeElement.dataset ? document.activeElement.dataset.task ?? null : null })"
 const focusNode = (id) => `(() => { const n = document.querySelector('[data-module="graph"] .gnode[data-task="${id}"]'); if (!n) return false; n.focus(); return document.activeElement === n })()`
 const clickNode = (id) => `(() => { const n = document.querySelector('[data-module="graph"] .gnode[data-task="${id}"] .box'); if (!n) return false; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); return true })()`
 
@@ -138,11 +139,16 @@ const pageTests = {
     assert.deepEqual(page.errors, [])
   },
 
-  async 'Enter on a focused node opens the task drawer listing its write set, and Escape returns focus to the node — catches a node the keyboard can\'t open'() {
+  async 'Enter on a focused node opens its task popover, and Open task the drawer listing its write set; Escape returns focus to the node — catches a node the keyboard can\'t open'() {
     assert.ok(await page.evaluate(focusNode('core')), 'the core node takes no focus')
     await page.press('Enter')
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false, 'Enter on a node opens no popover')
+    assert.equal(pop.title, 'core')
+    assert.match(pop.body, /merged/)
+    await page.evaluate("document.querySelector('#pop [data-open-task]').click()")
     let drawer = await page.evaluate(DRAWER)
-    assert.equal(drawer.open, true, 'Enter on a node does not open the drawer')
+    assert.equal(drawer.open, true, 'Open task does not open the drawer')
     assert.equal(drawer.id, 'core')
     assert.match(drawer.body, /Core\/A\.swift/)
     assert.match(drawer.body, /Core\/B\.swift/)
@@ -152,11 +158,18 @@ const pageTests = {
     assert.equal(drawer.active, 'core', 'focus does not return to the node')
   },
 
-  async 'a click on a node opens the drawer for its task — catches a click bound to the wrong node'() {
+  async 'a click on a node opens the popover for its task, and Space on a focused node too; Escape closes it — catches a click bound to the wrong node'() {
     assert.ok(await page.evaluate(clickNode('docs')), 'no node for docs')
-    const drawer = await page.evaluate(DRAWER)
-    assert.equal(drawer.open, true)
-    assert.equal(drawer.id, 'docs')
+    let pop = await page.evaluate(POPOVER)
+    assert.equal(pop.hidden, false)
+    assert.equal(pop.title, 'docs')
+    assert.equal((await page.evaluate(DRAWER)).open, false, 'a click opens the drawer, not the popover')
+    await page.press('Escape')
+    assert.equal((await page.evaluate(POPOVER)).hidden, true)
+    assert.ok(await page.evaluate(focusNode('ui')))
+    await page.press('Space')
+    pop = await page.evaluate(POPOVER)
+    assert.equal(pop.title, 'ui', 'Space on a node opens no popover')
     await page.press('Escape')
   },
 
@@ -215,7 +228,7 @@ if (!findChrome()) {
   const built = writePage()
   try {
     await page.viewport(1280, 900)
-    await page.load(built.url)
+    await page.load(built.url + '#graph')
     for (const [name, test] of Object.entries(pageTests)) await report(name, test)
   } finally {
     await browser.close()

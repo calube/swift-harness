@@ -262,7 +262,7 @@ public struct MissFindings: Sendable, Equatable {
                 plan: run.plan, buildRunID: run.runID, task: id, greenRunID: vouch.greenRunID,
                 redRunID: gate.runID, rules: Self.rulesAbove(red, vouch.green), paths: inside))
           }
-        case .transition:
+        case .transition, .returnCheck:
           continue
         }
       }

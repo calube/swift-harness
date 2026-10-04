@@ -158,7 +158,8 @@ struct CalibrateBuildTests {
       steps: fixer || misstep == .gateWithoutProof
         ? nil
         : misstep == .gateWithoutTaskGateSteps
-          ? ["prove", "mutate"] : ["prove", "mutate", "impact", "coverage", "app-build"])
+          ? ["prove", "mutate"] : ["prove", "mutate", "impact", "coverage", "app-build"],
+      headCommit: head, dirty: false)
 
     let task = String(branch.split(separator: "/").last ?? "")
     let taskReturn = TaskReturn(

@@ -1,6 +1,7 @@
 // Writes a real `swiftgate report --html` of the captured build run in a scratch repository and
 // loads it in headless Chrome: the page is the report's only file, every region draws a row for
-// each item the embedded view holds, and the console holds no error.
+// each item the embedded view holds, every tab draws, its badges match the view, and the console
+// holds no error.
 // Run: node tests/run_viewer_report_test.mjs   (SWIFTGATE_BIN=plugin/bin/swiftgate to use the shim)
 // Regressions caught: key drift between the Swift encoder and the page, a report that needs a
 // sibling file or the network to draw, and a red span or blocked task with no failure context.
@@ -95,11 +96,11 @@ const REGIONS = `(() => ({
   meta: document.querySelectorAll('#meta span').length,
   stats: document.querySelectorAll('#stats .stat').length,
   bars: document.querySelectorAll('#tl .bar').length,
-  spec: document.querySelectorAll('#spec tbody tr').length,
+  spec: document.querySelectorAll('#spec-table tbody tr').length,
   proof: document.querySelectorAll('#proof tbody tr').length,
-  tokens: document.querySelectorAll('#tokens .tok-row').length,
+  tokens: document.querySelectorAll('#token-rows .tok-row').length,
   roles: document.querySelectorAll('#roles .tok-row').length,
-  gates: document.querySelectorAll('#gates .gate').length,
+  gates: document.querySelectorAll('#gate-list .gate').length,
   errors: document.body.dataset.errors,
 }))()`
 
@@ -135,7 +136,8 @@ async function renderReport(run, act) {
     const text = await page.evaluate('document.body.innerText')
     const barIDs = await page.evaluate("[...new Set([...document.querySelectorAll('#tl .bar')].map(bar => bar.dataset.id))]")
     const acted = act ? await act(page) : null
-    return { regions, view, text, barIDs, html, acted, errors: [...page.errors] }
+    const tabs = await walkTabs(page)
+    return { regions, view, text, barIDs, html, acted, tabs, errors: [...page.errors] }
   } finally {
     await close()
   }
@@ -145,6 +147,7 @@ async function renderReport(run, act) {
 const POPOVER = `(() => { const p = document.getElementById('pop');
   return { hidden: p.hidden, text: p.innerText, active: document.activeElement.dataset.id ?? null } })()`
 async function focusThenDrawer(page, id, task) {
+  await page.evaluate(`document.querySelector('[role=tab][data-tab="timeline"]').click()`)
   await page.evaluate(`document.querySelector('#tl .bar[data-id="${id}"]').focus()`)
   const popover = await page.evaluate(POPOVER)
   await page.evaluate(`window.runViewer.openTaskDrawer(${JSON.stringify(task)})`)
@@ -152,7 +155,71 @@ async function focusThenDrawer(page, id, task) {
   return { popover, drawer }
 }
 
-function assertRendered({ regions, view, text, errors }, run, keys) {
+const TABS = ['overview', 'timeline', 'board', 'graph', 'spec', 'gates', 'tokens']
+// Clicks each tab in turn and reads what it shows: the panels on screen, their height and text,
+// the errors so far, and every tab's badges by key.
+async function walkTabs(page) {
+  const shown = {}
+  for (const id of TABS) {
+    shown[id] = await page.evaluate(`(() => {
+      const tab = document.querySelector('[role=tab][data-tab="${id}"]')
+      if (!tab || tab.hidden) return null
+      tab.click()
+      const panels = [...document.querySelectorAll('[role=tabpanel]')].filter((p) => !p.hidden && p.offsetHeight > 0)
+      return { panels: panels.map((p) => p.dataset.tab), height: panels[0]?.offsetHeight ?? 0, text: panels[0]?.innerText.trim().length ?? 0,
+        selected: tab.getAttribute('aria-selected'), errors: document.body.dataset.errors }
+    })()`)
+  }
+  const badges = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('[role=tab]')].map((t) => [t.dataset.tab,
+    Object.fromEntries([...t.querySelectorAll('.badge')].map((b) => [b.dataset.key, Number(b.dataset.n)]))]))`)
+  return { shown, badges }
+}
+
+// The badge keys checked on each tab, and the counts they should carry, read straight from the
+// embedded view.
+const CHECKED = { overview: ['halted'], board: ['blocked', 'active'], spec: ['uncovered'], gates: ['red'], tokens: ['pending'], timeline: ['failed'] }
+function expectedBadges(view) {
+  const open = view.halts.filter((h) => h.answer == null && h.waitMs == null)
+  const halted = new Set(open.map((h) => h.task))
+  const n = (key, count) => (count ? { [key]: count } : {})
+  return {
+    overview: n('halted', open.length),
+    board: { ...n('blocked', view.tasks.filter((t) => ['blocked', 'needs-replan', 'abandoned'].includes(t.status) || halted.has(t.id)).length),
+      ...n('active', view.tasks.filter((t) => t.status === 'in-progress' && !halted.has(t.id)).length) },
+    spec: n('uncovered', view.spec.filter((q) => q.tasks.length === 0).length),
+    gates: n('red', view.gates.filter((g) => g.verdict === 'RED').length),
+    tokens: n('pending', view.tasks.filter((t) => t.tokens == null).length),
+    timeline: n('failed', view.spans.filter((x) => ['red', 'halted'].includes(x.outcome) && !['tier', 'step'].includes(x.phase)).length),
+  }
+}
+
+// Clicks a task's board card and reads the task popover it opens.
+async function cardPopover(page, task) {
+  await page.evaluate(`document.querySelector('[role=tab][data-tab="board"]').click()`)
+  await page.evaluate(`document.querySelector('.card[data-task="${task}"]').click()`)
+  const read = await page.evaluate(`({ hidden: document.getElementById('pop').hidden, title: document.getElementById('pop-title').textContent, text: document.getElementById('pop').innerText, cardText: document.querySelector('.card[data-task="${task}"]').innerText })`)
+  await page.press('Escape')
+  return read
+}
+
+// Every tab draws its panel alone with no error, and its badges carry the view's counts.
+function assertTabs({ tabs: { shown, badges }, view }) {
+  for (const id of TABS) {
+    assert.ok(shown[id], `the ${id} tab is missing`)
+    assert.deepEqual(shown[id].panels, [id], `the ${id} tab shows ${JSON.stringify(shown[id].panels)}`)
+    assert.ok(shown[id].height > 0 && shown[id].text > 0, `the ${id} tab is blank`)
+    assert.equal(shown[id].selected, 'true')
+    assert.equal(shown[id].errors, '0', `the ${id} tab throws`)
+  }
+  for (const [tab, counts] of Object.entries(expectedBadges(view))) {
+    const shownCounts = Object.fromEntries(Object.entries(badges[tab]).filter(([key]) => CHECKED[tab].includes(key)))
+    assert.deepEqual(shownCounts, counts, `the ${tab} tab's badges`)
+  }
+}
+
+function assertRendered(rendered, run, keys) {
+  const { regions, view, text, errors } = rendered
+  assertTabs(rendered)
   for (const key of keys) {
     assert.ok(regions[key] > 0, `region ${key} is empty: ${JSON.stringify(regions)}`)
   }
@@ -168,7 +235,7 @@ function assertRendered({ regions, view, text, errors }, run, keys) {
 const REGION_KEYS = ['meta', 'stats', 'bars', 'spec', 'tokens', 'roles', 'gates']
 
 const tests = {
-  async 'the report of the captured run is 1 file that draws a row for each item in every region with 0 console errors — catches key drift between the encoder and the page'() {
+  async 'the report of the captured run is 1 file that draws a row for each item in every region and every tab, whose badges carry the view\'s counts, with 0 console errors — catches key drift between the encoder and the page, a blank tab or a drifting badge'() {
     // The first captured run predates proof recording, so its proof table is checked against the data.
     assertRendered(await renderReport(RUNS.first), RUNS.first, REGION_KEYS)
   },
@@ -204,11 +271,20 @@ const tests = {
   async 'a brownfield run\'s blocked task reads why on its task span and drawer, and a worker\'s RED gate its rule at file:line — catches a blocked task whose spans all read ok'() {
     const task = 'share-view-limit-store'
     const rendered = await renderReport(RUNS.blocked, async (page) => ({
+      card: await cardPopover(page, task),
       task: await focusThenDrawer(page, `task:${task}`, task),
       gate: await focusThenDrawer(page, 'gate:20261004T124744Z-9d7ec113', task),
     }))
     assertRendered(rendered, RUNS.blocked, ['meta', 'stats', 'bars', 'gates'])
-    const { task: blocked, gate } = rendered.acted
+    const { task: blocked, gate, card } = rendered.acted
+    assert.equal(card.hidden, false, 'the board card opens no task popover')
+    assert.equal(card.title, task)
+    // A block and a RED worker gate: the heading is the drawer's, and both causes show.
+    assert.match(card.text, /why it failed/i, 'the task popover carries no failure context')
+    assert.match(card.text, /no return of it was stored/)
+    assert.match(card.text, /neutral\.lint/)
+    assert.doesNotMatch(card.text, /null|undefined/, 'a brownfield task with no model reads null')
+    assert.doesNotMatch(card.cardText, /null/, 'the board card of a task with no model reads null')
     assert.equal(blocked.popover.hidden, false)
     assert.match(blocked.popover.text, /why it stopped/i)
     assert.match(blocked.popover.text, /stopped\s+at \d\d:\d\d UTC: no return of it was stored/)

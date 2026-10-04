@@ -97,16 +97,46 @@ enum PlanLintRun {
       }
     }
 
+    let validation: (table: ValidationTable, path: String)?
+    switch readValidation(store) {
+    case .success(let read): validation = read
+    case .failure(let refusal): return refusal.result
+    }
     do throws(ReportContractViolation) {
       let findings = try PlanLintGraph.allFindings(
         design: design, designPath: planDesign.design, ledger: ledger,
         ledgerPath: store.plan.ledgerFile, graph: graph, workerPacks: workerPacks,
         bounds: config.plan)
+      // An owned repository is an iOS app, so every flow row has an app to drive.
+      let validationFindings =
+        try validation.map { read throws(ReportContractViolation) in
+          try PlanLintValidation.findings(
+            table: read.table, requirements: design.requirements.map(\.id),
+            taskIDs: Set(ledger.tasks.map(\.id)), hasIOSArea: true, file: read.path)
+        } ?? []
       return Result(
-        outcome: .checked(RuleRunResult(findings: moved + findings, allowances: [])),
+        outcome: .checked(
+          RuleRunResult(findings: moved + findings + validationFindings, allowances: [])),
         packFailures: packFailures, notes: sources.notes)
     } catch {
       return blocked("plan-lint: \(error)")
+    }
+  }
+
+  /// The plan's `validation.json`, or `nil` when it has none: `/swift-harness:plan` writes it
+  /// beside the ledger. A file that is there but unreadable or malformed stops the lint.
+  private static func readValidation(_ store: PlanStateStore)
+    -> Swift.Result<(table: ValidationTable, path: String)?, Refusal>
+  {
+    let path = store.plan.directory + "/" + ValidationTable.fileName
+    guard FileManager.default.fileExists(atPath: path) else { return .success(nil) }
+    guard let data = FileManager.default.contents(atPath: path) else {
+      return .failure(Refusal(result: blocked("can't read `\(path)`")))
+    }
+    do throws(ValidationTableJSONError) {
+      return .success((try ValidationTableJSON.decode(data), path))
+    } catch {
+      return .failure(Refusal(result: blocked("`\(path)` is malformed: \(error)")))
     }
   }
 

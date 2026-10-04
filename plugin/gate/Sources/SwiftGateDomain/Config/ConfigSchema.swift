@@ -16,7 +16,7 @@ public enum ConfigSchema {
       allowed: [
         "schema", "xcode", "app_scheme", "packages", "simulator", "pyramid", "flows", "mutation",
         "budgets", "clients", "modules", "judge", "docs", "plan", "build", "harness", "exclude",
-        "telemetry",
+        "telemetry", "scenarios", "qa",
       ])
 
     if let schema = reader.integer(root, "schema", at: "", required: true),
@@ -42,6 +42,8 @@ public enum ConfigSchema {
     let buildPresets = readBuild(&reader, root, profile: .owned)
     let profile = readHarness(&reader, root)
     let telemetry = readTelemetry(&reader, root)
+    let scenarios = readScenarios(&reader, root)
+    let qa = readQA(&reader, root)
 
     // A key that failed to read was replaced by a placeholder; rule violations on that placeholder
     // (or anything under it) would only restate the read issue.
@@ -55,7 +57,7 @@ public enum ConfigSchema {
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      profile: profile, exclude: exclude
+      profile: profile, exclude: exclude, scenarios: scenarios, qa: qa
     ).filter { !restatesReadIssue($0) }
     let issues = reader.issues + invariantIssues
     if !issues.isEmpty { throw ConfigValidationError(issues: issues) }
@@ -64,7 +66,7 @@ public enum ConfigSchema {
       xcode: xcode, appScheme: appScheme, packages: packages, simulator: simulator,
       pyramid: pyramid, flows: flows, mutation: mutation, budgets: budgets, clients: clients,
       modules: modules, judge: judge, docs: docs, plan: plan, buildPresets: buildPresets,
-      profile: profile, exclude: exclude, telemetry: telemetry)
+      profile: profile, exclude: exclude, telemetry: telemetry, scenarios: scenarios, qa: qa)
   }
 
   private static func readSimulator(_ reader: inout Reader, _ root: [String: ConfigValue])
@@ -105,6 +107,26 @@ public enum ConfigSchema {
         name: reader.string(table, "name", at: path, required: true) ?? "",
         reason: reader.string(table, "reason", at: path, required: true) ?? "")
     }
+  }
+
+  private static func readScenarios(_ reader: inout Reader, _ root: [String: ConfigValue])
+    -> [Scenario]
+  {
+    reader.tableArray(root, "scenarios", at: "").map { path, table in
+      reader.rejectUnknownKeys(in: table, at: path, allowed: ["name", "reason"])
+      return Scenario(
+        name: reader.string(table, "name", at: path, required: true) ?? "",
+        reason: reader.string(table, "reason", at: path, required: true) ?? "")
+    }
+  }
+
+  private static func readQA(_ reader: inout Reader, _ root: [String: ConfigValue]) -> QAConfig {
+    let path = "qa"
+    guard let table = reader.table(root, path, at: "") else { return QAConfig() }
+    reader.rejectUnknownKeys(in: table, at: path, allowed: ["session_timeout_minutes"])
+    return QAConfig(
+      sessionTimeoutMinutes: reader.integer(table, "session_timeout_minutes", at: path)
+        ?? QAConfig.defaultSessionTimeoutMinutes)
   }
 
   private static func readMutation(_ reader: inout Reader, _ root: [String: ConfigValue])
@@ -349,13 +371,15 @@ public enum ConfigSchema {
     _ reader: inout Reader, _ table: [String: ConfigValue], at path: String,
     profile: RepositoryProfile
   ) -> BuildPreset {
-    reader.rejectUnknownKeys(
-      in: table, at: path,
-      allowed: [
-        "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
-        "time_budget_min", "stop_starts_before_min", "on_design_conflict", "task_proof",
-        "stall_min",
-      ])
+    var allowed: Set = [
+      "design_tier", "max_parallel", "review", "task_gate", "merge_gate", "worker_model",
+      "time_budget_min", "stop_starts_before_min", "on_design_conflict", "task_proof",
+      "stall_min",
+    ]
+    // A brownfield run validates each merge with `qa run` instead, so only an owned preset
+    // carries the key.
+    if profile == .owned { allowed.insert("sim_qa") }
+    reader.rejectUnknownKeys(in: table, at: path, allowed: allowed)
     let designTier: BuildPreset.DesignStep =
       readEnum(&reader, table, "design_tier", at: path) ?? .standard
     let review: BuildPreset.Review =
@@ -369,6 +393,8 @@ public enum ConfigSchema {
       readEnum(&reader, table, "on_design_conflict", at: path)
     let taskProof: BuildPreset.TaskProof =
       readProfiled(&reader, table, "task_proof", at: path, profile: profile) ?? .perTask
+    let simQA: BuildPreset.SimQA =
+      profile == .owned ? readEnum(&reader, table, "sim_qa", at: path) ?? .off : .off
     // With no design there is nothing to amend, so a conflict can only block. A brownfield plan
     // is its live PLAN.md, which the run amends itself, so it may answer `amend` with no design.
     if designTier == .none, profile == .owned, let readConflict, readConflict != .block {
@@ -385,7 +411,7 @@ public enum ConfigSchema {
       stopStartsBeforeMin: reader.integer(table, "stop_starts_before_min", at: path, required: true)
         ?? 0,
       onDesignConflict: readConflict ?? .amend, taskProof: taskProof,
-      stallMin: reader.integer(table, "stall_min", at: path))
+      stallMin: reader.integer(table, "stall_min", at: path), simQA: simQA)
   }
 
   /// `task_gate` isn't a plain closed enum: `"ledger"` and every ``CheckTier`` raw value are both

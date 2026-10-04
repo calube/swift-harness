@@ -90,6 +90,32 @@ struct GateRunEventsTests {
   }
 
   @Test(
+    "with telemetry off, a gate run's history line still records its head and whether its tree was dirty — catches check-return judging a run whose tree only the event store knew"
+  )
+  func historyRecordsDirtyWithTelemetryOff() async throws {
+    let repository = try ProbeRepository()
+    defer { repository.remove() }
+
+    for dirty in [true, false] {
+      try await GateRun.execute(
+        root: repository.root, format: .json, command: "check fast",
+        git: FakeGit(changed: [], mergeBase: "base", revisions: ["HEAD": Self.sha]),
+        checkTier: .fast, events: DisabledEventWriter(),
+        workingTree: FixedTree(tree: WorkingTreeState(treeHash: dirty ? nil : "tree", dirty: dirty))
+      ) { _ in
+        GateRunParts(
+          tiers: [
+            try TierResult(tier: .t0, verdict: .green, durationMilliseconds: 4, testCounts: nil)
+          ])
+      }
+    }
+
+    let records = try RunStore(worktreeRoot: repository.root).readHistory().records
+    #expect(records.map(\.dirty) == [true, false])
+    #expect(records.map(\.headCommit) == [Self.sha, Self.sha])
+  }
+
+  @Test(
     "a gate run records the tree it started on and each step its body timed, under its check tier — catches steps or tree state lost between the run and its record"
   )
   func stepsAndTree() async throws {

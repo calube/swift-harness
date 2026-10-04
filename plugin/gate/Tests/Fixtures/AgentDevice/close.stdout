@@ -1,0 +1,7 @@
+{
+  "success": true,
+  "data": {
+    "session": "swiftgate-capture",
+    "message": "Closed: swiftgate-capture"
+  }
+}

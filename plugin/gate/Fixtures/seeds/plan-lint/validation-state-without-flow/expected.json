@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "verdict": "red",
+  "ruleIDs": [
+    "plan-lint.validation-state-without-flow"
+  ]
+}

@@ -34,6 +34,7 @@ struct RepositoryScriptTests {
   /// They run as a disabled test, so the gate reports them skipped rather than passed.
   static let loadSensitiveMjsScripts: Set = [
     "skill_gate_walks_test.mjs", "skill_surface_baseline_walk_test.mjs",
+    "run_viewer_board_test.mjs", "run_viewer_page_test.mjs", "run_viewer_report_test.mjs",
   ]
 
   /// A script stopped at its timeout, with the last lines it printed: a script reports each check

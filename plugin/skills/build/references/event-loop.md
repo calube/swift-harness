@@ -169,6 +169,7 @@ is a red gate, and the fixer gets only the new findings.
 | `build merge` exits 1 with `status` `conflicted` | `main` is untouched, and the fix worktree is cut |
 | the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main` and cuts the fix worktree |
 | `build merge` exits 1 with another `reason` | halt: `main-moved`, `dirty-checkout` and `not-on-main` need the user; `already-merged` means the ledger lags, so run `ledger set … done` and go on |
+| `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 2 | halt |
 
 An `--undo` that exits non-zero halts: `main` may still hold the red merge. Quote its `reason`.
@@ -189,7 +190,9 @@ Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and g
   fix worktree measures from where `main`'s gates do;
 - the absolute path `$SG` holds, the plugin under test's `bin/swiftgate`, to run its gate and every
   other `swiftgate` command through: a `swiftgate` on `PATH` may be another install, whose runs no
-  store of this build holds.
+  store of this build holds;
+- that the gate run it returns must start at its last commit on a clean tree: commit first, then
+  gate. `check-return --fix` rejects any other run as `build-return.stale-gate`.
 
 When it returns, end the span by its outcome: `"$SG" events span end <span> --outcome ok` for
 `ready-to-merge`, else `"$SG" events span end <span> --outcome red`.
@@ -205,7 +208,9 @@ Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
 
 - The check passes and `outcome` is `ready-to-merge`:
-  `"$SG" build merge <slug> <task> --fix --session <session> --json`, then the merge gate on
+  `"$SG" build merge <slug> <task> --fix --session <session> --json`, as its own command after the
+  check exits 0 (it refuses a fix whose newest `--fix` check isn't GREEN at the fix branch's tip),
+  then the merge gate on
   `main` again, recorded with `build record-gate --kind merge --task <task>` like the first.
   GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
   `worktree remove`, remove the fix worktree and branch too:

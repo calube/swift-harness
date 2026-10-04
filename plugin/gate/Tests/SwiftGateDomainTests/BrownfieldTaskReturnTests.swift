@@ -15,7 +15,7 @@ struct BrownfieldTaskReturnTests {
     .deletingLastPathComponent()
 
   @Test(
-    "a GREEN slice return from the memos trial, with its own gate run, passes check-return under the brownfield preset — catches a brownfield slice return rejected for impact, coverage or app-build",
+    "a GREEN slice return from the memos trial, with its own gate run, meets the brownfield preset's steps and fails only for its history line not recording the dirty flag — catches a brownfield slice return rejected for impact, coverage or app-build",
     arguments: ["share-view-limit-store", "share-view-limit-web"])
   func capturedSliceReturnPasses(_ task: String) throws {
     let taskReturn = try TaskReturnJSON.decode(
@@ -34,7 +34,9 @@ struct BrownfieldTaskReturnTests {
       taskStatus: nil, proofRequired: false, reviewRequired: true,
       taskGateStepsRequired: true)
 
-    #expect(TaskReturnCheck.findings(taskReturn, evidence: evidence) == [])
+    // These history lines predate the dirty flag, so each run's tree is unknown and only that
+    // fails: no step the brownfield tier doesn't run is asked of it.
+    #expect(TaskReturnCheck.findings(taskReturn, evidence: evidence).map(\.rule) == [.staleGate])
   }
 
   @Test(

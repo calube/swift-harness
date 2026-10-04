@@ -214,7 +214,9 @@ private struct TestBuildScenario {
     try RunStore(worktreeRoot: worktree).record(
       report, finishedAt: Self.finishedAt, command: "check push",
       steps: ["prove", "mutate", "impact", "coverage", "app-build"],
-      proofBases: [surface] + (stub.map { [$0] } ?? []))
+      proofBases: [surface] + (stub.map { [$0] } ?? []),
+      headCommit: try await Self.git(["rev-parse", "HEAD"], in: worktree, runner: runner),
+      dirty: false)
     let taskReturn = TaskReturn(
       task: task, outcome: .readyToMerge, commits: commits,
       gate: .init(tier: .push, verdict: .green, runID: runID),

@@ -511,6 +511,8 @@ const brief = () =>
     `Swiftgate: ${SG}, the plugin under test. Run every gate command through that path, never a bare \`swiftgate\`: ` +
       "the one on PATH may be another install, whose gate code and run store aren't this build's.",
     ...taskGateLines(),
+    'Cited gate: the run you return as "gate" must start at your last commit on a clean tree, so commit everything first and then run the task gate. ' +
+      '`build check-return` rejects a run started at an earlier commit or on uncommitted changes (build-return.stale-gate).',
     `Tests to turn green: ${A.tests.length ? A.tests.join(', ') : '(none listed)'}.`,
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')

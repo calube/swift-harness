@@ -1,0 +1,4 @@
+Error (COMMAND_FAILED): wait timed out for text: No such text anywhere. Current surface: 0, Increment, Decrement, Cat fact.
+Hint: Retry with --debug and inspect diagnostics log for details.
+Diagnostic ID: muu3bza8-5c9dea1d
+Diagnostics Log: /HOME/.agent-device/sessions/swiftgate-capture/requests/d6eb2e5be695d606.ndjson

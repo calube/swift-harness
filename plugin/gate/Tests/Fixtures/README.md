@@ -218,6 +218,70 @@ and deletes only the devices it made.
 - `simctl create` prints only the new UDID. The device list gives each device's
   `deviceTypeIdentifier`.
 
+## AgentDevice
+
+Captured on 2026-10-04 with `agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. The pin
+is `AgentDevicePin.version`; install it with:
+
+```
+npm i -g agent-device@0.21.18
+```
+
+Build the app with `(cd examples/SampleApp && ../../plugin/bin/swiftgate test --tier t3)`, then run
+`plugin/gate/Tests/Fixtures/AgentDevice/capture.sh
+examples/SampleApp/.harness/derived-data/app-SampleApp/Build/Products/Debug-iphonesimulator/SampleApp.app`
+from the repository root. The script creates its own `agent-device-capture-<pid>` iPhone 17 device,
+installs the app, and deletes the device on exit. Each `AgentDevice/<call>.{stdout,stderr,status}`
+is one real call against session `swiftgate-capture` on that device; the scratch path is replaced
+with `/SCRATCH` and `$HOME` with `/HOME`. The same script writes
+`plugin/qa/agent-device-schemas-0.21.18.json`: the MCP server's `initialize` `serverInfo` and its
+`tools/list` `tools`, from `agent-device mcp` over stdio.
+
+| Files | Call |
+|---|---|
+| `version` | `--version` |
+| `open`, `open-launch-args.txt` | `open com.example.SampleApp --udid <udid> --session <session> --launch-args -harness-scenario --launch-args live --json`, then the app process's argv from `ps` |
+| `snapshot`, `screenshot`, `appstate`, `session-list` | `snapshot`, `screenshot <path>`, `appstate`, `session list`, each with `--udid <udid> --session <session> --json` |
+| `wait-text-absent`, `wait-text-absent-plain` | `wait text "No such text anywhere" 2000`, with and without `--json` |
+| `open-device-in-use` | `open` on the same device from session `<session>-other` |
+| `open-unknown-udid` | `open` with UDID `00000000-0000-0000-0000-000000000000` |
+| `batch-pass`, `batch-fail`, `batch-invalid`, `batch-record` | `batch --steps-file <file> --on-error stop`: a passing `wait`, `press`, `is`, `snapshot` flow; a flow whose second step waits for absent text; a `wait` step with a CLI-shaped `target`; a flow wrapped in `record start` and `record stop` steps |
+| `record-start`, `record-stop`, `contact-sheet` | `record start <path>`, a `press`, `record stop`, `record contact-sheet <video> --out <sheet> --json` |
+| `logs-path`, `network-dump`, `trace-start`, `trace-stop` | `logs path`, `network dump 25 --include headers`, `trace start <path>`, `trace stop <path>` |
+| `close` | `close` |
+| `device-release-session-refused`, `device-release-stale` | `device release --stale` with `--udid --session`, then with `--udid` alone |
+
+Observed behavior the adapter relies on:
+
+- `--json` prints its envelope on stdout, `{"success":true,"data":…}` or
+  `{"success":false,"error":{"code","message",…}}`, and leaves stderr empty. A failure exits 1.
+  Without `--json`, a failure prints `Error (<code>): <message>` on stderr and nothing on stdout.
+- The codes seen are `COMMAND_FAILED` (a `wait` past its deadline, with `details.reason`
+  `wait_deadline_exceeded`), `DEVICE_IN_USE` (`open` on a device another session holds),
+  `DEVICE_NOT_FOUND` (an unknown UDID) and `INVALID_ARGS` (a step input that fails its schema, and
+  `--session` on `device`, which refuses it).
+- A failing batch names the step in `error.details.step` (1-based) and `error.details.command`;
+  a passing one lists every step under `data.results` with `step`, `command`, `ok` and
+  `durationMs`, and a `snapshot` step returns the full tree under its `data.nodes`.
+- `record start` and `record stop` work as steps inside a batch that also drives the app.
+- `open --launch-args` reaches the app: the app process's argv ends `-harness-scenario live`.
+- `open` with `--udid` and `--session` binds the session to that device: `session list` and the
+  envelope's `device_udid` name it.
+- No call failed for a missing macOS Accessibility or Screen Recording permission: `snapshot`,
+  `screenshot` and `record` all succeeded on this Mac, so `doctor` gets no permission check.
+- `appstate` prints `data.state`, one of the 5 `XCUIApplication.State` names in the package's
+  `dist/src` (`unknown`, `notRunning`, `runningBackgroundSuspended`, `runningBackground`,
+  `runningForeground`).
+- The iOS role vocabulary is a node's `type`. The runner names each element type from
+  `elementTypeNamesByRawValue` in
+  `dist/apple/runner/AgentDeviceRunner/AgentDeviceRunnerUITests/RunnerTests+Snapshot.swift`:
+  `Application`, `Window`, `Button`, `Cell`, `StaticText`, `TextField`, `TextView`,
+  `SecureTextField`, `Switch`, `Slider`, `Link`, `Image`, `NavigationBar`, `TabBar`,
+  `CollectionView`, `Table`, `ScrollView`, `Toolbar`, `SearchField`, `SegmentedControl`, `Stepper`,
+  `Picker`, `ActivityIndicator`, `ProgressIndicator`, `CheckBox`, `MenuItem`, `WebView`, `Other`,
+  `Keyboard` and `Key`, and any other type as `Element(<raw value>)`. The snapshot engine in
+  `dist/src/ios-snapshot-engine.js` also rewrites some `Other` nodes to `Heading`.
+
 ## SwiftFormat
 
 Toolchain `swift format` 6.2.1. Sources under `gate/Fixtures/format/` (excluded from the harness's
@@ -2229,6 +2293,29 @@ for line in open(sys.argv[1]):
 
 `grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
 
+### A stale task gate and a merge after a RED check
+
+The rest of `BuildReturn/memos-5/` is state the fifth brownfield trial on `usememos/memos` left in its clone `C`, after the run
+removed its task worktrees. The orchestrator wrote the 3 returns above byte for byte to its `returns/`, beside
+`fix-share-view-limit-web.json`, the fixer's return `build check-return` read. `task-gate-runs.jsonl` is the `gate.run` event of
+each run those returns cite, from the clone's gate event store: the store task's slice ran on a dirty tree at
+the contract commit, not at the task's own commit. `last-commits.txt` is `git rev-parse` of each return's last
+commit. `return-checked.jsonl` is the clone's 5 `build.return-checked` events, and `build-events.jsonl` is the
+build run's event log, whose second web merge landed 1 s after the fixer's RED check. From this directory:
+
+```sh
+C=<trial clone>/.git/swift-harness B=$C/plans/spec/build/20261004T160656Z-0ad8c7c2 F=BuildReturn/memos-5
+mkdir -p $F
+cp $B/returns/fix-share-view-limit-web.json $F/
+grep -E '"runID":"(20261004T160820Z-3c3ed983|20261004T160825Z-8924b00e|20261004T161750Z-62635ccf|20261004T161222Z-50cc3d46)"' \
+  $C/events/gate.jsonl | grep '"kind":"gate.run"' > $F/task-gate-runs.jsonl
+cp $C/events/build.jsonl $F/return-checked.jsonl
+cp $B/events.jsonl $F/build-events.jsonl
+for c in 990fd862 20e3afcf 0f470558 bae9f2f8; do echo "$c $(git -C $C/../.. rev-parse $c)"; done > $F/last-commits.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
+
 ## Brownfield trial: a contract landed before import
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
@@ -2279,3 +2366,30 @@ Observed behavior the check relies on: the version warning is the manifest entry
 `--strict` the same warning is printed with `"success": true`. A manifest with a schema error
 (such as `"keywords": "swift"`) reports the error and drops the version warning.
 `grep -niE '/Users|/private|/var/folders|caleb' PluginValidate/*` matched nothing.
+
+## Brownfield trial: a plan with a validation table
+
+`BrownfieldTrial/memos-4-validation-PLAN.md` is `memos-4-PLAN.md` with a `## Validation` section
+that Opus wrote for it, given that plan and `plugin/skills/run/references/plan-shape.md` as the
+commit adding the fixture has it. The section went in before `## Assumptions`, and nothing else
+changed. Opus gave every requirement an `acceptance` row, since the repository has no `xcode`
+area. From the repository root, with Claude Code 2.1.288:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+{ printf 'Write the `## Validation` section of the brownfield PLAN.md below, following the reference that comes after it. The repository has 2 areas: `memos` (kind go) and `web` (kind node); it has no xcode area. Print only the section, starting with the `## Validation` heading, and nothing else.\n\n<plan>\n'
+  cat $F/memos-4-PLAN.md
+  printf '</plan>\n\n<reference>\n'
+  cat plugin/skills/run/references/plan-shape.md
+  printf '</reference>\n'; } > prompt.txt
+(cd "$(mktemp -d)" && claude -p --model opus --tools "" < "$OLDPWD/prompt.txt") > section.md
+python3 -c "
+import sys
+plan = open(sys.argv[1]).read(); section = open(sys.argv[2]).read()
+i = plan.index('## Assumptions')
+open(sys.argv[3], 'w').write(plan[:i] + section.rstrip('\\n') + '\\n\\n' + plan[i:])
+" $F/memos-4-PLAN.md section.md $F/memos-4-validation-PLAN.md
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/memos-4-validation-PLAN.md`
+matched nothing.

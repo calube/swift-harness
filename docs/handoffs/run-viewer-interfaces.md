@@ -61,12 +61,25 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
 `plugin/bin/swiftgate` sets.
 
 **Page** (`V/`).
-- `window.runViewer = { register(name, {render(view, mount), apply(view)}), openPopover(anchor, rows, title),
-  openTaskDrawer(taskID), apply }`. A module throwing lands in the footer's damage and hides its mount.
+- `window.runViewer = { register(name, {render(view, mount), apply(view)}), addTab(id, spec),
+  openPopover(anchor, rows, title), openTaskPopover(taskID, anchor), openTaskDrawer(taskID), apply }`. A module
+  throwing lands in the footer's damage and hides its mount.
+- Tabs (the user's 2026-10-04 layout): `overview`, `timeline`, `board`, `graph`, `spec`, `gates`, `tokens`, each
+  a `.tab-panel[data-tab=<id>]` with `role="tabpanel"` and a `[role=tab][data-tab=<id>]` button. The id is the
+  tab's bare `#<id>` in the URL; an unknown or hidden one shows `overview`. `board` and `graph` show only once
+  their module's `[data-module]` mount draws.
+- The tab seam: `runViewer.addTab(id, { label, badges(view) -> [{key, kind, n, text, title}], available() ->
+  Bool, shown() })` appends a tab after the core's and returns its panel element to draw into; `kind` is `bad`,
+  `warn`, `info` or `plain`. A throwing `badges` lands in damage once. A Validation module adds its tab this way;
+  pair it with `register(name, …)` on a `[data-module]` mount inside the panel to get the module's damage rule.
+- `openTaskPopover` anchors a task's details (status, column, deps, latest gate, commits, covers, why it failed
+  or stopped, Open task) to a card, node or `.task-link`; a poll reopens it on the same task.
 - `ViewerTemplate` inlines every `run-viewer-*.js` and `run-viewer-*.css`, in name order. Modules today:
-  `RunViewBoard.columns(view, now)` and `RunViewGraph.layers(tasks)`.
+  `RunViewBoard.columns(view, now)` and `RunViewGraph.layers(tasks)`. The core draws on `DOMContentLoaded`,
+  after every module script ran; in live mode modules draw on the first fetched view.
 - `RunViewModel` (`run-view-model.js`) holds the pure functions: `apply`, `stalls`, `workers`, `lanes`,
-  `scale`, `labelFits` and the formats.
+  `scale`, `labelFits`, `latestGate(view, taskID)`, `tabBadges(view, {now, stallMin})` (keyed by tab id; `now`
+  null for a report) and the formats.
 
 **Callers.**
 - `build-task.js` requires `buildRun` and `pluginRoot`. Each stage agent's prompt carries its own 2 span lines

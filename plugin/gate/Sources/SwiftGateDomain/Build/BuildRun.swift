@@ -145,6 +145,7 @@ public enum BuildEvent: Sendable, Equatable {
   case merge(Merge)
   case undo(Undo)
   case gate(Gate)
+  case returnCheck(ReturnCheck)
 
   public struct Transition: Sendable, Equatable {
     public let task: String
@@ -215,8 +216,38 @@ public enum BuildEvent: Sendable, Equatable {
     }
   }
 
+  /// `build check-return`'s verdict on 1 task's return, which `build merge` requires GREEN at
+  /// the commit it merges.
+  public struct ReturnCheck: Sendable, Equatable {
+    public let task: String
+    /// A fixer's return, checked with `--fix`.
+    public let fix: Bool
+    public let verdict: Verdict
+    /// The full sha of the return's last commit; `nil` when it named none git knows.
+    public let commit: String?
+    /// The id the check's `build.return-checked` event carries too.
+    public let checkID: String
+    /// Every finding's rule, each once, in report order.
+    public let rules: [TaskReturnFinding.Rule]
+    public let at: Date
+
+    public init(
+      task: String, fix: Bool, verdict: Verdict, commit: String?, checkID: String,
+      rules: [TaskReturnFinding.Rule], at: Date
+    ) {
+      self.task = task
+      self.fix = fix
+      self.verdict = verdict
+      self.commit = commit
+      self.checkID = checkID
+      self.rules = rules
+      self.at = at
+    }
+  }
+
   public enum Kind: String, Sendable, Codable, CaseIterable {
     case transition, merge, undo, gate
+    case returnCheck = "return-check"
   }
 
   public var kind: Kind {
@@ -225,6 +256,7 @@ public enum BuildEvent: Sendable, Equatable {
     case .merge: .merge
     case .undo: .undo
     case .gate: .gate
+    case .returnCheck: .returnCheck
     }
   }
 
@@ -239,6 +271,7 @@ public enum BuildEvent: Sendable, Equatable {
       case .merge(let task): task
       case .final: nil
       }
+    case .returnCheck(let check): check.task
     }
   }
 }
@@ -246,7 +279,9 @@ public enum BuildEvent: Sendable, Equatable {
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
+    case fix, commit, rules
     case runID = "runId"
+    case checkID = "checkId"
   }
 
   private enum GateStage: String, Codable {
@@ -284,6 +319,14 @@ extension BuildEvent: Codable {
           stage: stage, tier: try container.decode(CheckTier.self, forKey: .tier),
           verdict: try container.decode(Verdict.self, forKey: .verdict),
           runID: try container.decode(String.self, forKey: .runID), at: at))
+    case .returnCheck:
+      self = .returnCheck(
+        ReturnCheck(
+          task: try task(), fix: try container.decode(Bool.self, forKey: .fix),
+          verdict: try container.decode(Verdict.self, forKey: .verdict),
+          commit: try container.decodeIfPresent(String.self, forKey: .commit),
+          checkID: try container.decode(String.self, forKey: .checkID),
+          rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at))
     }
   }
 
@@ -318,6 +361,14 @@ extension BuildEvent: Codable {
       try container.encode(gate.verdict, forKey: .verdict)
       try container.encode(gate.runID, forKey: .runID)
       try container.encode(gate.at, forKey: .at)
+    case .returnCheck(let check):
+      try container.encode(check.task, forKey: .task)
+      try container.encode(check.fix, forKey: .fix)
+      try container.encode(check.verdict, forKey: .verdict)
+      try container.encodeIfPresent(check.commit, forKey: .commit)
+      try container.encode(check.checkID, forKey: .checkID)
+      try container.encode(check.rules, forKey: .rules)
+      try container.encode(check.at, forKey: .at)
     }
   }
 }
@@ -347,7 +398,7 @@ public struct BuildEventLog: Sendable, Equatable {
       switch event {
       case .merge(let merge): return merge.postCommit
       case .undo(let undo): return undo.toCommit
-      case .transition, .gate: continue
+      case .transition, .gate, .returnCheck: continue
       }
     }
     return nil
@@ -363,10 +414,21 @@ public struct BuildEventLog: Sendable, Equatable {
         tasks.removeAll { $0 == merge.task }
         tasks.append(merge.task)
       case .undo(let undo): tasks.removeAll { $0 == undo.task }
-      case .transition, .gate: continue
+      case .transition, .gate, .returnCheck: continue
       }
     }
     return tasks
+  }
+
+  /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;
+  /// `nil` when none was recorded.
+  public func latestReturnCheck(task: String, fix: Bool) -> BuildEvent.ReturnCheck? {
+    for event in events.reversed() {
+      if case .returnCheck(let check) = event, check.task == task, check.fix == fix {
+        return check
+      }
+    }
+    return nil
   }
 }
 

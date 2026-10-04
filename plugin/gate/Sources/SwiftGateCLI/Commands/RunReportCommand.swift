@@ -203,7 +203,7 @@ enum BrownfieldRunReportRun {
         switch event {
         case .merge(let merge): merge.task
         case .transition(let transition): transition.task
-        case .undo, .gate: nil
+        case .undo, .gate, .returnCheck: nil
         }
       }
       return Dictionary(

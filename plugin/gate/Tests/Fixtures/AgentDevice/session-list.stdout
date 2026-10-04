@@ -1,0 +1,20 @@
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "name": "swiftgate-capture",
+        "address": "swiftgate-capture",
+        "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture",
+        "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture/runner.log",
+        "platform": "ios",
+        "target": "mobile",
+        "device": "agent-device-capture-10909",
+        "id": "F9277B7E-DB39-40C2-AF02-659F9A517B7A",
+        "device_udid": "F9277B7E-DB39-40C2-AF02-659F9A517B7A",
+        "ios_simulator_device_set": null,
+        "createdAt": 1791134652911
+      }
+    ]
+  }
+}

@@ -216,6 +216,7 @@ public struct HaltsSection: EventSummarySection {
     case .merge(let merge): merge.at
     case .undo(let undo): undo.at
     case .gate(let gate): gate.at
+    case .returnCheck(let check): check.at
     }
   }
 
