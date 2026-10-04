@@ -56,7 +56,8 @@ struct BrownfieldDiscoverAdaptersTests {
       try await group.waitForAll()
     }
 
-    let config = try #require(try writer.readConfig())
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      String(contentsOf: layout.config, encoding: .utf8))
     #expect(config.allow.map(\.path).sorted() == (0..<8).map { "a\($0).go" }.sorted())
   }
 
