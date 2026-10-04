@@ -985,10 +985,10 @@ jq '.[-1]' tools.json | sed "s#$ROOT#/REPO#g" > Transcripts/<session>.envelope.j
 The `/etc/hosts` result is the stock macOS file. After the copy, the grep above matched nothing in
 these 3 files.
 
-Here a message's repeated lines carry the same usage. The run view build's worker transcripts,
-from Workflow agents in the same Claude Code version and not kept, did not: their first message's
-2 lines read `usage.output_tokens` 16, then 350, and `events ingest` refused each with `repeats an
-earlier message id with different usage`.
+Here a message's repeated lines carry the same usage. The run view build's worker transcripts
+came from Workflow agents in the same Claude Code version, and the fixtures don't keep them. Their
+lines differed: the first message's 2 lines read `usage.output_tokens` 16, then 350. `events
+ingest` refused each with `repeats an earlier message id with different usage`.
 
 ## Events
 
@@ -1129,7 +1129,7 @@ state the run left, unedited:
 | `counter-ui-reset-button-snapshot` | `abandoned` | returned no commits, `build-return.no-commits` halted it; the resumed session answered `abandon`, an orchestrator-answered rehearsal, never the user |
 
 The final `ready` gate, run `20261004T051601Z-46b2b09c`, was GREEN. The plan stays `building`
-because 1 task was abandoned.
+because the resumed session abandoned 1 task.
 
 | File | Holds |
 |---|---|
@@ -1143,8 +1143,8 @@ There is no `usage` stream: `events ingest` exited 2 after every task, first wit
 record` and, after the resume wrote one, with `repeats an earlier message id with different usage`
 (see Transcripts). The first failure came from the SessionStart hook running the shim's last good
 binary while the plugin data cache rebuilt; that older binary refused a `plugin.json` with no
-`version`. Spans, `prove.result` and `agent.tools` aren't recorded yet; a later capture repeats this
-run once they are.
+`version`. No command records spans, `prove.result` or `agent.tools` yet; a later capture repeats this
+run once one does.
 
 The sources held no machine path, so no `sed` ran. Ledger worktrees are relative
 (`../app-<plan>-<task>`). `grep -rniE '/Users|/private|/var/folders|/tmp|caleb|@[a-z]+\.|swift-harness|home' RunView`
