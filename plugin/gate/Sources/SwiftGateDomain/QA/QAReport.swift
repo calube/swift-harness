@@ -33,9 +33,16 @@ public struct QAReport: Sendable, Equatable {
     runID: String, plan: String, after: String?, atBase: Bool, commit: String?, rows: [QARow],
     notes: [String] = []
   ) {
+    let findings = Self.findings(rows: rows, atBase: atBase)
+    let counts = QAResult.allCases.map { result in
+      "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
+    }
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, commit: commit,
-      verdict: .green, rows: rows, findings: [], notes: notes, message: "")
+      verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
+      findings: findings, notes: notes,
+      message: rows.isEmpty
+        ? "no validation row to run" : "\(rows.count) rows: " + counts.joined(separator: ", "))
   }
 
   private init(
@@ -64,6 +71,15 @@ public struct QAReport: Sendable, Equatable {
       rows: [], findings: [], notes: [], message: message)
   }
 
+  /// A run with no table to read: GREEN, since a plan may carry none, with `note` saying why.
+  public static func nothingToRun(
+    _ note: String, plan: String?, after: String?, atBase: Bool, runID: String? = nil
+  ) -> QAReport {
+    QAReport(
+      runID: runID, plan: plan, after: after, atBase: atBase, commit: nil, verdict: .green,
+      rows: [], findings: [], notes: [note], message: "no validation row to run")
+  }
+
   /// This report with `notes` added after its own.
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
@@ -74,7 +90,27 @@ public struct QAReport: Sendable, Equatable {
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
   /// so only a row that passes there is a finding.
   public static func findings(rows: [QARow], atBase: Bool) -> [Finding] {
-    []
+    rows.compactMap { row in
+      let named = "row \(row.row) (\(row.requirement), \(row.layer.rawValue)) `\(row.check)`"
+      let rule: (id: String, severity: Severity, message: String)
+      switch (row.result, atBase) {
+      case (.red, false):
+        rule = (checkFailedRuleID, .major, "\(named): \(row.message)")
+      case (.pass, true):
+        rule = (
+          checkPassesAtBaseRuleID, .major,
+          "\(named) passes at the merge base, so it can't tell the change from its absence"
+        )
+      case (.unverified, _):
+        rule = (checkUnverifiedRuleID, .nit, "\(named): \(row.message)")
+      case (.pass, false), (.red, true), (.waiting, _):
+        return nil
+      }
+      // Every argument is non-empty, so the contract can't refuse it.
+      return try? Finding(
+        ruleID: rule.id, severity: rule.severity, file: ValidationTable.fileName, line: nil,
+        message: rule.message, failureScenario: nil)
+    }
   }
 }
 

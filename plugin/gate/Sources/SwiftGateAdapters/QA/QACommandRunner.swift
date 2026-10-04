@@ -79,7 +79,35 @@ public struct LiveQAPorts: QAPortAssigning {
   public init() {}
 
   public func assignPort() throws(QAPortError) -> Int {
-    throw QAPortError(reason: "not built")
+    let descriptor = socket(AF_INET, SOCK_STREAM, 0)
+    guard descriptor >= 0 else { throw Self.failure("socket") }
+    defer { close(descriptor) }
+    var address = sockaddr_in()
+    address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+    address.sin_family = sa_family_t(AF_INET)
+    address.sin_port = 0
+    address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+    let bound = withUnsafePointer(to: &address) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        bind(descriptor, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+      }
+    }
+    guard bound == 0 else { throw Self.failure("bind") }
+    var assigned = sockaddr_in()
+    var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+    let named = withUnsafeMutablePointer(to: &assigned) {
+      $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+        getsockname(descriptor, $0, &length)
+      }
+    }
+    guard named == 0 else { throw Self.failure("getsockname") }
+    let port = Int(UInt16(bigEndian: assigned.sin_port))
+    guard port > 0 else { throw QAPortError(reason: "the OS assigned port 0") }
+    return port
+  }
+
+  private static func failure(_ call: String) -> QAPortError {
+    QAPortError(reason: "\(call) failed: \(String(cString: strerror(errno)))")
   }
 }
 
@@ -93,6 +121,43 @@ public struct QACommandRunner: QACheckRunning {
   }
 
   public func run(_ request: QACheckRequest) async -> QACheckOutput {
-    QACheckOutput(exit: .launchFailed("not built"))
+    let executable: String
+    let arguments: [String]
+    switch request.program {
+    case .command(let line):
+      executable = "/bin/sh"
+      arguments = ["-c", line]
+    case .script(let path) where FileManager.default.isExecutableFile(atPath: path):
+      executable = path
+      arguments = []
+    case .script(let path):
+      executable = "/bin/sh"
+      arguments = [path]
+    }
+    let invocation = ProcessInvocation(
+      executable: executable, arguments: arguments,
+      environmentOverlay: request.environment.mapValues { $0 },
+      workingDirectory: request.workingDirectory, timeout: request.timeout)
+    do {
+      let output = try await runner.run(invocation)
+      let exit: QACheckExit =
+        switch output.status {
+        case .exited(let code): .exited(code)
+        case .signaled(let signal): .signaled(signal)
+        }
+      return QACheckOutput(
+        exit: exit, stdout: output.stdout.text, stderr: output.stderr.text,
+        elapsed: output.elapsed)
+    } catch {
+      switch error {
+      case .timedOut(_, let after, let stdout, let stderr):
+        return QACheckOutput(
+          exit: .timedOut(after), stdout: stdout.text, stderr: stderr.text, elapsed: after)
+      case .launchFailed(_, let reason):
+        return QACheckOutput(exit: .launchFailed(reason))
+      case .cancelled:
+        return QACheckOutput(exit: .launchFailed("cancelled before it finished"))
+      }
+    }
   }
 }
