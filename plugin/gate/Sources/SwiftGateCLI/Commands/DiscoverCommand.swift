@@ -70,14 +70,19 @@ struct DiscoverCommand: AsyncParsableCommand {
     async throws -> Outcome
   {
     let started = ContinuousClock.now
-    let gathered = try await gather(directory: directory, dependencies: dependencies)
     let layout = try await GitTrackedTree(runner: dependencies.runner, directory: directory)
       .stateLayout()
+    let writer = BrownfieldConfigWriter(layout: layout)
+    // An unlocked read is enough for a cache: a stale or unreadable entry only costs a miss, and
+    // the locked read below still refuses a malformed record.
+    let cached = (try? writer.readLastDiscover())??.cache
+    let gathered = try await gather(
+      directory: directory, dependencies: dependencies, cached: cached)
     var notes: [String] = []
     let settings = hookSettings(harnessRoot: dependencies.harnessRoot, notes: &notes)
 
     var result: DiscoverEditResult?
-    try await BrownfieldConfigWriter(layout: layout).update {
+    try await writer.update {
       config, last throws(BrownfieldConfigWriteError) in
       let applied: DiscoverEditResult
       do throws(DiscoverEditError) {
@@ -91,7 +96,8 @@ struct DiscoverCommand: AsyncParsableCommand {
         layout.discoverDirty: try encode(
           DiscoverDirtyFiles(head: applied.proposal.head, paths: applied.proposal.dirty)),
         layout.discoverLast: try encode(
-          DiscoverRecord(proposal: applied.proposal, edits: applied.applied)),
+          DiscoverRecord(
+            proposal: applied.proposal, edits: applied.applied, cache: gathered.cache)),
       ]
       if let settings { files[layout.settings] = settings }
       return BrownfieldStateWrite(
@@ -121,19 +127,39 @@ struct DiscoverCommand: AsyncParsableCommand {
       configPath: layout.config.path, notes: notes)
   }
 
-  /// The tracked tree's proposal and the worktree root it came from.
-  private static func gather(directory: URL, dependencies: Dependencies) async throws
-    -> (proposal: DiscoverProposal, root: URL)
-  {
+  /// The tracked tree's proposal, the cache entry it came from or made, and the worktree root.
+  /// A `cached` entry whose key still matches the tree is reused without running a reader.
+  private static func gather(
+    directory: URL, dependencies: Dependencies, cached: DiscoverRecord.Cache? = nil
+  ) async throws -> (proposal: DiscoverProposal, cache: DiscoverRecord.Cache, root: URL) {
     let tree = GitTrackedTree(runner: dependencies.runner, directory: directory)
     let root = try await tree.repositoryRoot()
     let head = try await tree.head()
     let dirty = try await tree.dirtyPaths()
     let snapshot = try await tree.snapshot()
-    return (
-      Discover.propose(tree: snapshot, head: head, dirty: dirty, readers: dependencies.readers),
-      root
-    )
+    let salt = cacheSalt(readers: dependencies.readers)
+    if let cached,
+      Discover.cacheKey(tree: snapshot, inputs: cached.inputs, salt: salt) == cached.key
+    {
+      return (cached.proposal(head: head, dirty: dirty), cached, root)
+    }
+    let (proposal, inputs) = Discover.proposeRecordingInputs(
+      tree: snapshot, head: head, dirty: dirty, readers: dependencies.readers)
+    let cache = DiscoverRecord.Cache(
+      key: Discover.cacheKey(tree: snapshot, inputs: inputs, salt: salt), inputs: inputs,
+      areas: proposal.areas)
+    return (proposal, cache, root)
+  }
+
+  /// This build of swiftgate and its readers: a rebuilt binary or another reader set may propose
+  /// differently from the same files.
+  private static func cacheSalt(readers: [any EcosystemReader]) -> String {
+    let executable = Bundle.main.executablePath ?? CommandLine.arguments[0]
+    let attributes = try? FileManager.default.attributesOfItem(atPath: executable)
+    let modified = (attributes?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+    let size = (attributes?[.size] as? Int) ?? 0
+    let names = readers.map { String(reflecting: type(of: $0)) }.joined(separator: ",")
+    return "\(executable)|\(modified)|\(size)|\(names)"
   }
 
   /// The plugin's hooks as a settings file, or `nil` with a note naming why the clone gets none.

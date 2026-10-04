@@ -1,4 +1,6 @@
+import CryptoKit
 import Foundation
+import Synchronization
 
 /// `swiftgate discover`'s pure core: every reader's areas, CI commands over guesses, the
 /// orchestrator's edits, and the config an applied proposal writes.
@@ -22,6 +24,42 @@ public enum Discover {
     let mined = CICommandMining.commands(in: tree, areas: areas)
     return DiscoverProposal(
       head: head, areas: CICommandMining.outrank(areas, with: mined), dirty: dirty)
+  }
+
+  /// ``propose(tree:head:dirty:readers:)``, naming every file a reader or the miner read. Readers
+  /// see nothing but the listing and those files, so the 2 together decide the proposal.
+  public static func proposeRecordingInputs(
+    tree: TrackedTreeSnapshot, head: String, dirty: [String],
+    readers: [any EcosystemReader] = EcosystemReaders.all
+  ) -> (proposal: DiscoverProposal, inputs: [String]) {
+    let read = Mutex<Set<String>>([])
+    let recording = TrackedTreeSnapshot(
+      paths: tree.paths,
+      read: { path in
+        read.withLock { _ = $0.insert(path) }
+        return tree.read(path)
+      })
+    let proposal = propose(tree: recording, head: head, dirty: dirty, readers: readers)
+    return (proposal, read.withLock { $0.sorted() })
+  }
+
+  /// The key a cached proposal is reused under: the whole listing, so any added, removed or
+  /// renamed file misses, and the bytes of each input, so an edited build file misses. `salt`
+  /// names the discover build and its readers, whose logic the key can't see.
+  public static func cacheKey(tree: TrackedTreeSnapshot, inputs: [String], salt: String)
+    -> String
+  {
+    var hasher = SHA256()
+    hasher.update(data: Data("\(salt)\0".utf8))
+    for path in tree.paths { hasher.update(data: Data("\(path)\n".utf8)) }
+    hasher.update(data: Data("\0".utf8))
+    for path in inputs.sorted() {
+      let digest = tree.read(path).map {
+        SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined()
+      }
+      hasher.update(data: Data("\(path)\0\(digest ?? "-")\n".utf8))
+    }
+    return hasher.finalize().map { String(format: "%02x", $0) }.joined()
   }
 
   /// `config.toml` rejects 2 areas with 1 name, so a later duplicate takes its kind, then a

@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -90,6 +91,17 @@ private struct ManifestReader: EcosystemReader {
         ], missing: [.test: "no test script"], testGlobs: [], xcode: nil,
         generatedProjectTracked: nil)
     }
+  }
+}
+
+/// ``ManifestReader``, counting the times discovery runs it.
+private final class CountingReader: EcosystemReader {
+  private let calls = Mutex(0)
+  var count: Int { calls.withLock { $0 } }
+
+  func areas(in tree: TrackedTreeSnapshot) -> [ProposedArea] {
+    calls.withLock { $0 += 1 }
+    return ManifestReader().areas(in: tree)
   }
 }
 
@@ -267,5 +279,36 @@ struct DiscoverCommandTests {
     let written = FileManager.default.fileExists(atPath: clone.layout.settings.path)
     let noted = outcome.notes.contains { $0.contains("settings.json") }
     #expect(written != noted, "written: \(written), notes: \(outcome.notes)")
+  }
+
+  @Test(
+    "an unchanged listing reuses the last proposal without running the readers, and a changed directory listing misses the cache — catches the stale-manifest false RED of a cached answer"
+  )
+  func cacheMissesOnChangedListing() async throws {
+    let clone = try await TemporaryClone(files: ["web/package.json": "{}\n", "web/a.js": "1\n"])
+    defer { clone.remove() }
+    let reader = CountingReader()
+    let dependencies = clone.dependencies(readers: [reader])
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root,
+      edits: [DiscoverEdit(area: "web", step: .test, change: .set(command: "npm test"))],
+      dependencies: dependencies)
+    try clone.write(["web/a.js": "2\n"])
+
+    let hit = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [], dependencies: dependencies)
+
+    #expect(reader.count == 1)
+    #expect(hit.proposal.areas.map(\.name) == ["web"])
+    #expect(hit.proposal.areas.first?.commands[.test]?.value == "npm test")
+    #expect(hit.proposal.areas.first?.commands[.lint]?.confidence == .guessed)
+
+    try clone.write(["api/package.json": "{}\n"])
+    try await clone.git("add", "api/package.json")
+    let miss = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [], dependencies: dependencies)
+
+    #expect(reader.count == 2)
+    #expect(miss.proposal.areas.map(\.name).sorted() == ["api", "web"])
   }
 }
