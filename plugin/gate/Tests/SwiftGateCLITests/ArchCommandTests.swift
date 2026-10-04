@@ -31,6 +31,15 @@ struct ArchCommandTests {
   }
 
   @Test(
+    "the sample app passes arch with its declared scenarios — catches a rule switched on with no passing input"
+  )
+  func sampleAppPasses() async throws {
+    let sample = SelfTest.defaultSampleApp(harnessRoot: Fixture.checkoutRoot)
+    let report = try await Self.run(sample)
+    #expect(report.verdict == .green, "\(report.findings.map { "\($0.ruleID): \($0.message)" })")
+  }
+
+  @Test(
     "without a config only source rules run, and the output says so — catches arch silently skipping graph rules"
   )
   func withoutConfig() async throws {
