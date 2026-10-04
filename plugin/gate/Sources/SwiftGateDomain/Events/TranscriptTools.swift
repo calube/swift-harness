@@ -150,11 +150,12 @@ public struct ToolIngestPlan: Sendable, Equatable {
 /// From a session's tool calls to the `agent.tools` events not stored yet.
 public enum ToolIngest {
   /// `topLevels` maps each working directory to the git top level holding it; a path is kept
-  /// only when it sits inside its line's top level. `stored` is every `agent.tools` event id the
-  /// store holds.
+  /// only when it sits inside its line's top level. `worktrees` maps each working directory to
+  /// every worktree root of its repository. `stored` is every `agent.tools` event id the store
+  /// holds.
   public static func plan(
     sessionID: String, transcripts: [ToolTranscript], buildRun: String?,
-    topLevels: [String: String], stored: Set<String>
+    topLevels: [String: String], worktrees: [String: [String]] = [:], stored: Set<String>
   ) -> ToolIngestPlan {
     var events: [HarnessEvent] = []
     var read: Set<String> = []

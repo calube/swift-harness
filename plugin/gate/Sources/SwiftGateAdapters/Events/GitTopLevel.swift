@@ -19,6 +19,12 @@ public struct GitTopLevel: Sendable {
       current = parent
     }
   }
+
+  /// Every worktree root of the repository holding `directory`: the main checkout and each
+  /// linked worktree git still lists. Empty when `directory` is in no repository.
+  public func worktrees(of directory: String) -> [String] {
+    []
+  }
 }
 
 extension String {
