@@ -106,8 +106,15 @@ Serve the report as CSV.
 | `Reason` | optional: why the requirement needs no other layer |
 
 - **acceptance** checks behaviour at a boundary, such as an API, a CLI or the module that joins
-  2 tasks. It is a test in the area's framework, or a `curl -fsS … \| jq -e '<condition>'`
-  command against a server the command starts on `$QA_PORT`.
+  2 tasks. It is a test in the area's framework, named as `test: <id>`, or a
+  `curl -fsS … \| jq -e '<condition>'` command against a server the command starts on `$QA_PORT`.
+  `qa run` runs `test: <id>` through the area's own test command, narrowed to that 1 test:
+  - an `xcode` area's `test` with `-only-testing:<id>`, where `<id>` is `<Target>/<Class>` or
+    `<Target>/<Class>/<method>`, such as `test: AppTests/ExportTests/testColumnOrder`;
+  - any other area's `test_files`, with the id in its `{tests}` or `{files}`.
+
+  With more than 1 area that runs tests, name the area: `test <area>: <id>`. A bare test file
+  path in `Check` fails the import, and a raw `xcodebuild` line bypasses swiftgate.
 - **flow** drives a user journey in the running app. It runs for `xcode` areas only.
 - **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
   straight after a `flow` row for the same requirement and `Runs after` tasks; in a repository
@@ -127,13 +134,14 @@ on these `plan-lint` rules:
 | `plan-lint.validation-unknown-task` | a `Runs after` or `Writer` id with no task section |
 | `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
 | `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
+| `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
 
 ```markdown
 ## Validation
 
 | Done when | Layer | Check | Runs after | Writer | Reason |
 |---|---|---|---|---|---|
-| req-csv-download | acceptance | `pytest api/tests/export/test_download.py` | report-export-api | report-export-api | |
+| req-csv-download | acceptance | `test api: tests/export/test_download.py` | report-export-api | report-export-api | |
 | req-csv-columns | | | | | the handler test in report-export-api checks the column order |
 ```
 

@@ -48,4 +48,29 @@ struct SimVerifyCommandTests {
     #expect(refused["ruleID"] as? String == "sim.not-owner")
     #expect(SimVerifyCommand.output(.failure(failure), json: false) == failure.text)
   }
+
+  @Test(
+    "standalone sim verify audits every control in an owned repository and none in a brownfield clone, saying why — catches a brownfield run failing on controls no flow named"
+  )
+  func standaloneAuditFollowsTheProfile() throws {
+    let brownfield = FileManager.default.temporaryDirectory.appending(
+      path: "sim-verify-audit-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let owned = FileManager.default.temporaryDirectory.appending(
+      path: "sim-verify-audit-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer {
+      try? FileManager.default.removeItem(at: brownfield)
+      try? FileManager.default.removeItem(at: owned)
+    }
+    let common = brownfield.appending(path: ".git/\(StateRootResolver.commonConfigFile)")
+    try FileManager.default.createDirectory(
+      at: common.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: common)
+    try FileManager.default.createDirectory(at: owned, withIntermediateDirectories: true)
+    try Data().write(to: owned.appending(path: Config.fileName))
+
+    #expect(SimVerifyCommand.audit(root: owned) == .everyControl)
+    #expect(
+      SimVerifyCommand.audit(root: brownfield)
+        == .unaudited(reason: SimAuditScope.noFlowReason))
+  }
 }

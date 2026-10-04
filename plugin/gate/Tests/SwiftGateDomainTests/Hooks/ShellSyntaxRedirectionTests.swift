@@ -11,7 +11,7 @@ struct ShellSyntaxRedirectionTests {
       ShellSyntax.simpleCommands(in: "cp a b > log 2>&1").map(\.arguments) == [["a", "b"]])
     #expect(
       ShellSyntax.simpleCommands(in: "cat <<'EOF' > notes.md\nhello\nEOF")
-        .map { [$0.name ?? ""] + $0.arguments } == [["cat"], ["hello"]])
+        .map { [$0.name ?? ""] + $0.arguments } == [["cat"]])
   }
 
   @Test(

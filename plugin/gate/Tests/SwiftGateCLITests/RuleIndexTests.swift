@@ -156,7 +156,7 @@ extension RuleIndexTests {
       PlanLintCoverage.tooManyModulesRuleID, PlanLintCoverage.tooManyTestsRuleID,
       PlanLintCoverage.packOverBudgetRuleID, PlanLintValidation.uncoveredRuleID,
       PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
-      PlanLintValidation.flowWithoutIOSRuleID,
+      PlanLintValidation.flowWithoutIOSRuleID, PlanLintValidation.checkSourceFileRuleID,
     ]
     let build = [
       "build-next.unmerged-dependency", "build-next.missing-model", "build-next.write-set-overlap",
@@ -168,7 +168,7 @@ extension RuleIndexTests {
       QAReport.checkFailedRuleID, QAReport.checkUnverifiedRuleID,
       QAReport.checkPassesAtBaseRuleID, FlowRules.unparsedRuleID, FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
-      FlowRules.idsUnknownRuleID,
+      FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
     ]
     return DesignLintRule.allCases.map(\.rawValue) + docsLint + planLint + build + other
       + enumeratedFamilies.values.flatMap { $0 }

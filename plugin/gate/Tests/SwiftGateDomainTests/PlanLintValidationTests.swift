@@ -97,4 +97,36 @@ struct PlanLintValidationTests {
     #expect(findings.first?.severity == .major)
     #expect(try lint([acceptance, flow]).isEmpty)
   }
+
+  @Test(
+    "an acceptance check naming a test source file is validation-check-source-file at its line, naming the test form; commands, test references and qa scripts pass — catches the Aidoku trial's row that /bin/sh ran as a path"
+  )
+  func checkSourceFile() throws {
+    func row(_ check: String, layer: ValidationLayer = .acceptance) -> ValidationRow {
+      ValidationRow(
+        requirement: "req-draft-list", layer: layer, check: check, runsAfter: ["draft-list"],
+        writer: "draft-list")
+    }
+    let path = row("AidokuTests/LargeDownloadConfirmationTests.swift")
+    let findings = try lint([path, flow, state], rowLines: [32, 33, 34])
+    #expect(findings.map(\.ruleID) == [PlanLintValidation.checkSourceFileRuleID])
+    let finding = try #require(findings.first)
+    #expect(finding.line == 32)
+    #expect(finding.severity == .major)
+    #expect(finding.message.contains("`AidokuTests/LargeDownloadConfirmationTests.swift`"))
+    #expect(finding.message.contains("test: <Target>/<Class>"), "\(finding.message)")
+
+    let python = try lint([row("tests/test_export.py"), flow, state], hasIOSArea: false)
+      .filter { $0.ruleID == PlanLintValidation.checkSourceFileRuleID }
+    #expect(python.count == 1)
+    #expect(python.first?.message.contains("test_files") == true, "\(python)")
+
+    for check in [
+      "test: AidokuTests/LargeDownloadConfirmationTests", "test web: src/export.test.ts",
+      "pytest tests/test_export.py", "qa/export.acceptance.sh", "scripts/check-export.sh",
+      "DraftListTests",
+    ] {
+      #expect(try lint([row(check), flow, state]).isEmpty, "\(check)")
+    }
+  }
 }

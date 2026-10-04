@@ -2748,6 +2748,68 @@ cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
 matched nothing.
 
+## Brownfield trial: an iOS plan whose acceptance row names a source file
+
+`BrownfieldTrial/aidoku-validation-2-PLAN.md` is the `PLAN.md` the orchestrator first wrote in
+the second iOS validation trial on `Aidoku/Aidoku` (finding 2): its `req-check` acceptance row's
+`Check` is the test file `AidokuTests/LargeDownloadConfirmationTests.swift`, which `plan import`
+accepted and `qa run` then ran as a shell command. `Hooks/aidoku-validation-2-orchestrator-bash.json`
+holds the 1 Bash call `guard.raw-xcodebuild` denied in that run: a `python3 - <<'EOF'` script that
+only rewrote that row in `PLAN.md`, with the denial text. `H` is the harness checkout the trial
+ran and `C` the clone. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2 F=plugin/gate/Tests/Fixtures H=… C=… python3 - <<'PY'
+import json, os
+S, F, H, C = (os.environ[k] for k in ("S", "F", "H", "C"))
+uses, denied, plan = {}, [], None
+for line in open(f"{S}/run.jsonl"):
+    entry = json.loads(line)
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list): continue
+    for block in content:
+        if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            command = block["input"]["command"]
+            uses[block["id"]] = command
+            if plan is None and "| req-check | acceptance |" in command and command.startswith("cat <<'EOF' >"):
+                plan = command.split("\n", 1)[1].rsplit("\nEOF", 1)[0] + "\n"
+        if block.get("type") == "tool_result" and block.get("tool_use_id") in uses:
+            text = block.get("content")
+            text = text if isinstance(text, str) else json.dumps(text)
+            if "guard.raw-xcodebuild" in text:
+                denied.append({"command": uses[block["tool_use_id"]], "denial": text})
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+open(f"{F}/Hooks/aidoku-validation-2-orchestrator-bash.json", "w").write(
+    scrub(json.dumps(denied, indent=2, ensure_ascii=False) + "\n"))
+open(f"{F}/BrownfieldTrial/aidoku-validation-2-PLAN.md", "w").write(scrub(plan))
+PY
+```
+
+The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
+both files matched nothing.
+
+## Brownfield trial: a flow row's sim run on an iOS clone
+
+`BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
+`Aidoku/Aidoku`, from its last `qa run` (`20261004T223404Z-be50ef8e`). `flow.json` is the flow file
+the validation worker wrote. `sim/` holds that row's `session.json`, `steps.ndjson`, the 5
+`snapshot --json` trees `sim snap` recorded, and the `report.json` `sim verify` wrote: RED on 183
+findings, 103 `sim.a11y-identifier` and 80 `sim.a11y-label`, all but the new switch's on controls
+the app already had. The screenshots stay out; no rule reads their bytes. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-2
+R=$S/qa-runs/20261004T223404Z-be50ef8e/01-req-setting.flow
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/aidoku-setting-flow
+mkdir -p $F/sim/steps
+cp $S/qa/confirm-large-downloads-toggle.flow.json $F/flow.json
+cp $R/sim/session.json $R/sim/steps.ndjson $R/sim/report.json $F/sim/
+cp $R/sim/steps/*.tree.json $F/sim/steps/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-setting-flow` matched
+nothing.
+
 ## Node installs: 1 lockfile per package manager
 
 `NodeInstall/<manager>/` holds a 1-dependency `package.json` and the lockfile its manager wrote installing it:

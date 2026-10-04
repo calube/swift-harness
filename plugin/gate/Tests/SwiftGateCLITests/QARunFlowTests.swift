@@ -73,7 +73,8 @@ final class FakeFlowSimulator: QAFlowSimulating {
     ).run(
       SimVerify.Request(
         worktree: CanonicalPath.of(request.worktree), runID: request.runID,
-        checkoutHead: .commit(head), simDirectory: { _ in simDirectory }, historyFile: history))
+        checkoutHead: .commit(head), simDirectory: { _ in simDirectory }, historyFile: history,
+        audit: request.audit))
   }
 
   func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {
