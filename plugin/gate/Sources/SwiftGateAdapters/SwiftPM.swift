@@ -136,8 +136,15 @@ public struct LiveSwiftPM: SwiftPM {
     for filter in request.filters { arguments += ["--filter", filter] }
     let output = try await run(
       arguments, in: request.packageDirectory, timeout: testTimeout,
-      // The snapshot library's default silently records missing references and passes.
-      environmentOverlay: ["SNAPSHOT_TESTING_RECORD": "never"])
+      environmentOverlay: [
+        // The snapshot library's default silently records missing references and passes.
+        "SNAPSHOT_TESTING_RECORD": "never",
+        // Nothing the gate reads comes from a dSYM (coverage maps live in the binary), and under
+        // parallel load every debug link queues on `dsymutil` in uninterruptible wait. An
+        // environment variable, unlike `-debug-info-format none`, leaves the build description
+        // unchanged, so the gate and a plain `swift test` keep sharing one incremental build.
+        "SWIFT_DRIVER_DSYMUTIL_EXEC": "/usr/bin/true",
+      ])
     return SwiftTestRun(
       output: output, xctestReportPath: request.xunitOutputPath,
       swiftTestingReportPath: Self.swiftTestingReportPath(for: request.xunitOutputPath))

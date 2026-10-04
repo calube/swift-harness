@@ -101,6 +101,19 @@ struct LiveSwiftPMTests {
     #expect(run.swiftTestingReportPath == "/runs/abc/GameEngine-swift-testing.xml")
   }
 
+  @Test(
+    "test builds point the driver's dSYM step at a no-op — catches every gate test link queueing on dsymutil, which stalls builds under parallel load"
+  )
+  func testSkipsDsymutil() async throws {
+    let runner = FakeProcessRunner { _ in ProcessOutput(status: .exited(0)) }
+    _ = try await adapter(runner).test(
+      SwiftTestRequest(packageDirectory: gameEngine, xunitOutputPath: "/runs/abc/GameEngine.xml"))
+
+    let invocation = try #require(runner.invocations.first)
+    #expect(invocation.environmentOverlay["SWIFT_DRIVER_DSYMUTIL_EXEC"] == .some("/usr/bin/true"))
+    #expect(!invocation.arguments.contains("-debug-info-format"))
+  }
+
   @Test("coverage path is read from swift's output — catches coverage parsed from a stale location")
   func codeCoveragePath() async throws {
     let output = try Fixture.text("SwiftPM/show-codecov-path-GameEngine.txt")
