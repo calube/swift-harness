@@ -1,0 +1,255 @@
+import Foundation
+import SwiftGateAdapters
+import SwiftGateDomain
+import SwiftGateRules
+
+/// Brownfield prove: each area's changed tests run through `test_files` in a scratch tree at the
+/// task head with the task's non-test changes reverted.
+enum BrownfieldProve {
+  struct Dependencies: Sendable {
+    let git: any Git
+    let scratch: any ScratchWorktrees
+    let runner: any AreaCommandRunning
+    /// A file's text, or `nil` when it can't be read.
+    let readFile: @Sendable (URL) -> String?
+    /// Per command run.
+    let deadline: Duration
+
+    init(
+      git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
+      readFile: @escaping @Sendable (URL) -> String? = {
+        try? String(contentsOf: $0, encoding: .utf8)
+      },
+      deadline: Duration
+    ) {
+      self.git = git
+      self.scratch = scratch
+      self.runner = runner
+      self.readFile = readFile
+      self.deadline = deadline
+    }
+
+    /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.
+    static func live(
+      root: URL, layout: BrownfieldStateLayout, runner: any AreaCommandRunning, deadline: Duration
+    ) -> Dependencies {
+      let process = LiveProcessRunner()
+      return Dependencies(
+        git: LiveGit(runner: process, repositoryRoot: root.path),
+        scratch: LiveScratchWorktrees(
+          runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory),
+        runner: runner, deadline: deadline)
+    }
+  }
+
+  /// - Parameters:
+  ///   - root: the worktree's toplevel.
+  ///   - junitDirectory: where `{junit}` paths point.
+  static func run(
+    root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
+    dependencies: Dependencies
+  ) async -> ChangedTestJudgement {
+    let git = dependencies.git
+    let mergeBase: String
+    let changed: [String]
+    let added: [AddedLines]
+    do throws(GitError) {
+      guard let found = try await git.mergeBase("HEAD", base) else {
+        return blocked("HEAD and \(base) share no history, so there is no tree to revert to")
+      }
+      mergeBase = found
+      changed = try await git.changedFiles(since: mergeBase)
+      added = try await git.addedLines(since: mergeBase)
+    } catch {
+      return blocked("git: \(error)")
+    }
+    let tests = changed.filter { path in
+      config.areas.contains { ChangedTestIDs.isTestFile(path, of: $0) }
+    }
+    var judgement = ChangedTestJudgement.empty
+    var plans: [AreaPlan] = []
+    for area in config.areas {
+      var files: [ChangedTestFile] = []
+      for change in added where ChangedTestIDs.isTestFile(change.path, of: area) {
+        guard let content = dependencies.readFile(root.appending(path: change.path)) else {
+          judgement = judgement.merged(
+            with: blocked("can't read \(change.path)", file: change.path))
+          continue
+        }
+        files.append(ChangedTestFile(path: change.path, content: content, added: change))
+      }
+      guard !files.isEmpty else { continue }
+      switch plan(area, files: files) {
+      case .run(let plan): plans.append(plan)
+      case .nothing: continue
+      case .cannot(let reason): judgement = judgement.merged(with: reason)
+      }
+    }
+    guard !plans.isEmpty else {
+      return judgement.merged(with: note("prove: no new or changed tests since \(base)"))
+    }
+    let reverted = changed.filter { !tests.contains($0) }
+    guard !reverted.isEmpty else {
+      return judgement.merged(
+        with: note("prove: only tests changed since \(base), so there is nothing to revert"))
+    }
+    let request = ScratchTreeRequest(
+      revision: "HEAD", revertTo: mergeBase, copiedPaths: tests, revertedPaths: reverted)
+    let ran: AreaRun
+    do throws(ScratchWorktreeError) {
+      ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
+        var total = AreaRun()
+        for plan in plans {
+          total = total + (await execute(plan, in: toplevel, junitDirectory, dependencies))
+        }
+        return total
+      }
+    } catch {
+      return judgement.merged(with: blocked("scratch worktree: \(error)"))
+    }
+    return judgement.merged(with: ran.judgement).merged(
+      with: note(
+        "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
+          + "reverted"))
+  }
+
+  /// How 1 area's changed tests run.
+  struct AreaPlan: Sendable {
+    enum Command: Sendable {
+      /// `test_files`, expanded per selection.
+      case selected(String)
+      /// `test`, once, because the area can't select its changed tests.
+      case whole(String)
+    }
+
+    let area: BrownfieldArea
+    let ids: [AreaTestID]
+    let command: Command
+  }
+
+  /// The outcome of running some areas' plans.
+  struct AreaRun: Sendable {
+    var judgement = ChangedTestJudgement.empty
+    var proven = 0
+    var total = 0
+
+    static func + (lhs: AreaRun, rhs: AreaRun) -> AreaRun {
+      AreaRun(
+        judgement: lhs.judgement.merged(with: rhs.judgement), proven: lhs.proven + rhs.proven,
+        total: lhs.total + rhs.total)
+    }
+  }
+
+  enum Planned: Sendable {
+    case run(AreaPlan)
+    /// The change touches test files but no test in them.
+    case nothing
+    case cannot(ChangedTestJudgement)
+  }
+
+  static func plan(_ area: BrownfieldArea, files: [ChangedTestFile]) -> Planned {
+    if let template = area.testFiles {
+      if template.contains("{tests}") {
+        let ids =
+          area.kind == .swiftpm
+          ? ChangedTestIDs.swift(files.flatMap(swiftTests))
+          : ChangedTestIDs.ids(kind: area.kind, areaRoot: area.root, files: files)
+        if let ids {
+          return ids.isEmpty
+            ? .nothing : .run(AreaPlan(area: area, ids: ids, command: .selected(template)))
+        }
+      } else if template.contains("{files}") {
+        return .run(
+          AreaPlan(
+            area: area, ids: ChangedTestIDs.files(areaRoot: area.root, files: files),
+            command: .selected(template)))
+      }
+    }
+    guard let whole = area.test ?? area.testFiles else {
+      return .cannot(
+        blocked(
+          "\(area.name) has changed tests but neither test nor test_files, so prove can't run "
+            + "them", file: files[0].path))
+    }
+    return .run(
+      AreaPlan(
+        area: area, ids: ChangedTestIDs.files(areaRoot: area.root, files: files),
+        command: .whole(whole)))
+  }
+
+  /// The test functions a Swift file's change adds or edits, in the target its `Tests/<target>/`
+  /// directory names.
+  private static func swiftTests(_ file: ChangedTestFile) -> [ChangedTest] {
+    let components = file.path.split(separator: "/").map(String.init)
+    let target =
+      components.firstIndex(of: "Tests").flatMap {
+        $0 + 2 < components.count ? components[$0 + 1] : nil
+      } ?? components.dropLast().last ?? ""
+    let unit = SourceUnit(input: SourceInput(path: file.path, text: file.content), scope: nil)
+    return ChangedTestDiscovery.tests(in: unit, target: target, added: file.added)
+  }
+
+  private static func execute(
+    _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, _ dependencies: Dependencies
+  ) async -> AreaRun {
+    let area = plan.area
+    let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
+    var runs = 0
+    func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> AreaCommandOutcome {
+      runs += 1
+      var junit: String?
+      if template.contains("{junit}") {
+        try? FileManager.default.createDirectory(
+          at: junitDirectory, withIntermediateDirectories: true)
+        junit = junitDirectory.appending(path: "\(area.name)-prove-\(runs).xml").path
+      }
+      let command = ChangedTestIDs.expand(
+        template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: ids),
+        files: ChangedTestIDs.filesArgument(areaRoot: area.root, ids: ids),
+        junit: junit.map(ChangedTestIDs.shellQuoted))
+      return await dependencies.runner.run(
+        AreaCommandRequest(
+          area: area.name, step: step, command: command, workingDirectory: directory.path,
+          deadline: dependencies.deadline, environment: [:], junitPath: junit))
+    }
+    let outcomes: [(AreaTestID, AreaCommandOutcome)]
+    let judgement: ChangedTestJudgement
+    switch plan.command {
+    case .whole(let command):
+      let outcome = await run(command, step: .test, ids: plan.ids)
+      outcomes = plan.ids.map { ($0, outcome) }
+      judgement = ProveVerdict.judgeWhole(area: area.name, ids: plan.ids, outcome: outcome)
+    case .selected(let template):
+      let together = await run(template, step: .testFiles, ids: plan.ids)
+      if ProveVerdict.needsRerunAlone(together, idCount: plan.ids.count) {
+        var alone: [(AreaTestID, AreaCommandOutcome)] = []
+        for id in plan.ids {
+          alone.append((id, await run(template, step: .testFiles, ids: [id])))
+        }
+        outcomes = alone
+      } else {
+        outcomes = plan.ids.map { ($0, together) }
+      }
+      judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes)
+    }
+    let proven = outcomes.filter {
+      if case .failed = $0.1 { return true }
+      return false
+    }.count
+    return AreaRun(judgement: judgement, proven: proven, total: plan.ids.count)
+  }
+
+  private static func blocked(_ message: String, file: String = ".") -> ChangedTestJudgement {
+    let finding = try? Finding(
+      ruleID: ProofRules.noEvidenceRuleID, severity: .minor, file: file, line: nil,
+      message: "prove: \(message)", failureScenario: nil)
+    return ChangedTestJudgement(findings: finding.map { [$0] } ?? [], blocked: true)
+  }
+
+  private static func note(_ message: String) -> ChangedTestJudgement {
+    let finding = try? Finding(
+      ruleID: ProofRules.summaryRuleID, severity: .nit, file: ".", line: nil, message: message,
+      failureScenario: nil)
+    return ChangedTestJudgement(findings: finding.map { [$0] } ?? [], blocked: false)
+  }
+}
