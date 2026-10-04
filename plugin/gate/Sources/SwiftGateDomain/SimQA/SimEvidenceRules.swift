@@ -158,6 +158,7 @@ public enum SimEvidenceRules {
           rule: .assertAbsent, step: step.n, path: step.tree,
           message: "\(name): no element's label or value is \"\(assert)\" in \(step.tree)"))
     }
+    findings += SimAccessibilityRules.findings(tree, step: step)
     return findings
   }
 }

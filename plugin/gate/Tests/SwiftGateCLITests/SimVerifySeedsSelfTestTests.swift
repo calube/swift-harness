@@ -15,7 +15,9 @@ struct SimVerifySeedsSelfTestTests {
 
   private static func tempRoot() -> URL {
     TestTemporaryDirectory.root
-      .appending(path: "swiftgate-sim-verify-seeds-\(UUID().uuidString)", directoryHint: .isDirectory)
+      .appending(
+        path: "swiftgate-sim-verify-seeds-\(UUID().uuidString)", directoryHint: .isDirectory
+      )
       .resolvingSymlinksInPath()
   }
 
