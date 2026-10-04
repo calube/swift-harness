@@ -1868,7 +1868,7 @@ gate of `counter-ui-reset-button` wrote in the `build-run-1` capture (see its `S
 that went RED on the `counterWithFact` snapshot test before the fixer turned the task GREEN. The
 run viewer reads it for that gate's failure: its tier, gating findings and failing test. The
 capture's scratch repository still held it on 2026-10-04; with `S` that scratch directory and
-`R=20261004T050310Z-ed998508`, it was copied with 2 path substitutions and nothing else:
+`R=20261004T050310Z-ed998508`, this copy made 2 path substitutions and nothing else:
 
 ```sh
 sed -e 's#/var/folders/lb/9c21kv5n74x2gyjdxqn51ngh0000gn/T/tmp\.IvRTQZud90#/var/folders/xx/T/tmp.scratch#g' \
@@ -1888,9 +1888,9 @@ the only matches of the run view greps above in this file.
 gate runs in a clone's shared store and its blocked tasks. The `memos-3` trial ran the run skill
 on a clone of the `usememos/memos` repository on 2026-10-04, build run
 `20261004T124141Z-c3747b7a` of plan `spec`. The contract task finished. `share-view-limit-store`
-and `share-view-limit-web` ran in parallel; each worker's slice gate went RED once in its own
+and `share-view-limit-web` ran in parallel. Each worker's slice gate went RED once in its own
 worktree (`neutral.lint` on `store/test/memo_share_test.go:212`, and the web area's lint), then
-GREEN, and each task ended `blocked` when `build check-return` rejected its return for an
+GREEN. Each task ended `blocked` when `build check-return` rejected its return for an
 `app-build` step a slice gate never records. That rejection is in no event or ledger line: the
 run's `REPORT.md` holds it as prose. `share-view-limit-api` never started.
 

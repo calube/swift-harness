@@ -25,9 +25,9 @@ failed" section:
 
 The view holds at most 10 gating findings and 10 failing tests per gate run and counts the rest as
 "+N more in the report". A task that ended `blocked` or `needs-replan` ends its task span there,
-halted, and its popover and drawer say "Why it stopped": its newest gate run RED, no return of it
-stored (`build check-return` rejected it, or none came back), or a halt of it, with the halt's
-reason and its last gate run. A `gate-red` halt names the RED gate run it stopped on. A gate run
+halted. Its popover and drawer say "Why it stopped": its newest gate run RED, no return of it
+stored, or a halt of it. They name the halt's reason and the last gate run. With no stored return,
+`build check-return` rejected the return, or none came back. A `gate-red` halt names the RED gate run it stopped on. A gate run
 whose `report.json` no live checkout holds, as in a removed worktree, still shows its failed tiers,
 rule counts and failing tests, and says its report isn't there; one that exists and doesn't read is
 a damage row.
@@ -38,7 +38,7 @@ run store holds it; failing that, to the task whose window holds its time.
 
 ## Privacy
 
-A RED gate's finding messages are the 1 piece of report text the view keeps. Each is put on 1 line
-and cut to 400 bytes. A path under a checkout becomes repo-relative; every other absolute path,
+A RED gate's finding messages are the 1 piece of report text the view keeps. The builder puts each on
+1 line and cuts it to 400 bytes. A path under a checkout becomes repo-relative; every other absolute path,
 home path or `file://` URL becomes `<path>`. A message the guard still rejects reads "message
-withheld". A finding with no file, or one outside the repository, shows no location.
+withheld". A finding with no file, or a file outside the repository, shows no location.
