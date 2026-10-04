@@ -1,0 +1,13 @@
+diff --git a/crates/ruff_text_size/tests/main.rs b/crates/ruff_text_size/tests/main.rs
+index 8d8dd09..ffb2710 100644
+--- a/crates/ruff_text_size/tests/main.rs
++++ b/crates/ruff_text_size/tests/main.rs
+@@ -77,3 +77,8 @@ fn contains_point() {
+     assert!(   range(1..3).contains_inclusive(size(3)));
+     assert!( ! range(1..3).contains_inclusive(size(4)));
+ }
++
++#[test]
++fn aborts() {
++    std::process::abort();
++}

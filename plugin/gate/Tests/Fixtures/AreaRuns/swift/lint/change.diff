@@ -1,0 +1,13 @@
+diff --git a/ElementX/Sources/Other/Extensions/Array.swift b/ElementX/Sources/Other/Extensions/Array.swift
+index 6b767c9..7d69973 100644
+--- a/ElementX/Sources/Other/Extensions/Array.swift
++++ b/ElementX/Sources/Other/Extensions/Array.swift
+@@ -95,3 +95,8 @@ nonisolated extension Array where Element == RoomTimelineItemProtocol {
+         }
+     }
+ }
++
++func firstLabel(_ values: [Any]) -> String {
++    let label = values.first as! String
++    return URL(string: label)!.absoluteString
++}

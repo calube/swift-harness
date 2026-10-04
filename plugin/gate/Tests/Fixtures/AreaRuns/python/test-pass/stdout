@@ -1,0 +1,10 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.13.11, pytest-9.1.1, pluggy-1.6.0
+rootdir: <repo>/gguf-py
+configfile: pyproject.toml
+collected 1 item
+
+gguf-py/tests/test_metadata.py .                                         [100%]
+
+- generated xml file: <repo>/.area-junit.xml -
+============================== 1 passed in 0.05s ===============================

@@ -1,0 +1,31 @@
+diff --git a/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt b/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
+index 14c96a7..3cf8315 100644
+--- a/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
++++ b/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
+@@ -44,7 +44,7 @@ class ServerSentEventIteratorTest {
+       |
+       """.trimMargin(),
+     )
+-    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n10"))
++    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n11"))
+   }
+ 
+   @Test
+@@ -58,7 +58,7 @@ class ServerSentEventIteratorTest {
+       |
+       """.trimMargin().replace("\n", "\r"),
+     )
+-    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n10"))
++    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n11"))
+   }
+ 
+   @Test
+@@ -72,7 +72,7 @@ class ServerSentEventIteratorTest {
+       |
+       """.trimMargin().replace("\n", "\r\n"),
+     )
+-    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n10"))
++    assertThat(callbacks.remove()).isEqualTo(Event(null, null, "YHOO\n+2\n11"))
+   }
+ 
+   @Test

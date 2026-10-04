@@ -1,0 +1,9 @@
+tools/list/list.go:167:2: ineffectual assignment to x (ineffassign)
+	x := 1
+	^
+tools/list/list.go:165:6: func unusedHelper is unused (unused)
+func unusedHelper() int {
+     ^
+2 issues:
+* ineffassign: 1
+* unused: 1

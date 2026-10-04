@@ -1,0 +1,15 @@
+diff --git a/tools/list/list.go b/tools/list/list.go
+index 27c4b96..a4f48b9 100644
+--- a/tools/list/list.go
++++ b/tools/list/list.go
+@@ -161,3 +161,10 @@ func ToChunks[T any](list []T, chunkSize int) [][]T {
+ 
+ 	return append(chunks, list)
+ }
++
++func unusedHelper() int {
++
++	x := 1
++	x = 2
++	return x
++}

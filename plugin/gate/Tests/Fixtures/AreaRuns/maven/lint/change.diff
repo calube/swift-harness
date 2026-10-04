@@ -1,0 +1,10 @@
+diff --git a/README.md b/README.md
+index eaabe91..c73af00 100644
+--- a/README.md
++++ b/README.md
+@@ -297,3 +297,5 @@ To configure CI for your project, run the ci-cd sub-generator (`jhipster ci-cd`)
+ - [DefinitelyTyped](https://definitelytyped.org/)
+ - [Angular CLI](https://angular.dev/tools/cli)
+ - [Cypress](https://www.cypress.io/)
++
++See http://example.com/docs for the old guide.

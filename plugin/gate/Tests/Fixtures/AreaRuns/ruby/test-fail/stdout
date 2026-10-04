@@ -1,0 +1,36 @@
+Run options: include {locations: {"./spec/rubocop/cop/style/redundant_return_spec.rb" => [6]}}
+
+Randomized with seed 42215
+F
+
+Failures:
+
+  1) RuboCop::Cop::Style::RedundantReturn reports an offense for def with only a return
+     Failure/Error: expect(new_source).to eq(correction)
+
+       expected: "def func\n  something_else\nensure\n  2\nend\n"
+            got: "def func\n  something\nensure\n  2\nend\n"
+
+       (compared using ==)
+
+       Diff:
+       @@ -1,5 +1,5 @@
+        def func
+       -  something_else
+       +  something
+        ensure
+          2
+        end
+     # ./lib/rubocop/rspec/expect_offense.rb:176:in 'RuboCop::RSpec::ExpectOffense#expect_correction'
+     # ./spec/rubocop/cop/style/redundant_return_spec.rb:16:in 'block (2 levels) in <top (required)>'
+     # <scratch>/bundle-rubocop/ruby/4.0.0/gems/webmock-3.26.4/lib/webmock/rspec.rb:39:in 'block (2 levels) in <top (required)>'
+
+Finished in 0.22264 seconds (files took 0.28938 seconds to load)
+1 example, 1 failure
+
+Failed examples:
+
+rspec ./spec/rubocop/cop/style/redundant_return_spec.rb:6 # RuboCop::Cop::Style::RedundantReturn reports an offense for def with only a return
+
+Randomized with seed 42215
+

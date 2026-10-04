@@ -1,0 +1,16 @@
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':okhttp-sse:test' (registered by plugin 'org.gradle.jvm-test-suite').
+> Test process encountered an unexpected problem.
+   > Process 'Gradle Test Executor 4' finished with non-zero exit value 3
+
+* Try:
+> Check common problems https://docs.gradle.org/9.6.1/userguide/java_testing.html#sec:java_testing_troubleshooting.
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 11s

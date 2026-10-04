@@ -1,0 +1,1 @@
+cargo test -p ruff_text_size --test main -- --exact sum

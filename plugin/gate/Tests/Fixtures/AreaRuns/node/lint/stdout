@@ -1,0 +1,8 @@
+
+<repo>/packages/api/src/dpi.ts
+  478:10  error  'debugScale' is defined but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+  479:9   error  'unused' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  480:3   error  Unexpected console statement                                                       no-console
+
+✖ 3 problems (3 errors, 0 warnings)
+

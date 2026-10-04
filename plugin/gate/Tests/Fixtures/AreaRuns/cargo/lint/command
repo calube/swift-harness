@@ -1,0 +1,1 @@
+cargo clippy -p ruff_text_size --locked

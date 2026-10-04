@@ -1,0 +1,16 @@
+diff --git a/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt b/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
+index 14c96a7..d48f4dc 100644
+--- a/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
++++ b/okhttp-sse/src/test/java/okhttp3/sse/internal/ServerSentEventIteratorTest.kt
+@@ -25,6 +25,11 @@ import org.junit.jupiter.api.AfterEach
+ import org.junit.jupiter.api.Test
+ 
+ class ServerSentEventIteratorTest {
++  @Test
++  fun exits() {
++    System.exit(3)
++  }
++
+   /** Either [Event] or [Long] items for events and retry changes, respectively.  */
+   private val callbacks: Deque<Any> = ArrayDeque()
+ 

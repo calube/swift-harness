@@ -1,0 +1,14 @@
+[1/1] Testing XcodeGenCoreTests.ArrayExtensionsTests/testSearchingForFirstIndex
+Test Suite 'Selected tests' started at 2026-10-03 23:19:14.098.
+Test Suite 'XcodeGenPackageTests.xctest' started at 2026-10-03 23:19:14.099.
+Test Suite 'ArrayExtensionsTests' started at 2026-10-03 23:19:14.099.
+Test Case '-[XcodeGenCoreTests.ArrayExtensionsTests testSearchingForFirstIndex]' started.
+<repo>/Tests/XcodeGenCoreTests/ArrayExtensionsTests.swift:8: error: -[XcodeGenCoreTests.ArrayExtensionsTests testSearchingForFirstIndex] : XCTAssertEqual failed: ("Optional(2)") is not equal to ("Optional(3)")
+Test Case '-[XcodeGenCoreTests.ArrayExtensionsTests testSearchingForFirstIndex]' failed (0.090 seconds).
+Test Suite 'ArrayExtensionsTests' failed at 2026-10-03 23:19:14.189.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.090 (0.090) seconds
+Test Suite 'XcodeGenPackageTests.xctest' failed at 2026-10-03 23:19:14.189.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.090 (0.090) seconds
+Test Suite 'Selected tests' failed at 2026-10-03 23:19:14.189.
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.090 (0.091) seconds
+

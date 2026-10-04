@@ -1,0 +1,13 @@
+diff --git a/spec/rubocop/cop/style/redundant_return_spec.rb b/spec/rubocop/cop/style/redundant_return_spec.rb
+index 4d01d31..f88d3b9 100644
+--- a/spec/rubocop/cop/style/redundant_return_spec.rb
++++ b/spec/rubocop/cop/style/redundant_return_spec.rb
+@@ -15,7 +15,7 @@ RSpec.describe RuboCop::Cop::Style::RedundantReturn, :config do
+ 
+     expect_correction(<<~RUBY)
+       def func
+-        something
++        something_else
+       ensure
+         2
+       end

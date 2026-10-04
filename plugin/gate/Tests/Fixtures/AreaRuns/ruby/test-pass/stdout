@@ -1,0 +1,10 @@
+Run options: include {locations: {"./spec/rubocop/cop/style/redundant_return_spec.rb" => [6]}}
+
+Randomized with seed 55579
+.
+
+Finished in 0.24682 seconds (files took 1.46 seconds to load)
+1 example, 0 failures
+
+Randomized with seed 55579
+

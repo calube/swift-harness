@@ -1,0 +1,13 @@
+diff --git a/gguf-py/tests/test_metadata.py b/gguf-py/tests/test_metadata.py
+index b77c563..bbd0223 100755
+--- a/gguf-py/tests/test_metadata.py
++++ b/gguf-py/tests/test_metadata.py
+@@ -16,7 +16,7 @@ class TestMetadataMethod(unittest.TestCase):
+ 
+     def test_id_to_title(self):
+         self.assertEqual(gguf.Metadata.id_to_title("Mixtral-8x7B-Instruct-v0.1"), "Mixtral 8x7B Instruct v0.1")
+-        self.assertEqual(gguf.Metadata.id_to_title("Meta-Llama-3-8B"), "Meta Llama 3 8B")
++        self.assertEqual(gguf.Metadata.id_to_title("Meta-Llama-3-8B"), "Meta Llama 3 70B")
+         self.assertEqual(gguf.Metadata.id_to_title("hermes-2-pro-llama-3-8b-DPO"), "Hermes 2 Pro Llama 3 8b DPO")
+ 
+     def test_get_model_id_components(self):

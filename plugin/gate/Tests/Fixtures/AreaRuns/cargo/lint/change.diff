@@ -1,0 +1,12 @@
+diff --git a/crates/ruff_text_size/src/size.rs b/crates/ruff_text_size/src/size.rs
+index aa4a857..c76bfc9 100644
+--- a/crates/ruff_text_size/src/size.rs
++++ b/crates/ruff_text_size/src/size.rs
+@@ -217,3 +217,7 @@ where
+         iter.fold(0.into(), Add::add)
+     }
+ }
++
++pub fn is_empty_list(values: &Vec<u32>) -> bool {
++    values.len() == 0
++}

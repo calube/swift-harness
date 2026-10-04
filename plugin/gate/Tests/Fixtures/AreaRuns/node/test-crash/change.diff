@@ -1,0 +1,14 @@
+diff --git a/packages/turbo-utils/__tests__/convert-case.test.ts b/packages/turbo-utils/__tests__/convert-case.test.ts
+index 429907e..94b35a7 100644
+--- a/packages/turbo-utils/__tests__/convert-case.test.ts
++++ b/packages/turbo-utils/__tests__/convert-case.test.ts
+@@ -22,3 +22,9 @@ describe("convertCase", () => {
+     }
+   );
+ });
++
++describe("abort", () => {
++  it("aborts the process", () => {
++    process.abort();
++  });
++});

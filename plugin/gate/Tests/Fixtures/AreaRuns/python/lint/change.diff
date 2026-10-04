@@ -1,0 +1,18 @@
+diff --git a/gguf-py/gguf/utility.py b/gguf-py/gguf/utility.py
+index 154351d..ee746f0 100644
+--- a/gguf-py/gguf/utility.py
++++ b/gguf-py/gguf/utility.py
+@@ -5,6 +5,7 @@ from pathlib import Path
+ from typing import Literal
+ 
+ import os
++import tempfile
+ import json
+ import numpy as np
+ 
+@@ -338,3 +339,5 @@ class SafetensorsLocal:
+ 
+     def __exit__(self, *args, **kwargs):
+         del args, kwargs  # unused
++def _unused():
++    value = 1 

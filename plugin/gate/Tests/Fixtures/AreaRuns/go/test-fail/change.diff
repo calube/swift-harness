@@ -1,0 +1,13 @@
+diff --git a/tools/list/list_test.go b/tools/list/list_test.go
+index c1cd9b3..0ba78fe 100644
+--- a/tools/list/list_test.go
++++ b/tools/list/list_test.go
+@@ -38,7 +38,7 @@ func TestSubtractSliceString(t *testing.T) {
+ 		{
+ 			[]string{"1", "2", "3", "4", "7"},
+ 			[]string{"2", "4", "5", "6"},
+-			`["1","3","7"]`,
++			`["1","3"]`,
+ 		},
+ 	}
+ 

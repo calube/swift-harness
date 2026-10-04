@@ -1,0 +1,16 @@
+diff --git a/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java b/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
+index 2d0ea5d..962dfbb 100644
+--- a/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
++++ b/src/test/java/io/github/jhipster/sample/security/SecurityUtilsUnitTest.java
+@@ -21,6 +21,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
+  */
+ class SecurityUtilsUnitTest {
+ 
++    @Test
++    void exits() {
++        System.exit(3);
++    }
++
+     @BeforeEach
+     @AfterEach
+     void cleanup() {

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="okhttp3.sse.internal.ServerSentEventIteratorTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-10-04T04:00:27.678Z" hostname="<host>" time="0.109">
+  <properties/>
+  <testcase name="multiline()" classname="okhttp3.sse.internal.ServerSentEventIteratorTest" time="0.072">
+    <failure message="org.opentest4j.AssertionFailedError: expected:&lt;...null, data=YHOO&#10;+2&#10;1[1])&gt; but was:&lt;...null, data=YHOO&#10;+2&#10;1[0])&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected:&lt;...null, data=YHOO
++2
+1[1])&gt; but was:&lt;...null, data=YHOO
++2
+1[0])&gt;
+	at okhttp3.sse.internal.ServerSentEventIteratorTest.multiline(ServerSentEventIteratorTest.kt:47)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

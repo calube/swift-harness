@@ -1,0 +1,16 @@
+diff --git a/tools/list/exit_test.go b/tools/list/exit_test.go
+new file mode 100644
+index 0000000..cf480b4
+--- /dev/null
++++ b/tools/list/exit_test.go
+@@ -0,0 +1,10 @@
++package list_test
++
++import (
++	"os"
++	"testing"
++)
++
++func TestExit(t *testing.T) {
++	os.Exit(3)
++}

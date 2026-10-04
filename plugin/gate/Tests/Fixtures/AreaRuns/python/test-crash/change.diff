@@ -1,0 +1,14 @@
+diff --git a/gguf-py/tests/test_metadata.py b/gguf-py/tests/test_metadata.py
+index b77c563..f3d0f56 100755
+--- a/gguf-py/tests/test_metadata.py
++++ b/gguf-py/tests/test_metadata.py
+@@ -236,3 +236,9 @@ class TestMetadataMethod(unittest.TestCase):
+ 
+ if __name__ == "__main__":
+     unittest.main()
++
++
++class TestAbort(unittest.TestCase):
++
++    def test_abort(self):
++        os.abort()

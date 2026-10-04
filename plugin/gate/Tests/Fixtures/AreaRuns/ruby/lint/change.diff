@@ -1,0 +1,16 @@
+diff --git a/app/lib/hashtag_normalizer.rb b/app/lib/hashtag_normalizer.rb
+index 5347271..2918e3f 100644
+--- a/app/lib/hashtag_normalizer.rb
++++ b/app/lib/hashtag_normalizer.rb
+@@ -5,6 +5,11 @@ class HashtagNormalizer
+     remove_invalid_characters(ascii_folding(lowercase(cjk_width(str))))
+   end
+ 
++  def debug_label(str)
++    unused = str.length
++    return "tag: " + str
++  end
++
+   private
+ 
+   def remove_invalid_characters(str)
