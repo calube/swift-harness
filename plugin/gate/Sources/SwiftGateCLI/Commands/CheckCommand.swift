@@ -894,12 +894,27 @@ struct CheckCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     if tier.profile == .brownfield {
+      // Area roots are toplevel-relative, so a tier started in a subdirectory gates from the
+      // toplevel; an owned project may sit below its worktree's toplevel, so it keeps the cwd.
+      let toplevel: Result<URL, GitError>
+      do throws(GitError) {
+        toplevel = .success(
+          try await BrownfieldCheck.repositoryRoot(
+            from: root, git: LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)))
+      } catch {
+        toplevel = .failure(error)
+      }
+      let gated = (try? toplevel.get()) ?? root
       try await GateRun.execute(
-        root: root, format: output.format, command: "check \(tier.rawValue)", base: base,
+        root: gated, format: output.format, command: "check \(tier.rawValue)", base: base,
         checkTier: tier
       ) { context in
-        try await BrownfieldCheck.run(
-          root: root, tier: tier, base: base, refusing: ownedOnlyOptions, context: context)
+        if case .failure(let error) = toplevel {
+          return try BrownfieldCheck.notRun(
+            tier, because: "can't find the git worktree's toplevel from \(root.path): \(error)")
+        }
+        return try await BrownfieldCheck.run(
+          root: gated, tier: tier, base: base, refusing: ownedOnlyOptions, context: context)
       }
       return
     }
