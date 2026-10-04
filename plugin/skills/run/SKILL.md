@@ -237,8 +237,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 ## 9. Report
 
 `"$SG" run report <slug>` writes the report to `<plan-dir>` and prints it: the assumptions, the
-baseline failures, the build-only areas, the dropped steps, the review fallbacks and the plan
-branch to merge. Its first line says whether the run finished: a run that left any task blocked
+baseline failures, the build-only areas, the dropped steps, each task's review depth, the review
+fallbacks and the plan branch to merge. Its first line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
 line, covers only what merged. Print it as your last message as written. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.

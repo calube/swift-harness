@@ -188,4 +188,27 @@ struct BrownfieldMergeCheckTests {
       })
     #expect(Self.verdict(parts) == .red)
   }
+
+  @Test(
+    "merge and final hand gate.run the count of failures the baseline absorbed, 0 when none failed — catches the final gate of the fifth memos trial, which absorbed 3 and wrote no baselineCount"
+  )
+  func baselineCountReachesTheGateRun() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let known = FakeAreaCommandRunner { request in
+      request.step == .build ? .failed(exit: 1, tail: "known build failure", junit: nil) : .passed
+    }
+    for tier in [CheckTier.merge, .final] {
+      let absorbed = try await Self.run(
+        clone, tier: tier, areas: [Self.area("web"), Self.area("api")],
+        changed: ["web/src/lib.js"], runner: known)
+      #expect(Self.verdict(absorbed) == .green, "\(tier)")
+      #expect(absorbed.baselineCount == (tier == .final ? 2 : 1), "\(tier)")
+    }
+
+    let clean = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("web")], changed: ["web/src/lib.js"],
+      runner: FakeAreaCommandRunner { _ in .passed })
+    #expect(clean.baselineCount == 0)
+  }
 }
