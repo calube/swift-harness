@@ -44,11 +44,13 @@ enum QALintRun {
       return .success(
         Inputs(
           schemas: schemas,
-          ids: .unconfigured(reason: "a brownfield clone's config.toml declares no accessibility ids")))
+          ids: .unconfigured(
+            reason: "a brownfield clone's config.toml declares no accessibility ids")))
     case nil:
       return .success(
         Inputs(
-          schemas: schemas, ids: .unconfigured(reason: "this repository has no \(Config.fileName)")))
+          schemas: schemas, ids: .unconfigured(reason: "this repository has no \(Config.fileName)"))
+      )
     }
     guard let path = config.qa.accessibilityIDs else {
       return .success(
@@ -102,7 +104,8 @@ enum QALintRun {
       encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
       return String(decoding: (try? encoder.encode(report)) ?? Data(), as: UTF8.self)
     }
-    return (["\(command): \(report.verdict.rawValue) \(report.message)"]
+    return
+      (["\(command): \(report.verdict.rawValue) \(report.message)"]
       + report.findings.map { "  \($0.ruleID) \($0.file): \($0.message)" })
       .joined(separator: "\n")
   }

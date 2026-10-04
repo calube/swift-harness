@@ -129,7 +129,9 @@ struct ScenarioQAConfigTests {
     #expect(unset.qa.accessibilityIDs == nil)
     let set = try ConfigSchema.config(
       from: root(merging: [
-        "qa": .table(["accessibility_ids": .string("Packages/IDs/Sources/IDs/AccessibilityID.swift")])
+        "qa": .table([
+          "accessibility_ids": .string("Packages/IDs/Sources/IDs/AccessibilityID.swift")
+        ])
       ]))
     #expect(set.qa.accessibilityIDs == "Packages/IDs/Sources/IDs/AccessibilityID.swift")
   }

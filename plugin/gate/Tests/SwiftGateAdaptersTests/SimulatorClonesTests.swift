@@ -1,8 +1,8 @@
 import Foundation
-import Synchronization
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 /// `simctl` calls answered with recorded output from `gate/Fixtures/simctl/capture.sh`.
@@ -367,7 +367,8 @@ struct SimulatorClonesBootedBaseTests {
     #expect(fake.calls.contains(.clone(udid: "BASE-1", name: "swift-harness-4242-tok")))
     let seen = notes.withLock { $0 }
     #expect(seen.map(\.ruleID) == ["sim.base-ambiguous"])
-    #expect(seen.first.map { $0.message.contains("BASE-1") && $0.message.contains("BASE-2") } == true)
+    #expect(
+      seen.first.map { $0.message.contains("BASE-1") && $0.message.contains("BASE-2") } == true)
 
     let single = FakeSimctl(devices: [shutDown("BASE-1")])
     _ = try await SimulatorClones(

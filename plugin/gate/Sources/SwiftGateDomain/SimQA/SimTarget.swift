@@ -53,8 +53,9 @@ public struct SimTarget: Sendable, Equatable {
   /// The target of `config`'s 1 `xcode` area: its workspace or project, the scheme its `test`
   /// command builds (else its first scheme), and the device that command's `-destination` names.
   /// The simulator limits and the session timeout take their defaults, and no scenario exists.
-  public static func brownfield(_ config: BrownfieldConfig) -> Result<SimTarget, SimTargetUnavailable>
-  {
+  public static func brownfield(_ config: BrownfieldConfig) -> Result<
+    SimTarget, SimTargetUnavailable
+  > {
     let areas = config.areas.filter { $0.xcode != nil }
     guard let area = areas.first, let xcode = area.xcode, areas.count == 1 else {
       let names = config.areas.map { "\($0.name) (\($0.kind.rawValue))" }

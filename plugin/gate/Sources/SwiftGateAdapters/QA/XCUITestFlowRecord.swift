@@ -138,8 +138,10 @@ public struct XCUITestFlowRecorder: Sendable {
           videoGap = .noVideoAttachment
         }
       } else {
-        gap(.video, "\(test.identifier) kept no screen recording: is the test plan's "
-          + "uiTestingScreenshotsLifetime keepAlways?")
+        gap(
+          .video,
+          "\(test.identifier) kept no screen recording: is the test plan's "
+            + "uiTestingScreenshotsLifetime keepAlways?")
         videoGap = .noVideoAttachment
       }
     } catch {

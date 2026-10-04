@@ -25,7 +25,8 @@ struct XCUITestFlowTests {
   )
   func counterStepsOnTheVideoClock() throws {
     let activities = try Self.activities("pass", "testIncrementAndDecrementUpdateTheDisplayedCount")
-    let video = try #require(XCUITestFlow.video(of: Self.counterTest, in: try Self.attachments("pass")))
+    let video = try #require(
+      XCUITestFlow.video(of: Self.counterTest, in: try Self.attachments("pass")))
 
     let steps = XCUITestFlow.steps(activities, videoStart: video.timestamp, passed: true)
 
@@ -52,7 +53,8 @@ struct XCUITestFlowTests {
   )
   func failingStepNotOK() throws {
     let activities = try Self.activities("fail", "testIncrementAndDecrementUpdateTheDisplayedCount")
-    let video = try #require(XCUITestFlow.video(of: Self.counterTest, in: try Self.attachments("fail")))
+    let video = try #require(
+      XCUITestFlow.video(of: Self.counterTest, in: try Self.attachments("fail")))
 
     let steps = XCUITestFlow.steps(activities, videoStart: video.timestamp, passed: false)
 

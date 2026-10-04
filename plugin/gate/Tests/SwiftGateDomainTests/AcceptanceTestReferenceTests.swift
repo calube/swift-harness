@@ -29,7 +29,8 @@ struct AcceptanceTestReferenceTests {
     #expect(
       AcceptanceTestReference.parse("  test web:   src/export.test.ts ")
         == AcceptanceTestReference(area: "web", id: "src/export.test.ts"))
-    #expect(AcceptanceTestReference.parse("AidokuTests/LargeDownloadConfirmationTests.swift") == nil)
+    #expect(
+      AcceptanceTestReference.parse("AidokuTests/LargeDownloadConfirmationTests.swift") == nil)
     #expect(AcceptanceTestReference.parse("pytest api/tests/test_download.py") == nil)
     #expect(AcceptanceTestReference.parse("test -f build/out.csv") == nil)
     #expect(AcceptanceTestReference.parse("qa/export.acceptance.sh") == nil)
@@ -88,7 +89,8 @@ struct AcceptanceTestReferenceTests {
     "with several test-running areas the check must name 1, and a named area must exist and be able to narrow its tests — catches a test run in the wrong area or run whole"
   )
   func areaChoice() throws {
-    let web = area("web", kind: .node, root: "web", test: "npm test", testFiles: "npx vitest run {files}")
+    let web = area(
+      "web", kind: .node, root: "web", test: "npm test", testFiles: "npx vitest run {files}")
     let docs = area("docs", kind: .command, test: "make docs-test")
     let buildOnly = area("tools", kind: .command)
 

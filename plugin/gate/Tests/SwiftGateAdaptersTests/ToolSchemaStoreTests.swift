@@ -16,9 +16,10 @@ struct ToolSchemaStoreTests {
     let schemas = try ToolSchemaStore.load(pluginRoot: Self.pluginRoot)
 
     #expect(schemas.version == AgentDevicePin.version)
-    #expect(["wait", "is", "press", "get", "snapshot", "screenshot"].allSatisfy {
-      schemas.commands[$0] != nil
-    })
+    #expect(
+      ["wait", "is", "press", "get", "snapshot", "screenshot"].allSatisfy {
+        schemas.commands[$0] != nil
+      })
     #expect(schemas.commands["batch"] != nil)
   }
 
@@ -42,7 +43,8 @@ struct ToolSchemaStoreTests {
       _ = try ToolSchemaStore.load(pluginRoot: root)
     }
 
-    #expect(error == .versionMismatch(path: file.path, found: "0.21.20", pin: AgentDevicePin.version))
+    #expect(
+      error == .versionMismatch(path: file.path, found: "0.21.20", pin: AgentDevicePin.version))
     let message = error.map(String.init(describing:)) ?? ""
     #expect(message.contains("0.21.20") && message.contains(AgentDevicePin.version))
   }

@@ -94,11 +94,12 @@ public struct QACheckJudgement: Sendable, Equatable {
   /// placeholder, or else the last non-empty line of stderr, then of stdout; scrubbed and cut.
   private static func failureLine(_ input: Input) -> String? {
     var line: String?
-    let failed = input.report.flatMap(JUnitReports.cases)?.compactMap {
-      testCase -> (XUnitTestCase, String)? in
-      guard case .failed(let message) = testCase.outcome else { return nil }
-      return (testCase, message.trimmingCharacters(in: .whitespacesAndNewlines))
-    } ?? []
+    let failed =
+      input.report.flatMap(JUnitReports.cases)?.compactMap {
+        testCase -> (XUnitTestCase, String)? in
+        guard case .failed(let message) = testCase.outcome else { return nil }
+        return (testCase, message.trimmingCharacters(in: .whitespacesAndNewlines))
+      } ?? []
     if let (_, message) = failed.first(where: { !$0.1.isEmpty && $0.1 != "failure" }) {
       line = message
     } else if let (testCase, _) = failed.first {
