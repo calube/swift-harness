@@ -96,7 +96,10 @@ struct SimAuditScopeTests {
     let report = try Self.judged(try Self.targeted([#"role=button label=\"Settings\""#]))
     #expect(report.findings.map(\.rule) == Array(repeating: .a11yIdentifier, count: 5))
     #expect(report.findings.map(\.step) == [1, 2, 3, 4, 5])
-    #expect(report.findings.allSatisfy { $0.message.hasSuffix("Button \"Settings\" has no accessibility identifier") })
+    #expect(
+      report.findings.allSatisfy {
+        $0.message.hasSuffix("Button \"Settings\" has no accessibility identifier")
+      })
     #expect(report.verdict == .red)
   }
 

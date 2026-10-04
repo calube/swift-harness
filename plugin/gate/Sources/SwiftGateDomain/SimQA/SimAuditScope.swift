@@ -114,7 +114,7 @@ public struct SimSelector: Sendable, Equatable {
       case .object(let fields):
         for name in fields.keys.sorted() { fields[name].map { visit($0, key: name) } }
       case .array(let values):
-        values.forEach { visit($0, key: key) }
+        for item in values { visit(item, key: key) }
       case .string(let text):
         guard !FlowRules.contentKeys.contains(key ?? ""), let selector = parse(text),
           !found.contains(where: { $0.raw == selector.raw })
