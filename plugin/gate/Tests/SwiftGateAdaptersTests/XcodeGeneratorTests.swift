@@ -160,11 +160,26 @@ struct XcodeGeneratorTests {
     let generator = XcodeGenerator(
       runner: runner, repositoryRoot: repository.root, layout: Self.layout(repository))
 
-    let outcome = await generator.generate(
+    func config(_ inclusion: XcodeInclusion, manifest: String?) -> XcodeAreaConfig {
+      XcodeAreaConfig(
+        workspace: "\(Self.tuistRoot)/App.xcworkspace", project: nil, inclusion: inclusion,
+        manifest: manifest, schemes: [])
+    }
+    for inclusion in [XcodeInclusion.synchronized, .explicit] {
+      #expect(
+        XcodeGenerateRequest(
+          xcode: config(inclusion, manifest: "\(Self.tuistRoot)/Project.swift"),
+          generatedProjectTracked: false) == nil)
+    }
+    #expect(
+      XcodeGenerateRequest(xcode: config(.tuist, manifest: nil), generatedProjectTracked: false)
+        == nil)
+    let request = try #require(
       XcodeGenerateRequest(
-        tool: .tuist, manifest: "\(Self.tuistRoot)/Project.swift",
-        generatedProjectTracked: false)
-    ) { $0.tree.standardizedFileURL.path }
+        xcode: config(.tuist, manifest: "\(Self.tuistRoot)/Project.swift"),
+        generatedProjectTracked: false))
+
+    let outcome = await generator.generate(request) { $0.tree.standardizedFileURL.path }
 
     guard case .generated(let generation, let tree) = outcome else {
       Issue.record("expected a generation, got \(outcome)")
@@ -273,5 +288,101 @@ struct XcodeGeneratorTests {
       ])
         == XcodeGeneratorPin(version: "2.45.3", source: "ios/App/Mintfile"))
     #expect(pin(["Mintfile": "yonaskolb/XcodeGen@2.42.0\n"], tool: .tuist) == nil)
+    #expect(pin([".mise.toml": "[tools]\ntuist = \"4.210.0\"\n"]) == nil)
+  }
+
+  @Test(
+    "a project.yaml spec is named with --spec — catches XcodeGen looking for a project.yml that isn't there"
+  )
+  func yamlSpecIsNamed() async throws {
+    let repository = try await Self.xcodegenClone(pin: nil)
+    defer { repository.remove() }
+    var replays = try Self.xcodegenReplays()
+    replays[["/usr/bin/env", "xcodegen", "generate", "--spec", "project.yaml"]] =
+      replays[["/usr/bin/env", "xcodegen", "generate"]]
+    let runner = ReplayRunner(git: repository.runner, replays: replays)
+    let generator = XcodeGenerator(
+      runner: runner, repositoryRoot: repository.root, layout: Self.layout(repository))
+
+    let outcome = await generator.generate(
+      XcodeGenerateRequest(
+        tool: .xcodegen, manifest: "\(Self.xcodegenRoot)/project.yaml",
+        generatedProjectTracked: false)
+    ) { _ in true }
+
+    guard case .generated = outcome else {
+      Issue.record("expected a generation, got \(outcome)")
+      return
+    }
+    #expect(
+      runner.generatorInvocations.last?.arguments
+        == ["xcodegen", "generate", "--spec", "project.yaml"])
+  }
+
+  @Test(
+    "a generate that exits nonzero, a version the tool doesn't print, a launch failure and a scratch tree outside git each stop before the body — catches a failed generate reported as generated"
+  )
+  func failuresStopBeforeTheBody() async throws {
+    let repository = try await Self.xcodegenClone(pin: nil)
+    defer { repository.remove() }
+    let version = try Self.replay("xcodegen/xcodegen-version")
+    let request = XcodeGenerateRequest(
+      tool: .xcodegen, manifest: "\(Self.xcodegenRoot)/project.yml",
+      generatedProjectTracked: false)
+    func outcome(
+      _ replays: [[String]: ReplayRunner.Replay], root: URL? = nil, tracked: Bool = false
+    )
+      async -> XcodeGenerateOutcome<Bool>
+    {
+      let runner = ReplayRunner(git: repository.runner, replays: replays)
+      let generator = XcodeGenerator(
+        runner: runner, repositoryRoot: root ?? repository.root,
+        layout: Self.layout(repository))
+      return await generator.generate(
+        XcodeGenerateRequest(
+          tool: request.tool, manifest: request.manifest, generatedProjectTracked: tracked)
+      ) { _ in true }
+    }
+
+    let failing = ReplayRunner.Replay(status: 1, stdout: "", stderr: "")
+    #expect(
+      await outcome([
+        ["/usr/bin/env", "xcodegen", "--version"]: version,
+        ["/usr/bin/env", "xcodegen", "generate"]: failing,
+      ]) == .failed(tool: .xcodegen, status: .exited(1), output: ""))
+
+    guard case .failed = await outcome([["/usr/bin/env", "xcodegen", "--version"]: failing])
+    else {
+      Issue.record("a failing version query must be a failure")
+      return
+    }
+    let silent = ReplayRunner.Replay(status: 0, stdout: "", stderr: "")
+    guard case .failed = await outcome([["/usr/bin/env", "xcodegen", "--version"]: silent])
+    else {
+      Issue.record("a version the tool didn't print must be a failure")
+      return
+    }
+    guard case .blocked = await outcome([:]) else {
+      Issue.record("a launch failure must block")
+      return
+    }
+
+    let outside = FileManager.default.temporaryDirectory
+      .appending(path: "swiftgate-nogit-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: outside) }
+    let runner = ReplayRunner(
+      git: repository.runner, replays: [["/usr/bin/env", "xcodegen", "--version"]: version])
+    let generator = XcodeGenerator(
+      runner: runner, repositoryRoot: outside, layout: Self.layout(repository))
+    let scratchless = await generator.generate(
+      XcodeGenerateRequest(
+        tool: .xcodegen, manifest: request.manifest, generatedProjectTracked: true)
+    ) { _ in true }
+    guard case .blocked = scratchless else {
+      Issue.record("a scratch tree that can't be made must block, got \(scratchless)")
+      return
+    }
+    #expect(!runner.generatorInvocations.contains { $0.arguments.contains("generate") })
   }
 }
