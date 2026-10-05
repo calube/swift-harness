@@ -175,7 +175,7 @@ struct ViewServerEnsurerTests {
       try folder.write(
         page: Data("<html></html>".utf8),
         view: Data("{\"run\":{\"state\":\"\(state)\",\"snapshotAt\":\(snapshot)}}".utf8),
-        linked: [], from: [common])
+        carrying: .init(carried: [], left: []), from: [common])
     }
     try write(state: "running", snapshotAt: "2026-10-04T05:00:00Z")
     #expect(!folder.isFinal)

@@ -120,14 +120,15 @@ enum ReportRun {
     var view = RunViewBuilder.build(input)
     if view.run.state != .done { view.run.snapshotAt = now }
     let runs = reader.runRoots.map { $0.url(RunLayout.runsDirectory, directoryHint: .isDirectory) }
-    let linked = view.validation?.linkedFiles ?? []
+    let carriage = RunReportFolder.carriage(
+      view.validation?.linkedFiles ?? [], first: view.validation?.flowFiles ?? [], under: runs)
     if format == .html {
       view.evidenceBase = RunReportFolder.evidenceBase
-      for missing in RunReportFolder.missing(linked, under: runs) {
+      view.evidenceFiles = carriage.carried.sorted()
+      for left in carriage.left {
+        guard let reason = left.reason else { continue }
         view.damage.append(
-          RunView.Damage(
-            source: RunReportFolder.evidenceBase + missing,
-            reason: "linked by a flow but not in its run directory, so not copied"))
+          RunView.Damage(source: RunReportFolder.evidenceBase + left.relative, reason: reason))
       }
     }
     let json: Data
@@ -167,7 +168,7 @@ enum ReportRun {
       }
       do {
         let page = Data(try ViewerTemplate.load(pluginRoot: pluginRoot).render(viewJSON: json).utf8)
-        try folder.write(page: page, view: json, linked: linked, from: runs)
+        try folder.write(page: page, view: json, carrying: carriage, from: runs)
       } catch {
         return blocked("\(display): \(error)")
       }
