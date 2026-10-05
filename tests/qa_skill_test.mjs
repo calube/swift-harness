@@ -7,7 +7,8 @@
 // closes the app that `sim up` and `sim down` own; a verdict the skill states on its own; a flow
 // kept without asking, past `max_flows`, or without the typed accessibility ids; prepared
 // validation rows explored past instead of run first; a validation worker that writes outside its
-// test files and `.harness/qa/<plan>/`, or adds a contract name itself; and a skill tuned to one app.
+// test files and `.harness/qa/<plan>/`, adds a contract name itself, or proves a red by hand rather
+// than through `qa run --at-base --prepared-by`; and a skill tuned to one app.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
@@ -146,26 +147,26 @@ export function workerProblems(text) {
 }
 
 /**
- * Where a validation worker's red run falls short of the judge `qa run` uses after the merge: its
- * `## Record why each check fails now` section runs a flow through `sim up`, `sim snap`, `sim down`
- * and `sim verify`, in that order, takes the red run from `sim verify`, and never counts a raw
- * `agent-device batch` result as one. A worker that read its red from the batch alone first saw the
- * audit and press failures only after its tasks merged.
+ * Where a validation worker's red run falls short of the judge the gate uses: its
+ * `## Record why each check fails now` section proves its prepared checks with 1
+ * `qa run --at-base --prepared-by`, which leases the device, snaps each step and judges with
+ * `sim verify` as the post-merge run does, and never drives a `sim` step or an `agent-device batch`
+ * by hand. A worker that proved its reds by hand spent its own `sim up`s on a red that
+ * `qa run --at-base` repeated minutes later.
  */
 export function redRunProblems(text) {
   const section_ = section(text, 'Record why each check fails now')
   if (!section_) return ['the brief has no `## Record why each check fails now` section']
   const problems = []
-  const steps = simStepLines(section_)
-  const order = ['up', 'snap', 'down', 'verify']
-  for (const step of order) if (!(step in steps)) problems.push(`the red run never runs \`sim ${step}\``)
-  const present = order.filter(step => step in steps)
-  for (let i = 1; i < present.length; i++) {
-    if (steps[present[i]] < steps[present[i - 1]]) problems.push(`the red run's \`sim ${present[i]}\` comes before \`sim ${present[i - 1]}\``)
+  const invocations = extractInvocations(section_)
+  const prepared = invocations.some(({ words }) =>
+    words[0] === 'qa' && words[1] === 'run' && words.includes('--at-base') && words.includes('--prepared-by'))
+  if (!prepared) problems.push('the red run never runs `qa run --at-base --prepared-by`')
+  for (const step of Object.keys(simStepLines(section_))) problems.push(`the red run runs \`sim ${step}\` by hand`)
+  if (/\bagent-device\s+batch\b[^\n]*--steps-file/.test(section_)) problems.push('the red run drives a raw `agent-device batch`')
+  if (!/`guard\.validation-flow-by-hand`/.test(flat(section_))) {
+    problems.push('the brief never says a raw batch of a prepared flow is denied')
   }
-  const prose = flat(section_)
-  if (!/red run is `sim verify`'s/.test(prose)) problems.push('the red run is never `sim verify`\'s verdict')
-  if (!/batch[^.]*\bnever a red run\b/i.test(prose)) problems.push('the brief never says a batch\'s output alone is not a red run')
   return problems
 }
 
@@ -281,20 +282,21 @@ const tests = {
     assert.deepEqual(workerProblems('# Brief\n'), ['the brief has no `## Write set` section'])
   },
 
-  'the validation worker records each flow\'s red run through sim up, snap, down and verify, and takes it from sim verify, never a raw batch — catches a pre-merge red the post-merge judge disagrees with'() {
+  'the validation worker proves its prepared checks red with 1 qa run --at-base --prepared-by and never by hand — catches a pre-merge red the gate\'s judge never saw'() {
     assert.deepEqual(redRunProblems(read(WORKER)), [])
   },
 
-  'the red-run check names a batch-only red run, a verify before down and a missing section — catches a check that passes anything'() {
+  'the red-run check names a hand-driven sim run, a raw batch, a missing qa run and a missing section — catches a check that passes anything'() {
     const text = ['# Brief', '', '## Record why each check fails now', '', '```bash',
       '"$SG" sim up --json', 'agent-device batch --steps-file f --udid <udid> --session <session> --json',
-      '"$SG" sim verify <runID> --json', '"$SG" sim down <runID> --json', '```', '',
+      '"$SG" sim verify <runID> --json', '"$SG" qa run --plan <plan> --at-base --json', '```', '',
       'Record the failing step\'s number and message from the batch output.', '', '## Return', ''].join('\n')
     assert.deepEqual(redRunProblems(text), [
-      'the red run never runs `sim snap`',
-      'the red run\'s `sim verify` comes before `sim down`',
-      'the red run is never `sim verify`\'s verdict',
-      'the brief never says a batch\'s output alone is not a red run',
+      'the red run never runs `qa run --at-base --prepared-by`',
+      'the red run runs `sim up` by hand',
+      'the red run runs `sim verify` by hand',
+      'the red run drives a raw `agent-device batch`',
+      'the brief never says a raw batch of a prepared flow is denied',
     ])
     assert.deepEqual(redRunProblems('# Brief\n'), ['the brief has no `## Record why each check fails now` section'])
   },

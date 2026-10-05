@@ -17,6 +17,9 @@ enum QARunRun {
     var atBase = false
     /// Every ready row, with each flow recorded and its logs saved.
     var final = false
+    /// With `atBase`, only the rows this task writes, read from the checkout's prepared
+    /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
+    var preparedBy: String?
   }
 
   struct Dependencies: Sendable {
@@ -53,6 +56,11 @@ enum QARunRun {
     if options.final, options.atBase || options.after != nil {
       return blocked(
         "--final runs every ready row on the checkout, so it takes neither --at-base nor --after")
+    }
+    if options.preparedBy != nil, !options.atBase || options.after != nil || options.final {
+      return blocked(
+        "--prepared-by runs a validation task's checks at the merge base before `qa adopt`, so "
+          + "it needs --at-base and takes neither --after nor --final")
     }
     if options.final, dependencies.flows != nil, dependencies.finalPass == nil {
       return blocked("--final has no recorder to record its flows with")
@@ -130,7 +138,29 @@ enum QARunRun {
         merged = progress.merged
       }
     }
-    let runPlan = QARunPlan.make(table: table, merged: merged, after: options.after)
+    var runPlan = QARunPlan.make(table: table, merged: merged, after: options.after)
+    var prepared: String?
+    var notes: [String] = []
+    if let writer = options.preparedBy {
+      let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
+      let folder = root.appending(path: relative, directoryHint: .isDirectory).path
+      var isDirectory: ObjCBool = false
+      guard files.fileExists(atPath: folder, isDirectory: &isDirectory), isDirectory.boolValue
+      else {
+        return blocked(
+          "this checkout has no \(relative)/ folder, so --prepared-by has no checks to run",
+          plan: slug)
+      }
+      runPlan = QARunPlan(entries: runPlan.entries.filter { $0.validation.writer == writer })
+      guard !runPlan.entries.isEmpty else {
+        return blocked(
+          "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
+      }
+      prepared = folder
+      notes.append(
+        "checks read from \(relative)/ before qa adopt: only the \(runPlan.entries.count) rows "
+          + "`\(writer)` writes ran")
+    }
 
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
@@ -142,7 +172,8 @@ enum QARunRun {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
     let checks = Checks(
-      planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies,
+      planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
+      dependencies: dependencies,
       runID: runID, plan: runPlan, atBase: options.atBase,
       areas: testAreas(root: root, common: common, table: table),
       flows: dependencies.flows.map { simulator in
@@ -150,7 +181,6 @@ enum QARunRun {
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
       })
 
-    var notes: [String] = []
     let rows: [QARow]
     let commit: String?
     if options.atBase {
@@ -269,6 +299,9 @@ enum QARunRun {
   /// script, or a flow row through ``QAFlowRunner``.
   private struct Checks: Sendable {
     let planDirectory: String
+    /// The checkout's `.harness/qa/<plan>/` a `--prepared-by` run reads checks from, which holds
+    /// what plan state's `qa/` holds once adopted.
+    let preparedDirectory: String?
     let qaDirectory: URL
     let dependencies: Dependencies
     let runID: String
@@ -290,6 +323,14 @@ enum QARunRun {
       func take(row: Int) -> QACheckOutcome? {
         results.withLock { $0.removeValue(forKey: row) }
       }
+    }
+
+    /// Where a row's `qa/<name>` check is read from.
+    func checkFile(_ check: String) -> URL {
+      if let preparedDirectory, check.hasPrefix("qa/") {
+        return URL(filePath: preparedDirectory).appending(path: String(check.dropFirst(3)))
+      }
+      return URL(filePath: planDirectory).appending(path: check)
     }
 
     func flowRecords() async -> [Int: QAFlowRecord] {
@@ -339,7 +380,7 @@ enum QARunRun {
         return QACheckOutcome(result: .unverified, message: QARunPlan.flowRunnerMissing)
       }
       let row = entry.validation
-      let stepsFile = URL(filePath: planDirectory).appending(path: row.check)
+      let stepsFile = checkFile(row.check)
       let worktree = URL(filePath: workingDirectory, directoryHint: .isDirectory)
       let lint = QALintRun.run(
         files: [stepsFile.path], root: worktree, pluginRoot: dependencies.pluginRoot)
@@ -397,7 +438,7 @@ enum QARunRun {
           return QACheckOutcome(result: .unverified, message: "not run: \(unresolved.reason)")
         }
       } else {
-        let script = URL(filePath: planDirectory).appending(path: row.check).path
+        let script = checkFile(row.check).path
         var isDirectory: ObjCBool = false
         program =
           !row.check.hasPrefix("/")
@@ -406,7 +447,7 @@ enum QARunRun {
           ? .script(path: script) : .command(row.check)
       }
       var environment = [
-        "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
+        "QA_PORT": "\(port)", "QA_DIR": preparedDirectory ?? planDirectory + "/qa",
         "QA_EVIDENCE_DIR": qaDirectory.path,
       ]
       if let junit {
@@ -451,7 +492,8 @@ enum QARunRun {
           end: end, stdout: output.stdout, stderr: output.stderr,
           report: junit.flatMap(JUnitReportFiles.read(at:)), resultBundle: bundle,
           reference: reference, atBase: atBase,
-          roots: [directory, workingDirectory, qaDirectory.path, planDirectory]))
+          roots: [directory, workingDirectory, qaDirectory.path, planDirectory]
+            + (preparedDirectory.map { [$0] } ?? [])))
       let result = judgement.result
       let text =
         "$ \(shown)\nQA_PORT=\(port)\nexit: \(status)\n"
@@ -513,7 +555,8 @@ enum QARunRun {
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]`.
+/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final]
+/// [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -531,6 +574,11 @@ struct QARunCommand: AsyncParsableCommand {
   @Flag(help: "Run every ready row, recording each flow and saving its logs: the final pass.")
   var final = false
 
+  @Option(
+    help:
+      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
+  var preparedBy: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -539,7 +587,8 @@ struct QARunCommand: AsyncParsableCommand {
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(plan: plan, after: after, atBase: atBase, final: final),
+      root: root, options: QARunRun.Options(
+        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,

@@ -18,6 +18,7 @@ public enum BashGuard {
   public static let simctlAllRuleID = "guard.simctl-all"
   public static let snapshotRecordRuleID = "guard.snapshot-record"
   public static let globalDerivedDataRuleID = "guard.global-derived-data"
+  public static let validationFlowByHandRuleID = "guard.validation-flow-by-hand"
 
   public static func evaluate(_ command: String) -> GuardViolation? {
     for simple in ShellSyntax.simpleCommands(in: command) {
@@ -57,9 +58,47 @@ public enum BashGuard {
     case let name?
     where deletes(name, command.arguments) && command.arguments.contains(where: isGlobalDerivedData):
       return derivedDataViolation
+    case "agent-device":
+      guard command.arguments.first(where: { !$0.hasPrefix("-") }) == "batch",
+        let stepsFile = stepsFile(command.arguments), isValidationFlow(stepsFile)
+      else { return nil }
+      return GuardViolation(
+        ruleID: validationFlowByHandRuleID,
+        reason:
+          "`\(stepsFile)` is a validation row's flow, and only `swiftgate qa run` drives one: it "
+          + "lints the flow, leases the device, snaps each step and judges the run with `sim "
+          + "verify`, so its red is the one the gate reads. Before `qa adopt`, prove the rows "
+          + "your task writes with `swiftgate qa run --plan <plan> --at-base --prepared-by "
+          + "<task> --json` from the worktree; after it, run `swiftgate qa run --plan <plan>`.")
     default:
       return nil
     }
+  }
+
+  /// The value of `--steps-file`, spelled as 2 words or with `=`.
+  private static func stepsFile(_ arguments: [String]) -> String? {
+    for (index, argument) in arguments.enumerated() {
+      if argument == "--steps-file", index + 1 < arguments.count { return arguments[index + 1] }
+      if argument.hasPrefix("--steps-file=") { return String(argument.dropFirst(13)) }
+    }
+    return nil
+  }
+
+  /// A path in a validation worker's prepared `.harness/qa/` folder, or in the `qa/` folder of a
+  /// plan under `swift-harness/plans/`, where `qa adopt` copies it.
+  private static func isValidationFlow(_ path: String) -> Bool {
+    let parts = path.split(separator: "/").map(String.init)
+    for index in parts.indices.dropLast() where parts[index] == ".harness" {
+      if parts[index + 1] == RunLayout.qaPreparedDirectory { return true }
+    }
+    for index in parts.indices where parts[index] == "plans" && index >= 1 {
+      if parts[index - 1] == "swift-harness", index + 2 < parts.count,
+        parts[index + 2] == "qa"
+      {
+        return true
+      }
+    }
+    return false
   }
 
   private static func deletes(_ name: String, _ arguments: [String]) -> Bool {

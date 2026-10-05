@@ -73,24 +73,24 @@ struct QALintCommandTests {
   }
 
   @Test(
-    "a brownfield clone lints against its config.toml, noting that the profile declares no ids instead of naming a missing .swiftgate.toml by absolute path — catches qa lint reading only the owned profile"
+    "the third iOS validation trial's 2 flows lint GREEN with no finding against its brownfield config.toml, which has nowhere to declare ids — catches a qa.flow-ids-unknown note on every brownfield clone that nothing in the clone can clear"
   )
-  func brownfieldCloneNote() throws {
+  func brownfieldCloneHasNoIDsNote() throws {
     let root = try TestTemporaryDirectory.make("qa-lint-brownfield")
     defer { TestTemporaryDirectory.remove(root) }
     let state = root.appending(path: ".git/swift-harness", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true)
-    try Data(try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml").utf8)
+    try Data(try Fixture.text("BrownfieldTrial/aidoku-validation-3-config.toml").utf8)
       .write(to: state.appending(path: "config.toml"))
+    let flows = ["toggle", "store"].map {
+      Fixture.directory.appending(path: "BrownfieldTrial/aidoku-validation-3-\($0).flow.json").path
+    }
 
-    let report = QALintRun.run(
-      files: [Self.flow("typo-id.flow.json")], root: root, pluginRoot: Self.pluginRoot)
+    let report = QALintRun.run(files: flows, root: root, pluginRoot: Self.pluginRoot)
 
     #expect(report.verdict == .green, "\(report.message)")
-    let note = try #require(report.findings.first)
-    #expect(note.ruleID == FlowRules.idsUnknownRuleID)
-    #expect(note.message.contains("brownfield"), "\(note.message)")
-    #expect(!note.message.contains(root.path), "\(note.message)")
+    #expect(report.findings == [], "\(report.findings)")
+    #expect(report.message == "2 files: no findings", "\(report.message)")
   }
 
   @Test(

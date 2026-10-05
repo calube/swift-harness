@@ -41,11 +41,7 @@ enum QALintRun {
     switch loaded {
     case .owned(let owned)?: config = owned
     case .brownfield?:
-      return .success(
-        Inputs(
-          schemas: schemas,
-          ids: .unconfigured(
-            reason: "a brownfield clone's config.toml declares no accessibility ids")))
+      return .success(Inputs(schemas: schemas, ids: .undeclarable))
     case nil:
       return .success(
         Inputs(
