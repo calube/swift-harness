@@ -403,3 +403,30 @@ extension BrownfieldMergeCheckTests {
         ])
   }
 }
+
+extension BrownfieldMergeCheckTests {
+  @Test(
+    "the trial's xcode area runs its merge steps in the checkout's own DerivedData — catches a merge gate building in Xcode's path-keyed default, away from the seed the warm-up filled"
+  )
+  func xcodeMergeStepsUseTheCheckoutDerivedData() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml"))
+    let aidoku = try #require(config.areas.first)
+    let runner = FakeAreaCommandRunner { _ in .passed }
+
+    _ = try await Self.run(
+      clone, tier: .merge, areas: [aidoku],
+      changed: ["Aidoku/Shared/Managers/DownloadManager.swift"], runner: runner)
+
+    let path = XcodeDerivedData.path(area: "Aidoku", layout: clone.layout)
+    let head = runner.requests.filter {
+      !clone.inScratch($0) && ($0.step == .build || $0.step == .test)
+    }
+    #expect(Set(head.map(\.step)) == [.build, .test])
+    #expect(
+      head.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(path)' ") },
+      "\(head.map(\.command))")
+  }
+}

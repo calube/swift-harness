@@ -13,10 +13,13 @@ public struct AreaCommandRequest: Sendable, Equatable {
   public let environment: [String: String]
   /// Absolute path the command writes JUnit XML to, when `{junit}` was expanded.
   public let junitPath: String?
+  /// The DerivedData the runner seeds before the command runs, when the command builds into a
+  /// worktree's own DerivedData.
+  public let derivedDataSeed: DerivedDataSeedCopy?
 
   public init(
     area: String, step: AreaStep, command: String, workingDirectory: String, deadline: Duration,
-    environment: [String: String], junitPath: String?
+    environment: [String: String], junitPath: String?, derivedDataSeed: DerivedDataSeedCopy? = nil
   ) {
     self.area = area
     self.step = step
@@ -25,6 +28,19 @@ public struct AreaCommandRequest: Sendable, Equatable {
     self.deadline = deadline
     self.environment = environment
     self.junitPath = junitPath
+    self.derivedDataSeed = derivedDataSeed
+  }
+}
+
+/// A worktree's DerivedData to start from the area's seed, which the warm-up builds at the base
+/// tree. Both absolute.
+public struct DerivedDataSeedCopy: Sendable, Equatable {
+  public let seed: String
+  public let destination: String
+
+  public init(seed: String, destination: String) {
+    self.seed = seed
+    self.destination = destination
   }
 }
 
