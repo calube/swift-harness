@@ -2853,6 +2853,39 @@ cp $R/sim/steps/*.tree.json $F/sim/steps/
 `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-setting-flow` matched
 nothing.
 
+## Brownfield trial: the validation worker's Bash calls and flows on an iOS clone
+
+`Hooks/aidoku-validation-3-worker-bash.json` holds every Bash command the validation worker ran in
+the third iOS validation trial on `Aidoku/Aidoku`, in order. Calls 14 and 17 drive its prepared
+flows with a raw `agent-device batch`. `BrownfieldTrial/aidoku-validation-3-config.toml` is that
+clone's `config.toml` after the run, and `BrownfieldTrial/aidoku-validation-3-toggle.flow.json` and
+`aidoku-validation-3-store.flow.json` are the 2 flows the worker wrote. `H` is the harness checkout
+the trial ran and `C` the clone. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures H=… C=… python3 - <<'PY'
+import json, os
+S, F, H, C = (os.environ[k] for k in ("S", "F", "H", "C"))
+commands = []
+for line in open(f"{S}/validation-worker.jsonl"):
+    entry = json.loads(line)
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list): continue
+    for block in content:
+        if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            commands.append(block["input"]["command"])
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+open(f"{F}/Hooks/aidoku-validation-3-worker-bash.json", "w").write(
+    scrub(json.dumps(commands, indent=2, ensure_ascii=False) + "\n"))
+PY
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/config.toml $F/aidoku-validation-3-config.toml
+cp $S/qa/confirm-large-downloads-toggle.flow.json $F/aidoku-validation-3-toggle.flow.json
+cp $S/qa/confirm-large-downloads-store.flow.json $F/aidoku-validation-3-store.flow.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 4 files matched nothing.
+
 ## Node installs: 1 lockfile per package manager
 
 `NodeInstall/<manager>/` holds a 1-dependency `package.json` and the lockfile its manager wrote installing it:
