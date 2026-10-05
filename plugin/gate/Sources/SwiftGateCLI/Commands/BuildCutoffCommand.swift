@@ -35,6 +35,9 @@ struct CutoffHistory: Sendable {
   var gateMilliseconds: [String: Int] = [:]
   /// The plan's `qa run --before-merge` reports.
   var beforeMergeReports: [QAReport] = []
+  /// What `final` would still run on the checkout's tree, which prices it before any `final` is
+  /// recorded; `nil` when that can't be read.
+  var finalReuse: FinalGateReuse? = nil
 }
 
 /// `build cutoff`: the brownfield run's answer to the time box's cutoff, decided by

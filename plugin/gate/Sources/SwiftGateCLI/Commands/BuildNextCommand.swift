@@ -26,6 +26,9 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   /// The merge on `main` whose task isn't done yet: its gate, or the steps after it, still run.
   /// No other task merges until it is done or undone.
   let merging: MergeQueue.Merging?
+  /// Running tasks whose checked return a halt sent to a fixer: none merges until its fixer's
+  /// return is checked.
+  var fixing: [String] = []
   /// A `swiftgate run`'s box: when starts stop, when the cutoff comes and when the box ends.
   /// Absent for a run without one.
   let timeBox: TimeBox?

@@ -53,6 +53,9 @@ enum QARunRun {
     var deadline: QARunDeadline?
     /// Merges the branch a `--before-merge` run checks into its scratch tree.
     var merger: any MergeRunner = LiveMergeRunner(runner: LiveProcessRunner())
+    /// Told the run's id and where its report will be written, once its run directory exists
+    /// and before any row runs, so a caller can wait on that file.
+    var started: (@Sendable (_ runID: String, _ report: URL) -> Void)? = nil
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the

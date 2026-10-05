@@ -104,3 +104,11 @@ public struct SpanEndEvent: Sendable, Equatable, Codable {
     milliseconds = try c.decode(Int.self, forKey: .milliseconds)
   }
 }
+
+/// The spans a build run started and never ended.
+public enum OpenSpans {
+  /// Each `span.start` of `buildRun` in `events` with no `span.end`, oldest first.
+  public static func of(_ events: [HarnessEvent], buildRun: String) -> [SpanStartEvent] {
+    []
+  }
+}

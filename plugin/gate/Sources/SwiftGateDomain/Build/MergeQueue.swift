@@ -34,10 +34,14 @@ public struct MergeQueue: Sendable, Equatable {
   /// In the order their returns were checked.
   public let ready: [Ready]
   public let merging: Merging?
+  /// Running tasks whose checked return a halt sent back to a fixer since: not ready until the
+  /// fixer's return is checked. In the order their returns were checked.
+  public let fixing: [String]
 
-  public init(ready: [Ready], merging: Merging?) {
+  public init(ready: [Ready], merging: Merging?, fixing: [String] = []) {
     self.ready = ready
     self.merging = merging
+    self.fixing = fixing
   }
 }
 
@@ -58,8 +62,10 @@ extension BuildEventLog {
     return false
   }
 
-  /// The queue for the tasks in `running`, the ledger's `in-progress` ones.
-  public func mergeQueue(running: Set<String>) -> MergeQueue {
+  /// The queue for the tasks in `running`, the ledger's `in-progress` ones. `retried` holds each
+  /// task's newest halt answered `retry`, by when: a GREEN return checked before it went to a
+  /// fixer, so the task is `fixing`, not ready.
+  public func mergeQueue(running: Set<String>, retried: [String: Date] = [:]) -> MergeQueue {
     var waiting: [String: (order: Int, fix: Bool)] = [:]
     var merging: MergeQueue.Merging?
     for (index, event) in events.enumerated() {

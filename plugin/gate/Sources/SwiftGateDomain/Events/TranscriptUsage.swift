@@ -6,12 +6,23 @@ public enum AgentRole: String, Sendable, Codable, CaseIterable {
   case design
   case plan
   case buildWorker = "build-worker"
+  /// The fixer a build launches for a task whose gate or flows stayed red.
+  case buildFixer = "build-fixer"
   case review
   case qa
   /// A brownfield run's read-only researcher, 1 per area.
   case explorer
   /// The judge's diff-risk and finding-severity questions.
   case classifier
+}
+
+extension AgentRole {
+  /// The role of a subagent of `agentType`, as Claude Code names it in the agent's `.meta.json`,
+  /// such as `swift-harness:build-fixer`; `nil` for a type no role describes, such as
+  /// `general-purpose`.
+  public static func of(agentType: String) -> AgentRole? {
+    nil
+  }
 }
 
 /// Whether a message came from a session's own transcript or from a subagent's.

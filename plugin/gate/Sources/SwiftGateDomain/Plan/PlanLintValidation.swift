@@ -9,6 +9,7 @@ public enum PlanLintValidation {
   public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
   public static let appWithoutFlowRuleID = "plan-lint.validation-app-without-flow"
   public static let obstacleFakeableRuleID = "plan-lint.validation-obstacle-fakeable"
+  public static let reasonWithoutObstacleRuleID = "plan-lint.validation-reason-without-obstacle"
 
   /// What may stop a flow checking a screen requirement. A screen requirement's `Reason` opens
   /// with 1 of these and a colon, such as `data: needs a source with 50 chapters`, or it doesn't
@@ -113,11 +114,14 @@ public enum PlanLintValidation {
   ///     1 inside an app's area stops a ``fakeableObstacleKinds`` reason excusing its screens.
   ///   - requirementTitles: each requirement's title by id, which says whether a
   ///     ``gateReasonKind`` reason may excuse it.
+  ///   - reasonsNameObstacles: whether every reason-only row must open with an obstacle kind or
+  ///     ``gateReasonKind``, as a brownfield plan's must: unit tests that prove a requirement are
+  ///     no obstacle to checking it end to end.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
     file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
     appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = [],
-    requirementTitles: [String: String] = [:]
+    requirementTitles: [String: String] = [:], reasonsNameObstacles: Bool = false
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))

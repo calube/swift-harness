@@ -198,6 +198,9 @@ public struct CutoffCosts: Sendable, Equatable, Codable {
     /// No `final` recorded yet: sized by this run's merge gates, since `final` runs every step a
     /// merge does and reuses the area passes merges recorded.
     case mergeGates = "merge-gates"
+    /// No `final` recorded yet: sized by the area steps it can't take from an earlier pass on
+    /// the plan tip's tree, at the warm-up's times.
+    case areaSteps = "area-steps"
     /// No recorded gate: the fifth memos trial's figures.
     case estimated
   }
@@ -239,9 +242,12 @@ public struct CutoffCosts: Sendable, Equatable, Codable {
   /// The costs `log`'s recorded gates measured, each gate's duration read from `milliseconds` by
   /// its run id. Only gates the run recorded count: a gate someone ran on a branch tip never
   /// landed one. The merge cost is the slowest of the ``recentMergeGates`` newest, the final cost
-  /// the newest `final`, or the merge cost before any; each whole seconds, rounded up, and never
-  /// under ``floorSeconds``. With no recorded gate it is ``estimated``.
-  public static func measured(log: BuildEventLog, milliseconds: [String: Int]) -> CutoffCosts {
+  /// the newest `final`, or before any, what `finalReuse` leaves to run, else the merge cost;
+  /// each whole seconds, rounded up, and never under ``floorSeconds``. With no recorded gate and
+  /// no `finalReuse` it is ``estimated``.
+  public static func measured(
+    log: BuildEventLog, milliseconds: [String: Int], finalReuse: FinalGateReuse? = nil
+  ) -> CutoffCosts {
     var merges: [Int] = []
     var finals: [Int] = []
     for event in log.events {

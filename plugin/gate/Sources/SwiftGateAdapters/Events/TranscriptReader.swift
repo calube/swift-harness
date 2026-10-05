@@ -12,15 +12,25 @@ public struct TranscriptFile: Sendable, Equatable {
   /// A Workflow's agent, from `subagents/workflows/<workflow>/`, rather than 1 the session
   /// launched itself with the Agent tool.
   public let workflow: Bool
+  /// The subagent's type from the `agent-<id>.meta.json` beside it, such as
+  /// `swift-harness:build-fixer`; `nil` when there is none that reads.
+  public let agentType: String?
+  /// A Workflow agent's task, from its Workflow's record, once that Workflow has ended: a
+  /// Workflow stopped before its own ingest leaves its agents to the session's. `nil` while it
+  /// runs, or when its record or its `task` argument can't be read.
+  public let endedWorkflowTask: String?
 
   public init(
-    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false
+    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false,
+    agentType: String? = nil, endedWorkflowTask: String? = nil
   ) {
     self.agent = agent
     self.agentID = agentID
     self.label = label
     self.data = data
     self.workflow = workflow
+    self.agentType = agentType
+    self.endedWorkflowTask = endedWorkflowTask
   }
 }
 
