@@ -23,6 +23,10 @@ private struct BlockedClone {
   /// check-return, and the store task on a design conflict.
   static let memos4 = Capture(
     fixture: "brownfield-rejected", clone: "memos-4", buildRun: "20261004T141445Z-85d15f09")
+  /// The first price-tracker trial: 3 tasks ran at once, client-live's checked return was never
+  /// handled, app-core's merge was undone at the cutoff and both ended abandoned.
+  static let priceTracker1 = Capture(
+    fixture: "price-tracker-1", clone: "repo", buildRun: "20261005T025144Z-77b256da")
   static let plan = "spec"
   static let store = "share-view-limit-store"
   static let web = "share-view-limit-web"
@@ -64,8 +68,15 @@ private struct BlockedClone {
     where files.fileExists(atPath: captured.appending(path: name).path) {
       try files.copyItem(at: captured.appending(path: name), to: harness.appending(path: name))
     }
+    if files.fileExists(atPath: captured.appending(path: CutoffRecord.fileName).path) {
+      try files.copyItem(
+        at: captured.appending(path: CutoffRecord.fileName),
+        to: run.appending(path: CutoffRecord.fileName))
+    }
+    // A run whose worktrees were all removed by the time it ended left none to capture.
     let worktrees = captured.appending(path: "worktrees", directoryHint: .isDirectory)
-    for name in try files.contentsOfDirectory(atPath: worktrees.path) where !name.hasPrefix(".") {
+    let names = (try? files.contentsOfDirectory(atPath: worktrees.path)) ?? []
+    for name in names where !name.hasPrefix(".") {
       let checkout = parent.appending(path: name, directoryHint: .isDirectory)
       let gitDir = common.appending(path: "worktrees/\(name)", directoryHint: .isDirectory)
       try files.createDirectory(at: checkout, withIntermediateDirectories: true)
@@ -204,5 +215,42 @@ struct RunViewReaderRejectedTests {
     #expect(store.blocked?.cause == .halt)
     #expect(store.blocked?.rejection == nil)
     #expect(try RunViewGuard.rejection(of: view) == nil)
+  }
+}
+
+@Suite("run view reader: a brownfield run cut off with an undone merge")
+struct RunViewReaderCutoffTests {
+  @Test(
+    "a worker's slice gates read with their task when 3 tasks ran at once, its return was never checked and its worktree is gone — catches client-live's 3 slice gates missing from the price-tracker view"
+  )
+  func uncheckedTaskKeepsItsGates() throws {
+    let clone = try BlockedClone(BlockedClone.priceTracker1)
+    defer { clone.remove() }
+    let view = try clone.view()
+    let tasks = Dictionary(
+      view.gates.map { ($0.runID, $0.task ?? "none") }, uniquingKeysWith: { first, _ in first })
+    for run in [
+      "20261005T025302Z-36f7c92b", "20261005T025506Z-cad6cbf3", "20261005T025622Z-886e7098",
+    ] {
+      #expect(tasks[run] == "client-live", "\(run)")
+    }
+    #expect(tasks["20261005T025359Z-7d643ed6"] == "tracker-ui")
+    #expect(tasks["20261005T025412Z-b8b146f8"] == "app-core")
+    #expect(try RunViewGuard.rejection(of: view) == nil)
+  }
+
+  @Test(
+    "a budget halt the cutoff answered continue reads abandon once its task's merge was undone and the task abandoned — catches app-core's halt saying continue for a task the run dropped"
+  )
+  func cutoffHaltFollowsTheAbandon() throws {
+    let clone = try BlockedClone(BlockedClone.priceTracker1)
+    defer { clone.remove() }
+    let view = try clone.view()
+    let budget = view.halts.filter { $0.reason == .budget }
+    #expect(budget.first { $0.task == "app-core" }?.answer == .abandon)
+    #expect(budget.first { $0.task == "client-live" }?.answer == .abandon)
+    #expect(budget.first { $0.task == nil }?.answer == .continue)
+    let core = try #require(view.tasks.first { $0.id == "app-core" })
+    #expect(core.mergedAt == nil)
   }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
@@ -274,5 +275,118 @@ struct BuildTimeBoxTests {
     #expect(result.message.contains("halts and asks"), "\(result.message)")
     #expect(try scenario.ledger() == ["web": .inProgress])
     #expect(try scenario.events().isEmpty)
+  }
+
+  /// The price-tracker trial's clone events from before app-core's merge gate: tracker-ui's
+  /// 161 s merge gate is the merge tier's only history.
+  private static func priceTrackerEvents() throws -> [HarnessEvent] {
+    let cut = Date(timeIntervalSince1970: 1_791_169_200)  // 2026-10-05T03:00:00Z
+    return
+      (try HarnessEventJSON.decode(Fixture.data("RunView/price-tracker-1/events/gate.jsonl")).events
+      + HarnessEventJSON.decode(Fixture.data("RunView/price-tracker-1/events/brownfield.jsonl"))
+      .events).filter { $0.time < cut }
+  }
+
+  /// A captured gate output in the scenario's plan directory, created at `startedAt`.
+  private static func output(_ captured: String, in scenario: BoxScenario, startedAt: Date) throws
+    -> URL
+  {
+    let url = URL(filePath: try scenario.layout().directory).appending(path: "out/\(captured)")
+    try scenario.write(url, try Fixture.data("RunView/price-tracker-1/out/\(captured)"))
+    try FileManager.default.setAttributes([.creationDate: startedAt], ofItemAtPath: url.path)
+    return url
+  }
+
+  private final class SteppingClock: BuildClock {
+    private struct State {
+      var date: Date
+      var slept: [Int] = []
+    }
+    private let state: Mutex<State>
+
+    init(_ date: Date) { state = Mutex(State(date: date)) }
+
+    var slept: [Int] { state.withLock { $0.slept } }
+
+    func now() -> Date { state.withLock { $0.date } }
+
+    func sleep(_ seconds: Int) {
+      state.withLock {
+        $0.slept.append(seconds)
+        $0.date = $0.date.addingTimeInterval(TimeInterval(seconds))
+      }
+    }
+  }
+
+  private static func gateWait(
+    _ scenario: BoxScenario, output: URL, clock: SteppingClock, maxWait: Int = 0
+  ) async throws -> BuildLoopResult<BuildGateWaitReport> {
+    let events = try priceTrackerEvents()
+    return await BuildGateWaitRun.run(
+      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: maxWait, git: scenario.git,
+      clock: clock, events: { events }, sleep: { clock.sleep($0) })
+  }
+
+  @Test(
+    "build gate-wait on the hung app-core gate's empty output waits inside its 483 s deadline, polls to it, then says overrun — catches the orchestrator's 1215 s of blind waiting on a merge gate"
+  )
+  func gateWaitOverruns() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("app-core", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+    let started = BoxScenario.launch.addingTimeInterval(20 * 60)
+    let output = try Self.output("merge-app-core.json", in: scenario, startedAt: started)
+
+    let early = try await Self.gateWait(
+      scenario, output: output, clock: SteppingClock(started.addingTimeInterval(300)))
+    let waiting = try #require(early.report, "\(early.message)")
+    #expect(waiting.action == .wait)
+    #expect(waiting.budget.expectedSeconds == 161)
+    #expect(waiting.elapsedSeconds == 300)
+    #expect(waiting.deadlineAt == started.addingTimeInterval(483))
+    #expect(waiting.gateVerdict == nil)
+
+    let clock = SteppingClock(started.addingTimeInterval(470))
+    let polled = try await Self.gateWait(scenario, output: output, clock: clock, maxWait: 60)
+    let overrun = try #require(polled.report, "\(polled.message)")
+    #expect(overrun.action == .overrun)
+    #expect(overrun.elapsedSeconds == 483)
+    #expect(clock.slept == [5, 5, 3])
+    #expect(polled.verdict == .green)
+  }
+
+  @Test(
+    "build gate-wait reads a finished gate's verdict and run id, says cutoff past the cutoff, and refuses a gate with no output — catches a watch that can't tell a finished gate from a hung one"
+  )
+  func gateWaitReadsAndCuts() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("tracker-ui", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+    let started = BoxScenario.launch.addingTimeInterval(20 * 60)
+    let finished = try Self.output("merge-tracker-ui.json", in: scenario, startedAt: started)
+
+    let read = try #require(
+      try await Self.gateWait(
+        scenario, output: finished, clock: SteppingClock(started.addingTimeInterval(160))
+      ).report)
+    #expect(read.action == .read)
+    #expect(read.gateVerdict == .green)
+    #expect(read.gateRunId == "20261005T025653Z-e59bdc49")
+
+    let late = BoxScenario.launch.addingTimeInterval(40 * 60 + 30)
+    let hung = try Self.output("merge-app-core.json", in: scenario, startedAt: late)
+    let cut = try #require(
+      try await Self.gateWait(scenario, output: hung, clock: SteppingClock(late)).report)
+    #expect(cut.action == .cutoff)
+
+    let missing = try await Self.gateWait(
+      scenario, output: finished.deletingLastPathComponent().appending(path: "none.json"),
+      clock: SteppingClock(started))
+    #expect(missing.verdict == .blocked)
+    #expect(missing.message.contains("no gate output"), "\(missing.message)")
   }
 }
