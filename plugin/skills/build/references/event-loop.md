@@ -16,7 +16,8 @@ Contents:
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Before each merge](#before-each-merge): the validation rows a merge makes ready
 - [Flow repair](#flow-repair): a flow row its own flow file keeps red, rewritten once
-- [No repair](#no-repair): `build no-repair` amends the contract or merges with the row unverified
+- [No repair](#no-repair): `build no-repair` amends the contract, fixes an app defect again, or
+  merges with the row unverified
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -332,6 +333,14 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - the plan slug and the task id;
 - `fixWorktree` and `fixBranch` from the `build merge` JSON;
 - the case: `conflicted` with `conflictedFiles`, or a clean merge that turned the merge gate red;
+- for red validation rows, each row's red evidence, quoted from the red run's `qa/report.json`
+  row and its files: the requirement's text, the `check`, the failing step's number and command,
+  what that step expected (its selector or value in the flow file) and what it observed (its
+  `message`), and the absolute paths of the row's `evidence` files, `steps.json`, `sheet.png` and
+  `video.mp4`, in the run's folder: `<git common dir>/swift-harness/runs/<run id>/` in a
+  brownfield clone, whichever checkout ran it, never a `worktrees/` path. Never add a likely or guessed cause, such as a
+  flow-side timing problem or a clock race, and never say no app change is needed: the fixer
+  judges the cause from that evidence and a reproduction test, as its rules say;
 - both returns: this task's, and that of the task it collides with, read from `<returns>`. For a
   conflict, that's the merged task whose `writeSet` holds a conflicted file; otherwise, or when none
   does, the task merged last;
@@ -415,9 +424,13 @@ read the output file the notice names, which is the fixer's whole transcript:
   Verifying starts no task, so no new starts doesn't stop it. When the cutoff comes first,
   `build cutoff` decides the task as it decides any other.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
-  set the task `blocked`. Options: leave it blocked and go on with the rest (Recommended),
-  abandon this task and go on, or stop the build. Before `cutoffAt`, stop is never recommended:
-  1 task's halt leaves the rest of the plan's work to merge.
+  set the task `blocked`. Options: retry the fixer, leave it blocked and go on with the rest,
+  abandon this task and go on, or stop the build. Mark recommended what `haltAdvice.answer`
+  names, quoting its `why`. `retry` relaunches the fixer in the same fix worktree for 1 more
+  round, its brief quoting the findings and each red row's evidence: the task already started,
+  so no new starts doesn't stop it, and the advice gives it only when the round's measured gate
+  and qa run end before the cutoff. Before `cutoffAt`, stop is never recommended: 1 task's halt
+  leaves the rest of the plan's work to merge.
 
 ## Before each merge
 
@@ -476,7 +489,8 @@ names, as below.
   `main` untouched, as for a conflict. It is a halt answered by rule:
   `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
   `"$SG" build resume --run <run> --task <task> --answer retry`, then the fixer as for a red
-  merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON.
+  merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON,
+  and its evidence as the fixer's brief says.
   The fixer's branch runs it again with `--fix` before `build merge --fix`. Never merge on your
   own judgement: a row red at the newest `--at-base` report too goes to the fixer like any other.
 - Exit 2 (BLOCKED): the table, the ledger or the scratch tree failed. Keep its `message` for the
@@ -502,8 +516,13 @@ another in the same fix worktree, starting with the row whose step failed first.
 2. Launch 1 Agent tool call in the background, passing `run_in_background: true`, with
    `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the fix worktree as its
    worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from
-   `validation.json`. It quotes the `flow row:` line, both red run ids and the evidence paths their
-   `qa/report.json` rows name, and says to follow the repair mode of
+   `validation.json`. It quotes the `flow row:` line, both red run ids and each red run's evidence:
+   the failing step, what it expected and what it observed, and the absolute paths of the
+   `steps.json`, `sheet.png` and `video.mp4` their `qa/report.json` rows name, joined to the run
+   folder. In a brownfield clone a `qa run` in any checkout writes
+   `<git common dir>/swift-harness/runs/<run id>/qa/report.json`, which reads from every checkout
+   and outlives the slot; never cite a `worktrees/` path. It never adds a likely or guessed cause,
+   the fixer's or yours, beyond that line. It says to follow the repair mode of
    `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`, which runs the at-base proof
    itself. Never prescribe the edit: the fixer's suggestion, such as an `is` in place of a `wait`,
    can weaken the check. Record its usage as for the validation task, under the task the row
@@ -517,7 +536,9 @@ another in the same fix worktree, starting with the row whose step failed first.
    `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
    - GREEN: go on to the next requirement's round, if any. Once every round is taken, launch the
      fixer again, 1 more attempt with its own span, ingest and check, given its last return and
-     each adopt's `repaired` record. It runs the before-merge `qa run --fix` again and returns
+     each adopt's `repaired` record. Quote the evidence of its newest red run as its first brief
+     does, the failing step, what it expected and what it observed, with the `steps.json` and
+     `sheet.png` paths, and never a likely or guessed cause, nor that no app change is expected. It runs the before-merge `qa run --fix` again and returns
      `ready-to-merge` once its rows are GREEN, which merges as above. A `flow row:` line for a
      repaired row in that return takes a second round while `run clock` is before
      `noNewStartsAt`, and halts after it.
@@ -559,6 +580,10 @@ the build. Its `action`:
   `build halt --reason gate-red`, `build resume --answer merge`, then
   `"$SG" build merge <slug> <task> --fix --session <session> --json` and its merge gate, as a
   fixer's `ready-to-merge` merges. A `flows-unchecked` refusal names the run to make first.
+- `fix-again`: the repair worker's `app defect:` line names a frame that shows the app breaking
+  the requirement, and 1 more measured fix round ends before the cutoff. Never merge it
+  unverified. Halt with `gate-red`, resume with `retry`, and relaunch the fixer in the same fix
+  worktree, its brief quoting the `app defect:` line and the red run's evidence.
 - `continue`: halt with `gate-red`, set the task `blocked`, and resume with `continue`.
 
 ## Recording halts
@@ -574,7 +599,7 @@ the findings or the answer's words.
 | Halt | `--task` | `--reason` |
 |---|---|---|
 | a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
-| a `gate-red` return, a `build no-repair` decision that merges or goes on, or the fix merge's gate still red | the task | `gate-red` |
+| a `gate-red` return, a `build no-repair` decision that merges, fixes again or goes on, or the fix merge's gate still red | the task | `gate-red` |
 | a RED `qa run --before-merge`, resumed with `retry` before its fixer | the task | `gate-red` |
 | the fixer's merge still conflicted | the task | `merge-conflict` |
 | a `design-conflict` return | the reporting task | `amend` |
@@ -625,8 +650,11 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
    recommended the option `check-return`'s `haltAdvice.answer` names, and quote its `why`: `retry`
    for a finding a fix pass resolves (a gate to run again, a missing reason, a formatting fix, a
    flaky launch) while a retry as long as the first run fits before the cutoff and no new starts
-   hasn't begun; `continue` for a design conflict or a retry the box can't hold. `verify` is no
-   halt: an unconfirmed fix is checked as the fixer's return says. Options:
+   hasn't begun, or, for a fixer's return past no new starts, while 1 more measured fix round
+   ends before the cutoff; `continue` for a design conflict or a retry the box can't hold.
+   `verify` is no halt: an unconfirmed fix is checked as the fixer's return says. Record the
+   halt's `--reason` as [the table](#recording-halts) says: `review-blocked` is `question`.
+   Options:
    - **Retry**: `ledger set … pending`, then let `build next` start it again, its brief quoting
      every finding. Its worktree and branch still exist, so skip `worktree create` and launch into
      the same worktree.
@@ -776,7 +804,7 @@ At `changed`, with a `<plans>/<slug>/validation.json`, run the final pass first:
 ```
 
 It runs every row whose tasks merged, records each flow under the 1-slot `sim-record` lock, and
-writes `.harness/runs/<runID>/qa/report.json`. A video the recorder couldn't take is a
+writes `runs/<runID>/qa/report.json` at the path its last line names. A video the recorder couldn't take is a
 `qa.video-unverified` nit and never fails a row. Keep `runID`, `verdict` and each row's
 `requirement`, `layer`, `result` and `message`.
 

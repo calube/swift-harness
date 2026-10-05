@@ -49,7 +49,10 @@ exists and fails for the reason the feature is missing.
   `<Target>/<Class>/<method>`, which `qa run` passes to the area's test command as `-only-testing:`.
 - **Flow**: a JSON array of `{"command": "<name>", "input": {...}}` steps for an `agent-device` batch.
   Target elements by `id="…"` selectors whose ids are raw values of the app's `AccessibilityID`
-  module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. Every flow
+  module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. The selector
+  keys (`id`, `label`, `value`, `role`), how a value matches, several terms and `||` alternatives
+  are in `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-selectors.md`; never read the tool's
+  package for them. Every flow
   checks at least 1 thing with a `wait` or `is` step; a `get` reads a value and never counts.
   A `wait` puts its target under the key its `kind` reads, which the tool runs whatever `kind`
   says: `{"kind": "absent", "absent": "id=\"<id>\""}` waits for an element to go, and the same
@@ -96,6 +99,15 @@ exists and fails for the reason the feature is missing.
   "id=\"<id across the screen>\""}}`, then waits for what the interaction changes. A random or
   moving position never excuses it. When the contract has no such scenario or id, return it as a
   missing contract name.
+  A flow for a requirement where 1 event causes an effect first checks the effect has not
+  happened while the cause is still pending. Examples are an entity leaving the screen costing a
+  counter, or a save showing a record. Then the flow waits for or performs the cause, then waits
+  for the effect: a `wait` for `id="<entity>"` beside an `is` on `id="<counter>" value="<start>"`,
+  then the cause, then a `wait` for `id="<counter>" value="<after>"`. A flow that waits only for the end state
+  passes when the app produces the effect without the cause, which is the defect the row exists to
+  catch. So it launches under the contract's held or seeded scenario that holds the cause back
+  until the flow acts, which makes the first check deterministic. When the contract has none,
+  return it as a missing contract name.
   A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
   {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
   `fill` or `press` on the list's id. Check the result by the ids of the count and rows.
@@ -176,8 +188,12 @@ fixer's `flow row:` line, both red run ids and their evidence paths. The worktre
 
 - Read the evidence the brief names, `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-gestures.md` and
   `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-steps.md`.
-  Decide whether the flow is at fault: a step the pinned tool can't drive as written, a selector
-  for the wrong element, or a step the app can't satisfy as written.
+  Hold the red run's frames in its `sheet.png`, and the failing step in its `steps.json`, against
+  the requirement's text first. A screen that shows a state the requirement rules out, such as an
+  effect with no cause on screen or an entity gone before it was drawn, is an app defect, whatever
+  the fixer's line says: return `no repair` for it. Otherwise decide whether the flow is at fault:
+  a step the pinned tool can't drive as written, a selector for the wrong element, or a step the
+  app can't satisfy as written.
 - Change only the requirement's files in that folder, and add no other file. Keep every `wait` and
   `is` step, in order, with a `timeoutMs` no shorter: change, add or drop only the steps that drive
   the app. A `wait` whose target sits under another kind's key, which `qa lint` names as
@@ -204,13 +220,15 @@ Return 1 line:
 ```text
 repaired: <requirement> <path>: red: <message> (qa run <run id>)
 no repair: <requirement>: <why>
+no repair: <requirement>: app defect: <frame>: <what it shows against the requirement>
 no repair: <requirement>: contract gap: <name>: <why>
 ```
 
 Return `no repair` when the flow already drives what the requirement needs and the app is at
-fault, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
+fault, with `app defect: <frame>:` when the frames show it, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
 A `held` scenario for a state the fake ends before the `wait` sees it is such a name: name the
 one the flow would launch with. So is a `held` or seeded scenario for a screen whose state
-advances on a clock, when the red step read a state the clock had already moved: a fixer's
+advances on a clock, when the red step checked a starting state and its frames show that state
+correct and then moved by the clock before the step read it: a fixer's
 `flow row:` line that says `contract gap: held` names that case. Return it at once when the
 contract has no such scenario; no rewrite of the flow wins a race with the clock.

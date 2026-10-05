@@ -3,7 +3,17 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 
-extension BuildHaltReason: ExpressibleByArgument {}
+extension BuildHaltReason: ExpressibleByArgument {
+  /// The raw values, and the halting return outcomes the build loop's halt table records under
+  /// another reason: `review-blocked` as `question`, `design-conflict` as `amend`.
+  public init?(argument: String) {
+    switch TaskReturn.Outcome(rawValue: argument) {
+    case .reviewBlocked: self = .question
+    case .designConflict: self = .amend
+    default: self.init(rawValue: argument)
+    }
+  }
+}
 extension BuildResumeAnswer: ExpressibleByArgument {
   /// The raw values, and `stop`, the run skill's word for stopping the build, as `abandon`.
   public init?(argument: String) {
@@ -183,7 +193,10 @@ struct BuildHaltCommand: AsyncParsableCommand {
   @Option(help: "The task the halt is about; leave it out for a halt of the whole run.")
   var task: String?
 
-  @Option(help: "Why the build stopped.")
+  @Option(
+    help: ArgumentHelp(
+      "Why the build stopped. A return's `review-blocked` records as question, and its "
+        + "`design-conflict` as amend."))
   var reason: BuildHaltReason
 
   @OptionGroup var output: OutputOptions

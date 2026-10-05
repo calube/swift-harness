@@ -408,6 +408,71 @@ export function repairModeProblems(worker) {
   return problems
 }
 
+const SELECTORS = 'docs/simulator-qa-flow-selectors.md'
+const AGENT_DEVICE_FIXTURES = 'gate/Tests/Fixtures/AgentDevice'
+const SELECTOR_FIXTURE = `${AGENT_DEVICE_FIXTURES}/selectors`
+const SELECTOR_KEYS = ['id', 'label', 'value', 'role']
+
+// Every `*.steps.json` under `dir`, relative to the plugin root.
+function stepsFiles(dir) {
+  return readdirSync(join(root, dir), { withFileTypes: true }).flatMap(entry =>
+    entry.isDirectory() ? stepsFiles(`${dir}/${entry.name}`)
+      : entry.name.endsWith('.steps.json') ? [`${dir}/${entry.name}`] : [])
+}
+
+// Every selector a captured agent-device batch ran, from each step's `selector`, `absent` or
+// `target.selector`.
+function capturedSelectors() {
+  return new Set(stepsFiles(AGENT_DEVICE_FIXTURES).flatMap(file =>
+    JSON.parse(read(file)).flatMap(step =>
+      [step.input?.selector, step.input?.absent, step.input?.target?.selector].filter(Boolean))))
+}
+
+/**
+ * Where a text's selector grammar strays from what the pinned tool ran: a table row per key it
+ * matches by (`id`, `label`, `value`, `role`), every example selector built from those keys taken
+ * from a captured batch, and the matching rules: a value matches the whole attribute, ignoring
+ * case, every term holds, and `||` takes alternatives. In a build trial the validation worker read
+ * the tool's minified package for about 50 s to learn the keys.
+ */
+export function selectorProblems(text, captured) {
+  const problems = []
+  for (const key of SELECTOR_KEYS) {
+    if (!text.split('\n').some(line => line.startsWith(`| \`${key}\` |`))) problems.push(`no row for the key \`${key}\``)
+  }
+  const term = String.raw`[a-z]+=(?:"[^"\x60]*"|[a-z]+)`
+  const examples = [...text.matchAll(new RegExp(String.raw`\x60(${term}(?:\s+(?:\|\|\s+)?${term})*)\x60`, 'g'))]
+    .map(m => m[1])
+    .filter(example => [...example.matchAll(/([a-z]+)=/g)].every(m => SELECTOR_KEYS.includes(m[1])))
+  if (examples.length === 0) problems.push('no example selector')
+  for (const example of examples) if (!captured.has(example)) problems.push(`\`${example}\` ran in no captured batch`)
+  const prose = flat(text)
+  if (!/\bwhole attribute\b/i.test(prose)) problems.push('never says a value matches the whole attribute')
+  if (!/\bignoring case\b/i.test(prose)) problems.push('never says matching ignores case')
+  if (!/\bmust all hold\b/i.test(prose)) problems.push('never says every term must hold')
+  if (!/`\|\|`[^.]*\balternatives\b/i.test(prose)) problems.push('never says `||` separates alternatives')
+  return problems
+}
+
+/**
+ * Where a text lets a cause-and-effect flow pass on the defect it should catch: a flow for a
+ * requirement where 1 event causes an effect first checks the effect hasn't happened, under a held
+ * or seeded scenario, then the cause, then the effect. In a build trial a flow waited only for
+ * the end state, and passed while the app produced the effect with no cause.
+ */
+export function causeEffectProblems(text) {
+  const sentences = flat(text).split(/(?<=\.)\s+/)
+  const at = sentences.findIndex(s => /\bcauses an effect\b/i.test(s))
+  if (at === -1) return ['never names a requirement where 1 event causes an effect']
+  const near = sentences.slice(at, at + 7).join(' ')
+  const problems = []
+  if (!/\bfirst checks?\b[^.]*\beffect\b[^.]*\b(?:not|hasn't|absent)\b/i.test(near)) problems.push('never checks the effect is absent before the cause')
+  if (!/\bend state\b/i.test(near)) problems.push('never says a flow that waits only for the end state passes on the defect')
+  if (!/\b(?:held|seeded)\b[^.]*\bscenario\b/i.test(near)) problems.push('never runs it under a held or seeded scenario')
+  if (!/\bmissing contract name\b/i.test(near)) problems.push('never returns a missing scenario as a missing contract name')
+  return problems
+}
+
 const tests = {
   'the QA skill names every sim and qa command it drives, each with flags the real CLI has — catches a skill step drifting from the CLI'() {
     const help = realHelp()
@@ -648,6 +713,52 @@ const tests = {
     assert.match(clockFlowProblems(good.replace('several clock steps', '1 step')).join('\n'), /several clock steps/)
     assert.match(clockFlowProblems(good.replace('accessibility value', 'label')).join('\n'), /accessibility value/)
     assert.match(clockFlowProblems(good.replace('with no sleep', 'after a pause')).join('\n'), /sleep/)
+  },
+
+  'the captured selector batches: id, label, value and role terms all held on 1 element, `||` fell through to the alternative that matched, and a part of a label, a term that fails or an unknown key failed the step — catches a selector doc built on runs that show nothing'() {
+    const outcome = name => JSON.parse(read(`${SELECTOR_FIXTURE}/${name}.stdout`))
+    const pass = outcome('pass')
+    assert.equal(read(`${SELECTOR_FIXTURE}/pass.status`).trim(), '0')
+    assert.equal(pass.data.results.find(result => result.step === 7).data.selector, 'id="probe.start"')
+    assert.equal(pass.data.results.find(result => result.step === 8).data.matches, 1)
+    for (const name of ['label-part', 'terms-all', 'unknown-key']) {
+      assert.equal(read(`${SELECTOR_FIXTURE}/${name}.status`).trim(), '1', name)
+    }
+    assert.match(outcome('label-part').error.message, /step 3 \(wait\): wait timed out for selector: label="Step"/)
+    assert.match(outcome('terms-all').error.message, /step 3 \(wait\): wait timed out/)
+    assert.equal(outcome('unknown-key').error.code, 'INVALID_ARGS')
+  },
+
+  'the selectors doc names each key the pinned tool matches by, takes every example from a captured batch and states the matching rules, the docs index routes to it, and the validation worker points at it — catches a worker reading the tool\'s package for selector keys'() {
+    assert.deepEqual(selectorProblems(read(SELECTORS), capturedSelectors()), [], SELECTORS)
+    assert.ok(read('docs/index.md').includes('(simulator-qa-flow-selectors.md)'), 'the docs index never routes to the selectors doc')
+    assert.ok(read(WORKER).includes('docs/simulator-qa-flow-selectors.md'), 'the validation worker never points at the selectors doc')
+  },
+
+  'the selector check names a missing key row, an uncaptured example and each missing rule — catches a check that passes anything'() {
+    const captured = new Set(['id="a"', 'id="a" value="3"', 'id="b" || id="a"'])
+    const good = '| `id` | x | `id="a"` |\n| `label` | x |\n| `value` | x | `id="a" value="3"` |\n| `role` | x |\n\nA value matches the whole attribute, ignoring case. Terms must all hold. `||` separates alternatives: `id="b" || id="a"`.'
+    assert.deepEqual(selectorProblems(good, captured), [])
+    assert.match(selectorProblems(good.replace('| `role` |', '| role |'), captured).join('\n'), /no row for the key `role`/)
+    assert.match(selectorProblems(good.replace('value="3"', 'value="4"'), captured).join('\n'), /`id="a" value="4"` ran in no captured batch/)
+    assert.match(selectorProblems(good.replace('whole attribute', 'attribute'), captured).join('\n'), /whole attribute/)
+    assert.match(selectorProblems(good.replace(', ignoring case', ''), captured).join('\n'), /ignores case/)
+    assert.match(selectorProblems(good.replace('must all hold', 'combine'), captured).join('\n'), /every term/)
+    assert.match(selectorProblems(good.replace('separates alternatives', 'works'), captured).join('\n'), /`\|\|`/)
+  },
+
+  'the validation worker has a cause-and-effect flow check the effect is absent before the cause, under a held or seeded scenario — catches a flow that passed because the effect happened with no cause'() {
+    assert.deepEqual(causeEffectProblems(read(WORKER)), [], WORKER)
+  },
+
+  'the cause-and-effect check names each missing piece — catches a check that passes anything'() {
+    const good = 'A flow for a requirement where 1 event causes an effect first checks the effect has not happened. A flow that waits only for the end state passes on a defect. It launches under a held or seeded scenario. Without one, return it as a missing contract name.'
+    assert.deepEqual(causeEffectProblems(good), [])
+    assert.deepEqual(causeEffectProblems('Flows check states.'), ['never names a requirement where 1 event causes an effect'])
+    assert.match(causeEffectProblems(good.replace('first checks the effect has not happened', 'checks the effect')).join('\n'), /absent before the cause/)
+    assert.match(causeEffectProblems(good.replace('end state', 'result')).join('\n'), /end state/)
+    assert.match(causeEffectProblems(good.replace('a held or seeded scenario', 'any launch')).join('\n'), /held or seeded/)
+    assert.match(causeEffectProblems(good.replace('missing contract name', 'note')).join('\n'), /missing contract name/)
   },
 
   'the validation worker\'s repair mode rewrites 1 requirement\'s flow, keeps its assertions and proves it red at the base again — catches a repair that weakens a check to pass'() {

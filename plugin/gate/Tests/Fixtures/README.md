@@ -525,6 +525,29 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/selectors
+
+The selector keys `agent-device` matches an element by, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. In a build trial the validation
+worker read the installed tool's minified package for about 50 s to learn them. The app is
+`SelectorProbe.swift` with `Info.plist`: a text with the id `probe.count`, the label
+`Step count` and the accessibility value `0`, then `3` after 3 s, and a `Start` button with the
+id `probe.start`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/selectors/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app first.
+
+| Files | Batch |
+|---|---|
+| `pass.{steps.json,stdout,stderr,status}` | waits for `id="probe.count"`, `label="Step count"`, `id="probe.count" value="3"`, `role=button label="Start"`, `label="step COUNT"` and `id="probe.missing" \|\| id="probe.start"`, which resolved to `id="probe.start"`, then `is exists` `role=statictext id="probe.count" value="3"` (1 match). Exits 0 |
+| `label-part.{…}` | `label="Step"`: exits 1, `details.step` 3, `wait_target_absent`, "wait timed out for selector", while `Step count` showed |
+| `terms-all.{…}` | `id="probe.count" value="3"`, then `id="probe.count" value="4"`: exits 1, step 3, `wait_deadline_exceeded` |
+| `unknown-key.{…}` | `identifier="probe.count"`: exits 1, `INVALID_ARGS`, "Invalid wait selector" |
+
 ### AgentDevice/swipe
 
 Where each `gesture` `kind: swipe` preset moves its finger, captured on 2026-10-05 with
@@ -5426,3 +5449,31 @@ The script keeps only those 2 notes lines and renames the screen task's id and t
 words in the finding's path and title to generic ones (`screen-ui`, `EngineTests`,
 `SimulationTests`, `Spawning`, `spawns on`). The other ids, the severity and the line's shape are as
 captured. `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
+
+## Task halt: a started task left blocked with a fix round's time left
+
+`TaskHalt/late-fix-1/` is the state a 2026-10-05 brownfield practice trial left, build run
+`20261005T191004Z-19083d18` of plan `spec`, whose app's state advances on a clock. Its screen task,
+the one every flow row runs after, came back from its second fixer `gate-red` with 1 flow row red,
+checked at 19:33:41Z, 146 s past no new starts and 334 s before the cutoff. The halt was answered
+`continue`, so the task stayed `blocked` and no flow row ever passed. `ledger-events.jsonl` and
+`run.json` are the build run's, `halts.jsonl` the clone's `events/build.jsonl`, `gate-runs.jsonl`
+the `gate.run` lines of its `events/gate.jsonl`, `qa-before-merge.json` the task's first
+before-merge `qa run` (all 6 rows ran) and `qa-fix.json` the fixer's `qa run --fix` (5 rows
+reused). `C` is the trial's copied state root, and `SCRUB` a `sed -E` rename script outside this
+repository, since its pairs name the app: it renames the task ids, requirement ids, flow file
+names, accessibility ids and test file names to generic ones (`screen-ui`, `model-core`,
+`model-spawn`, `req-render`, `screen.entity`, `ModelTests`), and keeps the `slice` gate tier's
+name. From this directory:
+
+```sh
+F=TaskHalt/late-fix-1 R=$C/build/20261005T191004Z-19083d18 S=$(cat $SCRUB)
+mkdir -p $F
+sed -E "$S" $R/events.jsonl > $F/ledger-events.jsonl; cp $R/run.json $F/run.json
+sed -E "$S" $C/events/build.jsonl > $F/halts.jsonl
+grep '"kind":"gate.run"' $C/events/gate.jsonl | sed -E "$S" > $F/gate-runs.jsonl
+sed -E "$S" $C/runs/20261005T192422Z-4ba373f4/qa/report.json > $F/qa-before-merge.json
+sed -E "$S" $C/runs/20261005T193134Z-69c21ab9/qa/report.json > $F/qa-fix.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in the folder.
