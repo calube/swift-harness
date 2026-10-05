@@ -7,7 +7,7 @@
 // sibling file or the network to draw, and a red span or blocked task with no failure context.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -71,7 +71,7 @@ function seededClone({ dir: fixture, buildRun, plan, clone }) {
     writeFileSync(join(gitDir, 'commondir'), '../..\n')
     cpSync(join(captured, 'worktrees', name, 'runs'), join(gitDir, 'swift-harness/runs'), { recursive: true })
   }
-  return { dir, root: parent, report: join(harness, 'reports', `${buildRun}.html`) }
+  return { dir, root: parent, report: join(harness, 'reports', buildRun, 'index.html') }
 }
 
 // A git repository holding the captured run's plan state and stores, as the run left them.
@@ -106,8 +106,19 @@ function seededRepository(run) {
     })
     writeFileSync(join(dir, '.harness/events/qa.jsonl'), lines.join('\n') + '\n')
     cpSync(join(fixtures, run.qa, 'runs'), join(dir, '.harness/runs'), { recursive: true })
+    // The capture kept no video or contact sheet, so each one a flow names gets stand-in bytes
+    // where the final pass writes it.
+    for (const line of lines) {
+      const event = JSON.parse(line)
+      if (event.kind !== 'qa.flow') continue
+      for (const path of [event.payload.video, event.payload.sheet].filter(Boolean)) {
+        const file = join(dir, '.harness/runs', event.runID, path)
+        mkdirSync(dirname(file), { recursive: true })
+        writeFileSync(file, `stand-in for ${path}`)
+      }
+    }
   }
-  return { dir, root: dir, report: join(dir, '.harness/reports', `${buildRun}.html`) }
+  return { dir, root: dir, report: join(dir, '.harness/reports', buildRun, 'index.html') }
 }
 
 const REGIONS = `(() => ({
@@ -153,9 +164,10 @@ async function renderReport(run, act) {
     const view = JSON.parse(await page.evaluate("document.getElementById('run-view').textContent"))
     const text = await page.evaluate('document.body.innerText')
     const barIDs = await page.evaluate("[...new Set([...document.querySelectorAll('#tl .bar')].map(bar => bar.dataset.id))]")
+    const resources = await page.evaluate("performance.getEntriesByType('resource').length")
     const acted = act ? await act(page) : null
     const tabs = await walkTabs(page)
-    return { regions, view, text, barIDs, html, acted, tabs, errors: [...page.errors] }
+    return { regions, view, text, barIDs, html, acted, tabs, resources, repository, errors: [...page.errors] }
   } finally {
     await close()
   }
@@ -250,7 +262,8 @@ function assertTabs({ tabs: { shown, badges }, view }) {
 }
 
 function assertRendered(rendered, run, keys) {
-  const { regions, view, text, errors } = rendered
+  const { regions, view, text, errors, resources } = rendered
+  assert.equal(resources, 0, 'the report fetched a file or the network')
   assertTabs(rendered)
   for (const key of keys) {
     assert.ok(regions[key] > 0, `region ${key} is empty: ${JSON.stringify(regions)}`)
@@ -350,9 +363,19 @@ const tests = {
     flows.sort((a, b) => Number(a.row) - Number(b.row))
     assert.deepEqual(flows.map((f) => f.row), ['1', '3'])
     for (const [i, r] of flowRows.entries()) {
-      assert.deepEqual(flows[i].steps, r.flow.steps.map((st) => `${st.ok} ../runs/${qaRun}/${r.flow.video}#t=${st.offsetMs / 1000}`))
-      assert.equal(flows[i].sheet, `../runs/${qaRun}/${r.flow.sheet}`)
+      assert.deepEqual(flows[i].steps, r.flow.steps.map((st) => `${st.ok} runs/${qaRun}/${r.flow.video}#t=${st.offsetMs / 1000}`))
+      assert.equal(flows[i].sheet, `runs/${qaRun}/${r.flow.sheet}`)
     }
+    // Every link resolves to a copy in the report's own folder, which holds nothing else but the
+    // page and its view.
+    const folder = dirname(rendered.repository.report)
+    const hrefs = flows.flatMap((f) => f.steps.map((st) => st.split(' ')[1]).concat(f.sheet))
+    for (const href of hrefs) {
+      assert.ok(existsSync(join(folder, decodeURIComponent(href.split('#')[0]))), `${href} resolves to no file in the report folder`)
+    }
+    const listed = readdirSync(folder, { recursive: true }).filter((name) => !existsSync(join(folder, name)) || !statSync(join(folder, name)).isDirectory())
+    assert.deepEqual(listed.filter((name) => !name.startsWith('runs/')).sort(), ['index.html', 'view.json'])
+    assert.doesNotMatch(readFileSync(join(folder, 'view.json'), 'utf8'), MACHINE_PATHS)
     assert.deepEqual(flows[1].steps.map((st) => st.split(' ')[0]), ['true', 'true', 'false'])
     assert.deepEqual(kept, [['counter', [
       'CounterFlowUITests/testFixedFactScenarioShowsItsFactWithoutNetwork() 5',
@@ -360,6 +383,34 @@ const tests = {
     ]]])
     assert.deepEqual(ticks.sort(), flowRows.flatMap((r) => r.flow.steps.map((st) => `qa:${qaRun}:${r.row} ${st.n}`)).sort())
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'the final report folder still opens and draws with its step links, and renders again from the folder alone, after the plan state and run stores are deleted — catches a report that dies with plan cleanup'() {
+    const rendered = await renderReport(RUNS.flows)
+    const { repository } = rendered
+    for (const gone of ['.git/swift-harness/plans', '.harness/events', '.harness/runs']) rmSync(join(repository.dir, gone), { recursive: true, force: true })
+    const folder = dirname(repository.report)
+    const again = spawnSync(swiftgateBinary(), ['report', '--html', '--from', folder], {
+      cwd: repository.dir, encoding: 'utf8',
+      env: { ...process.env, LLVM_PROFILE_FILE: join(repository.root, 'profile-%p.profraw'), SWIFTGATE_HARNESS_ROOT: plugin },
+      timeout: 30_000,
+    })
+    assert.equal(again.status, 0, again.stdout + again.stderr)
+    const { page, close } = await launch()
+    try {
+      await page.viewport(1280, 900)
+      await page.load(pathToFileURL(repository.report).href)
+      const regions = await page.evaluate(REGIONS)
+      for (const key of REGION_KEYS) assert.ok(regions[key] > 0, `region ${key} is empty after cleanup`)
+      const tab = await page.evaluate(VALIDATION)
+      assert.deepEqual(tab.rows, ['3:red', '1:pass', '2:pass'])
+      const links = await page.evaluate("[...document.querySelectorAll('.qa-step a, .qa-sheet, .qa-video')].map((a) => a.getAttribute('href'))")
+      assert.ok(links.length > 0, 'the flows link no file')
+      for (const href of links) assert.ok(existsSync(join(folder, decodeURIComponent(href.split('#')[0]))), `${href} broke with cleanup`)
+      assert.equal(regions.errors, '0')
+      assert.deepEqual(page.errors, [])
+    } finally {
+      await close()
+    }
   },
   async 'focusing the RED merge gate\'s bar shows its tier, rule and file:line in the popover, and the task drawer the whole message, its failing test and report — catches a red span with no failure context'() {
     const rendered = await renderReport(RUNS.first, (page) => focusThenDrawer(page, `gate:${RED_GATE}`, 'counter-ui-reset-button'))

@@ -202,8 +202,10 @@ any other non-zero exit of either prints 1 line, and the report goes on without 
    gate time, stuck points and slot use. Telemetry never stops the report: an exit 2 that says
    `telemetry is off` means the repo opted out, so say nothing of it; any other non-zero exit of
    either prints 1 line, and the report goes on.
+6. Rewrite the run's report folder, so it holds the `ship` span: `"$SG" report --html <run>`. It
+   prints the page's path; a non-zero exit prints 1 line, and the report goes on.
 
-End with the ledger page link or its path, then the design doc and its tier, or at `none` the spec page path
+End with the ledger page link or its path, the run report page's path, then the design doc and its tier, or at `none` the spec page path
 and `<surface>`. List the tasks done, the unfinished
 ones with their status, and each halt with the user's answer; when the build ran,
 `"$SG" events list --kind build.halt --kind build.resume --since <run>` gives each one's reason,

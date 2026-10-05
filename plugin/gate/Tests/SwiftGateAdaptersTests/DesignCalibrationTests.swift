@@ -102,7 +102,7 @@ struct DesignCalibrationTests {
   }
 
   @Test(
-    "a version 2 record, and a version 3 one with served models and its judge, round-trip while a version 4 one fails to decode — catches a record losing its models or judge, or a future format read as a pass"
+    "a version 2 record, and a version 3 one with served models and its judge, round-trip while a version 5 one fails to decode — catches a record losing its models or judge, or a future format read as a pass"
   )
   func recordRejectsUnknownSchema() throws {
     let text = """
@@ -115,6 +115,7 @@ struct DesignCalibrationTests {
     #expect(try CalibrationRecord.decode(Data(encoded.utf8)) == record)
     #expect(encoded.contains("\"model\" : \"opus\""))
     #expect(record.judge == nil)
+    #expect(record.cases.first?.attempts == nil)
     let current = try CalibrationRecord.decode(
       Data(
         """
@@ -130,9 +131,32 @@ struct DesignCalibrationTests {
     #expect(try CalibrationRecord.decode(Data(currentText.utf8)) == current)
     #expect(currentText.contains("\"backend\" : \"jev\""))
     let future = currentText.replacingOccurrences(
-      of: "\"schemaVersion\" : 3", with: "\"schemaVersion\" : 4")
+      of: "\"schemaVersion\" : 3", with: "\"schemaVersion\" : 5")
     #expect(future != currentText)
     #expect(throws: (any Error).self) { try CalibrationRecord.decode(Data(future.utf8)) }
+  }
+
+  @Test(
+    "a new record is version 4 and carries each case's attempts in order, which round-trip — catches a case that passed on a retry recorded as a first-try pass, or its misses dropped"
+  )
+  func recordCarriesAttempts() throws {
+    let record = CalibrationRecord(
+      contentHash: "abc", hashedFiles: [], modelOverride: nil,
+      passedAt: Date(timeIntervalSince1970: 1_790_000_000),
+      cases: [
+        .init(
+          agent: "design-drafter", caseName: "c", model: "opus",
+          answers: [.init(question: "q", expected: "a", answered: "a", probability: 1)],
+          attempts: [.miss, .pass, .pass])
+      ])
+    let text = String(decoding: try record.encoded(), as: UTF8.self)
+    #expect(record.schemaVersion == 4)
+    #expect(text.contains("\"schemaVersion\" : 4"))
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+    let cases = try #require(object["cases"] as? [[String: Any]])
+    #expect(cases.first?["attempts"] as? [String] == ["miss", "pass", "pass"])
+    #expect(try CalibrationRecord.decode(Data(text.utf8)) == record)
   }
 
   static func label(version: Int = 2, checks: String) -> Data {
@@ -294,5 +318,68 @@ struct DesignCalibrationTests {
     #expect(kept.result.answers.map(\.answered) == ["refuted"])
     #expect(replayed.result == kept.result)
     #expect(replay.invocations.isEmpty)
+  }
+
+  @Test(
+    "a retry keeps its reply beside the first attempt's, and a replay of that attempt reads it back — catches a retry overwriting the first reply, or a replay scoring attempt 1's reply as attempt 2"
+  )
+  func retryKeepsItsOwnReply() async throws {
+    let repository = try TempRoot()
+    try repository.write(
+      "plugin/agents/design-challenger.md",
+      "---\nname: design-challenger\nmodel: opus\n---\n\nYou challenge options.\n")
+    try repository.write(
+      "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/refuted-api/input.md",
+      "Case: the design says X.\n")
+    try repository.write(
+      "\(DesignCalibrationLayout.seedsDirectory)/design-challenger/refuted-api/label.json",
+      "{\"schemaVersion\": 2, \"checks\": [\(Self.good)]}")
+    let seeds = DesignCalibrationSeeds.load(root: repository.root)
+    let agent = try #require(seeds.agents.first)
+    let seed = try #require(agent.cases.first)
+    let fixture = try Fixture.data("Judge/claude-result.json")
+    func stdout(_ status: String) throws -> String {
+      var envelope = try #require(
+        try JSONSerialization.jsonObject(with: fixture) as? [String: Any])
+      envelope["result"] = "{\"verdicts\": [{\"id\": \"x\", \"status\": \"\(status)\"}]}"
+      return String(decoding: try JSONSerialization.data(withJSONObject: envelope), as: UTF8.self)
+    }
+    let first = try stdout("supported")
+    let second = try stdout("refuted")
+    let runID = "20260930T120000Z-0000abcd"
+    let keep = DesignCalibrationReplies(root: repository.root, runID: runID, mode: .keep)
+
+    let missed = try await DesignCalibrationRunner(
+      runner: FakeProcessRunner { _ throws(ProcessRunnerError) in
+        ProcessOutput(status: .exited(0), stdout: first)
+      }, replies: keep
+    ).run(agent: agent, seed: seed, attempt: 1)
+    let retried = try await DesignCalibrationRunner(
+      runner: FakeProcessRunner { _ throws(ProcessRunnerError) in
+        ProcessOutput(status: .exited(0), stdout: second)
+      }, replies: keep
+    ).run(agent: agent, seed: seed, attempt: 2)
+    let replayRunner = FakeProcessRunner { _ throws(ProcessRunnerError) in
+      ProcessOutput(status: .exited(1), stdout: "", stderr: "no agent runs on a replay")
+    }
+    let replayed = try await DesignCalibrationRunner(
+      runner: replayRunner,
+      replies: DesignCalibrationReplies(root: repository.root, runID: runID, mode: .replay)
+    ).run(agent: agent, seed: seed, attempt: 2)
+
+    let kept = ".harness/runs/\(runID)/calibrate-design/design-challenger/"
+    #expect(missed.result.answers.map(\.answered) == ["supported"])
+    #expect(retried.result.answers.map(\.answered) == ["refuted"])
+    #expect(retried.replyPath?.hasSuffix("refuted-api.attempt-2.txt") == true)
+    #expect(
+      FileManager.default.fileExists(
+        atPath: repository.root.appending(path: kept + "refuted-api.attempt-2.json").path))
+    #expect(
+      String(
+        decoding: try Data(contentsOf: repository.root.appending(path: kept + "refuted-api.txt")),
+        as: UTF8.self
+      ).contains("supported"))
+    #expect(replayed.result == retried.result)
+    #expect(replayRunner.invocations.isEmpty)
   }
 }

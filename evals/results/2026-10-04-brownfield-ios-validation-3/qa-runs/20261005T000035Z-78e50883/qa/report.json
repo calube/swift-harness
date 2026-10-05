@@ -1,0 +1,38 @@
+{
+  "after" : "confirm-downloads-check",
+  "atBase" : false,
+  "commit" : "303690d0cc515f70276ac19caea8b57e0c3a5887",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "1 of 1 rows verified: 1 pass, 0 red, 0 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "test: AidokuTests/LargeDownloadConfirmationTests",
+      "evidence" : [
+        "qa/04-req-download-check.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 45143,
+      "requirement" : "req-download-check",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "confirm-downloads-check"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T000035Z-78e50883",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}

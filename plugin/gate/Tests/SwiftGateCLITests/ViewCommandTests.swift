@@ -269,4 +269,40 @@ struct ViewCommandTests {
       #expect(!String(decoding: response.body, as: UTF8.self).contains("bytes"), "\(path)")
     }
   }
+
+  @Test(
+    "the live server on a run with no ledger log yet answers it as not written yet, and once the log is written its next /changes carries the task spans and an empty unwritten list — catches a live page stuck on a file the run wrote since"
+  )
+  func liveServerFollowsTheLedgerLog() async throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let log = repository.planDirectory.appending(
+      path: "build/\(ReportCommandTests.buildRun)/events.jsonl")
+    let captured = try Data(contentsOf: log)
+    try FileManager.default.removeItem(at: log)
+    let server = LocalHTTPServer()
+    defer { server.stop() }
+    let port = try await server.start(port: 0, handler: try Self.serve(repository).respond)
+    func fetch(_ target: String) async throws -> [String: Any] {
+      let url = try #require(URL(string: "http://127.0.0.1:\(port)\(target)"))
+      let (body, response) = try await URLSession.shared.data(from: url)
+      #expect((response as? HTTPURLResponse)?.statusCode == 200, "\(target)")
+      return try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    let first = try await fetch("/view.json")
+    let unwritten = (first["unwritten"] as? [[String: Any]]) ?? []
+    #expect(unwritten.contains { ($0["source"] as? String)?.hasSuffix("events.jsonl") == true })
+    #expect(
+      !((first["spans"] as? [[String: Any]]) ?? []).contains { $0["phase"] as? String == "task" })
+    let cursor = try #require(first["cursor"] as? String)
+
+    try captured.write(to: log)
+    let changes = try await fetch("/changes?after=\(cursor)")
+
+    #expect((changes["unwritten"] as? [Any])?.isEmpty == true, "\(changes.keys.sorted())")
+    let spans = (changes["spans"] as? [[String: Any]]) ?? []
+    #expect(spans.contains { $0["phase"] as? String == "task" })
+    #expect((changes["run"] as? [String: Any])?["state"] as? String == "done")
+  }
 }

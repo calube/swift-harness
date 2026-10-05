@@ -71,12 +71,12 @@ struct ReportCommandTests {
   }
 
   @Test(
-    "report --html writes 1 self-contained page under the state root with the run's view embedded — catches a page that needs the network or a sibling file"
+    "report --html writes 1 self-contained page in the run's folder under the state root with the run's view embedded — catches a page that needs the network or a sibling file"
   )
   func writesSelfContainedPage() throws {
     let repository = try Repository()
     defer { repository.remove() }
-    let path = ".harness/reports/\(Self.buildRun).html"
+    let path = ".harness/reports/\(Self.buildRun)/index.html"
     #expect(repository.run(.html) == .wrote(path: path))
     let html = try String(contentsOf: repository.root.appending(path: path), encoding: .utf8)
     #expect(!html.contains("<script src"))
@@ -92,15 +92,15 @@ struct ReportCommandTests {
   }
 
   @Test(
-    "report --out writes the page there instead — catches an --out the command ignores"
+    "report --html --out writes the report folder there instead — catches an --out the command ignores"
   )
   func writesToOut() throws {
     let repository = try Repository()
     defer { repository.remove() }
-    #expect(repository.run(.html, out: "shared/run.html") == .wrote(path: "shared/run.html"))
+    #expect(repository.run(.html, out: "shared/run") == .wrote(path: "shared/run/index.html"))
     #expect(
       FileManager.default.fileExists(
-        atPath: repository.root.appending(path: "shared/run.html").path)
+        atPath: repository.root.appending(path: "shared/run/index.html").path)
     )
     #expect(
       !FileManager.default.fileExists(

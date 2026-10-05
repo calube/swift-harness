@@ -1,0 +1,35 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 60093,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "Aidoku has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: no new or changed tests since dbfdd547c4a85066851022e72d8399bc7e171bab",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "runID" : "20261004T235115Z-9e16c380",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 59978,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

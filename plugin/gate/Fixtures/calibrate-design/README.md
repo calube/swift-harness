@@ -142,18 +142,39 @@ around it is read through), or a design doc for the drafter.
 The checks score that reply. An observed check records probability 1. A judged check records the
 judge's probability for its most likely option, and passes only when that option is `expected`
 and its probability is at least 0.7: an answer that lands on the label by a coin flip is a miss,
-not a pass. Every check in every case met: exit 0, and `last-pass.json` is rewritten. Any miss:
-exit 1 with one `calibrate-design.label-missed` per check, and `last-pass.json` is left as it
-was. When `claude` can't run or returns an error, or a seed can't be read, the run exits 2.
+not a pass. An attempt passes when it meets every one of its checks.
+
+A case that passes its first attempt is done. A case whose first attempt misses runs again, as
+the same case on the same model. It gets up to 2 more attempts, and passes when 2 of its
+attempts pass: `[miss, pass, pass]` passes, while `[miss, pass, miss]` and `[miss, miss]` fail.
+The run skips a third attempt that can't change the verdict.
+
+Why: many seeds hold a case that a careful model can answer either way from run to run. With
+about 24 such seeds, a run that needs every case on its first try misses somewhere in most
+runs, on a different case each time. A single miss says little. An agent that is wrong on a
+case misses again, so 0 or 1 passes in 3 still fails.
+
+Every case passed: exit 0, and the run rewrites `last-pass.json`. A case that passed after a
+miss gets a `calibrate-design.usage` note naming its attempts and what each miss answered. A
+failed case: exit 1 with a `calibrate-design.label-missed` for each check each attempt missed,
+naming the attempt and the case's attempts, and the run leaves `last-pass.json` as it was. When
+`claude` can't run or returns an error, or the run can't read a seed, it exits 2.
+
+The run keeps each attempt's reply: the first at `<case>.txt`, a retry at
+`<case>.attempt-<n>.txt`. `--replay` judges the kept replies under the same rule, and reads
+attempt `n` only when the attempts before it call for one, so a replay never runs an agent. A
+replay that needs an attempt the live run never kept exits 2.
 
 `--model <m>` runs every agent on `<m>` instead, for experiments. The record it writes carries
 `modelOverride`, and push never counts it as fresh.
 
 ## `last-pass.json`
 
-A `CalibrationRecord`: `schemaVersion` (2), `contentHash`, `hashedFiles`, `modelOverride` (only
-on an override run), `passedAt` (ISO 8601) and `cases` (`agent`, `case`, `model`, and `answers`
-with `question`, `expected`, `answered` and `probability`). `contentHash` is SHA-256 over the
+A `CalibrationRecord`: `schemaVersion` (4), `contentHash`, `hashedFiles`, `modelOverride` (only
+on an override run), `passedAt` (ISO 8601), `judge`, and `cases` (`agent`, `case`, `model`,
+`servedModels`, `attempts` such as `["miss", "pass", "pass"]`, and the deciding attempt's
+`answers` with `question`, `expected`, `answered` and `probability`). Swiftgate still reads
+versions 2 and 3, which carry no attempts. `contentHash` is SHA-256 over the
 sorted list of `agents/design-*.md` and `workflows/design-*.js` (direct children only). Each file
 contributes `<path>\0<sha256 of its bytes>\n`, so an edit, an added or removed file, or a rename
 changes it.

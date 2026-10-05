@@ -345,7 +345,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 
 ## 9. Report
 
-`"$SG" run report <slug>` writes the report to `<plan-dir>` and prints it: the assumptions, the
+`"$SG" run report <slug>` writes the report to `<plan-dir>`, rewrites the run's report page, whose path
+its JSON names as `runReport`, and prints the report: the assumptions, the
 baseline failures, the build-only areas, the dropped steps, each task's review depth, the review
 fallbacks, the time box with each task that didn't fit it, and the plan branch to merge. Its first
 line says whether the run finished: a run that left any task blocked

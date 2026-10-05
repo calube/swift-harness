@@ -15,7 +15,8 @@ public enum RunViewBuilder {
       .compactMap { $0 }.min()
     let lastTime = times.max()
     let state: RunView.RunState =
-      !BuildHalts.open(in: events).isEmpty ? .halted : join.finalGate == nil ? .running : .done
+      !BuildHalts.open(in: events).isEmpty
+      ? .halted : endOfRun(ledgerEvents) == nil ? .running : .done
     let runEnd = state == .done ? lastTime : nil
 
     let runSpan = RunViewSpans.runSpan(start: startedAt, state: state, end: lastTime, join: join)
@@ -25,6 +26,15 @@ public enum RunViewBuilder {
       events: events, join: join, taskSpans: Set(taskSpans.map(\.id)), runSpan: runSpan?.id)
 
     var damage = input.damage + gates.damage
+    // A file a run writes as it goes is only late until the run ends.
+    var unwritten: [RunView.Damage] = []
+    if state == .done {
+      damage += input.unwritten
+    } else {
+      unwritten = input.unwritten.map {
+        RunView.Damage(source: $0.source, reason: RunView.notWrittenYet)
+      }
+    }
     let usage = events.compactMap { event -> AgentUsageEvent? in
       guard case .agentUsage(let usage) = event.payload else { return nil }
       return usage
@@ -39,7 +49,7 @@ public enum RunViewBuilder {
       run: RunView.Run(
         id: input.buildRun, plan: input.join?.plan, preset: input.join?.record?.presetName,
         startedAt: startedAt, endedAt: runEnd, state: state,
-        stallMin: input.join?.record?.preset.stallMin,
+        stallMin: input.join?.record?.preset.effectiveStallMin,
         timeBox: input.join?.record?.timeBox.map(timeBox)),
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,
@@ -50,7 +60,7 @@ public enum RunViewBuilder {
             events: events, parent: runSpan?.id, baselines: input.warmupBaselines)),
       gates: gates.gates,
       halts: halts(events),
-      damage: damage)
+      damage: damage, unwritten: unwritten)
     view = RunViewEmittedEvents.fold(events, into: view)
     RunViewValidationFold.fold(
       events, qaRuns: input.qaRuns, roots: input.checkoutRoots,
@@ -66,6 +76,17 @@ public enum RunViewBuilder {
     RunViewGateFailures.fill(&view, input: input, events: events)
     RunViewFailureReasons.fill(&view, input: input)
     return view
+  }
+
+  /// When the run ended: its newest ledger event is `build finish`'s, so nothing resumed after
+  /// it. A log written before `build finish` recorded its end ends at a GREEN final gate
+  /// instead; any other newest event, a red final's fix loop included, means it still runs.
+  static func endOfRun(_ events: [BuildEvent]) -> Date? {
+    switch events.last {
+    case .finish(let finish): finish.at
+    case .gate(let gate) where gate.stage == .final && gate.verdict == .green: gate.at
+    default: nil
+    }
   }
 
   /// An event read from 2 stores counts once.
@@ -93,7 +114,7 @@ public enum RunViewBuilder {
       case .merge(let merge): mergedAt = merge.at
       case .undo: mergedAt = nil
       case .gate(let gate): mergeGateRun = gate.runID
-      case .transition, .returnCheck: continue
+      case .transition, .returnCheck, .finish: continue
       }
     }
     // Usage is ingested when a worker finishes, so a task not yet finished has none to sum.
