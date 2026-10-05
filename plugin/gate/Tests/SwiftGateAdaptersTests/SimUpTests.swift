@@ -50,6 +50,8 @@ final class InstallRecordingSimctl: Simctl {
   }
 
   var installedApps: [String] { installed.withLock { $0 } }
+  /// Every call, the installs included, in order.
+  var calls: [FakeSimctl.Call] { base.calls }
 
   func devices() async throws(SimctlError) -> [SimulatorDevice] { try await base.devices() }
   func clone(_ udid: String, name: String) async throws(SimctlError) -> String {
@@ -64,6 +66,13 @@ final class InstallRecordingSimctl: Simctl {
   func install(_ udid: String, appPath: String) async throws(SimctlError) {
     if let installFailure { throw installFailure }
     installed.withLock { $0.append(appPath) }
+    try await base.install(udid, appPath: appPath)
+  }
+  func uninstall(_ udid: String, bundleID: String) async throws(SimctlError) {
+    try await base.uninstall(udid, bundleID: bundleID)
+  }
+  func resetKeychain(_ udid: String) async throws(SimctlError) {
+    try await base.resetKeychain(udid)
   }
   func launch(_ udid: String, bundleID: String, arguments: [String]) async throws(SimctlError)
     -> Int32
@@ -128,6 +137,8 @@ struct SimUpTests {
     var simctl = InstallRecordingSimctl(devices: [SimUpTests.device])
     var bundles = FixedAppBundle(result: .success(SimUpTests.app))
     var alive = true
+    /// Holders that read as exited even while `alive` holds.
+    var dead: Set<Int32> = []
     var terminated = PIDLog()
     var clock = VirtualHoldClock()
   }
@@ -139,21 +150,22 @@ struct SimUpTests {
   func run(
     _ rig: Rig, scenario: String? = "fixed-fact", leaseTimeout: Duration = .seconds(60),
     runID: String = SimUpTests.runID, git: FakeGit = FakeGit(revisions: ["HEAD": SimUpTests.head]),
-    derivedDataPath: String = "/dd"
+    derivedDataPath: String = "/dd", device: SimUpDevice = .own
   ) async throws -> Result<SimUpStarted, SimUpFailure> {
     let alive = rig.alive
+    let dead = rig.dead
     let terminated = rig.terminated
     let dependencies = SimUp.Dependencies(
       agentDevice: rig.agent, leases: store, launcher: rig.launcher, xcodebuild: rig.xcodebuild,
       simctl: rig.simctl, bundles: rig.bundles, git: git,
-      isAlive: { _ in alive }, terminate: { terminated.append($0) },
+      isAlive: { alive && !dead.contains($0) }, terminate: { terminated.append($0) },
       slotHolders: { [31337, 31338] }, clock: rig.clock.clock,
       now: { Date(timeIntervalSince1970: 1_791_115_200) })
     let request = SimUp.Request(
       worktree: worktree, config: try Self.config(), scenario: scenario, runID: runID,
       simDirectory: worktree.appending(
         path: ".harness/runs/\(runID)/sim", directoryHint: .isDirectory),
-      derivedDataPath: derivedDataPath, swiftgateExecutable: "/plugin/bin/sg")
+      derivedDataPath: derivedDataPath, swiftgateExecutable: "/plugin/bin/sg", device: device)
     return await SimUp(
       dependencies: dependencies, leaseTimeout: leaseTimeout, pollInterval: .seconds(1)
     ).run(request)
@@ -316,7 +328,7 @@ struct SimUpTests {
     #expect(failure.verdict == .blocked)
     #expect(failure.message.contains("31337") && failure.message.contains("31338"))
     #expect(failure.message.contains(SimSession.logFileName))
-    #expect(rig.xcodebuild.buildRequests.isEmpty)
+    #expect(rig.simctl.installedApps.isEmpty)
   }
 
   @Test(
@@ -331,6 +343,98 @@ struct SimUpTests {
     #expect(failure.rule == .noSlot)
     #expect(rig.terminated.all == [FakeHolderLauncher.pid])
     #expect(rig.clock.now >= .seconds(30))
+  }
+
+  @Test(
+    "the app builds while the holder is still waiting for its device — catches a clone's boot and the app's build paid 1 after the other"
+  )
+  func buildsWhileTheDeviceComesUp() async throws {
+    let rig = rig(writesLease: false)
+
+    let failure = try #require(Self.failure(try await run(rig, leaseTimeout: .seconds(30))))
+
+    #expect(failure.rule == .noSlot)
+    #expect(rig.xcodebuild.buildRequests.count == 1)
+    #expect(rig.simctl.installedApps.isEmpty)
+  }
+
+  var hold: SimSharedHold {
+    SimSharedHold(
+      runID: "20261004T120000Z-1a2b3c4d-device", ownerPID: 777,
+      logFile: root.appending(path: "runs/qa/device/agent-device.log"))
+  }
+  static let rowRunIDs = ["20261004T120000Z-1a2b3c4d-row1", "20261004T120000Z-1a2b3c4d-row2"]
+
+  @Test(
+    "2 runs on a shared hold start 1 holder, owned by the qa run, and each borrows its device under a lease of its own, with the app uninstalled and the keychain reset before each install — catches a clone booted per flow row, or a row that starts on the last row's app data"
+  )
+  func sharedHoldIsBorrowed() async throws {
+    let rig = rig()
+
+    let first = try await run(rig, runID: Self.rowRunIDs[0], device: .shared(hold)).get()
+    let second = try await run(rig, runID: Self.rowRunIDs[1], device: .shared(hold)).get()
+
+    #expect(
+      rig.launcher.launches.map(\.arguments)
+        == [["sim", "hold", "--run", hold.runID, "--owner-pid", "777"]])
+    #expect(rig.launcher.launches.first?.logPath == hold.logFile.path)
+    #expect([first.udid, second.udid] == [Self.udid, Self.udid])
+    #expect(
+      try store.read(runID: Self.rowRunIDs[1])
+        == SimLease(
+          runID: Self.rowRunIDs[1], worktree: worktree.path, udid: Self.udid,
+          holderPID: FakeHolderLauncher.pid,
+          session: SimSession.agentDeviceSessionName(runID: Self.rowRunIDs[1])))
+    #expect(try store.read(runID: hold.runID)?.session == nil)
+    let reset: [FakeSimctl.Call] = [
+      .uninstall(Self.udid, bundleID: Self.app.bundleID), .resetKeychain(Self.udid),
+      .install(Self.udid),
+    ]
+    #expect(
+      rig.simctl.calls.filter {
+        switch $0 {
+        case .uninstall, .resetKeychain, .install: true
+        default: false
+        }
+      } == reset + reset)
+  }
+
+  @Test(
+    "a shared hold whose holder died is started again rather than borrowed — catches every later flow row failing on a device nobody holds"
+  )
+  func deadSharedHoldStartsAgain() async throws {
+    var rig = rig()
+    rig.dead = [999]
+    try store.write(
+      SimLease(
+        runID: hold.runID, worktree: worktree.path, udid: "GONE", holderPID: 999,
+        session: nil))
+
+    let started = try await run(rig, runID: Self.rowRunIDs[0], device: .shared(hold)).get()
+
+    #expect(
+      rig.launcher.launches.map(\.arguments)
+        == [["sim", "hold", "--run", hold.runID, "--owner-pid", "777"]])
+    #expect(started.udid == Self.udid)
+    #expect(try store.read(runID: hold.runID)?.holderPID == FakeHolderLauncher.pid)
+    #expect(try store.read(runID: Self.rowRunIDs[0])?.holderPID == FakeHolderLauncher.pid)
+  }
+
+  @Test(
+    "an install refusal on a shared hold removes the row's lease and keeps the hold — catches a failed row taking the run's device with it, or leaving a lease behind"
+  )
+  func sharedInstallFailureKeepsTheHold() async throws {
+    var rig = rig()
+    rig.simctl = InstallRecordingSimctl(
+      devices: [Self.device],
+      installFailure: .failed(command: "install", status: .exited(1), stderr: "bad bundle"))
+
+    let failure = try #require(
+      Self.failure(try await run(rig, runID: Self.rowRunIDs[0], device: .shared(hold))))
+
+    #expect(failure.rule == .appInstallFailed)
+    #expect(try store.read(runID: Self.rowRunIDs[0]) == nil)
+    #expect(try store.read(runID: hold.runID)?.udid == Self.udid)
   }
 
   @Test(

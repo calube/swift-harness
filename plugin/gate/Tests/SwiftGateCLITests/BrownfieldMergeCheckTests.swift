@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -44,8 +45,9 @@ struct BrownfieldMergeCheckTests {
   private static func run(
     _ clone: Clone, tier: CheckTier, areas: [BrownfieldArea], changed: [String],
     runner: FakeAreaCommandRunner, sliceBuildsOnly: Bool = false,
-    context: GateRun.Context? = nil
+    context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil
   ) async throws -> GateRunParts {
+    let runner = areaRunner ?? runner
     let git = FakeGit(
       changed: changed, mergeBase: "base0",
       addedSince: changed.map { AddedLines(path: $0, ranges: [1...1]) })
@@ -111,6 +113,38 @@ struct BrownfieldMergeCheckTests {
     #expect(
       !proven.requests.contains { $0.step == .testFiles },
       "an area slice already proved isn't proved again")
+  }
+
+  @Test(
+    "an area's test clone is asked for before its build runs, its test runs on that clone, and the clone goes back when the area is done — catches a merge gate's test step paying its clone's boot after the build"
+  )
+  func testCloneWarmsDuringTheBuild() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml")
+    func command(_ key: String) throws -> String {
+      try #require(
+        config.split(separator: "\n").first { $0.hasPrefix("\(key) = \"") }
+          .map { String($0.dropFirst(key.count + 4).dropLast()) })
+    }
+    let leases = FakeTestDeviceLeases()
+    let askedAtBuild = Mutex<[Int]>([])
+    let base = FakeAreaCommandRunner { request in
+      if request.step == .build { askedAtBuild.withLock { $0.append(leases.destinations.count) } }
+      return .passed
+    }
+    let area = Self.area(
+      "app", test: try command("test"), testFiles: nil, lint: nil, build: try command("build"))
+
+    _ = try await Self.run(
+      clone, tier: .merge, areas: [area], changed: ["app/Sources/View.swift"], runner: base,
+      areaRunner: LeasedDeviceAreaRunner(base: base, leases: leases))
+
+    #expect(askedAtBuild.withLock { $0 } == [1])
+    let test = try #require(base.requests.first { $0.step == .test })
+    #expect(
+      test.command.contains("-destination 'id=\(FakeDevices.device.udid)'"), "\(test.command)")
+    #expect((leases.entered, leases.left) == (1, 1))
   }
 
   @Test(

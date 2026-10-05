@@ -130,6 +130,52 @@ struct SimDownTests {
   }
 
   @Test(
+    "a row's sim down on a device a qa run's hold lends closes the row's session and removes only the row's lease, leaving the hold, its holder and its device for the next row — catches each flow row deleting the run's shared device, or waiting for a teardown that never comes"
+  )
+  func borrowedDeviceStaysHeld() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let process = FakeProcess(pid: Self.holderPID)
+    let holder = SimHolder(
+      devices: SimulatorClones(
+        simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2")),
+      leases: store, agentDevice: FakeAgentDevice(), worktree: Self.worktree,
+      holderPID: Self.holderPID, timeout: Self.holdTimeout, pollInterval: .milliseconds(5),
+      clock: .continuous())
+    let holdRunID = "20261004T120000Z-1a2b3c4d-device"
+    let holding = Task {
+      defer { process.exit() }
+      return try await holder.hold(runID: holdRunID)
+    }
+    var hold: SimLease?
+    let deadline = ContinuousClock.now + .seconds(20)
+    while hold == nil, ContinuousClock.now < deadline {
+      hold = try store.read(runID: holdRunID)
+      await Task.yield()
+    }
+    let held = try #require(hold)
+    try store.write(
+      SimLease(
+        runID: Self.runID, worktree: Self.worktree, udid: held.udid, holderPID: Self.holderPID,
+        session: Self.session))
+    let agent = Self.agent(sessionUDID: held.udid)
+
+    let result = await down(
+      agent, simctl: simctl, isAlive: process.isAlive, teardownTimeout: .seconds(2))
+
+    #expect(
+      (try? result.get().outcome) == .released(runID: Self.runID, udid: held.udid), "\(result)")
+    #expect(Self.closes(agent) == [AgentDeviceTarget(udid: held.udid, session: Self.session)])
+    #expect(try store.read(runID: Self.runID) == nil)
+    #expect(try store.read(runID: holdRunID) == held)
+    #expect(Self.harnessDevices(simctl) == [held.udid])
+
+    try store.remove(runID: holdRunID)
+    #expect(try await holding.value.end == .released)
+    #expect(Self.harnessDevices(simctl).isEmpty)
+  }
+
+  @Test(
     "sim down closes the run's session, removes the lease, waits out the holder and its device, then releases stale claims; a second call does nothing and succeeds — catches a teardown that leaves the session open or isn't idempotent"
   )
   func releasesOnceAndIsIdempotent() async throws {

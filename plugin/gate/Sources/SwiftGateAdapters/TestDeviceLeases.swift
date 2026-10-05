@@ -65,11 +65,11 @@ public struct LiveTestDeviceLeases: TestDeviceLeasing {
 /// clone boot rather than paying 1 each.
 ///
 /// The lease runs in a task of its own that waits inside the provider's scope until released, so
-/// the provider still shuts down and deletes the clone. Calls are expected 1 at a time, as 1
-/// `qa run` makes them.
+/// the provider still shuts down and deletes the clone. Asks made at once share the 1 lease the
+/// first started.
 public final class SimulatorDeviceHold: Sendable {
   private struct Held: Sendable {
-    let result: Result<SimulatorDevice, TestDeviceLeaseError>
+    let result: Task<Result<SimulatorDevice, TestDeviceLeaseError>, Never>
     let lease: Task<Void, Never>
     let release: AsyncStream<Void>.Continuation
   }
@@ -83,27 +83,37 @@ public final class SimulatorDeviceHold: Sendable {
 
   /// The held device, leased on the first call; every later call returns the same result.
   public func device() async -> Result<SimulatorDevice, TestDeviceLeaseError> {
-    if let result = held.withLock({ $0?.result }) { return result }
-    let (released, release) = AsyncStream<Void>.makeStream()
-    let (handed, hand) = AsyncStream<Result<SimulatorDevice, TestDeviceLeaseError>>.makeStream()
+    await start().value
+  }
+
+  /// Starts the lease unless it has started, and returns its result, so a ``release()`` made
+  /// after this returns always finds it.
+  @discardableResult
+  public func start() -> Task<Result<SimulatorDevice, TestDeviceLeaseError>, Never> {
     let provider = self.provider
-    let lease = Task {
-      do {
-        try await provider.withDevice { device in
-          hand.yield(.success(device))
-          for await _ in released {}
+    return held.withLock { held in
+      if let held { return held.result }
+      let (released, release) = AsyncStream<Void>.makeStream()
+      let (handed, hand) = AsyncStream<Result<SimulatorDevice, TestDeviceLeaseError>>.makeStream()
+      let lease = Task {
+        do {
+          try await provider.withDevice { device in
+            hand.yield(.success(device))
+            for await _ in released {}
+          }
+        } catch {
+          hand.yield(.failure(TestDeviceLeaseError(reason: Self.describe(error))))
         }
-      } catch {
-        hand.yield(.failure(TestDeviceLeaseError(reason: Self.describe(error))))
+        hand.finish()
       }
-      hand.finish()
+      let result = Task {
+        var results = handed.makeAsyncIterator()
+        return await results.next()
+          ?? .failure(TestDeviceLeaseError(reason: "the lease ended before it held a device"))
+      }
+      held = Held(result: result, lease: lease, release: release)
+      return result
     }
-    var results = handed.makeAsyncIterator()
-    let result =
-      await results.next()
-      ?? .failure(TestDeviceLeaseError(reason: "the lease ended before it held a device"))
-    held.withLock { $0 = Held(result: result, lease: lease, release: release) }
-    return result
   }
 
   /// Gives the device back, which deletes the clone; a later ``device()`` leases a new one.
@@ -124,6 +134,7 @@ public final class SimulatorDeviceHold: Sendable {
 }
 
 /// 1 ``SimulatorDeviceHold`` per destination a run's test commands name, leased on first use.
+/// Asks made at once for 1 destination share its hold.
 public final class HeldTestDevices: Sendable {
   private enum Entry: Sendable {
     case held(SimulatorDeviceHold)
@@ -131,7 +142,7 @@ public final class HeldTestDevices: Sendable {
   }
 
   private let leases: any TestDeviceLeasing
-  private let entries = Mutex<[XcodeTestDestination: Entry]>([:])
+  private let entries = Mutex<[XcodeTestDestination: Task<Entry, Never>]>([:])
 
   public init(leases: any TestDeviceLeasing) {
     self.leases = leases
@@ -141,20 +152,17 @@ public final class HeldTestDevices: Sendable {
   public func device(for destination: XcodeTestDestination) async
     -> Result<SimulatorDevice, TestDeviceLeaseError>
   {
-    let entry: Entry
-    if let known = entries.withLock({ $0[destination] }) {
-      entry = known
-    } else {
-      switch await leases.devices(for: destination) {
-      case .success(let provider): entry = .held(SimulatorDeviceHold(provider: provider))
-      case .failure(let error): entry = .unavailable(error)
-      }
-      entries.withLock { $0[destination] = entry }
-    }
-    switch entry {
+    switch await entry(for: destination).value {
     case .held(let hold): return await hold.device()
     case .unavailable(let error): return .failure(error)
     }
+  }
+
+  /// Starts leasing `destination`'s clone and returns once the lease is asked for, without
+  /// waiting for the clone.
+  public func warm(_ destination: XcodeTestDestination) async {
+    guard case .held(let hold) = await entry(for: destination).value else { return }
+    hold.start()
   }
 
   /// Gives every held device back; a later ``device(for:)`` leases afresh.
@@ -163,14 +171,73 @@ public final class HeldTestDevices: Sendable {
       defer { entries = [:] }
       return entries.values
     }
-    for case .held(let hold) in taken { await hold.release() }
+    for entry in taken {
+      if case .held(let hold) = await entry.value { await hold.release() }
+    }
+  }
+
+  private func entry(for destination: XcodeTestDestination) -> Task<Entry, Never> {
+    let leases = self.leases
+    return entries.withLock { entries in
+      if let known = entries[destination] { return known }
+      let made = Task { () -> Entry in
+        switch await leases.devices(for: destination) {
+        case .success(let provider): .held(SimulatorDeviceHold(provider: provider))
+        case .failure(let error): .unavailable(error)
+        }
+      }
+      entries[destination] = made
+      return made
+    }
+  }
+}
+
+/// An area runner that can start leasing the clone a later test command needs before that command
+/// runs, so the clone boots while the steps before it build.
+public protocol TestDeviceWarming: AreaCommandRunning {
+  /// A runner whose `xcodebuild test` commands on the simulators `commands` name run on 1 clone
+  /// per simulator, leased from now until ``WarmedAreaRunner/release()``. It returns once each
+  /// lease is asked for, while the clones still boot. Commands that are run 1 at a time share a
+  /// clone, so callers running commands at once ask for a runner each.
+  func warmed(for commands: [String]) async -> WarmedAreaRunner
+}
+
+/// Runs commands as its base does, except an `xcodebuild test` naming a simulator it is warming,
+/// which runs on that simulator's held clone.
+public final class WarmedAreaRunner: AreaCommandRunning {
+  private let base: LeasedDeviceAreaRunner
+  private let devices: HeldTestDevices
+  private let destinations: Set<XcodeTestDestination>
+
+  init(base: LeasedDeviceAreaRunner, devices: HeldTestDevices, destinations: [XcodeTestDestination])
+  {
+    self.base = base
+    self.devices = devices
+    self.destinations = Set(destinations)
+  }
+
+  public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
+    guard let destination = XcodeTestDestination.simulator(in: request.command),
+      destinations.contains(destination)
+    else { return await base.run(request) }
+    switch await devices.device(for: destination) {
+    case .success(let device):
+      return await base.run(request, on: device)
+    case .failure:
+      return await base.run(request)
+    }
+  }
+
+  /// Gives back every clone this runner leased.
+  public func release() async {
+    await devices.releaseAll()
   }
 }
 
 /// Runs an area's `xcodebuild test` command on a leased clone of the simulator it names, and runs
 /// it once more when the simulator failed to launch the test runner. Any other command runs as
 /// written.
-public struct LeasedDeviceAreaRunner: AreaCommandRunning {
+public struct LeasedDeviceAreaRunner: TestDeviceWarming {
   private let base: any AreaCommandRunning
   private let leases: any TestDeviceLeasing
 
@@ -187,19 +254,35 @@ public struct LeasedDeviceAreaRunner: AreaCommandRunning {
       return await retrying(request)
     }
     do {
-      return try await provider.withDevice { device in
-        guard let command = XcodeTestDestination.leased(request.command, udid: device.udid)
-        else { return await retrying(request) }
-        return await retrying(
-          AreaCommandRequest(
-            area: request.area, step: request.step, command: command,
-            workingDirectory: request.workingDirectory, deadline: request.deadline,
-            environment: request.environment, junitPath: request.junitPath,
-            resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed))
-      }
+      return try await provider.withDevice { device in await run(request, on: device) }
     } catch {
       return await retrying(request)
     }
+  }
+
+  public func warmed(for commands: [String]) async -> WarmedAreaRunner {
+    let devices = HeldTestDevices(leases: leases)
+    let destinations = commands.compactMap(XcodeTestDestination.simulator(in:))
+    for destination in Set(destinations) { await devices.warm(destination) }
+    return WarmedAreaRunner(base: self, devices: devices, destinations: destinations)
+  }
+
+  /// Runs `request` on `device`, a clone already held for it.
+  func run(_ request: AreaCommandRequest, on device: SimulatorDevice) async -> AreaCommandOutcome {
+    guard let command = XcodeTestDestination.leased(request.command, udid: device.udid) else {
+      return await retrying(request)
+    }
+    return await retrying(Self.request(request, command: command))
+  }
+
+  private static func request(_ request: AreaCommandRequest, command: String)
+    -> AreaCommandRequest
+  {
+    AreaCommandRequest(
+      area: request.area, step: request.step, command: command,
+      workingDirectory: request.workingDirectory, deadline: request.deadline,
+      environment: request.environment, junitPath: request.junitPath,
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
   }
 
   /// Runs `request`, and once more when the runner didn't launch; a second launch failure stays

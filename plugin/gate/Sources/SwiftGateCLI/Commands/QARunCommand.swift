@@ -217,7 +217,10 @@ enum QARunRun {
       testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
         QAFlowRunner(
-          simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
+          simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil,
+          hold: QAFlowDeviceHold(
+            runID: "\(runID)-device",
+            directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory)))
       })
 
     let rows: [QARow]
@@ -243,11 +246,15 @@ enum QARunRun {
         rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
       } else {
         do throws(ScratchWorktreeError) {
-          rows = try await scratch.withScratchTree(
+          // The rows' shared device goes back while the tree its holder runs in still exists.
+          let ran = try await scratch.withScratchTree(
             ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
           ) { tree in
-            await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+            let rows = await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+            return (rows: rows, released: await checks.finishFlows())
           }
+          rows = ran.rows
+          notes += ran.released
         } catch {
           return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
         }
@@ -281,6 +288,7 @@ enum QARunRun {
       }
       rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
     }
+    notes += await checks.finishFlows()
     await checks.testDevices?.releaseAll()
     let flowRecords = await checks.flowRecords()
     let gaps = await checks.gaps()
@@ -446,6 +454,11 @@ enum QARunRun {
         return URL(filePath: preparedDirectory).appending(path: String(check.dropFirst(3)))
       }
       return URL(filePath: planDirectory).appending(path: check)
+    }
+
+    /// Gives back the device the flow rows shared, if they took one.
+    func finishFlows() async -> [String] {
+      await flows?.finish() ?? []
     }
 
     func flowRecords() async -> [Int: QAFlowRecord] {
@@ -789,6 +802,13 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
     case .failure(let failure): return .failure(failure)
     }
     let maxConcurrent = target.maxConcurrent
+    let device: SimUpDevice =
+      request.hold.map { hold in
+        .shared(
+          SimSharedHold(
+            runID: hold.runID, ownerPID: getpid(),
+            logFile: hold.directory.appending(path: SimSession.logFileName)))
+      } ?? .own
     let dependencies = SimUp.Dependencies(
       agentDevice: agentDevice,
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
@@ -808,7 +828,8 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
         worktree: root, target: target, scenario: request.scenario, runID: request.runID,
         simDirectory: request.simDirectory,
         derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
-        swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0]))
+        swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0],
+        device: device))
   }
 
   func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {

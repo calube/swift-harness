@@ -152,7 +152,7 @@ public struct SimDown: Sendable {
     } catch {
       throw SimDownFailure(rule: .environment, message: error.message, runID: runID)
     }
-    try await awaitTeardown(of: lease)
+    if !lent(lease) { try await awaitTeardown(of: lease) }
 
     do {
       try await dependencies.agentDevice.releaseStale(udid: lease.udid)
@@ -170,6 +170,19 @@ public struct SimDown: Sendable {
         runID: runID)
     }
     return SimDowned(outcome: .released(runID: runID, udid: lease.udid), notes: notes)
+  }
+
+  /// Whether `lease` borrows a device a live holder still holds under another lease, as each
+  /// flow row of a `qa run` does: the device then stays for the next borrower, and only the
+  /// holder's own release deletes it. An unreadable listing reads as not lent, so the release
+  /// waits for the teardown as usual.
+  private func lent(_ lease: SimLease) -> Bool {
+    guard dependencies.isAlive(lease.holderPID),
+      let listing = try? dependencies.leases.all()
+    else { return false }
+    return listing.leases.contains {
+      $0.runID != lease.runID && $0.udid == lease.udid && $0.holderPID == lease.holderPID
+    }
   }
 
   /// Copies the run's crash reports into `sim/crashes/`. When the step log records more exits
