@@ -65,6 +65,18 @@ struct ShellWriteTargetsTests {
       ("cd /wt\necho x > a", "cd /wt\nif true; then\ncd /main\nfi\necho x > a"),
       ("cd /wt\necho x > a", "cd /wt\nfor d in a; do cd /main; done\necho x > a"),
       ("cd /wt; echo x > a", "cd /wt; (cd /main; echo x > a)"),
+      ("C=/wt; cd $C && echo x > a", "C=$(pwd); cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=`pwd`; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt; cd $D && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt; cd ${C:-/main} && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C='/w t'; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "true || C=/wt; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt | cat; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt; read C; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt; unset C; cd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt\nif true; then C=/main; fi\ncd $C && echo x > a"),
+      ("C=/wt; cd $C && echo x > a", "C=/wt; for C in /main; do true; done; cd $C && echo x > a"),
     ])
   func uncertainCdKeepsTheStartingDirectory(certain: String, uncertain: String) {
     #expect(Self.paths(certain) == ["/wt/a"], "\(certain)")
@@ -117,6 +129,38 @@ struct ShellWriteTargetsTests {
   }
 
   @Test(
+    "the trial's `sed -i` of a relative glob after `C=<plan checkout>; cd $C &&` is named only under the plan checkout, never under the session's starting directory — catches the guard refusing a write after a cd to a variable the same command assigned"
+  )
+  func capturedCdToAnAssignedVariableFollowsIt() throws {
+    let call = try JSONDecoder().decode(
+      RefusedCall.self, from: Fixture.data("Hooks/assigned-variable-cd-bash.json"))
+    let plan = "/CLONE-spec"
+    try #require(call.command.hasPrefix("C=\(plan); cd $C && "))
+    let paths = ShellSyntax.writeTargets(in: call.command, directoryExists: { $0 == plan })
+      .map(\.path)
+    let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
+    let glob = "Packages/AppFeature/Sources/AppUI/*.swift"
+    #expect(denied == "\(call.cwd)/\(glob)")
+    #expect(paths == [plan + "/" + glob], "\(paths)")
+  }
+
+  @Test(
+    "a cd to a variable an earlier command of the line assigned a literal path moves the shell there, however the variable is spelled — catches a write after `cd $VAR` named under the starting directory",
+    arguments: [
+      ("C=/wt; cd $C && echo x > a", ["/wt/a"]),
+      ("C=\"/wt\"; cd \"$C\" && echo x > a", ["/wt/a"]),
+      ("C=/wt\ncd ${C} && echo x > a", ["/wt/a"]),
+      ("C=/wt; cd $C/sub && echo x > a", ["/wt/sub/a"]),
+      ("export C=/wt; cd $C && echo x > a", ["/wt/a"]),
+      ("C=/main; C=/wt; cd $C && echo x > a", ["/wt/a"]),
+      ("R=/w; C=${R}t; cd $C && echo x > a", ["/wt/a"]),
+      ("C=sub; cd /wt && cd $C && echo x > a", ["/wt/sub/a"]),
+    ])
+  func cdToAnAssignedVariableFollowsIt(command: String, expected: [String]) {
+    #expect(Self.paths(command) == expected, "\(command)")
+  }
+
+  @Test(
     "a write into the main checkout after a relative cd and a newline is still named there — catches the carried directory hiding a main-checkout write"
   )
   func relativeCdIntoTheMainCheckoutStaysThere() {
@@ -130,7 +174,8 @@ struct ShellWriteTargetsTests {
     arguments: [
       "cd /main && echo x > a", "cd /main\necho x > a", "cd /main; echo x > a",
       "pushd /main && echo x > a", "cd -P /main && cat a | tee a",
-      "cd /wt && cd /main && echo x > a",
+      "cd /wt && cd /main && echo x > a", "M=/main; cd $M && echo x > a",
+      "M=\"/main\"\ncd \"${M}\" && echo x > a",
     ])
   func cdIntoTheMainCheckoutStaysThere(command: String) {
     let paths = Self.paths(command)
