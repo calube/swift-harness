@@ -23,7 +23,7 @@ struct RunTimeBoxTests {
   static func minutes(_ value: Double) -> Date { launch.addingTimeInterval(value * 60) }
 
   @Test(
-    "a preset with no budget still gets the 45-minute box and says so, and a configured box keeps its own minutes — catches a brownfield run with no budget"
+    "a preset with no budget still gets the 40-minute box and says so, and a configured box keeps its own minutes — catches a brownfield run with no budget"
   )
   func noBudgetGetsTheDefaultBox() {
     let unbounded = TimeBoxLimits.resolve(preset: Self.preset(budget: 0, reserve: 0), override: nil)
@@ -34,9 +34,11 @@ struct RunTimeBoxTests {
     #expect(
       unbounded.limits
         == TimeBoxLimits(
-          budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .default))
-    #expect(unbounded.note?.contains("time_budget_min is 0") == true, "\(unbounded.note ?? "")")
-    #expect(missing.limits.budgetMin == 45)
+          budgetMin: 40, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .default))
+    #expect(
+      unbounded.note?.contains("time_budget_min is 0") == true
+        && unbounded.note?.hasSuffix("this run gets 40 min") == true, "\(unbounded.note ?? "")")
+    #expect(missing.limits.budgetMin == 40)
     #expect(missing.limits.source == .default)
     #expect(
       configured

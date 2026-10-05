@@ -23,7 +23,7 @@ public enum TimeBoxSource: String, Sendable, Codable, CaseIterable {
 ///   finish its slice, review and return. Starts stop 13 min before the end, so whatever is
 ///   running then has 8 min before the cutoff to return and merge.
 public struct TimeBoxLimits: Sendable, Equatable, Codable {
-  public static let defaultBudgetMin = 45
+  public static let defaultBudgetMin = 40
   public static let defaultStopStartsBeforeMin = 13
   public static let defaultFinalReserveMin = 5
 
