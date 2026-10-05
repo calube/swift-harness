@@ -1,0 +1,152 @@
+{
+  "after" : "root-ui",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "c578c638743d176b2db8671683d109e727a4cc37",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "2 of 8 rows verified (3 reason-only): 2 pass, 0 red, 0 unverified, 3 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "evidence" : [
+        "qa/01-req-launch-list.flow/steps.json",
+        "qa/01-req-launch-list.flow/batch.json",
+        "qa/01-req-launch-list.flow/flow.json",
+        "qa/01-req-launch-list.flow/video.mp4",
+        "qa/01-req-launch-list.flow/sheet.png",
+        "qa/01-req-launch-list.flow/sim/steps.ndjson",
+        "qa/01-req-launch-list.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 31310,
+      "requirement" : "req-launch-list",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-failure-retry.flow.json",
+      "evidence" : [
+        "qa/02-req-list-failure-retry.flow/steps.json",
+        "qa/02-req-list-failure-retry.flow/batch.json",
+        "qa/02-req-list-failure-retry.flow/flow.json",
+        "qa/02-req-list-failure-retry.flow/video.mp4",
+        "qa/02-req-list-failure-retry.flow/sheet.png",
+        "qa/02-req-list-failure-retry.flow/sim/steps.ndjson",
+        "qa/02-req-list-failure-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 7 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button app.list.retry 70×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 18385,
+      "requirement" : "req-list-failure-retry",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-sent.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-send-sending-sent",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    },
+    {
+      "check" : "qa/send-failure-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-send-failure-retry",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-preview-update",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    }
+  ],
+  "runID" : "20261005T151237Z-e88302e9",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/list-ui",
+        "task" : "list-ui",
+        "tip" : "095137156244e4a34e1c32d4bbbe0efd38b831d7"
+      }
+    ],
+    "base" : "37f9ee74b7f20d73eed5a5e2c8654ea76820cdde",
+    "branch" : "spec/root-ui",
+    "conflicts" : [
+
+    ],
+    "tip" : "bbcdc91df080410554eb197664a85d75e3b7a644"
+  },
+  "verdict" : "GREEN"
+}

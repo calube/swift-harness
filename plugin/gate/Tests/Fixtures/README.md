@@ -4994,3 +4994,120 @@ The run, in a zsh whose profile aliases `cp` to `cp -i`, showed what the rewrite
 at 5 s), and the payload carries `permission_mode: "bypassPermissions"`. Scrubbing: the cwd
 becomes `/REPO`, the transcript `/HOME/.claude/projects/-REPO/`, and `session_id` the fixed
 `8f2c1d7e-…`; nothing else changed.
+
+## Brownfield trial: a heredoc written after a relative `cd`
+
+`Hooks/relative-heredoc-after-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
+2026-10-05 brownfield practice trial: from the clone's checkout it `cd`'d into a validation slot,
+then into a relative `.harness/qa/spec`, and on a later line wrote a flow file there with a heredoc.
+The guard named the write in the user's checkout. Each heredoc body after the first heredoc's
+opening line is dropped (its text is app content and names no write), the clone becomes `/CLONE`
+and the app's bundle id `com.example.App`. With `T` the trial's run folder, whose `run.jsonl` is
+the orchestrator's stream-json output:
+
+```sh
+python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/relative-heredoc-after-cd-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
+    return c.replace('com.example.InterviewStarter','com.example.App')
+cwd=None; denied={}
+lines=[json.loads(l) for l in open(sys.argv[1])]
+for d in lines:
+    if d.get('type')=='system' and d.get('subtype')=='init' and cwd is None: cwd=d['cwd']
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_result' and str(b.get('content')).startswith('PreToolUse:Bash hook error: swiftgate guard.run-user-checkout'):
+            denied[b['tool_use_id']]=b['content']
+for d in lines:
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_use' and b.get('id') in denied:
+            head,_,_=b['input']['command'].partition('<<EOF\n')
+            json.dump({"cwd":scrub(cwd),"command":scrub(head+'<<EOF\nEOF\n'),
+                       "denial":scrub(denied[b['id']])},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## qa lint: a flow that waits for a state the fake ends on its own
+
+`QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
+the trial repository's plan qa folder (`.git/swift-harness/plans/<plan>/qa/`). Every flow runs
+against a fake client whose calls answer after a fixed 300 ms. `flow-5.flow.json` waits for a
+status label that shows while a save is in flight (step 8, timeout 2000 ms), then for that
+label's absence (step 10), under `scenario-1`, which holds nothing. In the trial's before-merge
+runs step 8 timed out on a correct app: the contact sheet showed the in-flight label and the
+final label about 260 ms apart. The other 4 flows wait for no state that goes by itself: each
+absence check either follows a `press` or names an element no earlier step waited for. From the
+repository root, with `S` the trial repository's plan qa folder:
+
+```sh
+python3 scrub.py $S plugin/gate/Tests/Fixtures/QA/transient-state
+```
+
+where `scrub.py` is:
+
+```python
+import json, os, re, sys
+src, dst = sys.argv[1], sys.argv[2]
+maps = {"id": {}, "text": {}, "scenario": {}}
+def name(kind, value, prefix):
+    m = maps[kind]
+    if value not in m:
+        m[value] = f"{prefix}{len(m) + 1}"
+    return m[value]
+def selector(s):
+    return re.sub(r'(\w+)="([^"]*)"', lambda m: f'{m.group(1)}="'
+        + (name("id", m.group(2), "el") if m.group(1) == "id" else name("text", m.group(2), "text"))
+        + '"', s)
+def walk(v, key=None):
+    if isinstance(v, dict):
+        return {k: walk(x, k) for k, x in v.items()}
+    if isinstance(v, list):
+        if key == "launchArgs":
+            return [a if i == 0 or v[i - 1] != "-harness-scenario" else name("scenario", a, "scenario-")
+                    for i, a in enumerate(v)]
+        return [walk(x, key) for x in v]
+    if isinstance(v, str):
+        if key == "app": return "com.example.App"
+        if key in ("text", "value"): return name("text", v, "text")
+        if key in ("selector", "absent", "source", "destination"): return selector(v)
+    return v
+files = sorted(f for f in os.listdir(src) if f.endswith(".flow.json"))
+os.makedirs(dst, exist_ok=True)
+for n, f in enumerate(files, 1):
+    steps = json.load(open(os.path.join(src, f)))
+    with open(os.path.join(dst, f"flow-{n}.flow.json"), "w") as out:
+        out.write("[\n" + ",\n".join("  " + json.dumps(walk(s)) for s in steps) + "\n]\n")
+```
+
+It numbers the flows in their source names' sorted order, and renames the bundle id, each
+identifier, each label and typed text, and each scenario name to a generic name, the same value
+to the same name in every file. No step's command, key, kind, timeout or order changes.
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/transient-state` matched nothing.
+
+## Brownfield trial: merge-train-1's before-merge run credited by its tree
+
+`BrownfieldTrial/merge-train-1-*` come from a brownfield one-shot trial (harness `88498fd6`) whose
+3 screen tasks shared 5 flow rows. A `qa run --after root-ui,list-ui --before-merge` passed rows 1
+and 2 on a trial merge of both branches onto the plan branch at `37f9ee74`. `root-ui` then merged
+alone, moving the plan branch to `3f48493d`, and `build merge list-ui` refused `flows-unchecked`,
+so a second `qa run --after list-ui --before-merge` ran on a trial merge that made the same tree,
+`417d939c`. `$T` is the trial's kept folder and `$R` its repository. The `sed` below renames the trial's 3
+task names, its accessibility-id prefix and its client type, given here as placeholders, and
+changes nothing else:
+
+```sh
+S='s/<root task>/root-ui/g; s/<list task>/list-ui/g; s/<thread task>/thread-ui/g; s/<id prefix>\./app./g; s/<Client type>/AppClient/g'
+sed "$S" $T/validation.json > merge-train-1-validation.json
+sed "$S" $T/state/runs/20261005T151237Z-e88302e9/qa/report.json > merge-train-1-qa-before-root-ui-list-ui.json
+sed "$S" $T/state/runs/20261005T151237Z-e88302e9/qa/merged-tree-run.json > merge-train-1-merged-tree-root-ui-list-ui.json
+sed "$S" $T/state/runs/20261005T151927Z-5b069a41/qa/report.json > merge-train-1-qa-before-list-ui.json
+git -C $R merge-tree --write-tree 3f48493d7a2624df62cf4d05545ff7b55eee9745 \
+  095137156244e4a34e1c32d4bbbe0efd38b831d7 > merge-train-1-list-ui-landing-tree.txt
+```
+
+`merge-train-1-list-ui-landing-tree.txt` is the tree `build merge list-ui` would land: `list-ui`'s
+tip merged into the moved plan branch. It equals both the first run's `merged-tree-run.json` tree
+and the tree of the merge commit `build merge` then made. `grep -niE '/Users|/private|caleb'` on
+the fixtures matched nothing.

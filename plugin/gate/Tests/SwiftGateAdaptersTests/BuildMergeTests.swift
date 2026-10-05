@@ -1024,9 +1024,81 @@ struct BuildMergeFlowsTests {
   }
 
   @Test(
-    "with both tasks' returns checked and neither merged, the first merge is refused flows-unchecked naming a run over both, and merges once that run is GREEN at both tips — catches rows first run on the last task's trial merge"
+    "with both tasks' returns checked and neither merged, the first merges with no run, saying its row waits on the other, and the second is refused flows-unchecked naming a run of its own branch on the moved main — catches a ready task held for a run over every task its row waits on"
   )
-  func firstMergeWaitsForTheCombinedRun() async throws {
+  func firstMergeLandsOnItsOwnRows() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: t2)
+
+    let first = await scenario.merge("t1")
+    let second = await scenario.merge("t2")
+
+    #expect(first.status == .merged, "\(first.message)")
+    #expect(first.message.contains("no validation row verified"), "\(first.message)")
+    #expect(second.reason == .flowsUnchecked, "\(second.message)")
+    #expect(second.message.contains("--after t2 --before-merge"), "\(second.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
+  }
+
+  /// Merges `tasks`' branches in turn onto `base` on a scratch branch, as `qa run` does in its
+  /// scratch tree, and returns the merge's tree.
+  fileprivate static func trialTree(
+    _ scenario: MergeScenario, base: String, tasks: [String]
+  ) async throws -> String {
+    try await scenario.repo.git("switch", "-q", "-c", "trial", base)
+    for task in tasks {
+      try await scenario.repo.git(
+        "merge", "-q", "--no-ff", "--no-edit", "\(MergeScenario.plan)/\(task)")
+    }
+    let tree = try await scenario.repo.git("rev-parse", "HEAD^{tree}")
+    try await scenario.repo.git("switch", "-q", "main")
+    try await scenario.repo.git("branch", "-q", "-D", "trial")
+    return tree
+  }
+
+  /// Writes the `merged-tree-run.json` a merged run leaves beside its report: `tree`, with the
+  /// report's rows.
+  fileprivate static func treeRecord(
+    _ scenario: MergeScenario, runID: String, tree: String
+  ) throws {
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    let report = try QAReportJSON.decode(
+      try Data(contentsOf: directory.appending(path: QAReport.fileName)))
+    let record = QAMergedTreeRun(
+      tree: tree,
+      run: QAAtBaseRun(
+        runID: runID, preparedBy: report.after ?? "", commit: nil, rows: report.rows,
+        digests: [:]))
+    try record.encoded().write(to: directory.appending(path: QAMergedTreeRun.fileName))
+  }
+
+  /// Writes a table with 1 row over `t1` and `t2`, and a ledger with `t1`, `t2` and `t3`, which
+  /// no row runs after, in progress.
+  fileprivate static func planOverBothWithAThird(_ scenario: MergeScenario) throws {
+    try planOverBoth(scenario)
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    try LedgerJSON.encode(
+      Ledger(
+        schemaVersion: 1, resume: "", maxParallel: 3,
+        tasks: ["t1", "t2", "t3"].map { id in
+          LedgerTask(
+            id: id, deps: [], writeSet: [], gate: .push, tests: [], covers: [], estLines: 10,
+            status: .inProgress, worktree: scenario.checkout.path + "-search-\(id)")
+        }, waves: [["t1", "t2", "t3"]])
+    ).write(
+      to: URL(filePath: plan.directory, directoryHint: .isDirectory).appending(path: "ledger.json"))
+  }
+
+  @Test(
+    "a GREEN run over both tasks on main's old commit lets the second merge after the first lands, since its merge into the moved main makes the tree that run's trial merge made — catches a re-run of rows already passed on identical code"
+  )
+  func runOnTheSameTreeCountsAfterMainMoved() async throws {
     let scenario = try await MergeScenario()
     defer { scenario.remove() }
     try Self.planOverBoth(scenario)
@@ -1034,17 +1106,46 @@ struct BuildMergeFlowsTests {
     let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
     try await scenario.check("t2", verdict: .green, commit: t2)
     let pre = try await scenario.main()
+    let runID = "20261005T151237Z-00000001"
+    try Self.combinedReport(scenario, runID: runID, tips: (t1, t2), base: pre, red: false)
+    try Self.treeRecord(
+      scenario, runID: runID,
+      tree: try await Self.trialTree(scenario, base: pre, tasks: ["t1", "t2"]))
 
-    let unchecked = await scenario.merge("t1")
-    try Self.combinedReport(
-      scenario, runID: "20261005T061000Z-00000001", tips: (t1, t2), base: pre, red: false)
-    let merged = await scenario.merge("t1")
+    let first = await scenario.merge("t1")
+    let second = await scenario.merge("t2")
 
-    #expect(unchecked.status == .refused, "\(unchecked.message)")
-    #expect(unchecked.reason == .flowsUnchecked)
-    #expect(unchecked.message.contains("--after t1,t2 --before-merge"), "\(unchecked.message)")
-    #expect(merged.status == .merged, "\(merged.message)")
-    #expect(try scenario.merges().map(\.task) == ["t1"])
+    #expect(first.status == .merged, "\(first.message)")
+    #expect(second.status == .merged, "\(second.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1", "t2"])
+  }
+
+  @Test(
+    "the same GREEN run vouches for nothing once a third task's merge changed main between, and the second task is refused flows-unchecked — catches a pass carried onto code a later merge changed"
+  )
+  func runOnAnotherTreeVouchesForNothing() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBothWithAThird(scenario)
+    let t1 = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.taskBranch("t3", "D.swift", "d\n")
+    try await scenario.check("t2", verdict: .green, commit: t2)
+    let pre = try await scenario.main()
+    let runID = "20261005T151237Z-00000002"
+    try Self.combinedReport(scenario, runID: runID, tips: (t1, t2), base: pre, red: false)
+    try Self.treeRecord(
+      scenario, runID: runID,
+      tree: try await Self.trialTree(scenario, base: pre, tasks: ["t1", "t2"]))
+
+    let first = await scenario.merge("t1")
+    let third = await scenario.merge("t3")
+    let second = await scenario.merge("t2")
+
+    #expect(first.status == .merged, "\(first.message)")
+    #expect(third.status == .merged, "\(third.message)")
+    #expect(second.reason == .flowsUnchecked, "\(second.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1", "t3"])
   }
 
   @Test(
@@ -1215,9 +1316,9 @@ struct BuildMergeFlowsTests {
   }
 
   @Test(
-    "t1's merge is deferred flows-pending, not refused, while t2's worker has a GREEN gate at t2's tip on a clean tree 56 s ago and no checked return: GREEN with a wait action until 300 s after that gate, and once t2's return is checked it needs the run over both — catches a task merged alone a minute before its rows could run on 1 trial merge, and a wait read as a red merge"
+    "t1 merges while t2's worker has a GREEN gate at t2's tip on a clean tree 56 s ago and no checked return, saying its row waits on t2 — catches a ready task held minutes for another task's return"
   )
-  func mergeWaitsForAReturnOnItsWay() async throws {
+  func mergeDoesNotWaitForAReturnOnItsWay() async throws {
     let scenario = try await MergeScenario()
     defer { scenario.remove() }
     try Self.planOverBoth(scenario)
@@ -1227,35 +1328,21 @@ struct BuildMergeFlowsTests {
       commonDirectory: scenario.checkout.path + "/.git", plan: MergeScenario.plan, task: "t2")
     try await scenario.repo.git("worktree", "add", "-q", worktree.path, worktree.branch)
     defer { try? FileManager.default.removeItem(atPath: worktree.path) }
-    let runs = RunStore(worktreeRoot: URL(filePath: worktree.path, directoryHint: .isDirectory))
-    func gate(_ runID: String, secondsAgo: TimeInterval) throws {
-      try runs.record(
-        RunReport(
-          runID: runID, durationMilliseconds: 1000,
-          tiers: [
-            TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1000, testCounts: nil)
-          ],
-          findings: []),
-        finishedAt: MergeScenario.at.addingTimeInterval(-secondsAgo), command: "check push",
-        headCommit: t2, dirty: false)
-    }
-    let pre = try await scenario.main()
+    try RunStore(worktreeRoot: URL(filePath: worktree.path, directoryHint: .isDirectory)).record(
+      RunReport(
+        runID: "20261005T075600Z-99b9dafb", durationMilliseconds: 1000,
+        tiers: [
+          TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1000, testCounts: nil)
+        ],
+        findings: []),
+      finishedAt: MergeScenario.at.addingTimeInterval(-56), command: "check push",
+      headCommit: t2, dirty: false)
 
-    try gate("20261005T075600Z-99b9dafb", secondsAgo: 56)
-    let pending = await scenario.merge("t1")
-    try await scenario.check("t2", verdict: .green, commit: t2)
-    let checked = await scenario.merge("t1")
+    let report = await scenario.merge("t1")
 
-    #expect(pending.status == .deferred, "\(pending.message)")
-    #expect(pending.verdict == .green)
-    #expect(pending.reason == .flowsPending)
-    #expect(pending.action == .wait)
-    #expect(pending.waitUntil == MergeScenario.at.addingTimeInterval(300 - 56).formatted(.iso8601))
-    #expect(pending.message.contains("t2"), "\(pending.message)")
-    #expect(pending.fixBranch == nil)
-    #expect(checked.reason == .flowsUnchecked, "\(checked.message)")
-    #expect(checked.message.contains("--after t1,t2 --before-merge"), "\(checked.message)")
-    #expect(try await scenario.main() == pre)
+    #expect(report.status == .merged, "\(report.message)")
+    #expect(report.message.contains("t2"), "\(report.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
   }
 
   @Test(
@@ -1348,72 +1435,6 @@ struct BuildMergeFlowsTests {
       .appending(path: QAReport.directory, directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
-  }
-
-  /// Commits `content` to `path` on `task`'s existing branch, as its worker would.
-  @discardableResult
-  fileprivate static func commit(
-    _ scenario: MergeScenario, _ task: String, _ path: String, _ content: String
-  ) async throws -> String {
-    try await scenario.repo.git("switch", "-q", "\(MergeScenario.plan)/\(task)")
-    try scenario.repo.write(path, content)
-    let tip = try await scenario.repo.commitAll("feat: \(task) retry work")
-    try await scenario.repo.git("switch", "-q", "main")
-    return tip
-  }
-
-  @Test(
-    "with t2's review-blocked return halted and retried, its ledger back to in-progress and a new commit on its branch no gate has passed, t1's merge waits flows-pending for t2 instead of naming a run that takes t2's branch, and once t2's ready-to-merge return is checked at its tip it names the run over both — catches the send-money trial's combined run taking a task mid-retry at a commit no gate had passed"
-  )
-  func retriedTaskIsNotTakenIn() async throws {
-    let scenario = try await MergeScenario()
-    defer { scenario.remove() }
-    try Self.planOverBoth(scenario)
-    try await scenario.taskBranch("t1", "B.swift", "b\n")
-    let blocked = try await scenario.taskBranch("t2", "C.swift", "c\n")
-    try await scenario.check("t2", verdict: .green, commit: blocked, outcome: .reviewBlocked)
-    for (from, to) in [(TaskStatus.inProgress, TaskStatus.blocked), (.blocked, .pending),
-      (.pending, .inProgress)]
-    {
-      try await scenario.run.append(
-        .transition(.init(task: "t2", from: from, to: to, at: MergeScenario.at)))
-    }
-    let retried = try await Self.commit(scenario, "t2", "D.swift", "d\n")
-    let pre = try await scenario.main()
-
-    let midRetry = await scenario.merge("t1")
-    try await scenario.check("t2", verdict: .green, commit: retried)
-    let checked = await scenario.merge("t1")
-
-    #expect(midRetry.status == .deferred, "\(midRetry.message)")
-    #expect(midRetry.reason == .flowsPending)
-    #expect(midRetry.action == .wait)
-    #expect(midRetry.waitUntil == MergeScenario.at.addingTimeInterval(300).formatted(.iso8601))
-    #expect(midRetry.message.contains("t2"), "\(midRetry.message)")
-    #expect(checked.reason == .flowsUnchecked, "\(checked.message)")
-    #expect(checked.message.contains("--after t1,t2 --before-merge"), "\(checked.message)")
-    #expect(try await scenario.main() == pre)
-    #expect(try scenario.merges() == [])
-  }
-
-  @Test(
-    "with t2's ready-to-merge return checked at a commit its branch has since moved past, t1's merge waits flows-pending for t2's next return instead of naming a run that takes t2's new commit — catches a combined run vouching for commits no check saw"
-  )
-  func movedPastItsCheckIsNotTakenIn() async throws {
-    let scenario = try await MergeScenario()
-    defer { scenario.remove() }
-    try Self.planOverBoth(scenario)
-    try await scenario.taskBranch("t1", "B.swift", "b\n")
-    let checkedAt = try await scenario.taskBranch("t2", "C.swift", "c\n")
-    try await scenario.check("t2", verdict: .green, commit: checkedAt)
-    try await Self.commit(scenario, "t2", "D.swift", "d\n")
-
-    let report = await scenario.merge("t1")
-
-    #expect(report.status == .deferred, "\(report.message)")
-    #expect(report.reason == .flowsPending)
-    #expect(report.message.contains("t2"), "\(report.message)")
-    #expect(try scenario.merges() == [])
   }
 
   @Test(

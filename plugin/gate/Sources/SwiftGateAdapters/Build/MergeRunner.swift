@@ -29,6 +29,12 @@ public protocol MergeRunner: Sendable {
   /// The tree the commit `ref` names holds.
   func tree(of ref: String, in checkout: String) async throws(GitWorkspaceError) -> String
 
+  /// The tree merging `revision` into `base` makes, written to the object store without touching
+  /// any checkout: `git merge-tree --write-tree`, which `git merge` agrees with on a clean merge.
+  /// - Returns: `nil` when the merge conflicts.
+  func mergedTree(of revision: String, into base: String, in checkout: String)
+    async throws(GitWorkspaceError) -> String?
+
   /// `git merge --no-ff -m <message> <branch>` into the checked-out branch.
   /// - Throws: when the merge fails for any reason other than conflicts.
   func merge(_ branch: String, message: String, in checkout: String)
@@ -89,6 +95,23 @@ public struct LiveMergeRunner: MergeRunner {
     try Self.checkRef(ref)
     return try await succeed(["rev-parse", "--verify", "--quiet", "\(ref)^{tree}"], in: checkout)
       .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func mergedTree(of revision: String, into base: String, in checkout: String)
+    async throws(GitWorkspaceError) -> String?
+  {
+    try Self.checkRef(revision)
+    try Self.checkRef(base)
+    let arguments = ["merge-tree", "--write-tree", "--no-messages", base, revision]
+    let output = try await git(arguments, in: checkout)
+    switch output.status {
+    case .exited(0):
+      return output.stdout.text.split(separator: "\n").first.map(String.init)
+    case .exited(1): return nil
+    default:
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
   }
 
   public func merge(_ branch: String, message: String, in checkout: String)
@@ -159,9 +182,6 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case conflicted
     /// `main` isn't where a merge may happen, or there's nothing to undo; nothing changed.
     case refused
-    /// Nothing changed yet, and the merge isn't refused: it waits on another task's return that
-    /// is on its way, and goes ahead once that return is checked or by ``BuildMergeReport/waitUntil``.
-    case deferred
     /// The lock is free or another session holds it; nothing changed.
     case notHeld = "not-held"
     case blocked
@@ -202,19 +222,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED in a
     /// row that runs after this task.
     case flowsRed = "flows-red"
-    /// A validation row runs after this task and another whose worker's gate passed at its
-    /// branch's tip with its return not yet checked, so 1 trial merge of both is minutes away.
-    case flowsPending = "flows-pending"
     /// The fixer's branch holds another task's commits that task's own merge hasn't landed: the
     /// fix worktree took its branch in for a RED run over both.
     case fixCarriesUnmerged = "fix-carries-unmerged"
-  }
-
-  /// What the caller does next with a `deferred` report.
-  public enum Action: String, Sendable, Encodable {
-    /// Check the returns the message names as their notices arrive, then merge again; with no
-    /// notice by ``BuildMergeReport/waitUntil``, merge again then.
-    case wait
   }
 
   /// Whether `main` was checked against the run's last merge.
@@ -249,10 +259,6 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The branches `--undo` kept the work it took off `main` on, or an earlier fix branch it set
   /// aside before cutting the new one, as `<plan>/fix-<task>-<n>`; `nil` when it kept none.
   public let keptBranches: [String]?
-  /// What to do next with a `deferred` report.
-  public let action: Action?
-  /// When a `deferred` merge stops waiting, ISO 8601.
-  public let waitUntil: String?
   /// The other tasks' unmerged branches a fixer's branch landed with this merge, each now
   /// merged and `done`.
   public let carried: [String]?
@@ -264,7 +270,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
     conflictedFiles: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
-    action: Action? = nil, waitUntil: String? = nil, carried: [String]? = nil, message: String
+    carried: [String]? = nil, message: String
   ) {
     self.command = command
     self.plan = plan
@@ -284,8 +290,6 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.conflictedFiles = conflictedFiles
     self.gateRunId = gateRunId
     self.keptBranches = keptBranches
-    self.action = action
-    self.waitUntil = waitUntil
     self.carried = carried
     self.message = message
   }
@@ -730,11 +734,11 @@ public struct BuildMerge: Sendable {
 
   /// Refuses while a validation row runs after this task with every other task it waits on
   /// merged, unless the newest `qa run --before-merge` that took the branch at its tip on `main`'s
-  /// commit passed it, or conflicted, which the merge then shows. A row whose other unmerged
-  /// tasks all have a checked return waiting to merge, and no fixer's branch, needs a run that
-  /// took all their branches at their tips too, in any order, before the first of them lands;
-  /// while another such task's worker has passed its gate and its return is on its way, the
-  /// merge waits for it. Only rows that run after this task count: a row RED there refuses it and
+  /// commit passed it, or conflicted, which the merge then shows. A run on an older `main` counts
+  /// too when its trial merge made the very tree this merge lands. A row over other tasks whose
+  /// checked returns wait to merge needs no run first: this merge lands on its own rows, and the
+  /// row runs before the last of them lands. A run that took all their branches and is RED in it
+  /// still refuses. Only rows that run after this task count: a row RED there refuses it and
   /// cuts the fix worktree with the branches that row's other tasks were run at, as a conflict
   /// does, unless this merges the fixer's branch, whose worktree exists; that fixer's branch sets
   /// the task aside, so the other tasks' merges no longer wait on it. A plan with no table, or one
@@ -751,8 +755,6 @@ public struct BuildMerge: Sendable {
     let merged: Set<String>
     let reports: [QAReport]
     let table: ValidationTable
-    var awaited: [QAPendingReturn] = []
-    var noNewStartsAt: Date?
     do {
       let plan = try PlanStateLayout(commonDirectory: context.common).plan(self.plan)
       guard
@@ -768,56 +770,20 @@ public struct BuildMerge: Sendable {
       // A halt answered retry sends a checked return back to work; unreadable halts send none.
       let retried = BuildHalts.retried(
         in: (try? halts?.events()) ?? [], buildRun: context.run.runID)
-      // A carried branch lands with this merge, so a row over both needs a run that took it.
-      let waiting =
-        try await waitingBranches(context, progress: progress, log: log, retried: retried)
-        + carried
+      let waiting = try await waitingBranches(
+        context, progress: progress, log: log, retried: retried)
       reports = beforeMergeReports(context)
+      // A carried branch lands with this merge, so a row over both needs a run that took it.
       alongside = QAMergeReadiness.alongside(
-        table: table, merged: merged, task: task, waiting: waiting)
+        table: table, merged: merged, task: task, waiting: carried)
+      let landing = try? await merger.mergedTree(
+        of: tip, into: main, in: context.names.mainCheckout)
       readiness = QAMergeReadiness.of(
         table: table, merged: merged, plan: self.plan, task: task, reports: reports,
-        branch: context.branch, tip: tip, base: main, waiting: waiting,
-        unverified: Set(log.unverifiedRows().keys))
-      if !fix {
-        noNewStartsAt = (try? context.run.record())?.timeBox?.deadlines.noNewStartsAt
-        let skipping = Set(waiting.map(\.task)).union(merged)
-        awaited = QAMergeReadiness.awaited(
-          table: table, merged: merged, task: task, waiting: waiting,
-          pending: try await pendingReturns(
-            context, progress: progress, log: log, retried: retried, skipping: skipping),
-          now: clock.now(), noNewStartsAt: noNewStartsAt)
-      }
+        branch: context.branch, tip: tip, base: main, waiting: waiting, carried: carried,
+        landing: landing, trees: trialTrees(context), unverified: Set(log.unverifiedRows().keys))
     } catch {
       return nil
-    }
-    if !awaited.isEmpty {
-      let gatedAt = awaited.map(\.gatedAt).max() ?? clock.now()
-      var lapsesAt = gatedAt.addingTimeInterval(QAMergeReadiness.returnWait)
-      if let noNewStartsAt { lapsesAt = min(lapsesAt, noNewStartsAt) }
-      let names = awaited.map(\.task)
-      let one = names.count == 1
-      let together = ([task] + alongside + names).joined(separator: ",")
-      let reason = BuildMergeReport.Reason.flowsPending.rawValue
-      let why = awaited.map { pending -> String in
-        guard let gate = pending.gateRunID else {
-          return "`\(pending.task)`'s checked return went back to work at "
-            + "\(pending.gatedAt.formatted(.iso8601)), and its branch holds no checked commit"
-        }
-        return "`\(pending.task)`'s worker's gate passed at its branch tip (run \(gate)) with no "
-          + "checked return since"
-      }
-      let message: String =
-        "build-merge.\(reason): a validation row runs after `\(task)` and "
-        + "\(names.joined(separator: ", ")): " + why.joined(separator: "; ") + "; check "
-        + "\(one ? "its return" : "their returns") as the completion notices arrive, then run 1 "
-        + "`swiftgate qa run --plan \(plan) --after \(together) --before-merge` over them all. "
-        + "The wait lapses at \(lapsesAt.formatted(.iso8601)), when `\(task)` merges on its own "
-        + "rows. This is a wait, not a red merge: no halt"
-      throw Stop(
-        report: report(
-          command, context, .deferred, .green, reason: .flowsPending, pre: main, action: .wait,
-          waitUntil: lapsesAt.formatted(.iso8601), message: message))
     }
     let tasks = ([task] + alongside).joined(separator: ",")
     let run =
@@ -836,7 +802,7 @@ public struct BuildMerge: Sendable {
           + "\(rows.count == 1 ? "it waits" : "they wait") on "
           + (alongside.isEmpty
             ? "merged"
-            : "merged or checked and waiting to merge (\(alongside.joined(separator: ", ")))")
+            : "merged or landing with it (\(alongside.joined(separator: ", ")))")
           + ", and no GREEN \(run) covers "
           + "\(context.branch) at \(tip)"
           + (alongside.isEmpty ? "" : " with those tasks' branches at their tips")
@@ -904,55 +870,6 @@ public struct BuildMerge: Sendable {
       + " as done: run `ledger set` for it"
   }
 
-  /// Every other running task, outside `skipping`, whose return is on its way: its worker's own
-  /// gate passed at its branch's tip on a clean tree with no check of its return recorded since,
-  /// or else its checked return went back to work, as a halt answered retry or a ledger reset
-  /// sends it, or its branch moved past the commit its return was checked at. A task with a
-  /// fixer's branch is set aside, as in ``waitingBranches(_:progress:log:retried:)``.
-  private func pendingReturns(
-    _ context: Context, progress: LedgerProgress, log: BuildEventLog, retried: [String: Date],
-    skipping: Set<String>
-  ) async throws -> [QAPendingReturn] {
-    var pending: [QAPendingReturn] = []
-    for other in progress.tasks
-    where other.status == .inProgress && other.id != task && !skipping.contains(other.id) {
-      let names = try TaskWorktree(
-        commonDirectory: context.common, plan: plan, task: other.id, profile: profile)
-      let fixNames = try TaskWorktree(
-        commonDirectory: context.common, plan: plan, task: "fix-\(other.id)", profile: profile)
-      guard try await workspace.branchExists(names.branch),
-        try await !workspace.branchExists(fixNames.branch)
-      else { continue }
-      let tip = try await merger.commit(
-        of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
-      let path =
-        (try? WorktreePool(commonDirectory: context.common, plan: plan).path(holding: names.branch))
-        ?? names.path
-      let records =
-        (try? RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
-          .readHistory().records) ?? []
-      guard
-        let gate = records.last(where: {
-          $0.verdict == .green && $0.headCommit == tip && $0.dirty == false
-            && TaskReturnEvidence.GateRun.tier(ofCommand: $0.command) != nil
-        })
-      else {
-        if let back = Self.sentBack(other.id, tip: tip, log: log, retried: retried) {
-          pending.append(QAPendingReturn(task: other.id, gateRunID: nil, gatedAt: back))
-        }
-        continue
-      }
-      let checked = log.events.contains { event in
-        guard case .returnCheck(let check) = event else { return false }
-        return check.task == other.id && !check.fix && check.at >= gate.finishedAt
-      }
-      guard !checked else { continue }
-      pending.append(
-        QAPendingReturn(task: other.id, gateRunID: gate.runID, gatedAt: gate.finishedAt))
-    }
-    return pending
-  }
-
   /// Refuses a fixer's branch that holds another running task's branch tip not yet merged into
   /// `main`: a fix worktree cut for a RED run over several tasks took their branches in, and
   /// merging it would land their work under this task's merge, with no merge of their own.
@@ -1000,6 +917,14 @@ public struct BuildMerge: Sendable {
     return landing
   }
 
+  /// The tree each `qa run --before-merge` trial merge made, by run id, from the
+  /// `merged-tree-run.json` beside its report in any checkout of the clone.
+  private func trialTrees(_ context: Context) -> [String: String] {
+    let records = QARunHistory.mergedTreeRuns(
+      worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory))
+    return Dictionary(records.map { ($0.run.runID, $0.tree) }) { first, _ in first }
+  }
+
   /// The plan's `qa run --before-merge` reports that merged this task's branch in the main
   /// checkout's runs, where the build skill runs them; a report that doesn't decode is passed
   /// over.
@@ -1007,19 +932,6 @@ public struct BuildMerge: Sendable {
     QARunHistory.beforeMergeReports(
       worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory), plan: plan
     ).filter { $0.after == task || $0.trialMerge?.alongside.contains { $0.task == task } == true }
-  }
-
-  /// When `task`'s checked return went back to work: as ``BuildEventLog/returnSentBack(task:retriedAt:)``
-  /// reads it, or, for a return whose check still stands, when it was checked if its branch has
-  /// since moved past the checked commit to `tip`. `nil` while the check stands at `tip`.
-  static func sentBack(
-    _ task: String, tip: String, log: BuildEventLog, retried: [String: Date]
-  ) -> Date? {
-    if let back = log.returnSentBack(task: task, retriedAt: retried[task]) { return back }
-    guard let check = log.standingCheck(task: task, retriedAt: retried[task]),
-      check.commit != tip
-    else { return nil }
-    return check.at
   }
 
   /// Every other running task whose checked return waits to merge and still stands at its
@@ -1273,8 +1185,7 @@ public struct BuildMerge: Sendable {
     reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
     pre: String? = nil, post: String? = nil,
     conflicted: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
-    cut: Bool = false, action: BuildMergeReport.Action? = nil, waitUntil: String? = nil,
-    carried: [String]? = nil, message: String
+    cut: Bool = false, carried: [String]? = nil, message: String
   ) -> BuildMergeReport {
     let cut = cut || status == .conflicted || status == .undone
     return BuildMergeReport(
@@ -1283,7 +1194,6 @@ public struct BuildMerge: Sendable {
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? Self.fixPath(context) : nil,
       fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted,
-      gateRunId: gateRunId, keptBranches: keptBranches, action: action, waitUntil: waitUntil,
-      carried: carried, message: message)
+      gateRunId: gateRunId, keptBranches: keptBranches, carried: carried, message: message)
   }
 }
