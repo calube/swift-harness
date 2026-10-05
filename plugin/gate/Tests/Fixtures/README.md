@@ -1375,6 +1375,36 @@ jq -c "$F" <worker transcript> | sed "s#$ROOT#/SCRATCH#g" > Transcripts/worker-w
 
 After the copy, both greps of `RunView/build-run-2` matched nothing in them.
 
+### A whole brownfield run's usage (`b9ba71e8-…`)
+
+The orchestrator session of a 31-minute `swiftgate run` trial, Claude Code 2.1.288, launched
+as `swiftgate run start spec.md -- -p --output-format stream-json --verbose`. Claude Code wrote its transcripts to
+`~/.claude/projects/<cwd slug>/`:
+
+| File | Holds |
+|---|---|
+| `b9ba71e8-….jsonl` | the orchestrator, 34 messages on `claude-opus-5-5` |
+| `b9ba71e8-…/subagents/agent-a9f3bfd905ad90faa.jsonl` | the 1 subagent it launched with the Agent tool (`model: opus`, in the background), 16 messages |
+| `b9ba71e8-…/subagents/workflows/wf_<id>/agent-<agentId>.jsonl` | 9 Workflow agents of 2 build-task workflows: build, review, verify and fix agents |
+| `b9ba71e8-….envelope.json` | the last line of the stream, the `result` |
+
+The filter keeps each assistant line's type, time, `isSidechain`, message id, model and usage, and
+drops `message.content` and every other line, so no prompt, reply, tool input or path; the envelope
+keeps `type`, `session_id`, `total_cost_usd`, `usage` and `modelUsage`. With `P` the session's
+project directory and `S` its session id:
+
+```sh
+F='select(.type=="assistant") | {type, timestamp, isSidechain, message: (.message | {id, model, usage})}'
+jq -c "$F" "$P/$S.jsonl" > "Transcripts/$S.jsonl"
+(cd "$P" && find "$S/subagents" -name 'agent-*.jsonl') | while read -r f; do
+  mkdir -p "Transcripts/$(dirname "$f")" && jq -c "$F" "$P/$f" > "Transcripts/$f"; done
+tail -1 <stream-json output> | jq '{type, session_id, total_cost_usd, usage, modelUsage}' > "Transcripts/$S.envelope.json"
+```
+
+Priced at table `2026-10-01` and deduplicated by `message.id`, the 11 transcripts sum to the
+envelope's `total_cost_usd`, 4.3562218. The trial's own `events ingest` calls, made at each task's
+completion, stored $2.27 of it. After the copy, the grep above matched nothing in these files.
+
 ## Events
 
 `Events/judge.jsonl` is a judge audit log as the writer at `bbf0c62` wrote it, before the store
