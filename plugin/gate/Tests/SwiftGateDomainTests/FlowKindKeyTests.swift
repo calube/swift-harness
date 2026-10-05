@@ -90,4 +90,47 @@ struct FlowKindKeyTests {
     let clean = #"[{"command":"is","input":{"predicate":"text","selector":"id=\"watchlist.row.bitcoin.name\"","value":"Bitcoin"}}]"#
     #expect(try Self.check(json: clean).isEmpty)
   }
+  @Test(
+    "the captured swipes the pinned tool ran, 1 per preset, pass; the captured swipe with no preset and the one with a `direction` key fail qa.flow-kind-key naming `preset`, and the 1 with preset `up` fails only qa.flow-schema — catches a swipe step lint lets through that the tool refuses at run time"
+  )
+  func capturedSwipes() throws {
+    let folder = "AgentDevice/swipe"
+    for name in ["right", "left", "left-edge", "right-edge", "band"] {
+      #expect(try Self.check("\(folder)/\(name).steps.json").isEmpty, "\(name)")
+    }
+    for name in ["no-preset", "direction-key", "preset-up"] {
+      #expect(try Fixture.data("\(folder)/\(name).status") == Data("1\n".utf8), "\(name)")
+      let stdout = String(decoding: try Fixture.data("\(folder)/\(name).stdout"), as: UTF8.self)
+      #expect(stdout.contains("Expected preset to be one of"), "\(name)")
+    }
+    for name in ["no-preset", "direction-key"] {
+      let findings = try Self.check("\(folder)/\(name).steps.json")
+      #expect(findings.map(\.ruleID) == [FlowRules.kindKeyRuleID], "\(name): \(findings)")
+      let message = try #require(findings.first?.message)
+      #expect(message.contains("step 3 `gesture`"), "\(message)")
+      #expect(message.contains("`preset`"), "\(message)")
+      #expect(message.contains("left, right, left-edge, right-edge"), "\(message)")
+    }
+    let corrected = try #require(try Self.check("\(folder)/direction-key.steps.json").first?.message)
+    #expect(corrected.contains(#"{"kind":"swipe","preset":"right"}"#), "\(corrected)")
+    let unknown = try Self.check("\(folder)/preset-up.steps.json")
+    #expect(unknown.map(\.ruleID) == [FlowRules.schemaRuleID], "\(unknown)")
+    #expect(unknown.first?.message.contains(#""up""#) == true)
+  }
+
+  @Test(
+    "the swipe presets the rule names are the pinned schema's `preset` enum — catches a rule that drifts from the pinned tool"
+  )
+  func swipePresetsMatchThePinnedSchema() throws {
+    let folder = Fixture.checkoutRoot.appending(path: "qa", directoryHint: .isDirectory)
+    let file = folder.appending(path: "agent-device-schemas-0.21.18.json")
+    let root = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    let tools = try #require(root["tools"] as? [[String: Any]])
+    let gesture = try #require(tools.first { $0["name"] as? String == "gesture" })
+    let schema = try #require(gesture["inputSchema"] as? [String: Any])
+    let properties = try #require(schema["properties"] as? [String: Any])
+    let presets = try #require((properties["preset"] as? [String: Any])?["enum"] as? [String])
+    #expect(FlowRules.swipePresets == presets)
+  }
 }
