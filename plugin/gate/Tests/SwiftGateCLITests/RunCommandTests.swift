@@ -181,14 +181,25 @@ private final class FakeWarmup: WarmupSpawning {
   private let stopped = Mutex<[Int32]>([])
   var stops: [Int32] { stopped.withLock { $0 } }
 
-  init(steps: Steps, config: URL) {
+  /// Each spawn adds 1 slot to the plan's pool in this clone, as the warm-up does.
+  let addsSlot: Bool
+
+  init(steps: Steps, config: URL, addsSlot: Bool = false) {
     self.steps = steps
     self.config = config
+    self.addsSlot = addsSlot
   }
 
   func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
     async throws(RunStartError) -> Int32?
   {
+    if addsSlot, let plan {
+      let root = directory.path(percentEncoded: false)
+      _ = try? await WorktreePool(commonDirectory: "\(root)/.git", plan: plan).prepare(
+        count: 1, revision: "HEAD",
+        workspace: LiveGitWorkspace(
+          runner: LiveProcessRunner(baseEnvironment: RunClone.environment), repositoryRoot: root))
+    }
     let existed = FileManager.default.fileExists(atPath: config.path)
     calls.withLock { $0.append((directory, log, existed)) }
     let seeded = seedCheckout.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
@@ -672,6 +683,29 @@ struct RunCommandTests {
     #expect(try await clone.leftovers(slug: "spec", warmup: warmup) == [])
     #expect(try await clone.git("rev-parse", "HEAD") == head)
     #expect(try await clone.git("symbolic-ref", "HEAD") == "refs/heads/main")
+  }
+
+  @Test(
+    "a launch that fails after the warm-up added a slot removes that slot too — catches a dead run leaving a worktree beside the clone that the next run's pool would take"
+  )
+  func failedLaunchRemovesTheSlots() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let warmup = FakeWarmup(steps: Steps(), config: clone.layout.config, addsSlot: true)
+
+    await #expect(throws: RunStartError.self) {
+      try await RunCommand.start(
+        spec: spec.path, directory: clone.root, slug: nil, extra: [],
+        dependencies: clone.dependencies(warmup: warmup), claude: FailingClaude())
+    }
+
+    let slot = try TaskWorktree.slotPath(
+      commonDirectory: clone.layout.commonDir.path(percentEncoded: false), plan: "spec",
+      number: 1)
+    #expect(!FileManager.default.fileExists(atPath: slot))
+    #expect(try await clone.leftovers(slug: "spec", warmup: warmup) == [])
   }
 
   @Test(
