@@ -3431,3 +3431,34 @@ PY
 
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## Brownfield trials: new tests a build-only slice never ran
+
+The price-tracker trial's app-core task returned 2 new test files from a GREEN slice that only
+built `AppFeature` (31.7 s warm test against a 30 s budget), so they first ran at the merge gate,
+where 1 hung. The send-money trial's `AppFeature` (27.4 s, measured before its files changed) went
+build-only once its build took the slice past the budget, and no merge proved its tests. Each file
+is copied unchanged; `$RUNS` is the trials' report folder and `$TRIALS` the trial clones' folder.
+From `plugin/gate/Tests/Fixtures`:
+
+```sh
+cp $RUNS/price-tracker-1/state/config.toml BrownfieldTrial/price-tracker-1-config.toml
+git -C $TRIALS/price-tracker-1/repo show \
+  spec/app-core:Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift \
+  > BrownfieldTrial/price-tracker-1-AssetDetailFeatureTests.swift
+mkdir -p BuildReturn/price-tracker-1
+cp $RUNS/price-tracker-1/state/plans/spec/build/20261005T025144Z-77b256da/returns/app-core.json \
+  BuildReturn/price-tracker-1/app-core.json
+cp $RUNS/price-tracker-1/state/runs/20261005T025412Z-b8b146f8/events/gate.jsonl \
+  BuildReturn/price-tracker-1/app-core-slice-gate.jsonl
+cp $RUNS/send-money-2/state/config.toml BrownfieldTrial/send-money-2-config.toml
+cp $RUNS/send-money-2/state/warmup/a12c4719959d18b4f7d759e4eeab4fe56f0a9cb5.json \
+  BrownfieldTrial/send-money-2-warmup.json
+git -C $TRIALS/send-money-2/repo show \
+  ebc5027:Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift \
+  > BrownfieldTrial/send-money-2-AmountInputTests.swift
+```
+
+`app-core-slice-gate.jsonl` is the slice run the return cites: its `gate.step`s build `AppFeature`
+and `InterviewStarter` and test neither, each labelled `derivedData: "none"`.
+`grep -rniE '/Users|/private|/var/folders|caleb'` over these files matched nothing.

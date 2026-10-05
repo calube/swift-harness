@@ -229,4 +229,12 @@ struct TestlintRulesTests {
   func hangWithoutDeadlineLoopFragments() throws {
     #expect(try lines("test.hang-without-deadline", "good/LoopFragments.swift") == [])
   }
+
+  @Test(
+    "price-tracker's captured detail test, which spins on `while !flag { await Task.yield() }` twice, is RED at both loops, and loops bounded by a deadline, an attempt cap, a break or a throw pass — catches a test that hangs its gate when the flag never flips"
+  )
+  func unboundedWaitCapturedSpins() throws {
+    #expect(try lines("test.unbounded-wait", "bad/AssetDetailFeatureTests.swift") == [71, 73])
+    #expect(try lines("test.unbounded-wait", "good/BoundedWaits.swift") == [])
+  }
 }
