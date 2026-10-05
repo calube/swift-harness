@@ -109,6 +109,37 @@ struct QARunReusesPreparedTests {
   }
 
   @Test(
+    "a prepared run names the absolute path of the at-base-run.json it wrote in its JSON and text output, and a run that writes none names no path — catches a worker searching the disk for its own record"
+  )
+  func namesItsRecord() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [validationRow("req-total", .acceptance, "qa/total.sh", after: ["total-ui"])],
+      tasks: ["total-ui": .pending])
+    let prepared = Self.prepared(repo)
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+    try Data("exit 5\n".utf8).write(to: prepared.appending(path: "total.sh"))
+
+    let worker = await repo.run(
+      QARunRun.Options(atBase: true, preparedBy: "validation"), suffix: 1)
+    let orchestrator = await repo.run(QARunRun.Options(atBase: true), suffix: 2)
+
+    let expected = prepared.appending(path: QAAtBaseRun.fileName).path
+    let path = try #require(worker.atBaseRecord, "\(worker.notes)")
+    #expect(path == expected)
+    #expect(path.hasPrefix("/"))
+    #expect(FileManager.default.fileExists(atPath: path))
+    let json = try QAReportJSON.decode(Data(QARunRun.render(worker, json: true).utf8))
+    #expect(json.atBaseRecord == expected)
+    #expect(
+      QARunRun.render(worker, json: false).split(separator: "\n").contains(
+        "  at-base record: \(expected)"), "\(QARunRun.render(worker, json: false))")
+    #expect(orchestrator.atBaseRecord == nil)
+    #expect(!QARunRun.render(orchestrator, json: false).contains("at-base record"))
+  }
+
+  @Test(
     "a flow and its state row the worker's prepared run drove on a device are reused after qa adopt with no device brought up, and a check passing at base is still a finding — catches the flow rows' device time spent twice"
   )
   func reusesFlowWithoutDevice() async throws {

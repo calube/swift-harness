@@ -8,7 +8,8 @@
 // kept without asking, past `max_flows`, or without the typed accessibility ids; prepared
 // validation rows explored past instead of run first; a validation worker that writes outside its
 // test files and `.harness/qa/<plan>/`, adds a contract name itself, or proves a red by hand rather
-// than through `qa run --at-base --prepared-by`; and a skill tuned to one app.
+// than through `qa run --at-base --prepared-by`; a worker call cut at the 120 s tool timeout, or a
+// search of the whole disk for the record its prepared run wrote; and a skill tuned to one app.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
@@ -170,6 +171,28 @@ export function redRunProblems(text) {
   return problems
 }
 
+/**
+ * Where a validation worker brief lets a tool call stall the run: every `"$SG"` call runs in the
+ * foreground with the Bash tool's `timeout` at 600000, since a call cut at the 120 s default goes
+ * on in the background while the worker waits; the record a prepared run writes is read at the
+ * `atBaseRecord` path `qa run` prints, never searched for; and no search leaves the worktree. A
+ * worker that searched the whole disk for its own `at-base-run.json` held every ready merge.
+ */
+export function toolCallProblems(text) {
+  const problems = []
+  const sentences = flat(text).split(/(?<=\.)\s/)
+  const timed = sentences.find(s => /600000/.test(s) && /every `"\$SG"` call/.test(s))
+  if (!timed) problems.push('the brief never gives every `"$SG"` call the 600000 `timeout`')
+  else if (!/foreground/.test(timed)) problems.push('the brief never runs every `"$SG"` call in the foreground')
+  if (!/`atBaseRecord`/.test(section(text, 'Record why each check fails now'))) {
+    problems.push('the red run never reads its record at the `atBaseRecord` path `qa run` prints')
+  }
+  if (!sentences.some(s => /\bnever search/i.test(s) && /outside[^.]*worktree/.test(s))) {
+    problems.push('the brief never forbids a search outside its worktree')
+  }
+  return problems
+}
+
 // Words a generic skill never carries: every template preset but `default`, every captured spec
 // page's title, and the example app's name.
 function nonGenericWords() {
@@ -284,6 +307,23 @@ const tests = {
 
   'the validation worker proves its prepared checks red with 1 qa run --at-base --prepared-by and never by hand — catches a pre-merge red the gate\'s judge never saw'() {
     assert.deepEqual(redRunProblems(read(WORKER)), [])
+  },
+
+  'the validation worker runs every swiftgate call in the foreground at the 600000 timeout, reads its record at the printed atBaseRecord path and never searches outside its worktree — catches a worker stalled on a disk-wide find'() {
+    assert.deepEqual(toolCallProblems(read(WORKER)), [])
+  },
+
+  'the tool-call check names a missing timeout, a background call, an unread record path and a missing search ban — catches a check that passes anything'() {
+    assert.deepEqual(toolCallProblems('# Brief\n\n## Record why each check fails now\n\nFind `at-base-run.json` and read it.\n'), [
+      'the brief never gives every `"$SG"` call the 600000 `timeout`',
+      'the red run never reads its record at the `atBaseRecord` path `qa run` prints',
+      'the brief never forbids a search outside its worktree',
+    ])
+    assert.deepEqual(toolCallProblems('Run every `"$SG"` call with `timeout` at 600000.'), [
+      'the brief never runs every `"$SG"` call in the foreground',
+      'the red run never reads its record at the `atBaseRecord` path `qa run` prints',
+      'the brief never forbids a search outside its worktree',
+    ])
   },
 
   'the red-run check names a hand-driven sim run, a raw batch, a missing qa run and a missing section — catches a check that passes anything'() {
