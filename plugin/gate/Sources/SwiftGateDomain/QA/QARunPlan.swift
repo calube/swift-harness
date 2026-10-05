@@ -96,7 +96,9 @@ public struct QARunPlan: Sendable, Equatable {
     for entry in entries {
       let validation = entry.validation
       let row: QARow
-      if !entry.waitingOn.isEmpty {
+      if !entry.waitingOn.isEmpty, let ended {
+        row = Self.neverReady(entry, ended: ended)
+      } else if !entry.waitingOn.isEmpty {
         row = Self.row(
           entry, result: .waiting,
           message: "waiting on \(entry.waitingOn.joined(separator: ", "))",
@@ -134,6 +136,23 @@ public struct QARunPlan: Sendable, Equatable {
       rows.append(row)
     }
     return rows
+  }
+
+  /// A row whose tasks the build ended without merging: `abandoned` when any of them was, and
+  /// `unverified` naming each task's status otherwise.
+  private static func neverReady(_ entry: Entry, ended: [String: TaskStatus]) -> QARow {
+    let abandoned = entry.waitingOn.filter { ended[$0] == .abandoned }
+    if !abandoned.isEmpty {
+      return row(
+        entry, result: .abandoned,
+        message: "not run: \(abandoned.joined(separator: ", ")) was abandoned before it merged")
+    }
+    let statuses = entry.waitingOn.map { task in
+      "\(task) (\(ended[task]?.rawValue ?? "not in the ledger"))"
+    }
+    return row(
+      entry, result: .unverified,
+      message: "not run: the build ended with \(statuses.joined(separator: ", ")) unmerged")
   }
 
   /// Whether `earlier` runs before `later` in ``layerOrder``.

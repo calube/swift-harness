@@ -113,7 +113,9 @@ struct QARowsAtBuildEndTests {
       commit: captured.commit, rows: captured.rows)
 
     #expect(settled.verdict == .red)
-    #expect(settled.findings.map(\.ruleID) == Array(repeating: QAReport.checkUnverifiedRuleID, count: 3))
+    #expect(
+      settled.findings.map(\.ruleID)
+        == Array(repeating: QAReport.checkUnverifiedRuleID, count: 3))
     #expect(settled.findings.allSatisfy { $0.severity.failsGate })
     #expect(settled.message.hasPrefix("1 of 4 rows verified"), "\(settled.message)")
     #expect(merging.verdict == .green)

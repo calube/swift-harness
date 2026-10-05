@@ -113,7 +113,8 @@ public struct QAReport: Sendable, Equatable {
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
   /// so only a row that passes there is a finding.
-  /// - Parameter settled: the build had ended, so a row that didn't verify is never proven.
+  /// - Parameter settled: the build had ended, so a row that didn't verify is never proven: its
+  ///   `qa.check-unverified` gates, where during merges it is a nit and a waiting row none.
   public static func findings(rows: [QARow], atBase: Bool, settled: Bool = false) -> [Finding] {
     rows.compactMap { row in
       let named = "row \(row.row) (\(row.requirement), \(row.layer.rawValue)) `\(row.check)`"
@@ -126,13 +127,15 @@ public struct QAReport: Sendable, Equatable {
           checkPassesAtBaseRuleID, .major,
           "\(named) passes at the merge base, so it can't tell the change from its absence"
         )
-      case (.unverified, false):
-        rule = (checkUnverifiedRuleID, .nit, "\(named): \(row.message)")
+      case (.unverified, false), (.waiting, false), (.abandoned, false):
+        guard settled || row.result != .waiting else { return nil }
+        let gates = settled || row.result == .abandoned
+        rule = (checkUnverifiedRuleID, gates ? .major : .nit, "\(named): \(row.message)")
       case (.unverified, true):
         rule = (
           checkUnverifiedRuleID, .nit, "\(named): no red run at the merge base: \(row.message)"
         )
-      case (.pass, false), (.red, true), (.waiting, _), (.abandoned, _):
+      case (.pass, false), (.red, true), (.waiting, true), (.abandoned, true):
         return nil
       }
       // Every argument is non-empty, so the contract can't refuse it.

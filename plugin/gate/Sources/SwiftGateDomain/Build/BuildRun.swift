@@ -448,7 +448,15 @@ public struct BuildEventLog: Sendable, Equatable {
   /// Whether a `final` gate is recorded after the newest merge or undo: the build has ended, so
   /// no later merge can make a validation row ready.
   public var finalGated: Bool {
-    false
+    for event in events.reversed() {
+      switch event {
+      case .gate(let gate):
+        if case .final = gate.stage { return true }
+      case .merge, .undo: return false
+      case .transition, .returnCheck, .finish: continue
+      }
+    }
+    return false
   }
 
   /// How far `task`'s merge got: `nil` when it isn't on `main`, ``CutoffTaskStage/landed`` once a
