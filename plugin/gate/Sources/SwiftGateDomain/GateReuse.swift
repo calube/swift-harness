@@ -45,6 +45,14 @@ public enum GateReuse {
     return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
+  /// The key of 1 area command that passed under `inputs`, whichever tier ran it: a `final` on a
+  /// tree whose `merge` ran the same command GREEN needn't run it again.
+  public static func areaStepKey(_ inputs: Inputs, area: String, step: AreaStep, command: String)
+    -> String
+  {
+    ""
+  }
+
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.
   public static func reusable(_ records: [RunHistoryRecord], command: String, key: String)
     -> RunHistoryRecord?

@@ -37,11 +37,15 @@ enum BuildCutoffRun {
   /// Acts at the cutoff, or once starts have stopped with nothing running, when the only tasks
   /// left are ones that never started. Owned runs, which have no box, are refused: their build
   /// halts and asks.
-  /// - Parameter leftovers: stops the gates of the tasks it abandons and prunes scratch trees;
-  ///   `nil` leaves both alone.
+  /// - Parameters:
+  ///   - leftovers: stops the gates of the tasks it abandons and prunes scratch trees; `nil`
+  ///     leaves both alone.
+  ///   - finalSeconds: how long the clone's `final` gate takes, which grows the final reserve and
+  ///     brings the cutoff earlier.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock,
-    telemetry: BuildCutoffTelemetry?, leftovers: (any RunLeftovers)? = nil
+    telemetry: BuildCutoffTelemetry?, leftovers: (any RunLeftovers)? = nil,
+    finalSeconds: Int? = nil
   ) async -> BuildLoopResult<BuildCutoffReport> {
     if let refusal: BuildLoopResult<BuildCutoffReport> = await BuildLoop.authorize(
       command, slug: slug, session: session, git: git)

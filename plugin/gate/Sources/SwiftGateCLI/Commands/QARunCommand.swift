@@ -44,6 +44,8 @@ enum QARunRun {
     /// Clones of the simulator a `test:` row's `xcodebuild test` names; `nil` runs the command on
     /// the device as written.
     var testDevices: (any TestDeviceLeasing)?
+    /// When the `swiftgate run` going on needs this run done; `nil` outside a box.
+    var deadline: QARunDeadline?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -723,7 +725,8 @@ struct QARunCommand: AsyncParsableCommand {
 
   @Option(
     help:
-      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
+      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/."
+  )
   var preparedBy: String?
 
   @Flag(help: "Print JSON.")
@@ -734,7 +737,8 @@ struct QARunCommand: AsyncParsableCommand {
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(
+      root: root,
+      options: QARunRun.Options(
         plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(

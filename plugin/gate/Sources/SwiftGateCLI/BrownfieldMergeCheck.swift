@@ -24,6 +24,9 @@ enum BrownfieldMergeCheck {
     var bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
         nil
+    /// Area commands that passed under the same inputs, which this tier takes without running;
+    /// `nil` runs every command.
+    var reuse: AreaStepReuse? = nil
 
     /// An area command may run as long as the area's own tests take.
     static let liveDeadline: Duration = .seconds(3600)
@@ -114,7 +117,6 @@ enum BrownfieldMergeCheck {
         deadline: liveDeadline, bound: bound)
     }
   }
-
 
   static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
     async throws -> GateRunParts
@@ -339,7 +341,9 @@ enum BrownfieldMergeCheck {
       let bound = dependencies.bound(area.name, step, .checkout)
       if bound.cannotFinish {
         result.refused = true
-        if let refusal = notStarted(area, step: step, bound: bound) { result.findings.append(refusal) }
+        if let refusal = notStarted(area, step: step, bound: bound) {
+          result.findings.append(refusal)
+        }
         break
       }
       guard
@@ -458,6 +462,14 @@ enum BrownfieldMergeCheck {
       message: "merge: \(reason)", failureScenario: nil)
     return Outcome(findings: finding.map { [$0] } ?? [], blocked: true)
   }
+}
+
+/// What a merge or final tier needs to take an area command's earlier pass: the inputs every
+/// key shares, the store, and the gate run recording new passes.
+struct AreaStepReuse: Sendable {
+  let inputs: GateReuse.Inputs
+  let store: any AreaStepReusing
+  let runID: String
 }
 
 /// Why a brownfield tier couldn't start: no config, no git, no state paths.
