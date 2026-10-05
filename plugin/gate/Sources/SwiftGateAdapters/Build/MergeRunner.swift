@@ -952,9 +952,9 @@ public struct BuildMerge: Sendable {
     return Dictionary(records.map { ($0.run.runID, $0.tree) }) { first, _ in first }
   }
 
-  /// The plan's `qa run --before-merge` reports that merged this task's branch in the main
-  /// checkout's runs, where the build skill runs them; a report that doesn't decode is passed
-  /// over.
+  /// The plan's `qa run --before-merge` reports that merged this task's branch, in the runs of
+  /// every checkout of the main checkout's clone: the build skill runs them in the main checkout
+  /// and a fixer in its slot. A report that doesn't decode is passed over.
   private func beforeMergeReports(_ context: Context) -> [QAReport] {
     QARunHistory.beforeMergeReports(
       worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory), plan: plan

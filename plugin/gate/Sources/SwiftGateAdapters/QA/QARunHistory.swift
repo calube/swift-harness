@@ -4,15 +4,18 @@ import SwiftGateDomain
 /// The `qa run`s a clone's runs directory holds, read for what a later run or the cutoff can take
 /// from them.
 public enum QARunHistory {
-  /// Every `qa run --before-merge` report of `plan` under `worktree`'s runs; a report that doesn't
-  /// decode is passed over.
+  /// Every `qa run --before-merge` report of `plan` under the runs of each checkout of
+  /// `worktree`'s clone, so the plan checkout reads a fixer's `--fix` run in its slot; a report
+  /// that doesn't decode is passed over, and 1 run read twice counts once.
   public static func beforeMergeReports(worktree: URL, plan: String) -> [QAReport] {
-    files(QAReport.fileName, worktree: worktree).compactMap { data in
-      guard let report = try? QAReportJSON.decode(data), report.plan == plan,
-        report.trialMerge != nil
-      else { return nil }
-      return report
-    }
+    var seen = Set<String>()
+    return stateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
+      .compactMap { data -> QAReport? in
+        guard let report = try? QAReportJSON.decode(data), report.plan == plan,
+          report.trialMerge != nil, seen.insert(report.runID ?? "").inserted
+        else { return nil }
+        return report
+      }
   }
 
   /// Every `qa run --at-base` report of `plan` under the runs of each checkout of `worktree`'s
@@ -83,11 +86,6 @@ public enum QARunHistory {
       }
     }
     return nil
-  }
-
-  /// The bytes of `runs/<run id>/qa/<name>` for each run that has one.
-  private static func files(_ name: String, worktree: URL) -> [Data] {
-    files(name, state: RunStore(worktreeRoot: worktree).state)
   }
 
   /// The bytes of `runs/<run id>/qa/<name>` under `state` for each run that has one.
