@@ -58,10 +58,12 @@ private struct SeamClone {
     root.appending(path: ".git/swift-harness/plans/\(Self.slug)", directoryHint: .isDirectory)
   }
 
-  /// Copies the fixture folder `folder` (`base`, `contract` or `seam`) over `destination`.
+  /// Copies the fixture folder `folder` (`base`, `contract` or `seam`, or a path under
+  /// `BrownfieldTrial` holding a slash) over `destination`.
   func copy(_ folder: String, into destination: URL) throws {
     let source = Self.trial.appending(
-      path: "price-tracker-3-contract/\(folder)", directoryHint: .isDirectory)
+      path: folder.contains("/") ? folder : "price-tracker-3-contract/\(folder)",
+      directoryHint: .isDirectory)
     let walker = try #require(
       FileManager.default.enumerator(at: source, includingPropertiesForKeys: nil))
     for case let url as URL in walker where !url.hasDirectoryPath {
@@ -113,7 +115,7 @@ private struct SeamClone {
 @Suite("plan import of a contract missing its app seam")
 struct PlanImportContractSeamTests {
   @Test(
-    "the trial's contract commit, GREEN but without the app file its Writes names, imports with the contract pending naming that file and the missing -harness-scenario seam; the seam commit then lands it — catches the trial's contract accepted while every flow read the live service"
+    "the trial's contract commit, GREEN but without the app file its Writes names, imports with the contract pending naming that file and the missing -harness-scenario seam; the seam commit leaves it pending on its refresh row's unpinned bottom marker, and a view pinning that marker lands it — catches the trial's contract accepted while every flow read the live service, or a refresh drag left with nothing to end on"
   )
   func contractWithoutSeamStaysPending() async throws {
     let clone = try await SeamClone()
@@ -131,7 +133,15 @@ struct PlanImportContractSeamTests {
     #expect(message.contains(ContractLanding.scenarioSeamRuleID), "\(message)")
 
     try await clone.land("seam", runID: "20261005T061106Z-6b7b7d78")
-    let landed = await clone.importPlan(contractRun: "20261005T061106Z-6b7b7d78")
+    let seamed = await clone.importPlan(contractRun: "20261005T061106Z-6b7b7d78")
+    let unpinned = seamed.contract?.message ?? ""
+    #expect(seamed.contract?.status == .pending, "\(seamed.message)")
+    #expect(!unpinned.contains(ContractLanding.scenarioSeamRuleID), "\(unpinned)")
+    #expect(unpinned.contains(ContractLanding.refreshMarkerRuleID), "\(unpinned)")
+    #expect(unpinned.contains("req-refresh-last-updated"), "\(unpinned)")
+
+    try await clone.land("price-tracker-5-watchlist/fixer", runID: "20261005T062000Z-5f1e2d3c")
+    let landed = await clone.importPlan(contractRun: "20261005T062000Z-5f1e2d3c")
     #expect(landed.contract?.status == .done, "\(landed.message)")
     #expect(landed.verdict == .green, "\(landed.message)")
   }

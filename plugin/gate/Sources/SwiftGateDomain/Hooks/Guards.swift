@@ -808,6 +808,37 @@ public enum SubagentScopeGuard {
   }
 }
 
+/// A brownfield run never writes the user's checkout: it commits in the plan checkout beside
+/// it, keeps returns and scratch files there, and keeps state under the git dir. So while a
+/// session holds a plan's lock in a brownfield clone, a write it or its agents make inside the
+/// user's tree, outside its `.git`, is denied.
+public enum UserCheckoutGuard {
+  public static let ruleID = "guard.run-user-checkout"
+
+  /// The first write inside `userCheckout` and outside its `.git`, or `nil`.
+  /// - Parameters:
+  ///   - writes: canonical absolute paths the call writes.
+  ///   - userCheckout: the user's checkout, canonical: the git common dir's parent.
+  ///   - planCheckout: the plan checkout a run commits in, named in the reason.
+  public static func evaluate(writes: [String], userCheckout: String, planCheckout: String?)
+    -> GuardViolation?
+  {
+    let root = userCheckout.hasSuffix("/") ? String(userCheckout.dropLast()) : userCheckout
+    for path in writes where path.hasPrefix(root + "/") {
+      let inside = path.dropFirst(root.count + 1)
+      guard inside != ".git", !inside.hasPrefix(".git/") else { continue }
+      let checkout = planCheckout.map { "the plan checkout `\($0)`" } ?? "the plan checkout"
+      return GuardViolation(
+        ruleID: ruleID,
+        reason:
+          "`\(path)` is in the user's checkout, which a run never writes. Commit, keep task "
+          + "returns under `.harness/build/`, and put scratch files in \(checkout); a gate's or "
+          + "`qa run`'s JSON goes in the plan's `out/` folder.")
+    }
+    return nil
+  }
+}
+
 /// `discover/dirty.json`: the repository-relative paths `git status` showed as modified or
 /// untracked when discovery ran. They are the user's work in progress, never a worker's.
 public struct DirtyFileList: Sendable, Equatable, Codable {

@@ -72,5 +72,6 @@ a failed sheet names `sheetFailed`. Each missing video is a `qa.video-unverified
 missing log a `qa.evidence-unsaved` nit. The row still passes or fails on its assertions.
 
 An `--after` run records each flow the same way when the lock is free at once, saving no logs. A
-busy lock or recorder runs the flow unrecorded at once, with no nit. The report shows each row's
+busy lock or recorder runs the flow unrecorded at once, with no nit, and the row's message
+says `no video:` and why. The report shows each row's
 newest passing run with its video, labelled with that run, when the row's newest run didn't pass.

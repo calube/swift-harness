@@ -84,6 +84,33 @@ struct QARunCombinedTrialMergeTests {
   }
 
   @Test(
+    "a fixer's run naming a task alongside that has since merged, its branch deleted, takes that task as already on main: the row passes on the fix branch merged into main, and a note names the merged task — catches the price-tracker fixer's run BLOCKED because its fix run still named the merged detail task"
+  )
+  func mergedTaskAlongsideIsOnMain() async throws {
+    let (repo, _, _) = try await Self.repo()
+    defer { repo.remove() }
+    let fix = "\(QARepo.slug)/fix-\(Self.logic)"
+    try await repo.git("branch", fix, "\(QARepo.slug)/\(Self.logic)")
+    try await repo.git("merge", "-q", "--no-ff", "-m", "Merge", "\(QARepo.slug)/\(Self.screens)")
+    try await repo.git("branch", "-D", "\(QARepo.slug)/\(Self.screens)")
+    try repo.plan(
+      [validationRow("req-send", .acceptance, Self.check, after: [Self.logic, Self.screens])],
+      tasks: [Self.logic: .inProgress, Self.screens: .done])
+    let base = try await repo.git("rev-parse", "main")
+
+    let report = await repo.run(
+      QARunRun.Options(
+        after: Self.logic, beforeMerge: true, fix: true, alongside: [Self.screens]))
+
+    #expect(report.verdict == .green, "\(report.message)")
+    #expect(report.rows.map(\.result) == [.pass], "\(report.rows.map(\.message))")
+    #expect(report.trialMerge?.branch == fix)
+    #expect(report.trialMerge?.base == base)
+    #expect(report.trialMerge?.alongside == [])
+    #expect(report.notes.contains { $0.contains(Self.screens) }, "\(report.notes)")
+  }
+
+  @Test(
     "tasks alongside without --before-merge, or naming no ledger task, are BLOCKED and run nothing — catches a combined run with no trial merge"
   )
   func alongsideNeedsBeforeMerge() async throws {
