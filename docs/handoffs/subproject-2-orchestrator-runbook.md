@@ -42,6 +42,38 @@ The maintainer chose build speed until a cleanup on 2026-10-04. Until this secti
 - A worker whose gate fails only because main moved under it proves at its merge base, or at its surface commit
   when that commit is the ancestor.
 
+## Lessons from the brownfield one-shot loop (2026-10-04 to 2026-10-05)
+
+A self-healing loop ran practice apps as brownfield one-shots (`swiftgate run spec.md`, zero input, 40 min
+box). Each failing trial became one fix worker per finding, then another attempt. Four of seven apps passed.
+
+- **Run trials one at a time.** Two trials at once pushed load to 300–900, and both runs' devices took the
+  machine's two `sim` slots, so gate tests and qa runs waited 600–800 s. The first two solo runs on the fixed
+  harness both passed. Fix workers can build alongside a solo trial.
+- **Pin each trial to a detached worktree of main** (`git worktree add --detach ../swift-harness-trial-<app>-<n>
+  main`), because main moves while the trial runs. Name the pinned commit in the brief.
+- **Trial briefs list what changed since the last attempt**, so the trial confirms each fix rather than
+  rediscovering it. Reports name PASS/FAIL, measures, rows, the top 5 time sinks, and findings with a file and a
+  generic fix.
+- **Send a trial's finding to a running worker that already owns the code** with SendMessage, rather than
+  starting a second worker on the same files. Tell running workers when main moves under them.
+- **Each failure moved further down the pipeline.** Rough order of what blocked passes: config clash, no flow
+  rows, shared simulator, hung tests, cutoff estimates, stuck waits, task status vs merged code, flow step shape.
+  Expect each attempt to find the next blocker, and judge progress by where the run stopped.
+- **After each batch of merges, run the full suite on main.** Individually green branches broke main about
+  once per batch: an unregistered rule id, a `.harness` literal outside `RunLayout`, a stale calibration record
+  after an agent prompt changed, or a test helper writing into the system temp folder. A main-red worker fixes
+  them; merge conflicts in shared files go back to the branch's own worker.
+- **Changing `build-worker.md` or `build-fixer.md` stales the build calibration.** The worker that changed it
+  runs `swiftgate calibrate build` once (about $0.15) and commits `last-pass.json`.
+- **Never run a bare `ls` in this shell.** `ls` is an `eza` alias that, with no path, reads paths from the Bash
+  tool's never-closing stdin and hangs until killed. Hung `eza` processes outlive their worker; kill them by PID.
+  Every worker brief says to name the folder.
+- **Scan the unpushed diff as its own step before `git push`**, for home paths, emails, secrets and the trial
+  folder names, and read the result before pushing.
+- **Check fixtures for machine paths before merging a branch that captured trial data.**
+- **Remove merged worktrees.** 163 of them held 265 GB of build output.
+
 ## New machine
 
 All build state lives in this repo: the plan and its RESUME header, this runbook, the worker brief, the
