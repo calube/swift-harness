@@ -2726,7 +2726,7 @@ above matched nothing.
 ## Run view: brownfield runs cut off with an undone merge
 
 `RunView/price-tracker-1/` and `RunView/send-money-2/` are the state 2 brownfield trials of
-2026-10-05 left, each a `swiftgate run` of the interview starter, with build runs
+2026-10-05 left, each a `swiftgate run` on a copy of the evals starter app, with build runs
 `20261005T025144Z-77b256da` and `20261005T025212Z-65cdde10` of plan `spec`. They feed the gate
 budget, the gate watch, the merge queue, the scheduler's free slots, the run view and the report's
 review depth.
