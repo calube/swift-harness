@@ -245,6 +245,26 @@ struct WarmupTests {
   }
 
   @Test(
+    "an xcode area's build and test build in the area's seed with nothing to copy — catches a warm-up filling Xcode's path-keyed default DerivedData, which no task worktree reads"
+  )
+  func xcodeAreaBuildsInTheSeed() async {
+    let recorder = Recorder()
+    _ = await Warmup.run(
+      area: area(
+        "app", kind: .xcode, build: "xcodebuild build -scheme App",
+        test: "xcodebuild test -scheme App"),
+      dependencies: dependencies(recorder: recorder))
+
+    let seed = AreaCacheEnvironment.derivedDataSeed(area: "app", layout: layout)
+    #expect(
+      recorder.requests.withLock { $0 }.map(\.command) == [
+        "xcodebuild -derivedDataPath '\(seed)' build -scheme App",
+        "xcodebuild -derivedDataPath '\(seed)' test -scheme App",
+      ])
+    #expect(recorder.requests.withLock { $0 }.allSatisfy { $0.derivedDataSeed == nil })
+  }
+
+  @Test(
     "an XcodeGen area generates first and builds and tests in the generated tree — catches a build in the user's tree when the project is generated elsewhere"
   )
   func generatorAreaBuildsInItsTree() async {

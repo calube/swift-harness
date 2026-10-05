@@ -514,7 +514,7 @@ enum BrownfieldSliceCheck {
         dependencies: dependencies)
     else { return nil }
     let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(prepared.request)
+      await dependencies.runner.run(atHead(prepared.request, dependencies))
     }
     var result = AreaResult()
     var unread = false
@@ -551,7 +551,7 @@ enum BrownfieldSliceCheck {
         dependencies: dependencies)
     else { return nil }
     let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(prepared.request)
+      await dependencies.runner.run(atHead(prepared.request, dependencies))
     }
     context.steps.record(
       .areaBuild, tier: nil, milliseconds: milliseconds,
@@ -601,7 +601,7 @@ enum BrownfieldSliceCheck {
         dependencies: dependencies)
     }
     let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(request(root))
+      await dependencies.runner.run(atHead(request(root), dependencies))
     }
     context.steps.record(
       .areaTest, tier: nil, milliseconds: milliseconds,
@@ -677,6 +677,14 @@ enum BrownfieldSliceCheck {
       ?? AreaCommandRequest(
         area: area.name, step: step, command: "false", workingDirectory: directory,
         deadline: dependencies.deadline, environment: [:], junitPath: nil)
+  }
+
+  /// A run in this worktree builds in its own DerivedData; a rerun in a scratch tree keeps
+  /// Xcode's default, so it never overwrites this worktree's build.
+  private static func atHead(_ request: AreaCommandRequest, _ dependencies: Dependencies)
+    -> AreaCommandRequest
+  {
+    XcodeDerivedData.request(request, layout: dependencies.layout)
   }
 
   private static func environment(_ area: BrownfieldArea, _ dependencies: Dependencies)

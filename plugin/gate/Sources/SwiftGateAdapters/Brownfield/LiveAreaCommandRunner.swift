@@ -5,14 +5,18 @@ import SwiftGateDomain
 /// the tail keeps the order the runner printed in.
 public struct LiveAreaCommandRunner: AreaCommandRunning {
   private let processRunner: any ProcessRunner
+  private let seeding: DerivedDataSeeding
 
   /// - Parameter processRunner: leads each command's own process group, so a timeout kills
   ///   every process the command started.
   public init(processRunner: any ProcessRunner = LiveProcessRunner()) {
     self.processRunner = processRunner
+    seeding = DerivedDataSeeding(processRunner: processRunner)
   }
 
+  /// A seed that fails leaves the command to build cold, as it would with no seed.
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
+    if let copy = request.derivedDataSeed { _ = await seeding.seed(copy) }
     if let junitPath = request.junitPath { JUnitReportFiles.clear(at: junitPath) }
     // `xcodebuild` refuses a result bundle path that already exists.
     if let bundle = request.resultBundlePath { try? FileManager.default.removeItem(atPath: bundle) }

@@ -296,9 +296,12 @@ public enum Warmup {
   ) async -> WarmupTreeRun {
     var steps: [WarmupStepResult] = []
     var baseline: [BaselineRecord] = []
-    let environment = AreaCacheEnvironment.make(
-      area: area, layout: dependencies.layout, tree: dependencies.trackedTree
-    ).variables
+    let caches = AreaCacheEnvironment.make(
+      area: area, layout: dependencies.layout, tree: dependencies.trackedTree)
+    let environment = caches.variables
+    // Every tree the warm-up builds, the user's or a scratch one, fills the seed that task
+    // worktrees start from.
+    let seed = caches.derivedDataSeed
     for (step, areaStep) in [(WarmupStep.build, AreaStep.build), (.test, .test)] {
       let cache = cache(area.name, step, dependencies.known)
       guard
@@ -315,8 +318,14 @@ public enum Warmup {
             detail: "no \(areaStep.rawValue) command in the config"))
         continue
       }
+      let request = prepared.request
       let started = ContinuousClock.now
-      let outcome = await dependencies.run(prepared.request)
+      let outcome = await dependencies.run(
+        AreaCommandRequest(
+          area: request.area, step: request.step,
+          command: XcodeDerivedData.command(request.command, derivedDataPath: seed),
+          workingDirectory: request.workingDirectory, deadline: request.deadline,
+          environment: request.environment, junitPath: request.junitPath))
       let milliseconds = Self.milliseconds(ContinuousClock.now - started)
       steps.append(
         WarmupStepResult(

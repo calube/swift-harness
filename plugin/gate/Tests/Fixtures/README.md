@@ -3067,6 +3067,28 @@ cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
 nothing.
 
+## Brownfield trial: an iOS area's resolved packages in its DerivedData seed
+
+`BrownfieldTrial/aidoku-workspace-state.json` is `SourcePackages/workspace-state.json` from the
+DerivedData that `xcodebuild build-for-testing`, with the third iOS validation trial's scheme and
+destination, built on a scratch clone of `Aidoku/Aidoku` at
+`3091ef26e593d303e34afed70bc8c5997c105f80` (Xcode 26.2). It names each binary artifact's absolute
+path inside that DerivedData, which becomes `/SEED`. `M` is the scratch directory; from the
+repository root:
+
+```sh
+git clone -q --local <a clone of Aidoku/Aidoku> $M/clone
+git -C $M/clone checkout -q 3091ef26e593d303e34afed70bc8c5997c105f80
+(cd $M/clone && xcodebuild build-for-testing -project Aidoku.xcodeproj -scheme Aidoku \
+  -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation \
+  -skipPackagePluginValidation -derivedDataPath $M/seed)
+sed "s#$M/seed#/SEED#g" $M/seed/SourcePackages/workspace-state.json \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/aidoku-workspace-state.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-workspace-state.json`
+matched nothing.
+
 ## QA: a test runner the busy shared simulator refused to launch
 
 `QA/runner-launch/` and `Xcresult/runner-busy.*` come from a brownfield trial whose `test:`
