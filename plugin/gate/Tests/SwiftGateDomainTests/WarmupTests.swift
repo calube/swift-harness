@@ -266,6 +266,21 @@ struct WarmupTests {
   }
 
   @Test(
+    "a swiftpm area's build and test build in the area's shared scratch path — catches a warm-up filling a .build no slot or prove tree reads, so the send-money trial's first prove built cold for 328 s"
+  )
+  func swiftPMAreaBuildsInTheSharedScratchPath() async {
+    let recorder = Recorder()
+    let package = area(
+      "AppFeature", kind: .swiftpm, build: "swift build",
+      test: "swift test --parallel --xunit-output {junit}")
+    _ = await Warmup.run(area: package, dependencies: dependencies(recorder: recorder))
+    let shared = ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: layout)
+    let commands = recorder.requests.withLock { $0 }.map(\.command)
+    #expect(commands.count == 2)
+    #expect(commands.allSatisfy { $0.contains(" --scratch-path '\(shared)'") }, "\(commands)")
+  }
+
+  @Test(
     "an XcodeGen area generates first and builds and tests in the generated tree — catches a build in the user's tree when the project is generated elsewhere"
   )
   func generatorAreaBuildsInItsTree() async {
