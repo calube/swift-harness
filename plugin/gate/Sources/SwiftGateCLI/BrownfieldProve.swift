@@ -54,15 +54,20 @@ enum BrownfieldProve {
       return copy
     }
 
-    /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.
+    /// Live git and scratch trees under `layout`'s scratch directory, around `runner`. A linked
+    /// worktree keeps its scratch tree between gates, so its prove builds incrementally where
+    /// it built before; the main checkout keeps none, since nothing removes it there.
     static func live(
       root: URL, layout: BrownfieldStateLayout, runner: any AreaCommandRunning, deadline: Duration
     ) -> Dependencies {
       let process = LiveProcessRunner()
+      let linked =
+        layout.gitDir.standardizedFileURL.path != layout.commonDir.standardizedFileURL.path
       return Dependencies(
         git: LiveGit(runner: process, repositoryRoot: root.path),
         scratch: LiveScratchWorktrees(
-          runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory),
+          runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory,
+          keepsTree: linked),
         runner: runner, deadline: deadline,
         layout: layout)
     }

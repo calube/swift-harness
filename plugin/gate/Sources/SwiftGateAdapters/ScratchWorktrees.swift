@@ -113,6 +113,23 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     await sweepOrphans(in: parent, prefix: prefix, toplevel: toplevel)
     _ = try? await sweepRegisteredOrphans()
 
+    let kept = "\(prefix)\(Self.keptMarker)"
+    if keepsTree,
+      let lease = try? await FileCountingLock(directory: parent, name: "\(kept).lock", capacity: 1)
+        .acquire(timeout: .milliseconds(500))
+    {
+      defer { lease.release() }
+      let tree = parent.appending(path: kept, directoryHint: .isDirectory)
+      try await refresh(tree, toplevel: toplevel, revision: request.revision)
+      do throws(ScratchWorktreeError) {
+        try await populate(tree, from: toplevel, request)
+      } catch {
+        await remove(tree, toplevel: toplevel)
+        throw error
+      }
+      return await body(tree)
+    }
+
     let token = UInt32.random(in: .min ... .max)  // swiftgate:allow det.random — unique name
     let scratch = parent.appending(
       path:
@@ -137,6 +154,44 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     return result
   }
 
+  /// The kept tree at `revision` as the caller's checkout names it, with nothing a last use
+  /// copied or reverted left in it; made again when it is missing or git can't bring it there.
+  private func refresh(_ tree: URL, toplevel: URL, revision: String)
+    async throws(ScratchWorktreeError)
+  {
+    let commit = try await git(
+      ["rev-parse", "--verify", "--quiet", "\(revision)^{commit}"], in: toplevel.path
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    if FileManager.default.fileExists(atPath: tree.path) {
+      // A kept tree's last user held the same lock, so any SwiftPM lock left in it is stale.
+      await OffPool.run { TemporaryDirectories.removeSwiftPMLocks(under: tree) }
+      do throws(ScratchWorktreeError) {
+        let top = try await git(["rev-parse", "--show-toplevel"], in: tree.path)
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard
+          URL(filePath: top).resolvingSymlinksInPath().path
+            == tree.resolvingSymlinksInPath().path
+        else { throw .fileSystem("\(tree.path) isn't a checkout of its own") }
+        // A file whose content matches the index but whose stat doesn't would be rewritten, and
+        // given a new timestamp, by a forced checkout; refreshing first leaves it be.
+        _ = try? await git(["update-index", "-q", "--refresh"], in: tree.path)
+        _ = try await git(["checkout", "--quiet", "--detach", "--force", commit], in: tree.path)
+        _ = try await git(["clean", "-ffdq"], in: tree.path)
+        return
+      } catch {
+        await remove(tree, toplevel: toplevel)
+      }
+    }
+    _ = try? await git(["worktree", "prune"], in: toplevel.path)
+    do throws(ScratchWorktreeError) {
+      _ = try await git(
+        ["worktree", "add", "--detach", "--quiet", tree.path, commit], in: toplevel.path)
+    } catch {
+      try? FileManager.default.removeItem(at: tree)
+      throw error
+    }
+  }
+
   private static func defaultParent(of toplevel: URL) throws(ScratchWorktreeError) -> URL {
     let state = StateRootResolver.resolve(worktree: toplevel)
     guard case .gitDir = state else { return toplevel.deletingLastPathComponent() }
@@ -159,7 +214,11 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
       for path in request.copiedPaths {
         let source = toplevel.appending(path: path)
         let destination = scratch.appending(path: path)
-        if files.fileExists(atPath: destination.path) { try files.removeItem(at: destination) }
+        // An identical file keeps its timestamp, so a kept tree's build doesn't redo it.
+        if files.fileExists(atPath: destination.path) {
+          if files.contentsEqual(atPath: source.path, andPath: destination.path) { continue }
+          try files.removeItem(at: destination)
+        }
         guard files.fileExists(atPath: source.path) else { continue }
         try files.createDirectory(
           at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
