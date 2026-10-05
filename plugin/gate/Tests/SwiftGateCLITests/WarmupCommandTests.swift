@@ -303,7 +303,7 @@ struct WarmupSeedCheckoutTests {
   }
 
   @Test(
-    "the warm-up adds the preset's 3 slots at the base and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, with no swift build in any checkout; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched"
+    "the warm-up adds the preset's 3 slots at the base and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, and each swiftpm area there into the checkout's own prove scratch path; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched, and each slot's first prove compiling the package's dependencies cold"
   )
   func warmsThePlanCheckoutAndEachSlot() async throws {
     let (clone, checkout) = try await Self.clone()
@@ -338,8 +338,15 @@ struct WarmupSeedCheckoutTests {
         .trimmingCharacters(in: .whitespacesAndNewlines)
       let own = "\(gitDir)/swift-harness/derived-data/areas/InterviewStarter"
       let inCheckout = runner.requests.filter { Self.inside($0.workingDirectory, path) }
-      #expect(inCheckout.count == 1, "\(path): \(inCheckout.map(\.command))")
-      let build = try #require(inCheckout.first)
+      #expect(inCheckout.count == 1 + Self.packages.count, "\(path): \(inCheckout.map(\.command))")
+      for package in Self.packages {
+        let prove = "\(gitDir)/swift-harness/derived-data/prove/\(package)"
+        let swift = try #require(inCheckout.first { $0.area == package }, "\(path) \(package)")
+        #expect(swift.step == .build)
+        #expect(swift.command == "swift build --scratch-path '\(prove)'")
+        #expect(swift.workingDirectory == "\(path)/Packages/\(package)")
+      }
+      let build = try #require(inCheckout.first { $0.area == "InterviewStarter" })
       #expect(build.area == "InterviewStarter" && build.step == .build)
       #expect(build.command.hasPrefix("xcodebuild -derivedDataPath '\(own)' build "))
       #expect(build.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: own))
@@ -349,8 +356,10 @@ struct WarmupSeedCheckoutTests {
         try await clone.git("-C", slot, "rev-parse", "HEAD").trimmingCharacters(
           in: .whitespacesAndNewlines) == base)
     }
-    #expect(outcome.seeded.map(\.checkout) == checkouts)
-    #expect(outcome.seeded.allSatisfy { $0.area == "InterviewStarter" && $0.outcome == .passed })
+    #expect(
+      outcome.seeded.map(\.checkout)
+        == checkouts.flatMap { Array(repeating: $0, count: 1 + Self.packages.count) })
+    #expect(outcome.seeded.allSatisfy { $0.outcome == .passed })
     let tree = try await clone.tree()
     let times = try WarmupTimesFile.decode(
       Data(contentsOf: clone.layout.warmup(tree: tree)), tree: tree)
@@ -361,6 +370,37 @@ struct WarmupSeedCheckoutTests {
       }.count
         == 2 * (Self.packages.count + 1),
       "the base tree's build and test of each area, and nothing more")
+  }
+
+  @Test(
+    "a warm-up of the swiftpm areas alone still adds the preset's 3 slots and builds each area into each slot's own prove scratch path — catches slots and their prove builds left to the first tasks when a clone has no xcode area"
+  )
+  func swiftPMAreasAloneGetSlots() async throws {
+    let (clone, checkout) = try await Self.clone()
+    let root = try await clone.git("rev-parse", "--show-toplevel").trimmingCharacters(
+      in: .whitespacesAndNewlines)
+    let common = URL(filePath: "\(root)/.git", directoryHint: .isDirectory)
+    let names = (1...3).map {
+      try? TaskWorktree.slotPath(
+        commonDirectory: common.path(percentEncoded: false), plan: Self.plan, number: $0)
+    }
+    defer { Self.remove(clone, slots: names.compactMap { $0 }) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+
+    let outcome = try await WarmupCommand.warm(
+      directory: clone.root, areaNames: ["AppFeature"], seedCheckout: checkout, plan: Self.plan,
+      dependencies: clone.dependencies(runner: runner))
+
+    let slots = try names.map { try #require($0) }
+    #expect(outcome.slots == slots)
+    for slot in slots {
+      let gitDir = try await clone.git("-C", slot, "rev-parse", "--absolute-git-dir")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      let builds = runner.requests.filter { Self.inside($0.workingDirectory, slot) }
+      #expect(
+        builds.map(\.command)
+          == ["swift build --scratch-path '\(gitDir)/swift-harness/derived-data/prove/AppFeature'"])
+    }
   }
 }
 

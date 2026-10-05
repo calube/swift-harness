@@ -41,6 +41,18 @@ const VERIFIER = 'swift-harness:verifier'
 // plain agent by its label.
 const CLASSIFIER = 'general-purpose'
 const CLASSIFIER_LABEL = /^diff-risk:/
+// The agent that lists a branch's commits from git when a ready-to-merge worker return lists none.
+const COMMIT_LISTER_LABEL = /^commits:/
+// The commit lister's default answer: the command never ran.
+const noLister = new Error('no commit lister scripted for this test')
+// The fifth send-money trial's amount-input worker return: ready-to-merge on a GREEN slice gate,
+// with no commits and the notes "placeholder", though its branch held commit 0b486ef.
+const placeholderReturn = () => {
+  const { span, ...rest } = JSON.parse(
+    readFileSync(join(root, 'gate/Tests/Fixtures/BuildReturn/send-money-6/placeholder-worker-return.json'), 'utf8'),
+  )
+  return rest
+}
 // The only agents a task may spawn: the stages, each of which runs its own span calls.
 const STAGE_AGENTS = [WORKER, VERIFIER, ...Object.keys(REVIEWERS)]
 const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
@@ -164,7 +176,7 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 const noJudge = { level: null, by: null, path: null, glob: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
 // What the diff-risk agent returns for a level the judge rated.
 const judged = level => ({ level, by: 'judge', path: null, glob: null, reason: null, exitStatus: 0 })
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge } = {}) {
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge, commitLister = noLister } = {}) {
   const calls = []
   let inFlight = 0
   let maxReviewersInFlight = 0
@@ -202,6 +214,11 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   }
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
+    if (opts.agentType === CLASSIFIER && COMMIT_LISTER_LABEL.test(opts.label ?? '')) {
+      assert.ok(!prompt.includes('events span'), 'the commit lister was handed a span call')
+      if (commitLister instanceof Error) throw commitLister
+      return typeof commitLister === 'function' ? commitLister(prompt) : structuredClone(commitLister)
+    }
     if (opts.agentType === CLASSIFIER) {
       assert.match(opts.label ?? '', CLASSIFIER_LABEL, `a plain agent ran that is not the diff-risk classifier: ${opts.label}`)
       assert.ok(!prompt.includes('events span'), 'the diff-risk classifier was handed a span call')
@@ -217,8 +234,9 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   const workerCalls = calls.filter(c => c.opts.agentType === WORKER)
   const reviewerCalls = calls.filter(c => ![WORKER, VERIFIER, CLASSIFIER].includes(c.opts.agentType))
   const verifyCalls = calls.filter(c => c.opts.agentType === VERIFIER)
-  const classifierCalls = calls.filter(c => c.opts.agentType === CLASSIFIER)
-  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, maxReviewersInFlight, logs }
+  const classifierCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && CLASSIFIER_LABEL.test(c.opts.label ?? ''))
+  const listerCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && COMMIT_LISTER_LABEL.test(c.opts.label ?? ''))
+  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, listerCalls, maxReviewersInFlight, logs }
 }
 
 // A stage prompt's 2 span lines: the start it runs first and the end it runs last, with
@@ -321,6 +339,47 @@ function assertTaskReturn(result, mode) {
 }
 
 const tests = {
+  async "the send-money trial's placeholder ready-to-merge return, which lists no commits, gets the branch's commits past its base from 1 git log and goes on to review with no second worker — catches the 88 s halt and retry its empty commits list cost"() {
+    const args = brownfieldArgs({ task: 'amount-input', plan: 'spec', worktree: '/work/repo-spec.slot-1', branch: 'spec/amount-input', base: 'swift-harness/spec' })
+    const { result, workerCalls, listerCalls, reviewerCalls } = await run(args, {
+      workers: [placeholderReturn()],
+      diffRisk: judged('medium'),
+      commitLister: { commits: ['0b486ef'], exitStatus: 0, reason: null },
+    })
+    assert.equal(workerCalls.length, 1, 'a second worker ran')
+    assert.equal(listerCalls.length, 1)
+    assert.ok(
+      listerCalls[0].prompt.includes('git -C /work/repo-spec.slot-1 log --reverse --format=%h swift-harness/spec..HEAD'),
+      listerCalls[0].prompt,
+    )
+    assert.equal(listerCalls[0].opts.effort, 'low')
+    assertTaskReturn(result, 'classified')
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.deepEqual(result.commits, ['0b486ef'])
+    assert.match(result.notes, /commits: the worker listed none; filled from git log swift-harness\/spec\.\.HEAD/)
+    assert.ok(reviewerCalls.length > 0, 'the filled return was not reviewed')
+    assert.ok(reviewerCalls.every(c => c.prompt.includes('commits 0b486ef on spec/amount-input')), 'the review was not told the commit')
+  },
+
+  async 'a ready-to-merge return with no commits on a branch with none past its base, or whose git log fails, is unusable and goes to the fix pass — catches an empty return merged as if it built the task'() {
+    const args = brownfieldArgs({ base: 'search/plan' })
+    for (const commitLister of [{ commits: [], exitStatus: 0, reason: null }, { commits: [], exitStatus: 128, reason: 'not a git repository' }, new Error('lister died')]) {
+      const { result, workerCalls, listerCalls } = await run(args, {
+        workers: [brownfieldReturn({ commits: [] }), brownfieldReturn({ commits: ['5e1f0a2'] })],
+        commitLister,
+      })
+      assert.equal(listerCalls.length, 1)
+      assert.equal(workerCalls.length, 2, `no fix pass for ${JSON.stringify(commitLister)}`)
+      assert.match(workerCalls[1].prompt, /lists no commits/)
+      assert.deepEqual(result.commits, ['5e1f0a2'])
+    }
+  },
+
+  async 'a return that lists its commits never runs the commit lister — catches an extra agent on every task'() {
+    const { listerCalls } = await run(brownfieldArgs(), { workers: [brownfieldReturn()] })
+    assert.equal(listerCalls.length, 0)
+  },
+
   async 'a task run records its stages in order, each parented to the one before — catches stages started flat'() {
     const sg = fakeSwiftgate()
     const { result } = await run(baseArgs(), {

@@ -337,6 +337,26 @@ enum QARunRun {
       kind: RunningGateRegistry.qaRunKind, now: dependencies.now())
     defer { if let record { running?.unregister(record) } }
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
+    // Each row's qa.check goes out as the row ends, so a watcher sees the run's progress; a row
+    // whose event couldn't be written goes again with the run's last events.
+    let written = Mutex<Set<Int>>([])
+    let rowEnded: @Sendable (QARow, String?) -> Void = {
+      [newEventID = dependencies.newEventID, now = dependencies.now, atBase = options.atBase]
+      row, head in
+      guard let events else { return }
+      do {
+        try events.append(
+          contentsOf: [
+            HarnessEvent(
+              eventID: newEventID(), time: now(), runID: runID, head: head,
+              source: HarnessEventSource(route: nil),
+              payload: .qaCheck(QACheckEvent(plan: slug, row: row, atBase: atBase)))
+          ])
+        written.withLock { _ = $0.insert(row.row) }
+      } catch {
+        return
+      }
+    }
     // A build run's device stays booted across its qa runs, each queueing for it in turn; a run
     // outside a build holds its own for its rows. A run no flow row of which drives the device
     // never queues behind another run's rows for it.
@@ -460,12 +480,14 @@ enum QARunRun {
               commit = made
               into += " and \(merging)"
             case .conflicted(let files):
-              let rows = await runPlan.execute(atBase: false) { _ in
-                QACheckOutcome(
-                  result: .unverified,
-                  message: "not run: \(merging) conflicts with \(into) in "
-                    + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
-              }
+              let rows = await runPlan.execute(
+                atBase: false,
+                check: { _ in
+                  QACheckOutcome(
+                    result: .unverified,
+                    message: "not run: \(merging) conflicts with \(into) in "
+                      + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
+                }, rowEnded: { rowEnded($0, nil) })
               return .conflicted(files: files, rows: rows)
             }
           }
@@ -489,7 +511,9 @@ enum QARunRun {
               "qa run \(record.run.runID) ran on the same merged tree \(merged.prefix(12))")
             treeNotes += reuseNotes(record: record.run, reuse: reuse)
           }
-          let rows = await runPlan.execute(atBase: false) { await onTree.run($0, in: tree.path) }
+          let rows = await runPlan.execute(
+            atBase: false, check: { await onTree.run($0, in: tree.path) },
+            rowEnded: { [commit] in rowEnded($0, commit) })
           return .merged(
             commit: commit, tree: merged, rows: rows, notes: treeNotes,
             released: await onTree.finishFlows())
@@ -543,7 +567,9 @@ enum QARunRun {
       let scratch =
         dependencies.scratch ?? scratchTrees(root: root, common: common, plan: slug)
       if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
-        rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
+        rows = await runPlan.execute(
+          atBase: true, check: { await checks.run($0, in: root.path) },
+          rowEnded: { rowEnded($0, base) })
       } else {
         let asked = ContinuousClock.now
         do throws(ScratchWorktreeError) {
@@ -552,7 +578,9 @@ enum QARunRun {
             ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
           ) { tree in
             treeSetup = Self.treeStep(tree, since: asked)
-            let rows = await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+            let rows = await runPlan.execute(
+              atBase: true, check: { await checks.run($0, in: tree.path) },
+              rowEnded: { rowEnded($0, base) })
             return (rows: rows, released: await checks.finishFlows())
           }
           rows = ran.rows
@@ -607,7 +635,9 @@ enum QARunRun {
           notes.append("no earlier run's rows reused: reading HEAD's tree: \(error)")
         }
       }
-      rows = await runPlan.execute(atBase: false) { await onHead.run($0, in: root.path) }
+      rows = await runPlan.execute(
+        atBase: false, check: { await onHead.run($0, in: root.path) },
+        rowEnded: { [commit] in rowEnded($0, commit) })
     }
     notes += await checks.finishFlows()
     await checks.testDevices?.releaseAll()
@@ -627,8 +657,9 @@ enum QARunRun {
     if let events {
       let time = dependencies.now()
       do {
+        let unwritten = written.withLock { written in rows.filter { !written.contains($0.row) } }
         try events.append(
-          contentsOf: rows.map { row in
+          contentsOf: unwritten.map { row in
             HarnessEvent(
               eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
               source: HarnessEventSource(route: nil),
@@ -1119,31 +1150,64 @@ enum QARunRun {
     return QARunDeadline.of(box, final: final)
   }
 
+  /// The line a run prints once its run directory exists, naming where its report is written
+  /// and, when that is a worktree's own state, where the clone keeps it once the checkout is
+  /// removed.
+  static func startedLine(runID: String, reportFile: String, keptReportFile: String?) -> String {
+    "\(command): run \(runID) started; its report will be written to \(reportFile)"
+      + kept(keptReportFile) + "\n"
+  }
+
+  /// Where the clone keeps run `runID`'s `qa/report.json` once the checkout at `root` is
+  /// removed; `nil` when that is where the run writes it.
+  static func keptReportFile(runID: String, root: URL) -> String? {
+    guard case .gitDir(let gitDir) = StateRootResolver.resolve(worktree: root),
+      case .gitDir(let common) = StateRootResolver.eventStore(worktree: root),
+      let kept = StateRootResolver.keptRuns(commonDir: common),
+      kept != .gitDir(gitDir.standardizedFileURL)
+    else { return nil }
+    return kept.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+      .appending(path: "\(QAReport.directory)/\(QAReport.fileName)", directoryHint: .notDirectory)
+      .path(percentEncoded: false)
+  }
+
+  private static func kept(_ file: String?) -> String {
+    file.map { ", and kept at \($0) once the checkout is removed" } ?? ""
+  }
+
   /// 1 line naming the verdict, the run and the report file, printed last so a cut output keeps
   /// it; empty when `reportFile` is `nil`.
-  static func summary(_ report: QAReport, reportFile: String?) -> String {
+  static func summary(_ report: QAReport, reportFile: String?, keptReportFile: String? = nil)
+    -> String
+  {
     guard let reportFile else { return "" }
     return
       "\(command): \(report.verdict.rawValue) \(report.message); run \(report.runID ?? "none"), "
-      + "report \(reportFile)"
+      + "report \(reportFile)" + (keptReportFile.map { ", kept at \($0) once the checkout is removed" } ?? "")
   }
 
   /// Writes `report`'s JSON, as `--json` prints it, to `path` alone, relative to `root` unless
   /// absolute.
   static func writeOutput(
-    _ report: QAReport, reportFile: String?, to path: String, root: URL
+    _ report: QAReport, reportFile: String?, keptReportFile: String? = nil, to path: String,
+    root: URL
   ) throws(QAFilesError) {
     let file =
       path.hasPrefix("/")
       ? URL(filePath: path, directoryHint: .notDirectory)
       : root.appending(path: path, directoryHint: .notDirectory)
     try QAFiles.write(
-      Data(render(report, json: true, reportFile: reportFile).utf8), to: file)
+      Data(
+        render(report, json: true, reportFile: reportFile, keptReportFile: keptReportFile).utf8),
+      to: file)
   }
 
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
-  static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
-    let summary = summary(report, reportFile: reportFile)
+  /// - Parameter keptReportFile: where the clone keeps that report once the checkout is removed.
+  static func render(
+    _ report: QAReport, json: Bool, reportFile: String? = nil, keptReportFile: String? = nil
+  ) -> String {
+    let summary = summary(report, reportFile: reportFile, keptReportFile: keptReportFile)
     guard !json else {
       let encoded = String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
       // The summary goes in as the object's last member, so the JSON still reads.
@@ -1279,9 +1343,9 @@ struct QARunCommand: AsyncParsableCommand {
           await QARunRun.deadline(root: root, runner: runner, final: final), bound),
         started: { runID, report in
           // Before any row runs, so a caller that backgrounds the run waits on this file.
-          let line =
-            "\(QARunRun.command): run \(runID) started; its report will be written to "
-            + "\(report.path)\n"
+          let line = QARunRun.startedLine(
+            runID: runID, reportFile: report.path,
+            keptReportFile: QARunRun.keptReportFile(runID: runID, root: root))
           FileHandle.standardError.write(Data(line.utf8))
         },
         devices: LiveQADeviceLender(
@@ -1292,16 +1356,21 @@ struct QARunCommand: AsyncParsableCommand {
       (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
     }.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
+    let keptReportFile = report.runID.flatMap { QARunRun.keptReportFile(runID: $0, root: root) }
     if let output {
       do throws(QAFilesError) {
-        try QARunRun.writeOutput(report, reportFile: reportFile, to: output, root: root)
+        try QARunRun.writeOutput(
+          report, reportFile: reportFile, keptReportFile: keptReportFile, to: output, root: root)
       } catch {
         FileHandle.standardError.write(Data("\(QARunRun.command): --output: \(error)\n".utf8))
         throw ExitCode(Verdict.blocked.exitCode)
       }
-      Console.write(QARunRun.summary(report, reportFile: reportFile))
+      Console.write(
+        QARunRun.summary(report, reportFile: reportFile, keptReportFile: keptReportFile))
     } else {
-      Console.write(QARunRun.render(report, json: json, reportFile: reportFile))
+      Console.write(
+        QARunRun.render(
+          report, json: json, reportFile: reportFile, keptReportFile: keptReportFile))
     }
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

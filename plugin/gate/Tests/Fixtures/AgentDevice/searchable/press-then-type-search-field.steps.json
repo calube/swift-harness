@@ -1,0 +1,9 @@
+[
+  {"command": "open", "input": {"app": "com.example.SearchableProbe", "relaunch": true}},
+  {"command": "wait", "input": {"selector": "id=\"probe.matches\" label=\"Matches 5\"", "timeoutMs": 15000}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "role=searchfield"}}},
+  {"command": "type", "input": {"text": "GR"}},
+  {"command": "wait", "input": {"selector": "id=\"probe.matches\" label=\"Matches 2\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "absent", "absent": "id=\"probe.row.alice\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"probe.row.grace\""}}
+]

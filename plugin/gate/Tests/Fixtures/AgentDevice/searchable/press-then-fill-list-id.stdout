@@ -1,0 +1,122 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 4 (fill): no text input found at the provided coordinates to clear",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muv3rarg-6f18ed9f",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/runner.log",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-searchable",
+      "requestId": "7a1bf5a882e967b8"
+    },
+    "details": {
+      "runner": {
+        "error": {
+          "message": "no text input found at the provided coordinates to clear"
+        },
+        "ok": false
+      },
+      "xcodebuild": {
+        "exitCode": 1,
+        "stdout": "",
+        "stderr": ""
+      },
+      "step": 4,
+      "command": "fill",
+      "positionals": [
+        "id=\"probe.list\"",
+        "GR"
+      ],
+      "executed": 3,
+      "total": 7,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-searchable",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-searchable",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/requests/7a1bf5a882e967b8.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.SearchableProbe",
+            "appBundleId": "com.example.SearchableProbe",
+            "startup": {
+              "durationMs": 1629,
+              "measuredAt": "2026-10-05T10:24:02.280Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.SearchableProbe",
+              "appBundleId": "com.example.SearchableProbe"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 576,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 1023,
+              "totalDurationMs": 1629
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-82521",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.SearchableProbe"
+          },
+          "durationMs": 2361
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 616,
+            "selector": "id=\"probe.matches\" label=\"Matches 5\""
+          },
+          "durationMs": 617
+        },
+        {
+          "step": 3,
+          "command": "press",
+          "ok": true,
+          "data": {
+            "x": 201,
+            "y": 492,
+            "message": "Tapped id=\"probe.list\" (201, 492)",
+            "runnerMainThreadBusy": false,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "targetKind": "selector",
+            "selector": "id=\"probe.list\"",
+            "selectorChain": [
+              "id=\"probe.list\"",
+              "text=\"probe.list\""
+            ],
+            "refLabel": "probe.list",
+            "resolution": {
+              "source": "runtime",
+              "phase": "pre-action",
+              "kind": "unique"
+            }
+          },
+          "durationMs": 1259
+        }
+      ]
+    }
+  }
+}

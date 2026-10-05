@@ -581,7 +581,42 @@ async function runWorker(fix, parent) {
   if (defect) return { defect, span }
   // A return that is well formed but for its redReason still names real commits on the branch.
   const reasonDefect = redReasonDefect(result)
-  return reasonDefect ? { defect: reasonDefect, salvage: withoutRedReason(result), span } : { value: withoutRedReason(result), span }
+  if (reasonDefect) return { defect: reasonDefect, salvage: withoutRedReason(result), span }
+  const value = withoutRedReason(result)
+  if (value.outcome !== 'ready-to-merge' || value.commits.length > 0 || !A.base) return { value, span }
+  const listed = await listCommits()
+  if (listed.commits.length === 0) {
+    return { defect: `it returned ready-to-merge but lists no commits, and ${listed.why}`, span }
+  }
+  log(`${A.task}: the worker listed no commits; filled ${listed.commits.join(', ')} from git log`)
+  const note = `commits: the worker listed none; filled from git log ${A.base}..HEAD`
+  return { value: { ...value, commits: listed.commits, notes: [value.notes, note].filter(Boolean).join('\n') }, span }
+}
+
+// The task branch's commits past its base, oldest first, from 1 agent running git log; `why`
+// says why there are none.
+async function listCommits() {
+  const command = `git -C ${A.worktree} log --reverse --format=%h ${A.base}..HEAD`
+  let answer
+  try {
+    answer = await agent(
+      'Run exactly this command once and report what it printed; change nothing, run nothing else:\n' +
+        `${command}\n` +
+        'It prints 1 abbreviated commit sha per line, or nothing. Return every sha in the order printed, the exit status, ' +
+        'and reason null. If it fails to run, return no commits and the error as reason.',
+      { agentType: CLASSIFIER_AGENT, model: CLASSIFIED_REVIEWER_MODEL, effort: 'low', label: `${COMMIT_LISTER_LABEL}${A.task}`, phase: 'Build', schema: COMMITS_SCHEMA },
+    )
+  } catch (error) {
+    return { commits: [], why: `listing the branch's commits failed: ${failure(error)}` }
+  }
+  if (!answer || typeof answer !== 'object' || !Array.isArray(answer.commits)) {
+    return { commits: [], why: "the agent listing the branch's commits returned nothing" }
+  }
+  if (answer.exitStatus !== 0) {
+    return { commits: [], why: `\`${command}\` exited ${answer.exitStatus}: ${answer.reason ?? 'no reason given'}` }
+  }
+  const commits = answer.commits.filter(c => typeof c === 'string' && SHA.test(c))
+  return { commits, why: `\`${command}\` printed no commit` }
 }
 
 // The plugin's rule docs for reviewers and the verifier: the pack quotes only the standards
@@ -788,6 +823,20 @@ const DIFF_RISK_SCHEMA = {
     glob: { type: ['string', 'null'], description: 'the "glob" it printed with "by": "sensitive"; else null' },
     reason: { type: ['string', 'null'], description: 'the "reason" it printed, or what went wrong running it; null with a level' },
     exitStatus: { type: 'integer', description: "the command's exit status" },
+  },
+}
+// A ready-to-merge worker return that lists no commits, though the branch has some past its base,
+// would merge nothing it names; 1 agent lists the branch's commits from git and the workflow fills
+// them in, where a fresh fix-pass worker would build the task again.
+const COMMIT_LISTER_LABEL = 'commits:'
+const COMMITS_SCHEMA = {
+  type: 'object',
+  required: ['commits', 'exitStatus', 'reason'],
+  additionalProperties: false,
+  properties: {
+    commits: { type: 'array', items: { type: 'string' }, description: 'each sha the command printed, in the order printed' },
+    exitStatus: { type: 'integer', description: "the command's exit status" },
+    reason: { type: ['string', 'null'], description: 'what went wrong running it; null when it ran' },
   },
 }
 let classified = null

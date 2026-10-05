@@ -51,13 +51,17 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
   /// The clone's ``CommittedConfigSetAside`` record; `.missing` when the run set nothing aside,
   /// `nil` when not looked for.
   public let setAside: RunReportInput<CommittedConfigSetAside>?
+  /// The set-aside file at the plan branch's head, which the report compares with the blob set
+  /// aside.
+  public let setAsideAtPlanTip: CommittedConfigSetAside.AtPlanTip
 
   public init(
     slug: String, planBranch: String, planBranchHead: String?, plan: RunReportInput<String>,
     baseline: RunReportInput<BaselineFile>, discover: RunReportInput<DiscoverRecord>,
     build: RunReportInput<RunReportBuild>, ledger: RunReportInput<Ledger>,
     validation: RunReportInput<QAReport>? = nil,
-    setAside: RunReportInput<CommittedConfigSetAside>? = nil
+    setAside: RunReportInput<CommittedConfigSetAside>? = nil,
+    setAsideAtPlanTip: CommittedConfigSetAside.AtPlanTip = .unknown
   ) {
     self.slug = slug
     self.planBranch = planBranch
@@ -69,6 +73,7 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
     self.ledger = ledger
     self.validation = validation
     self.setAside = setAside
+    self.setAsideAtPlanTip = setAsideAtPlanTip
   }
 }
 
@@ -264,16 +269,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
       reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
       validation: validation, validationNote: validationNote,
-      committedConfig: Self.committedConfig(inputs.setAside))
+      committedConfig: Self.committedConfig(inputs.setAside, atPlanTip: inputs.setAsideAtPlanTip))
   }
 
-  private static func committedConfig(_ input: RunReportInput<CommittedConfigSetAside>?)
-    -> Section<String>?
-  {
+  private static func committedConfig(
+    _ input: RunReportInput<CommittedConfigSetAside>?, atPlanTip: CommittedConfigSetAside.AtPlanTip
+  ) -> Section<String>? {
     guard let input else { return nil }
     switch input {
     case .missing: return nil
-    case .read(let record): return Section(items: [record.reportLine], note: nil)
+    case .read(let record):
+      return Section(items: [record.reportLine(atPlanTip: atPlanTip)], note: nil)
     case .unreadable: return Section(items: [], note: describe(input, what: "the set-aside record"))
     }
   }

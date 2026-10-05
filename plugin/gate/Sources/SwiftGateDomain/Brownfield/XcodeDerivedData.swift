@@ -55,7 +55,8 @@ public enum XcodeDerivedData {
       workingDirectory: request.workingDirectory, deadline: request.deadline,
       environment: request.environment, junitPath: request.junitPath,
       resultBundlePath: request.resultBundlePath,
-      derivedDataSeed: path == seed ? nil : DerivedDataSeedCopy(seed: seed, destination: path))
+      derivedDataSeed: path == seed ? nil : DerivedDataSeedCopy(seed: seed, destination: path),
+      buildLock: request.buildLock)
   }
 
   /// The build directories `request`'s command builds into, for a gate step to label warm when
@@ -100,7 +101,7 @@ public enum XcodeDerivedData {
       resultBundlePath: request.resultBundlePath,
       derivedDataSeed: DerivedDataSeedCopy(
         seed: AreaCacheEnvironment.derivedDataSeed(area: request.area, layout: layout),
-        destination: path))
+        destination: path), buildLock: request.buildLock)
   }
 
   /// `<git-dir>/swift-harness/derived-data/prove/<area>`: 1 per worktree and area, since a

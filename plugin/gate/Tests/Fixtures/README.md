@@ -457,6 +457,45 @@ time, also from a `NavigationLink` row (no navigation followed) and under an inl
 refreshed. A `scroll up` refreshed only sometimes: 3 of 4 with `pixels: 500`, 3 of 4 with
 `amount: 0.5`, 0 of 4 with `pixels: 600`, which starts at y 137, and never with `amount: 0.8`.
 
+### AgentDevice/searchable
+
+Typing into a SwiftUI `.searchable` field, captured on 2026-10-05 with `agent-device` 0.21.18,
+Xcode 26.2 and the iOS 26.2 runtime. Two send-money trials put the screen's search id on the
+`List` after `.searchable`, so their `fill` on that id found no text input, and the repair that
+pressed the id first failed the same way. The field iOS 26 draws is a `UISearchBarTextField` with
+no accessibility identifier: its `type` is `SearchField`, its `label` the prompt, and its `value`
+the prompt until text is typed, then the text. An identifier after `.searchable` lands on the
+list's `CollectionView`, and `UISearchTextField.appearance().accessibilityIdentifier` sets
+nothing. The app is `SearchableProbe.swift` with `Info.plist`: `Matches 5` (`probe.matches`) over
+5 rows, `probe.row.alice` to `probe.row.hiro`, in a `List` with the id `probe.list`, filtered by
+`.searchable(text:prompt: "Search names")` in the bottom toolbar, or with the launch argument
+`-probe-drawer` in a `.navigationBarDrawer(displayMode: .always)`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/searchable/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app, waits for `Matches 5`, types `GR`,
+then waits 5 s for `Matches 2`, strictly for `probe.row.alice` to be absent, and checks
+`probe.row.grace` exists.
+
+| Files | Outcome |
+|---|---|
+| `fill-list-id.{steps.json,stdout,stderr,status}` | `fill id="probe.list"`: exits 1, `details.step` 3, "no text input found at the provided coordinates to clear" |
+| `press-then-fill-list-id.{…}` | `press id="probe.list"` taps (201, 492), below the rows; the `fill` on the same id exits 1, step 4, the same message |
+| `fill-search-field.{…}` | `fill role=searchfield`: fills at (201, 822) and exits 0 |
+| `fill-search-prompt.{…}` | `fill label="Search names"`: fills at (201, 822) and exits 0 |
+| `press-then-type-search-field.{…}` | `press role=searchfield`, then `type`: exits 0 |
+| `fill-search-field-drawer.{…}` | `-probe-drawer`, `fill role=searchfield`: fills at (201, 191) and exits 0 |
+| `wait-absent-selector-key.{…}` | `fill-search-field` with its absence wait written `{"kind": "absent", "selector": …}`: exits 1, step 5, the wait timed out waiting for the row to appear while `Matches 2, Grace, Greg` showed |
+
+Probes on the same app and device, 4 runs each, matched every capture. `fill role=SearchField`,
+`fill label="Search names" editable=true`, and with no prompt, where the field and the
+magnifying-glass image are both labelled `Search`, `fill label="Search"` and
+`fill label="Search" editable=true` each filled the field. A strict absence wait is
+`{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
+
 ### AgentDevice/wait-kinds
 
 Each `wait` kind in the input key `agent-device` reads it from, and a `kind: absent` wait whose
@@ -4393,6 +4432,35 @@ to that repository's final tree, the one field a trial tree can't carry over.
 contacts screen contacts-feature had merged, after the combined run over account-client and
 amount-feature was RED.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: send-money-6's set-aside config, combined red run and placeholder return
+
+The sixth send-money trial (2026-10-05) reported its committed `.swiftgate.toml` as unchanged,
+though its contract added a module to it on the plan branch; quoted `--after account-client` in
+account-client's `flows-red` refusal for the run `20261005T094736Z-1149c44c`, which merged
+account-client's branch with amount-feature's alongside; and its amount-input build-worker returned
+ready-to-merge on a GREEN slice gate with `commits: []` and the notes `placeholder`, though its
+branch held `0b486ef`. `R` is the trial's clone, `T` its run folder, holding the clone's state as
+`state/` and the transcripts:
+
+```sh
+R=<send-money-6 clone> T=<send-money-6 run folder> F=BrownfieldTrial
+cp $R/.git/swift-harness/committed-config-set-aside.json $F/send-money-6-committed-config-set-aside.json
+git -C $R rev-parse swift-harness/spec:.swiftgate.toml > $F/send-money-6-committed-config-at-tip.txt
+cp $T/state/runs/20261005T094736Z-1149c44c/qa/report.json $F/send-money-6-qa-before-account-client-amount-feature.json
+mkdir -p BuildReturn/send-money-6
+python3 - $T/transcripts/b06295ef-b9a6-4477-8f69-11866cc98e3c/subagents/workflows/wf_657f668b-bf6/journal.jsonl \
+  > BuildReturn/send-money-6/placeholder-worker-return.json <<'PY'
+import json,sys
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    r=d.get('result')
+    if d.get('type')=='result' and isinstance(r,dict) and r.get('outcome')=='ready-to-merge':
+        print(json.dumps(r,indent=2,sort_keys=True)); break
+PY
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` matched none of the 4 files.
 
 ## Brownfield trial: price-tracker-5's refresh marker, user-checkout writes and halts
 

@@ -4,7 +4,7 @@ The flow steps for gestures that a selector alone doesn't drive, each proven on 
 the pinned `agent-device`. The rules a flow file meets are in
 [`simulator-qa.md`](simulator-qa.md#qa-lint), and how `qa run` drives a flow in
 [`simulator-qa-flows.md`](simulator-qa-flows.md). The captured runs are under
-`gate/Tests/Fixtures/AgentDevice/pull-to-refresh/`.
+`gate/Tests/Fixtures/AgentDevice/pull-to-refresh/` and `gate/Tests/Fixtures/AgentDevice/searchable/`.
 
 ## Pull to refresh
 
@@ -42,3 +42,20 @@ bottom of the refreshable screen's safe area, and the drag ends there:
   drag from the top row to the pinned id moved 594 pt and refreshed, and the drag to the last row
   moved 104 pt and didn't. The pinned id sits above the home indicator on a list of any length, so
   a refresh flow can always end its drag there.
+
+## A search field
+
+A SwiftUI `.searchable` field takes no accessibility identifier. On iOS 26 it is a
+`UISearchBarTextField` in the bottom toolbar, or in the navigation bar with a
+`.navigationBarDrawer` placement, and an identifier written after `.searchable` lands on the list.
+A `fill` on that id, or a `press` on it first, fails with "no text input found at the provided
+coordinates to clear". So the flow selects the field by its role, whatever its prompt says:
+
+`{"command": "fill", "input": {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`
+
+- `qa.flow-ref-target` passes a `role=` selector, and `qa.flow-unknown-id` checks only `id=`
+  selectors, so the step needs no `AccessibilityID` case. A screen with 2 search fields picks 1 by
+  `label="<prompt>"`, the field's label before and after typing.
+- The flow checks what the search changes by ids: a count, a row that stays, a row that goes.
+- A wait for a row to go puts the row under `absent`, as
+  [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) says.

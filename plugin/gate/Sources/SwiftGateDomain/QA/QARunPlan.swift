@@ -106,10 +106,15 @@ public struct QARunPlan: Sendable, Equatable {
   ///   plan passed; another requirement's red row stops nothing, since it crosses another
   ///   boundary. `true` runs every ready row, since each is expected to fail there, except a state
   ///   row whose flow row didn't run: with no device, its red would prove nothing.
+  /// - Parameter rowEnded: takes each row as it ends, before the next starts, so a watcher sees
+  ///   the run's progress.
   ///
   /// An acceptance check that rows share runs once, for the first of them; each later row takes
   /// its result and evidence, naming the row that ran it.
-  public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
+  public func execute(
+    atBase: Bool, check: (Entry) async -> QACheckOutcome,
+    rowEnded: (QARow) async -> Void = { _ in }
+  ) async -> [QARow] {
     var rows: [QARow] = []
     var reds: [String: QARow] = [:]
     var flows: [String: [QARow]] = [:]
@@ -162,6 +167,7 @@ public struct QARunPlan: Sendable, Equatable {
       }
       if validation.layer == .flow { flows[validation.requirement, default: []].append(row) }
       rows.append(row)
+      await rowEnded(row)
     }
     return rows
   }

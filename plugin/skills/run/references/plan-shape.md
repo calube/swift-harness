@@ -157,6 +157,9 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   and the drag pulls nothing. A requirement titled with a refresh, on a `flow` row, keeps the
   contract pending at `plan import` as `plan-import.refresh-marker-unplaced` until an app source
   pins an identified element that way.
+- A search journey's flow types into a `.searchable` field by `role=searchfield`, since the field
+  takes no identifier and an identifier after `.searchable` lands on the list. The contract names
+  the field's prompt and gives ids to what the search changes: the result count and each row.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 

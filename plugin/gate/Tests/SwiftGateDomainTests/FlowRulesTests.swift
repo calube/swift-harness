@@ -35,6 +35,26 @@ struct FlowRulesTests {
   }
 
   @Test(
+    "the captured steps that typed into a .searchable field by role, in the toolbar and in a navigation bar drawer, pass all 5 rules with only the probe's ids declared — catches a rule that would refuse the 1 selector reaching a search field, which takes no identifier"
+  )
+  func searchFieldByRolePasses() throws {
+    let ids = FlowIDs.declared(
+      source: "SearchableProbe.swift",
+      ids: Set(
+        ["probe.list", "probe.matches"]
+          + ["alice", "bob", "grace", "greg", "hiro"].map { "probe.row.\($0)" }))
+    for name in ["fill-search-field", "fill-search-field-drawer", "press-then-type-search-field"] {
+      let file = "AgentDevice/searchable/\(name).steps.json"
+      #expect(
+        FlowRules.check(
+          file: "qa/\(name).flow.json", data: try Fixture.data(file), schemas: try Self.schemas(),
+          ids: ids) == [], "\(file)")
+      #expect(
+        String(decoding: try Fixture.data(file), as: UTF8.self).contains("role=searchfield"))
+    }
+  }
+
+  @Test(
     "the SampleApp counter flow, the steps the pinned tool ran green, passes all 5 rules — catches a rule that fires on a working flow"
   )
   func counterFlowPasses() throws {

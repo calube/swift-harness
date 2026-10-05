@@ -1070,6 +1070,56 @@ struct BuildMergeFlowsTests {
     #expect(try scenario.merges().map(\.task) == ["t2"])
   }
 
+  @Test(
+    "after a RED run over both tasks cut the first task's fix, the second task's refusal quotes the run's own --after list, both tasks, not the second task alone — catches the send-money trial's account-client refusal naming `--after account-client` for its run over account-client and amount-feature"
+  )
+  func redRunIsQuotedWithItsOwnTasks() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOwnedRows(scenario)
+    let t1 = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t1", verdict: .green, commit: t1)
+    try await scenario.check("t2", verdict: .green, commit: t2)
+    let pre = try await scenario.main()
+    // The trial's run merged account-client's branch with amount-feature's alongside: red in the
+    // search row, after account-client alone, and in the continue row, after both.
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-6-qa-before-account-client-amount-feature.json"))
+    let red = captured.rows.filter { $0.result == .red }
+    #expect(red.count == 2)
+    let runID = try #require(captured.runID)
+    let report = QAReport(
+      runID: runID, plan: MergeScenario.plan, after: "t1", atBase: false, commit: nil,
+      rows: zip([["t1"], ["t1", "t2"]], red).enumerated().map { index, pair in
+        QARow(
+          row: index + 1, requirement: pair.1.requirement, layer: pair.1.layer,
+          check: pair.1.check, runsAfter: pair.0, result: pair.1.result,
+          message: pair.1.message, evidence: pair.1.evidence)
+      },
+      trialMerge: QATrialMerge(
+        branch: "\(MergeScenario.plan)/t1", tip: t1, base: pre,
+        alongside: [
+          QATrialMerge.Branch(task: "t2", branch: "\(MergeScenario.plan)/t2", tip: t2)
+        ]))
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
+
+    let first = await scenario.merge("t2")
+    let second = await scenario.merge("t1")
+
+    #expect(first.reason == .flowsRed, "\(first.message)")
+    #expect(second.reason == .flowsRed, "\(second.message)")
+    for refused in [first, second] {
+      #expect(
+        refused.message.contains(
+          "`swiftgate qa run --plan search --after t1,t2 --before-merge` run \(runID) is RED"),
+        "\(refused.message)")
+    }
+  }
+
   /// Writes a table whose row 1 runs after `t1` alone and row 2 after `t1` and `t2`, and a ledger
   /// with both in progress.
   fileprivate static func planOwnedRows(_ scenario: MergeScenario) throws {

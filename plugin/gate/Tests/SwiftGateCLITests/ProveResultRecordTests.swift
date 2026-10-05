@@ -172,4 +172,29 @@ struct ProveResultRecordTests {
     let second = try #require(steps.last?.startMs)
     #expect(second < first + steps[0].milliseconds)
   }
+
+  @Test(
+    "a step whose builds waited for their build directory records the wait beside its ms, as the gate.step's lockWaitMs, and a step with no wait leaves the key out — catches the send-money trial's prove steps whose ms hid the turns they took on 1 shared scratch path"
+  )
+  func lockWaitIsItsOwnField() throws {
+    let collector = GateStepCollector(elapsed: { 147_000 })
+    collector.record(
+      .prove, tier: nil, milliseconds: 147_000, verdict: .green, area: "AppFeature",
+      lockWaitMilliseconds: 121_500)
+    collector.record(.areaTest, tier: nil, milliseconds: 9_000, verdict: .green, area: "AppFeature")
+
+    let steps = collector.steps
+    #expect(steps.map(\.lockWaitMilliseconds) == [121_500, nil])
+    let events = try steps.map {
+      try #require(
+        JSONSerialization.jsonObject(with: JSONEncoder().encode(GateStepEvent($0)))
+          as? [String: Any])
+    }
+    #expect(events[0]["lockWaitMs"] as? Int == 121_500)
+    #expect(events[0]["ms"] as? Int == 147_000)
+    #expect(events[1]["lockWaitMs"] == nil)
+    let decoded = try JSONDecoder().decode(
+      GateStepEvent.self, from: JSONEncoder().encode(GateStepEvent(steps[0])))
+    #expect(decoded.lockWaitMs == 121_500)
+  }
 }

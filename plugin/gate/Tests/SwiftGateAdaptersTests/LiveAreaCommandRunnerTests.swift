@@ -210,6 +210,44 @@ struct LiveAreaCommandRunnerTests {
     #expect(active.withLock { $0.most } == 2)
   }
 
+  @Test(
+    "2 swift builds that take turns in 1 scratch path run 1 at a time and the second's wait is added to the waits they share, while 1 build alone records a wait of 0 — catches 3 concurrent slices of the send-money trial waiting on SwiftPM's lock with no step showing the wait"
+  )
+  func swiftPMScratchPathTurnsAreTimed() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let active = Mutex((now: 0, most: 0))
+    let processes = FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
+      active.withLock {
+        $0.now += 1
+        $0.most = max($0.most, $0.now)
+      }
+      try? await Task.sleep(for: .milliseconds(400))
+      active.withLock { $0.now -= 1 }
+      return ProcessOutput(status: .exited(0), stdout: "", stderr: "")
+    }
+    let runner = LiveAreaCommandRunner(processRunner: processes)
+    let scratch = directory.appending(path: "slot/derived-data/prove/Feature").path
+    func test(_ waits: BuildLockWaits) -> AreaCommandRequest {
+      AreaCommandRequest(
+        area: "Feature", step: .testFiles, command: "swift test --scratch-path '\(scratch)'",
+        workingDirectory: directory.path, deadline: .seconds(20), environment: [:],
+        junitPath: nil, buildLock: BuildDirectoryLock(directory: scratch, waits: waits))
+    }
+
+    let shared = BuildLockWaits()
+    async let first = runner.run(test(shared))
+    async let second = runner.run(test(shared))
+    #expect(await [first, second] == [.passed, .passed])
+    #expect(active.withLock { $0.most } == 1)
+    let waited = try #require(shared.milliseconds)
+    #expect(waited >= 300, "the second build waited out most of the first's 400 ms")
+
+    let alone = BuildLockWaits()
+    #expect(await runner.run(test(alone)) == .passed)
+    #expect(alone.milliseconds.map { $0 < 300 } == true)
+  }
+
   @Test("a passing command is passed — catches exit 0 read as a failure")
   func passes() async throws {
     let directory = try temporaryDirectory()
