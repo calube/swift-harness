@@ -186,7 +186,18 @@ public enum QAMergeReadiness: Sendable, Equatable {
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     carried: [QATrialMerge.Branch] = [], atBase: [QAReport], unverified: Set<Int> = []
   ) -> [Int] {
-    []
+    let landsWith = Set(carried.map(\.task))
+    let taken = atBase.filter { $0.plan == plan && $0.atBase && $0.atBaseRecord == nil }
+      .flatMap(\.rows)
+    return QARunPlan.make(table: table, merged: merged, after: task).entries
+      .filter { landsWith.isSuperset(of: $0.waitingOn) && !unverified.contains($0.row) }
+      .filter { entry in
+        !taken.contains { row in
+          row.row == entry.row && row.requirement == entry.validation.requirement
+            && row.layer == entry.validation.layer && row.check == entry.validation.check
+        }
+      }
+      .map(\.row).sorted()
   }
 
   /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming

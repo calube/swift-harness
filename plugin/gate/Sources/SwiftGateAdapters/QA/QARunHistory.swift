@@ -19,7 +19,14 @@ public enum QARunHistory {
   /// clone, prepared runs included; a report that doesn't decode is passed over, and 1 run read
   /// twice counts once.
   public static func atBaseReports(worktree: URL, plan: String) -> [QAReport] {
-    []
+    var seen = Set<String>()
+    return stateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
+      .compactMap { data -> QAReport? in
+        guard let report = try? QAReportJSON.decode(data), report.plan == plan, report.atBase,
+          let runID = report.runID, seen.insert(runID).inserted
+        else { return nil }
+        return report
+      }
   }
 
   /// Every ``QAMergedTreeRun`` under the runs of each checkout of `worktree`'s clone, so a run

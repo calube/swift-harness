@@ -746,7 +746,9 @@ public struct BuildMerge: Sendable {
   /// cuts the fix worktree with the branches that row's other tasks were run at, as a conflict
   /// does, unless this merges the fixer's branch, whose worktree exists; that fixer's branch sets
   /// the task aside, so the other tasks' merges no longer wait on it. A plan with no table, or one
-  /// whose state doesn't read, needs no run here: `qa run` itself reports that table.
+  /// whose state doesn't read, needs no run here: `qa run` itself reports that table. A row whose
+  /// pass this merge credits also needs a `qa run --at-base` that took it; a task whose rows all
+  /// wait on other tasks never waits for one.
   ///
   /// - Returns: what the merge report says when a row runs after this task and none ran before
   ///   it lands, since each still waits on another task; `nil` otherwise.
@@ -759,6 +761,7 @@ public struct BuildMerge: Sendable {
     let merged: Set<String>
     let reports: [QAReport]
     let table: ValidationTable
+    let unverified: Set<Int>
     do {
       let plan = try PlanStateLayout(commonDirectory: context.common).plan(self.plan)
       guard
@@ -782,10 +785,11 @@ public struct BuildMerge: Sendable {
         table: table, merged: merged, task: task, waiting: carried)
       let landing = try? await merger.mergedTree(
         of: tip, into: main, in: context.names.mainCheckout)
+      unverified = Set(log.unverifiedRows().keys)
       readiness = QAMergeReadiness.of(
         table: table, merged: merged, plan: self.plan, task: task, reports: reports,
         branch: context.branch, tip: tip, base: main, waiting: waiting, carried: carried,
-        landing: landing, trees: trialTrees(context), unverified: Set(log.unverifiedRows().keys))
+        landing: landing, trees: trialTrees(context), unverified: unverified)
     } catch {
       return nil
     }
@@ -793,7 +797,26 @@ public struct BuildMerge: Sendable {
     let run =
       "`swiftgate qa run --plan \(plan) --after \(tasks) --before-merge\(fix ? " --fix" : "")`"
     switch readiness {
-    case .checked, .conflicts:
+    case .checked:
+      let lacking = QAMergeReadiness.lackingAtBase(
+        table: table, merged: merged, plan: plan, task: task, carried: carried,
+        atBase: QARunHistory.atBaseReports(
+          worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory),
+          plan: plan),
+        unverified: unverified)
+      guard lacking.isEmpty else {
+        let one = lacking.count == 1
+        throw stop(
+          command, context, .refused,
+          "build-merge.\(BuildMergeReport.Reason.atBaseUnchecked.rawValue): validation "
+            + "\(one ? "row" : "rows") \(lacking.map(String.init).joined(separator: ", ")) "
+            + "passed before `\(task)` lands, but no `swiftgate qa run --plan \(plan) --at-base` "
+            + "has taken \(one ? "it" : "them") yet, so nothing shows \(one ? "it" : "each") "
+            + "read red without this change; merge once that run is done",
+          reason: .atBaseUnchecked)
+      }
+      return nil
+    case .conflicts:
       return nil
     case .notNeeded:
       return Self.unverifiedNote(table: table, merged: merged, task: task)
