@@ -15,8 +15,8 @@ takes these steps, in this order:
 
 1. It lints the file with the `qa lint` rules. A red lint makes the row `red` naming the rules, and
    no device starts; a lint that can't run (no plugin root, say) leaves the row `unverified`.
-2. It runs `sim up` in the tree the row runs in, with the app's live dependencies. A failed
-   `sim up` leaves the row `unverified`, naming its rule.
+2. It runs `sim up` in the tree the row runs in, opening the app with the `launchArgs` of a
+   leading `open` step. A failed `sim up` leaves the row `unverified`, naming its rule.
 3. It runs 1 `agent-device batch --on-error stop` on the leased UDID and session. After each `wait`
    or `is` step it adds a `snapshot`, a `screenshot` and a second `snapshot`, so each assertion
    leaves a `sim/` step with its tree and PNG, as `sim snap` would. An `is text` step's value

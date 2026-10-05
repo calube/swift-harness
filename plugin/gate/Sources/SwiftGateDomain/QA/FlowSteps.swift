@@ -167,7 +167,12 @@ public enum FlowSteps {
   /// the batch runs, so the app is never up on its live dependencies while a scenario flow
   /// starts. Empty when no `open` step comes first or it passes none.
   public static func launchArguments(_ steps: [FlowStep]) -> [String] {
-    []
+    guard let first = steps.first, first.command == "open",
+      case .array(let values)? = first.input["launchArgs"]
+    else { return [] }
+    return values.compactMap { value in
+      if case .string(let text) = value { text } else { nil }
+    }
   }
 }
 

@@ -383,7 +383,8 @@ public struct SimUp: Sendable {
     do {
       _ = try await dependencies.agentDevice.open(
         bundleID: app.bundleID,
-        launchArguments: SimSession.launchArguments(scenario: request.scenario),
+        launchArguments: request.launchArguments
+          ?? SimSession.launchArguments(scenario: request.scenario),
         on: target)
     } catch {
       Self.append("sim up: \(error.message)", to: log)

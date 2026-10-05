@@ -426,7 +426,7 @@ const tests = {
 
   'the orchestrator records each assumption line a fixer returns under the plan\'s assumptions — catches a fixer\'s added behaviour missing from the report'() {
     const loop = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8').replace(/\s+/g, ' ')
-    assert.match(loop, /each `assumption:` line of its notes[^.]*`## Assumptions`/, 'event-loop.md never records a fixer\'s assumption lines')
+    assert.match(loop, /each `assumption:` line of its notes .{0,80}`## Assumptions`/, 'event-loop.md never records a fixer\'s assumption lines')
   },
 
   'the fake fit check names a missing route and a missing assumption line — catches a check that passes anything'() {

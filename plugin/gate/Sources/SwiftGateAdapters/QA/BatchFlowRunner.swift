@@ -396,9 +396,11 @@ public actor QAFlowRunner {
     }
 
     let simDirectory = row.directory.appending(path: "sim", directoryHint: .isDirectory)
+    let steps = (try? Data(contentsOf: row.stepsFile)).flatMap { try? FlowSteps.parse($0) }
     let request = QAFlowSimulatorRequest(
       worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil,
-      audit: Self.audit(row), hold: hold)
+      launchArguments: steps.map(FlowSteps.launchArguments),
+      audit: Self.audit(row, steps: steps ?? []), hold: hold)
     if hold != nil { heldIn = row.worktree }
     let started: SimUpStarted
     switch await simulator.up(request) {
@@ -566,10 +568,8 @@ public actor QAFlowRunner {
   /// The controls the row's `sim verify` audits: every one in an owned repository, and in a
   /// brownfield clone those the flow file's steps select. A flow file that doesn't parse selects
   /// none; the batch reports it.
-  static func audit(_ row: QAFlowRow) -> SimAuditScope {
-    let steps = (try? Data(contentsOf: row.stepsFile)).flatMap { try? FlowSteps.parse($0) }
-    return .scope(
-      profile: StateRootResolver.profile(worktree: row.worktree), flowSteps: steps ?? [])
+  static func audit(_ row: QAFlowRow, steps: [FlowStep]) -> SimAuditScope {
+    .scope(profile: StateRootResolver.profile(worktree: row.worktree), flowSteps: steps)
   }
 
   /// `sim verify` over the row's `sim/` folder: only `GREEN` passes.
