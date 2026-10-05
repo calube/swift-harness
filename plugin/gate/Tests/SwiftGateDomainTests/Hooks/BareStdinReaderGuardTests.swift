@@ -77,7 +77,7 @@ struct BareStdinReaderGuardTests {
     try #require(calls.count == 2)
     let violation = try #require(BashGuard.evaluate(calls[0].toolInput.command))
     #expect(violation.ruleID == BashGuard.bareStdinReaderRuleID)
-    #expect(violation.reason.contains("`cat >> /dev/null`"), "\(violation.reason)")
+    #expect(violation.reason.contains("`cat` names no file"), "\(violation.reason)")
     #expect(BashGuard.evaluate(calls[1].toolInput.command)?.ruleID != BashGuard.bareStdinReaderRuleID)
   }
 
