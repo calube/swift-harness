@@ -458,7 +458,8 @@ enum BrownfieldMergeCheck {
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
       }
-      let request = XcodeDerivedData.request(prepared.request, layout: dependencies.layout)
+      let request = AreaBuildPlacement.checkout(
+        prepared.request, kind: area.kind, layout: dependencies.layout)
       let derivedData = GateStepCollector.derivedData(
         buildDirectories: XcodeDerivedData.buildDirectories(
           request, kind: area.kind, layout: dependencies.layout

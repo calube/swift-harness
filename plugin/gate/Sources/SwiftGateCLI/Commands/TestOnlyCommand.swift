@@ -137,7 +137,8 @@ enum TestOnlyCheck {
       workingDirectory: directory.path(percentEncoded: false), deadline: .zero,
       environment: environment, junitPath: resolved.command.contains(junit) ? junit : nil)
     // An `xcodebuild` builds in the worktree's own DerivedData, never Xcode's global one.
-    let placed = XcodeDerivedData.request(unplaced, layout: dependencies.layout)
+    let placed = AreaBuildPlacement.checkout(
+      unplaced, kind: owner.kind, layout: dependencies.layout)
     let derivedData = GateStepCollector.derivedData(
       buildDirectories: XcodeDerivedData.buildDirectories(
         placed, kind: owner.kind, layout: dependencies.layout
