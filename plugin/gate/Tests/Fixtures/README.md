@@ -5197,3 +5197,20 @@ sed "$S" $R/runs/20261005T162135Z-bd20614a/qa/report.json > at-base-1-qa-at-base
 ```
 
 `grep -niE '/Users|/private|caleb'` on the fixtures matched nothing.
+
+## Brownfield trial: a merge gate recorded from the user's checkout
+
+`RecordGate/merge-gate-report.json` and `RecordGate/merge-gate-run-event.json` are the `report.json`
+and the `gate.run` event (the first line of the run's `events/gate.jsonl`) of a GREEN `check merge`
+run a 2026-10-05 brownfield practice trial's orchestrator ran in the plan checkout. Its
+`build record-gate` from the user's checkout was BLOCKED because the run's history line was in the
+plan checkout's store. The history line itself didn't outlive the checkout, so a test records the
+captured report with the event's `command` and `time`. With `R` the run's directory in the trial's
+kept runs, the area name `InterviewStarter` becomes `App`:
+
+```sh
+sed 's/InterviewStarter/App/g' $R/report.json > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-report.json
+head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-run-event.json
+```
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.

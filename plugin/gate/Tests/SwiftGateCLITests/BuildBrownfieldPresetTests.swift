@@ -13,7 +13,7 @@ private struct PinnedClock: BuildClock {
 
 /// A throwaway git common dir with 1 claimed, planned plan, and a checkout beside it that is
 /// either a brownfield clone (config under the common dir) or an owned repository.
-private struct PresetScenario {
+struct PresetScenario {
   static let plan = "2026-10-04-search"
   static let session = "5e0c7a1b-2d3f-4a6b-8c9d-0e1f2a3b4c5d"
   static let startedAt = Date(timeIntervalSince1970: 1_790_000_000)
