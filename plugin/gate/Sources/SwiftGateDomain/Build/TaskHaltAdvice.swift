@@ -35,10 +35,12 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
   ///   - cutoffAt: a retry that would end after it can't finish in the box.
   ///   - unconfirmedFix: the return is a fixer's committed fix that no gate checked, as
   ///     ``isUnconfirmedFix(fix:outcome:commits:gateVerdict:)`` reads it.
+  ///   - fixRound: a fixer's return: what 1 more fix round of its already started task costs,
+  ///     as this run measured it; `nil` for a worker's return or when nothing measured it.
   public static func advise(
     outcome: TaskReturn.Outcome, verdict: Verdict, rules: [TaskReturnFinding.Rule],
     startedAt: Date?, now: Date, noNewStartsAt: Date?, cutoffAt: Date?,
-    unconfirmedFix: Bool = false
+    unconfirmedFix: Bool = false, fixRound: FixRound? = nil
   ) -> TaskHaltAdvice? {
     let halts = verdict != .green || outcome != .readyToMerge
     guard halts else { return nil }
@@ -84,6 +86,36 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
     fix: Bool, outcome: TaskReturn.Outcome, commits: [String], gateVerdict: Verdict?
   ) -> Bool {
     fix && outcome == .gateRed && !commits.isEmpty && (gateVerdict ?? .blocked) == .blocked
+  }
+
+  /// 1 more fix round of a task a fixer already works on: its gate and its before-merge `qa run`
+  /// again. Relaunching the fixer starts no task, so no new starts doesn't stop it; only the
+  /// cutoff does.
+  public struct FixRound: Sendable, Equatable, Encodable {
+    /// The fixer's own gate run, which the return cites.
+    public let gateSeconds: Int
+    /// The slowest before-merge `qa run` that took the task: a fix changes the tree, so the
+    /// next run reuses no row.
+    public let qaSeconds: Int
+    /// The validation table's flow rows that run after the task: none passes until it merges.
+    public let flowRows: Int
+
+    public init(gateSeconds: Int, qaSeconds: Int, flowRows: Int) {
+      self.gateSeconds = gateSeconds
+      self.qaSeconds = qaSeconds
+      self.flowRows = flowRows
+    }
+
+    public var seconds: Int { gateSeconds + qaSeconds }
+
+    /// The round as this run measured it: the gate run `gateRunID` names, read from
+    /// `gateMilliseconds` by run id, and the before-merge `reports` that took `task`, each the
+    /// sum of its rows' times. `nil` when no gate run of that id was measured.
+    public static func measured(
+      task: String, gateRunID: String?, gateMilliseconds: [String: Int], reports: [QAReport]
+    ) -> FixRound? {
+      nil
+    }
   }
 
   private static func stamp(_ date: Date) -> String {
