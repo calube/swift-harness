@@ -469,3 +469,16 @@ struct WarmupTimesFileTests {
     #expect(file.areas["api"]?.coldMilliseconds == 9_000)
   }
 }
+
+@Suite("Warm-up slot turns")
+struct WarmupSlotTurnsTests {
+  @Test(
+    "the warm-up builds 1 task slot at a time, the qa slot right after the first, so a foreground gate in the plan checkout shares the machine with 1 slot's builds — catches every slot's builds started at once, which slowed a contract slice gate from 93 s to 240 s"
+  )
+  func oneSlotATime() {
+    let turns = Warmup.slotTurns(tasks: ["/s1", "/s2", "/s3", "/s4"], qa: "/s5")
+
+    #expect(
+      turns == [.tasks(["/s1"]), .qa("/s5"), .tasks(["/s2"]), .tasks(["/s3"]), .tasks(["/s4"])])
+  }
+}
