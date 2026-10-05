@@ -73,27 +73,29 @@ private struct MergeScenario {
   /// Records a `build check-return` verdict in the build run as the command does.
   func check(
     _ task: String, fix: Bool = false, verdict: Verdict, commit: String?,
-    checkID: String = "check-\(UUID().uuidString)", rules: [TaskReturnFinding.Rule] = []
+    checkID: String = "check-\(UUID().uuidString)", rules: [TaskReturnFinding.Rule] = [],
+    outcome: TaskReturn.Outcome? = nil
   ) async throws {
     try await run.append(
       .returnCheck(
         .init(
           task: task, fix: fix, verdict: verdict, commit: commit, checkID: checkID, rules: rules,
-          at: Self.at)))
+          at: Self.at, outcome: outcome)))
   }
 
   func undo(_ task: String, leftovers: (any RunLeftovers)? = nil) async -> BuildMergeReport {
     await flow(task, leftovers: leftovers).undo()
   }
 
-  private func flow(_ task: String, fix: Bool = false, leftovers: (any RunLeftovers)? = nil)
-    -> BuildMerge
-  {
+  func flow(
+    _ task: String, fix: Bool = false, leftovers: (any RunLeftovers)? = nil,
+    halts: BuildHaltLog? = nil
+  ) -> BuildMerge {
     BuildMerge(
       plan: Self.plan, task: task, fix: fix, git: repo.adapter,
       workspace: LiveGitWorkspace(runner: repo.runner, repositoryRoot: repo.root.path),
       merger: LiveMergeRunner(runner: repo.runner), clock: FixedClock(date: Self.at),
-      leftovers: leftovers)
+      leftovers: leftovers, halts: halts)
   }
 
   func merges() throws -> [BuildEvent.Merge] {
@@ -701,6 +703,46 @@ struct BuildMergeTests {
     #expect(report.message.contains("build-return.outside-write-set-unexplained"))
     #expect(try await scenario.main() == pre)
     #expect(try scenario.merges() == [])
+  }
+
+  @Test(
+    "send-money-3's review-blocked send-flow return, checked GREEN, is refused review-blocked-unanswered with the trial's own halts, which answer only another task; a halt of the task answered merge after the check lets it merge — catches a review-blocked return merged on the orchestrator's own judgement"
+  )
+  func reviewBlockedReturnNeedsAnAnsweredHalt() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let captured = try TaskReturnJSON.decode(
+      Fixture.data("RunView/send-money-3/returns/send-flow.json"))
+    try await scenario.check("t1", verdict: .green, commit: tip, outcome: captured.outcome)
+    let root = TestTemporaryDirectory.root.appending(
+      path: "swiftgate-merge-halts-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let file = StateRoot.tree(root).url(RunLayout.eventsFile(.build))
+    try FileManager.default.createDirectory(
+      at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Fixture.data("RunView/send-money-3/events/build.jsonl").write(to: file)
+    let pre = try await scenario.main()
+    let log = BuildHaltLog(root: root, now: { MergeScenario.at.addingTimeInterval(60) })
+
+    let unanswered = await scenario.flow("t1", halts: log).merge()
+    _ = try log.halt(buildRun: scenario.run.runID, task: "t1", reason: .question)
+    _ = try log.resume(buildRun: scenario.run.runID, task: "t1", answer: .continue)
+    let wentOn = await scenario.flow("t1", halts: log).merge()
+
+    #expect(captured.outcome == .reviewBlocked)
+    for refused in [unanswered, wentOn] {
+      #expect(refused.status == .refused, "\(refused.message)")
+      #expect(refused.reason == .reviewBlockedUnanswered)
+      #expect(refused.message.contains("build-merge.review-blocked-unanswered"))
+    }
+    #expect(try await scenario.main() == pre)
+
+    _ = try log.halt(buildRun: scenario.run.runID, task: "t1", reason: .question)
+    _ = try log.resume(buildRun: scenario.run.runID, task: "t1", answer: .merge)
+    let answered = await scenario.flow("t1", halts: log).merge()
+
+    #expect(answered.status == .merged, "\(answered.message)")
   }
 
   @Test(

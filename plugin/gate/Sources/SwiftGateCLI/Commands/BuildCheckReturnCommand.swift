@@ -19,6 +19,10 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   /// The full sha of the return's last commit, the branch tip `build merge` requires; `nil` when
   /// the check couldn't resolve one.
   var commit: String? = nil
+  /// The answer a halt of this return recommends; `nil` when the return doesn't halt its task.
+  var haltAdvice: TaskHaltAdvice? = nil
+  /// The checked return's outcome, which `build merge` reads off the recorded check.
+  var outcome: TaskReturn.Outcome? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
@@ -61,16 +65,60 @@ enum BuildCheckReturnRun {
       let evidence = try await gather(
         taskReturn, plan: plan, fix: fix, git: git, profile: profile, warnings: &warnings)
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
+      let verdict: Verdict = findings.isEmpty ? .green : .red
+      var rules: [TaskReturnFinding.Rule] = []
+      for finding in findings where !rules.contains(finding.rule) { rules.append(finding.rule) }
       return BuildCheckReturnReport(
         command: command, plan: plan, task: taskReturn.task,
-        verdict: findings.isEmpty ? .green : .red, findings: findings, warnings: warnings,
+        verdict: verdict, findings: findings, warnings: warnings,
         message: findings.isEmpty
           ? "task `\(taskReturn.task)`: the return matches git and the run store"
           : "task `\(taskReturn.task)`: \(findings.count) claim(s) the evidence doesn't support",
-        commit: evidence.lastCommit)
+        commit: evidence.lastCommit,
+        haltAdvice: await haltAdvice(
+          taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git),
+        outcome: taskReturn.outcome)
     } catch {
       return blocked(taskReturn.task, error.message)
     }
+  }
+
+  /// The halt advice for `taskReturn` against the plan's newest build run: its time box, or its
+  /// preset's budget, and when the task last went `in-progress`. A plan with no readable build
+  /// run is advised as a build with no box.
+  private static func haltAdvice(
+    _ taskReturn: TaskReturn, verdict: Verdict, rules: [TaskReturnFinding.Rule], plan: String,
+    fix: Bool, git: any Git
+  ) async -> TaskHaltAdvice? {
+    let now = Date()  // swiftgate:allow det.date-init — measures the box left at the check
+    var startedAt: Date?
+    var noNewStartsAt: Date?
+    var cutoffAt: Date?
+    if let store = try? await BuildRunStore.latest(plan: plan, git: git),
+      let record = try? store.record()
+    {
+      if let box = record.timeBox {
+        noNewStartsAt = box.deadlines.noNewStartsAt
+        cutoffAt = box.deadlines.cutoffAt
+      } else if record.preset.timeBudgetMin > 0 {
+        let budget = TimeInterval(record.preset.timeBudgetMin * 60)
+        noNewStartsAt = record.startedAt.addingTimeInterval(
+          budget - TimeInterval(record.preset.stopStartsBeforeMin * 60))
+        cutoffAt = record.startedAt.addingTimeInterval(budget)
+      }
+      if !fix, let log = try? store.events() {
+        startedAt =
+          log.events.compactMap { event -> Date? in
+            guard case .transition(let move) = event, move.task == taskReturn.task,
+              move.to == .inProgress
+            else { return nil }
+            return move.at
+          }.last
+      }
+    }
+    return TaskHaltAdvice.advise(
+      outcome: taskReturn.outcome, verdict: verdict, rules: rules, startedAt: startedAt, now: now,
+      noNewStartsAt: noNewStartsAt, cutoffAt: cutoffAt)
   }
 
   /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.
@@ -129,7 +177,7 @@ enum BuildCheckReturnRun {
         .returnCheck(
           .init(
             task: task, fix: fix, verdict: report.verdict, commit: report.commit,
-            checkID: eventID, rules: rules, at: now)))
+            checkID: eventID, rules: rules, at: now, outcome: report.outcome)))
     } catch {
       return [
         "\(notRecorded) in build run \(buildRun), so `build merge` will refuse this return: "
