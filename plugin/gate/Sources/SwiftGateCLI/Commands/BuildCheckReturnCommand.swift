@@ -87,7 +87,8 @@ enum BuildCheckReturnRun {
           : "task `\(taskReturn.task)`: \(findings.count) claim(s) the evidence doesn't support",
         commit: evidence.lastCommit,
         haltAdvice: await haltAdvice(
-          taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git),
+          taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git,
+          profile: profile),
         outcome: taskReturn.outcome)
     } catch {
       return blocked(taskReturn.task, error.message)
@@ -99,7 +100,7 @@ enum BuildCheckReturnRun {
   /// run is advised as a build with no box.
   private static func haltAdvice(
     _ taskReturn: TaskReturn, verdict: Verdict, rules: [TaskReturnFinding.Rule], plan: String,
-    fix: Bool, git: any Git
+    fix: Bool, git: any Git, profile: RepositoryProfile
   ) async -> TaskHaltAdvice? {
     let now = Date()  // swiftgate:allow det.date-init — measures the box left at the check
     var startedAt: Date?
@@ -125,7 +126,25 @@ enum BuildCheckReturnRun {
       noNewStartsAt: noNewStartsAt, cutoffAt: cutoffAt,
       unconfirmedFix: TaskHaltAdvice.isUnconfirmedFix(
         fix: fix, outcome: taskReturn.outcome, commits: taskReturn.commits,
-        gateVerdict: taskReturn.gate?.verdict))
+        gateVerdict: taskReturn.gate?.verdict),
+      fixRound: fix ? await fixRound(taskReturn, plan: plan, git: git, profile: profile) : nil)
+  }
+
+  /// 1 more fix round of a fixer's task, from the gate runs and before-merge `qa run`s every
+  /// checkout of the clone recorded; `nil` when its gate run wasn't measured.
+  static func fixRound(
+    _ taskReturn: TaskReturn, plan: String, git: any Git, profile: RepositoryProfile
+  ) async -> TaskHaltAdvice.FixRound? {
+    guard let common = try? await git.commonDirectory(),
+      let main = try? TaskWorktree(
+        commonDirectory: common, plan: plan, task: taskReturn.task, profile: profile
+      ).mainCheckout
+    else { return nil }
+    let root = URL(filePath: main, directoryHint: .isDirectory)
+    return TaskHaltAdvice.FixRound.measured(
+      task: taskReturn.task, gateRunID: taskReturn.gate?.runID,
+      gateMilliseconds: MeasuredFinalGateReader.milliseconds(worktree: root),
+      reports: QARunHistory.beforeMergeReports(worktree: root, plan: plan))
   }
 
   /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.

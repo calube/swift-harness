@@ -5409,3 +5409,31 @@ and `moving` are as captured. The clone's `config.toml` differs from
 `price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
 `price-tracker-1-base-files.txt`, so the import test reads those 2.
 `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
+
+## Task halt: a started task left blocked with a fix round's time left
+
+`TaskHalt/late-fix-1/` is the state a 2026-10-05 brownfield practice trial left, build run
+`20261005T191004Z-19083d18` of plan `spec`, whose app's state advances on a clock. Its screen task,
+the one every flow row runs after, came back from its second fixer `gate-red` with 1 flow row red,
+checked at 19:33:41Z, 146 s past no new starts and 334 s before the cutoff. The halt was answered
+`continue`, so the task stayed `blocked` and no flow row ever passed. `ledger-events.jsonl` and
+`run.json` are the build run's, `halts.jsonl` the clone's `events/build.jsonl`, `gate-runs.jsonl`
+the `gate.run` lines of its `events/gate.jsonl`, `qa-before-merge.json` the task's first
+before-merge `qa run` (all 6 rows ran) and `qa-fix.json` the fixer's `qa run --fix` (5 rows
+reused). `C` is the trial's copied state root, and `SCRUB` a `sed -E` rename script outside this
+repository, since its pairs name the app: it renames the task ids, requirement ids, flow file
+names, accessibility ids and test file names to generic ones (`screen-ui`, `model-core`,
+`model-spawn`, `req-render`, `screen.entity`, `ModelTests`), and keeps the `slice` gate tier's
+name. From this directory:
+
+```sh
+F=TaskHalt/late-fix-1 R=$C/build/20261005T191004Z-19083d18 S=$(cat $SCRUB)
+mkdir -p $F
+sed -E "$S" $R/events.jsonl > $F/ledger-events.jsonl; cp $R/run.json $F/run.json
+sed -E "$S" $C/events/build.jsonl > $F/halts.jsonl
+grep '"kind":"gate.run"' $C/events/gate.jsonl | sed -E "$S" > $F/gate-runs.jsonl
+sed -E "$S" $C/runs/20261005T192422Z-4ba373f4/qa/report.json > $F/qa-before-merge.json
+sed -E "$S" $C/runs/20261005T193134Z-69c21ab9/qa/report.json > $F/qa-fix.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in the folder.

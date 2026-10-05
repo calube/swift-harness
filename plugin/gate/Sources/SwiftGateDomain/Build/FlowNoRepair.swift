@@ -9,12 +9,18 @@ public struct FlowNoRepair: Sendable, Equatable {
     case contractGap(name: String?)
     /// The flow drives what the requirement needs and the app doesn't do it.
     case appAtFault
+    /// The red run's frames show the app in a state the requirement rules out: `frame` names
+    /// where, `nil` when the line names none.
+    case appDefect(frame: String?)
   }
 
   public static let prefix = "no repair:"
   /// What a contract gap's reason starts with:
   /// `no repair: <requirement>: contract gap: <name>: <why>`.
   public static let contractGapMarker = "contract gap:"
+  /// What an app defect's reason starts with:
+  /// `no repair: <requirement>: app defect: <frame>: <what it shows>`.
+  public static let appDefectMarker = "app defect:"
 
   public let requirement: String
   public let cause: Cause
@@ -37,6 +43,18 @@ public struct FlowNoRepair: Sendable, Equatable {
       let requirement = rest[..<colon].trimmingCharacters(in: .whitespaces)
       guard !requirement.isEmpty, !requirement.contains(" ") else { return nil }
       let reason = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      if reason.lowercased().hasPrefix(appDefectMarker) {
+        let shown = reason.dropFirst(appDefectMarker.count)
+        guard let end = shown.firstIndex(of: ":") else {
+          return FlowNoRepair(
+            requirement: requirement, cause: .appDefect(frame: nil),
+            why: shown.trimmingCharacters(in: .whitespaces))
+        }
+        let frame = shown[..<end].trimmingCharacters(in: .whitespaces)
+        return FlowNoRepair(
+          requirement: requirement, cause: .appDefect(frame: frame.isEmpty ? nil : frame),
+          why: shown[shown.index(after: end)...].trimmingCharacters(in: .whitespaces))
+      }
       guard reason.lowercased().hasPrefix(contractGapMarker) else {
         // The cause in prose, as the repair-mode reference words it, with no marker.
         let gap = reason.lowercased().contains("contract name")
@@ -74,6 +92,9 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
     /// The task stays `blocked` and the build goes on without it. Halt, then
     /// `build resume --answer continue`.
     case `continue`
+    /// The frames show an app defect: the fixer runs again, its brief quoting the defect, while 1
+    /// more fix round fits before the cutoff. Halt, then `build resume --answer retry`.
+    case fixAgain = "fix-again"
   }
 
   public let action: Action
@@ -95,9 +116,11 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
   ///   - fixGate: the verdict of the gate the fixer's return cites; `nil` when it cites none.
   ///   - noNewStartsAt: after it no amendment round starts; `nil` for a build with no box.
   ///   - cutoffAt: from then `build cutoff` decides the task; `nil` for a build with no box.
+  ///   - fixRound: 1 more fix round of the task as this run measured it; `nil` prices it as
+  ///     `runSeconds`.
   public static func decide(
     _ noRepair: FlowNoRepair, run: [QARow], runSeconds: Int, fixGate: Verdict?, now: Date,
-    noNewStartsAt: Date?, cutoffAt: Date?
+    noNewStartsAt: Date?, cutoffAt: Date?, fixRound: TaskHaltAdvice.FixRound? = nil
   ) -> NoRepairDecision {
     let requirement = noRepair.requirement
     let left = run.filter { $0.requirement == requirement && $0.result != .pass }
@@ -112,6 +135,25 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
       return NoRepairDecision(
         action: .continue, rows: [],
         why: "no row of `\(requirement)` failed in this run: decide on the run its row was red in")
+    }
+    if case .appDefect(let frame) = noRepair.cause {
+      let shown =
+        "\(named) fails on an app defect its frames show"
+        + (frame.map { " (\($0))" } ?? "") + (noRepair.why.isEmpty ? "" : ": \(noRepair.why)")
+      let round = fixRound?.seconds ?? max(0, runSeconds)
+      guard let cutoffAt, now.addingTimeInterval(TimeInterval(round)) > cutoffAt else {
+        return NoRepairDecision(
+          action: .fixAgain, rows: rows,
+          why: "\(shown). Relaunch the fixer, its brief quoting the defect and the red run's "
+            + "evidence, for 1 more fix round of about \(round) s"
+            + (cutoffAt.map {
+              ", which ends \(Int($0.timeIntervalSince(now)) - round) s before the cutoff"
+            } ?? ""))
+      }
+      return NoRepairDecision(
+        action: .continue, rows: rows,
+        why: "\(shown), and 1 more fix round of about \(round) s would end after the cutoff at "
+          + "\(stamp(cutoffAt)): the task stays blocked, never merged with the defect")
     }
     if case .contractGap(let name) = noRepair.cause {
       let round = 2 * max(0, runSeconds)
@@ -149,7 +191,7 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
       case .contractGap(let name):
         "a contract name the app doesn't have" + (name.map { " (`\($0)`)" } ?? "")
           + ", with too little time to add it before no new starts"
-      case .appAtFault: "the app, by the repair worker's reading"
+      case .appAtFault, .appDefect: "the app, by the repair worker's reading"
       }
     return NoRepairDecision(
       action: .mergeUnverified, rows: rows,

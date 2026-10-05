@@ -16,7 +16,8 @@ Contents:
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Before each merge](#before-each-merge): the validation rows a merge makes ready
 - [Flow repair](#flow-repair): a flow row its own flow file keeps red, rewritten once
-- [No repair](#no-repair): `build no-repair` amends the contract or merges with the row unverified
+- [No repair](#no-repair): `build no-repair` amends the contract, fixes an app defect again, or
+  merges with the row unverified
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -423,9 +424,13 @@ read the output file the notice names, which is the fixer's whole transcript:
   Verifying starts no task, so no new starts doesn't stop it. When the cutoff comes first,
   `build cutoff` decides the task as it decides any other.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
-  set the task `blocked`. Options: leave it blocked and go on with the rest (Recommended),
-  abandon this task and go on, or stop the build. Before `cutoffAt`, stop is never recommended:
-  1 task's halt leaves the rest of the plan's work to merge.
+  set the task `blocked`. Options: retry the fixer, leave it blocked and go on with the rest,
+  abandon this task and go on, or stop the build. Mark recommended what `haltAdvice.answer`
+  names, quoting its `why`. `retry` relaunches the fixer in the same fix worktree for 1 more
+  round, its brief quoting the findings and each red row's evidence: the task already started,
+  so no new starts doesn't stop it, and the advice gives it only when the round's measured gate
+  and qa run end before the cutoff. Before `cutoffAt`, stop is never recommended: 1 task's halt
+  leaves the rest of the plan's work to merge.
 
 ## Before each merge
 
@@ -575,6 +580,10 @@ the build. Its `action`:
   `build halt --reason gate-red`, `build resume --answer merge`, then
   `"$SG" build merge <slug> <task> --fix --session <session> --json` and its merge gate, as a
   fixer's `ready-to-merge` merges. A `flows-unchecked` refusal names the run to make first.
+- `fix-again`: the repair worker's `app defect:` line names a frame that shows the app breaking
+  the requirement, and 1 more measured fix round ends before the cutoff. Never merge it
+  unverified. Halt with `gate-red`, resume with `retry`, and relaunch the fixer in the same fix
+  worktree, its brief quoting the `app defect:` line and the red run's evidence.
 - `continue`: halt with `gate-red`, set the task `blocked`, and resume with `continue`.
 
 ## Recording halts
@@ -590,7 +599,7 @@ the findings or the answer's words.
 | Halt | `--task` | `--reason` |
 |---|---|---|
 | a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
-| a `gate-red` return, a `build no-repair` decision that merges or goes on, or the fix merge's gate still red | the task | `gate-red` |
+| a `gate-red` return, a `build no-repair` decision that merges, fixes again or goes on, or the fix merge's gate still red | the task | `gate-red` |
 | a RED `qa run --before-merge`, resumed with `retry` before its fixer | the task | `gate-red` |
 | the fixer's merge still conflicted | the task | `merge-conflict` |
 | a `design-conflict` return | the reporting task | `amend` |
@@ -641,8 +650,11 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
    recommended the option `check-return`'s `haltAdvice.answer` names, and quote its `why`: `retry`
    for a finding a fix pass resolves (a gate to run again, a missing reason, a formatting fix, a
    flaky launch) while a retry as long as the first run fits before the cutoff and no new starts
-   hasn't begun; `continue` for a design conflict or a retry the box can't hold. `verify` is no
-   halt: an unconfirmed fix is checked as the fixer's return says. Options:
+   hasn't begun, or, for a fixer's return past no new starts, while 1 more measured fix round
+   ends before the cutoff; `continue` for a design conflict or a retry the box can't hold.
+   `verify` is no halt: an unconfirmed fix is checked as the fixer's return says. Record the
+   halt's `--reason` as [the table](#recording-halts) says: `review-blocked` is `question`.
+   Options:
    - **Retry**: `ledger set … pending`, then let `build next` start it again, its brief quoting
      every finding. Its worktree and branch still exist, so skip `worktree create` and launch into
      the same worktree.

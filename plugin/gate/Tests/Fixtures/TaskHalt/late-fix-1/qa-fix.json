@@ -1,0 +1,164 @@
+{
+  "after" : "screen-ui",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "cfdc6336ef33347d3ae67f28a65558bc948c6835",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-render, flow) `qa/render.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"screen.entity.0\"; step 4 began 4.0 s into the batch: 1.1 s opening the app (1.0 s to launch, 0.6 s of it settling), 1.8 s in captures qa run added, 1.1 s in the flow's other steps",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "6 of 11 rows verified (5 reason-only): 5 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "qa run 20261005T192422Z-4ba373f4 ran on the same merged tree 28f9c649a606",
+    "5 rows (1, 2, 3, 4, 6) reused from qa run 20261005T192422Z-4ba373f4 by screen-ui: each check is byte-identical to the one it ran",
+    "row 5 ran: its check changed after qa run 20261005T192422Z-4ba373f4"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 5,
+  "rows" : [
+    {
+      "check" : "qa/launch.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T192422Z-4ba373f4 by screen-ui at 4160424877e5: batch passed; sim verify GREEN over 4 steps",
+      "ms" : 0,
+      "requirement" : "req-launch",
+      "result" : "pass",
+      "reusedFrom" : "20261005T192422Z-4ba373f4",
+      "row" : 1,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/gesture.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T192422Z-4ba373f4 by screen-ui at 4160424877e5: batch passed; sim verify GREEN over 4 steps",
+      "ms" : 0,
+      "requirement" : "req-gesture",
+      "result" : "pass",
+      "reusedFrom" : "20261005T192422Z-4ba373f4",
+      "row" : 2,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/hazard.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T192422Z-4ba373f4 by screen-ui at 4160424877e5: batch passed; sim verify GREEN over 3 steps",
+      "ms" : 0,
+      "requirement" : "req-hazard",
+      "result" : "pass",
+      "reusedFrom" : "20261005T192422Z-4ba373f4",
+      "row" : 3,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/expiry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T192422Z-4ba373f4 by screen-ui at 4160424877e5: batch passed; sim verify GREEN over 4 steps",
+      "ms" : 0,
+      "requirement" : "req-expiry",
+      "result" : "pass",
+      "reusedFrom" : "20261005T192422Z-4ba373f4",
+      "row" : 4,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/render.flow.json",
+      "evidence" : [
+        "qa/05-req-render.flow/steps.json",
+        "qa/05-req-render.flow/batch.json",
+        "qa/05-req-render.flow/flow.json",
+        "qa/05-req-render.flow/video.mp4",
+        "qa/05-req-render.flow/sheet.png",
+        "qa/05-req-render.flow/sim/steps.ndjson",
+        "qa/05-req-render.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"screen.entity.0\"; step 4 began 4.0 s into the batch: 1.1 s opening the app (1.0 s to launch, 0.6 s of it settling), 1.8 s in captures qa run added, 1.1 s in the flow's other steps",
+      "ms" : 57417,
+      "requirement" : "req-render",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/end.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T192422Z-4ba373f4 by screen-ui at 4160424877e5: batch passed; sim verify GREEN over 7 steps; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button screen.restart 101×34 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 0,
+      "requirement" : "req-end",
+      "result" : "pass",
+      "reusedFrom" : "20261005T192422Z-4ba373f4",
+      "row" : 6,
+      "runsAfter" : [
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T193134Z-69c21ab9",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "94d492be7e83bea44f11eb6558d96bf12f46419c",
+    "branch" : "spec/fix-screen-ui",
+    "conflicts" : [
+
+    ],
+    "tip" : "dac189c949d43477f5ea34fae632a17b6cc2f999"
+  },
+  "verdict" : "RED"
+}

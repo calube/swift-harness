@@ -147,6 +147,84 @@ struct FlowNoRepairTests {
   }
 }
 
+@Suite("a no-repair return naming an app defect its frames show")
+struct FlowNoRepairAppDefectTests {
+  static let reply =
+    "no repair: req-render: app defect: sheet frame 4 at 0.8 s: the count drops twice with "
+    + "2 entities still on screen"
+
+  @Test(
+    "an app defect line names its frame and what it shows — catches an app defect read as a prose app-at-fault reply"
+  )
+  func appDefectLineReadsItsFrame() throws {
+    let parsed = try #require(FlowNoRepair.parse("notes first\n" + Self.reply))
+
+    #expect(parsed.requirement == "req-render")
+    #expect(parsed.cause == .appDefect(frame: "sheet frame 4 at 0.8 s"))
+    #expect(parsed.why == "the count drops twice with 2 entities still on screen")
+    #expect(
+      FlowNoRepair.parse("no repair: req-render: app defect: the count drops on spawn")?.cause
+        == .appDefect(frame: nil))
+  }
+
+  @Test(
+    "with the fixer's gate GREEN and every other row passing, the captured screen task's red row sends the task back to its fixer while a measured fix round fits before the cutoff — catches an app defect merged with its row unverified"
+  )
+  func capturedAppDefectFixesAgain() throws {
+    let noRepair = try #require(FlowNoRepair.parse(Self.reply))
+    let record = try LateFix1.record()
+    let check = try LateFix1.fixCheck()
+    let run = try LateFix1.report("qa-fix.json")
+    guard case .gateRun(let gate) = try LateFix1.fixGate().payload else {
+      Issue.record("the fixer's gate isn't a gate run")
+      return
+    }
+
+    let decision = NoRepairDecision.decide(
+      noRepair, run: run.rows, runSeconds: run.rows.reduce(0) { $0 + $1.milliseconds } / 1000,
+      fixGate: gate.verdict, now: check.at, noNewStartsAt: record.noNewStartsAt,
+      cutoffAt: record.cutoffAt, fixRound: try LateFix1.fixRound())
+
+    #expect(gate.verdict == .green)
+    #expect(decision.action == .fixAgain, "\(decision)")
+    #expect(decision.rows == [5])
+    #expect(decision.why.contains("sheet frame 4 at 0.8 s"), "\(decision.why)")
+  }
+
+  @Test(
+    "the other captured no-repair run, its gate GREEN and other rows passing, also fixes again when its reply names an app defect — catches merge-unverified taken for any app-at-fault cause"
+  )
+  func appDefectNeverMergesUnverified() throws {
+    let defect = FlowNoRepair(
+      requirement: "req-send-sending-sent", cause: .appDefect(frame: "frame 2"),
+      why: "the status skips Sending")
+
+    let decision = try FlowNoRepairTests.decide(
+      defect, report: try FlowNoRepairTests.report(), fixGate: try FlowNoRepairTests.fixGate(),
+      at: FlowNoRepairTests.replied)
+
+    #expect(decision.action == .fixAgain, "\(decision)")
+  }
+
+  @Test(
+    "an app defect with no time for a fix round before the cutoff keeps the task blocked and is never merged unverified — catches a defect merged because the box is short"
+  )
+  func appDefectWithNoTimeGoesOn() throws {
+    let noRepair = try #require(FlowNoRepair.parse(Self.reply))
+    let record = try LateFix1.record()
+    let round = try LateFix1.fixRound()
+    let run = try LateFix1.report("qa-fix.json")
+    let late = try #require(record.cutoffAt).addingTimeInterval(-TimeInterval(round.seconds - 1))
+
+    let decision = NoRepairDecision.decide(
+      noRepair, run: run.rows, runSeconds: 0, fixGate: .green, now: late,
+      noNewStartsAt: record.noNewStartsAt, cutoffAt: record.cutoffAt, fixRound: round)
+
+    #expect(decision.action == .continue, "\(decision)")
+    #expect(decision.why.contains("app defect"), "\(decision.why)")
+  }
+}
+
 @Suite("rows a no-repair decision left unverified")
 struct RowsUnverifiedTests {
   static let at = Date(timeIntervalSince1970: 1_791_213_800)
