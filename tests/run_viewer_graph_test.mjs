@@ -87,6 +87,25 @@ const liveView = {
   gates: [], proofs: [], halts: [], damage: [],
 }
 
+// The whole view the next poll answers: `view` with each row of `rows` in place of the row with
+// its key, or added after the rest.
+function nextView(view, rows) {
+  const out = { ...view }
+  for (const [field, list] of Object.entries(rows)) {
+    const key = field === 'gates' ? 'runId' : 'id'
+    const merged = (view[field] || []).slice()
+    for (const row of list) {
+      const at = merged.findIndex((r) => r[key] === row[key])
+      if (at >= 0) merged[at] = row; else merged.push(row)
+    }
+    out[field] = merged
+  }
+  return out
+}
+let shown = liveView
+// Answers the next poll with `rows` over the view the page shows.
+const poll = (rows) => { shown = nextView(shown, rows); return `window.runViewer.replace(${JSON.stringify(shown)})` }
+
 function writePage() {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-graph-'))
   const files = ['run-viewer.html', 'run-viewer.css', 'run-viewer.js', 'run-view-model.js', 'run-viewer-board.js', 'run-viewer-board.css', 'run-viewer-graph.js', 'run-viewer-graph.css']
@@ -175,18 +194,16 @@ const pageTests = {
 
   async 'a poll recolours a node and keeps its focus, and stage spans add plan-stage nodes — catches a graph that never moves on a poll'() {
     assert.ok(await page.evaluate(focusNode('ui')))
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify({
-      cursor: 'c1',
+    await page.evaluate(poll({
       tasks: [task('ui', { status: 'done', deps: ['core'], writes: ['UI/View.swift'], mergedAt: at(12) })],
       spans: [span('tu', 'run', 'task', 9, 12, { task: 'ui' }), span('wu', 'tu', 'worker', 9, 12, { task: 'ui' })],
-    })})`)
+    }))
     let g = await page.evaluate(GRAPH)
     assert.equal(g.lane.ui, 'merged')
     assert.equal(await page.evaluate("document.activeElement.dataset.task ?? null"), 'ui', 'the poll drops the node\'s focus')
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify({
-      cursor: 'c2',
+    await page.evaluate(poll({
       spans: [span('sr', 'run', 'spec-read', 0, 1), span('pl', 'run', 'plan', 0, 1), span('fi', 'run', 'final', 12, null)],
-    })})`)
+    }))
     g = await page.evaluate(GRAPH)
     assert.deepEqual(g.stages, ['spec-read', 'plan', 'final'])
     assert.equal(g.depEdges, 4, 'stage edges counted as deps')
@@ -195,9 +212,9 @@ const pageTests = {
   },
 
   async 'a dep cycle draws no graph and shows 1 damage line naming its tasks — catches a cycle that hangs the page'() {
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify({
-      cursor: 'c3', tasks: [task('core', { status: 'done', model: 'sonnet', deps: ['snap'], writes: ['Core/A.swift', 'Core/B.swift'], mergedAt: at(8) })],
-    })})`)
+    await page.evaluate(poll({
+      tasks: [task('core', { status: 'done', model: 'sonnet', deps: ['snap'], writes: ['Core/A.swift', 'Core/B.swift'], mergedAt: at(8) })],
+    }))
     const g = await page.evaluate(GRAPH)
     assert.equal(g.svg, false)
     assert.equal(g.damage.length, 1)

@@ -31,27 +31,6 @@ const runView = (extra = {}) => ({
 })
 
 const tests = {
-  'apply merges a partial span by id and keeps every other span — catches a replace-all merge'() {
-    const view = runView({
-      spans: [span('run', null, 'run', 0, 40), span('a', 'run', 'plan', 1, 5), span('b', 'run', 'contract', 5, null)],
-    })
-    const merged = M.apply(view, { cursor: 'c1', spans: [{ ...span('b', 'run', 'contract', 5, 9), outcome: 'ok' }] })
-    assert.deepEqual(merged.spans.map((s) => s.id), ['run', 'a', 'b'])
-    assert.equal(merged.spans[2].end, at(9))
-    assert.equal(merged.spans[2].outcome, 'ok')
-    assert.equal(merged.cursor, 'c1')
-    assert.equal(view.spans[2].end, null, 'apply changed its input')
-  },
-
-  'apply replaces damage and unwritten whole, so a cleared row leaves the footer — catches a live footer that keeps a healed torn line'() {
-    const view = runView({ damage: [{ source: 'a.jsonl:3', reason: 'torn last line' }], unwritten: [{ source: 'events.jsonl', reason: 'not written yet' }] })
-    const merged = M.apply(view, { cursor: 'c1', damage: [], unwritten: [] })
-    assert.deepEqual(merged.damage, [])
-    assert.deepEqual(merged.unwritten, [])
-    const grown = M.apply(view, { damage: [{ source: 'b.json', reason: 'unreadable' }] })
-    assert.deepEqual(grown.damage, [{ source: 'b.json', reason: 'unreadable' }])
-  },
-
   'evidenceHref reaches a report folder\'s copies through the view\'s evidence base, and a live page\'s run files through ../runs/ — catches a final report whose step links leave its folder'() {
     assert.equal(M.evidenceHref('r1', 'qa/01 a.flow/video.mp4', 2500, 'runs/'), 'runs/r1/qa/01%20a.flow/video.mp4#t=2.5')
     assert.equal(M.evidenceHref('r1', 'qa/sheet.png', null, 'runs/'), 'runs/r1/qa/sheet.png')
@@ -64,12 +43,6 @@ const tests = {
     assert.equal(M.snapshotText({ state: 'halted', snapshotAt: '2026-10-04T05:17:00.000Z' }), 'Snapshot at 2026-10-04 05:17 UTC, run still halted')
     assert.equal(M.snapshotText({ state: 'done', snapshotAt: null }), null)
     assert.equal(M.snapshotText({ state: 'running' }), null)
-  },
-
-  'apply appends a span the view does not hold yet — catches a merge that only updates'() {
-    const view = runView({ spans: [span('run', null, 'run', 0, 40)] })
-    const merged = M.apply(view, { spans: [span('new', 'run', 'plan', 2, 3)] })
-    assert.deepEqual(merged.spans.map((s) => s.id), ['run', 'new'])
   },
 
   '2 parallel task spans land on 2 rows and their children nest under each — catches overlap'() {
@@ -354,10 +327,7 @@ const tests = {
     assert.deepEqual(M.validationBadges(runView({ validation: null })), [])
   },
 
-  'apply replaces the whole validation section from a partial — catches a live page that keeps a stale row count'() {
-    const before = runView({ validation: { plan: 'sample', counts: { pass: 0, red: 1, unverified: 0, waiting: 0 }, rows: [] } })
-    const after = M.apply(before, { cursor: 'c1', validation: { plan: 'sample', counts: { pass: 1, red: 0, unverified: 0, waiting: 0 }, rows: [] } })
-    assert.deepEqual(after.validation.counts, { pass: 1, red: 0, unverified: 0, waiting: 0 })
+  'a qa.check span reads as qa check on the timeline — catches a raw event kind as a bar label'() {
     assert.equal(M.normalize(runView({ spans: [span('qa:q1:1', null, 'qa.check', 1, 2)] }), null).spans[0].label, 'qa check')
   },
 }
