@@ -21,7 +21,8 @@ from the checkout's `.harness/qa/<slug>/`: a validation worker's red run before 
 The run leaves `at-base-run.json` in that folder: its run id, the merge base, and each row's result,
 message and exit status with the SHA-256 digest of its check. The digest covers the row's layer,
 its check's text and, when the check names a file, that file's bytes. `qa adopt` copies the record
-into plan state beside the checks.
+into plan state beside the checks. The report's `atBaseRecord` is the record's absolute path, and
+the text output prints it as `at-base record:`; a run that writes no record leaves it `null`.
 
 ## Reusing the prepared rows
 

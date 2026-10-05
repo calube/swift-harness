@@ -7,6 +7,11 @@ those checks wait for.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Work only in your own worktree, from its toplevel.
 
+Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash tool's `timeout` at
+600000, never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
+the background while you wait on it, and every merge your rows name waits on you. Never search
+outside your worktree: every file you need is in it, in the brief, or at a path `qa run` prints.
+
 ## What you get
 
 - The plan's slug, written `<plan>` below, and your task id.
@@ -69,7 +74,8 @@ lint finding isn't ready: fix it and run it again before you return.
   each flow is linted, run as 1 batch on a device `sim up` leases, snapped at each step and judged
   by `sim verify`, and each state row runs on its flow's device. Record each row's `result` and
   `message`, and the run id. Run it last, after your final edit, and leave the
-  `at-base-run.json` it writes: once `qa adopt` copies your folder, the orchestrator's
+  `at-base-run.json` it writes at the absolute path its JSON names as `atBaseRecord`; read it
+  there, never search for it. Once `qa adopt` copies your folder, the orchestrator's
   `qa run --at-base` takes each row whose check is still byte-identical from it instead of
   running the row again. A row that reads `pass` can't tell the change from its absence: fix
   the check. A row that reads `unverified` has no red run: fix what its message names and run

@@ -222,6 +222,7 @@ enum QARunRun {
 
     let rows: [QARow]
     let commit: String?
+    var atBaseRecord: String?
     if options.atBase {
       let main =
         BuildPresetCatalog.profile(root: root) == .brownfield
@@ -264,6 +265,7 @@ enum QARunRun {
             throw QAFilesError(path: file.path, reason: "encoding: \(error)")
           }
           try QAFiles.write(data, to: file)
+          atBaseRecord = file.path
         } catch {
           notes.append(
             "\(QAAtBaseRun.fileName) not written, so the at-base run after qa adopt runs "
@@ -315,7 +317,8 @@ enum QARunRun {
     let report = QAReport(
       runID: runID, plan: slug, after: options.after, atBase: options.atBase,
       final: options.final, settled: ended != nil, commit: commit, rows: rows, gaps: gaps,
-      notes: notes, reasonOnly: table.unitOnly.count, checkableRows: table.rows.count)
+      notes: notes, reasonOnly: table.unitOnly.count, checkableRows: table.rows.count,
+      atBaseRecord: atBaseRecord)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data
@@ -685,6 +688,7 @@ enum QARunRun {
           + row.message)
     }
     if let runID = report.runID { lines.append("  run: \(runID)") }
+    if let record = report.atBaseRecord { lines.append("  at-base record: \(record)") }
     lines += report.notes.map { "  note: \($0)" }
     return lines.joined(separator: "\n")
   }
