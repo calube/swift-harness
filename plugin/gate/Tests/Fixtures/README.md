@@ -525,6 +525,36 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/swipe
+
+Where each `gesture` `kind: swipe` preset moves its finger, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. In a build trial the validation
+worker searched the installed tool's package for the swipe step's input, and a retry brief had to
+ask for a recognizer the preset swipe would cross. The app is `SwipeProbe.swift` with
+`Info.plist`: a `DragGesture` over the whole screen shows the direction it saw under
+`probe.direction`, its start and end points under `probe.path`, and `Swipes <n>` under
+`probe.count`; with the launch argument `-probe-band` the recognizer covers only a 120 pt band at
+the top. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/swipe/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+iPhone 17 device (402 x 874 pt), and deletes it on exit. Each batch relaunches the app, waits for
+`Swipes 0`, runs the swipe as step 3, waits 5 s for the direction, then reads `probe.path`.
+
+| Files | Step 3 |
+|---|---|
+| `right.{steps.json,stdout,stderr,status}` | `preset: right`: a 100 ms fling from (60, 437) to (341, 437). Exits 0 |
+| `left.{…}` | `preset: left`: (341, 437) to (60, 437). Exits 0 |
+| `left-edge.{…}` | `preset: left-edge`: (394, 437) to (60, 437), from the right edge leftward. Exits 0 |
+| `right-edge.{…}` | `preset: right-edge`: (8, 437) to (341, 437), from the left edge rightward. Exits 0 |
+| `band.{…}` | `-probe-band`, `preset: right`: exits 1, `details.step` 4, the wait timed out with `Swipes 0` |
+| `no-preset.{…}` | `{"kind": "swipe"}`: exits 1, `INVALID_ARGS`, "Expected preset to be one of: left, right, left-edge, right-edge." |
+| `direction-key.{…}` | `{"kind": "swipe", "direction": "right"}`: exits 1, the same message |
+| `preset-up.{…}` | `{"kind": "swipe", "preset": "up"}`: exits 1, the same message |
+
 ### AgentDevice/under-search-bar
 
 A list row iOS 26's floating bottom `.searchable` field covers, captured on 2026-10-05 with
@@ -5029,6 +5059,19 @@ PY
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a heredoc after `mkdir -p <dir> && cd <dir> && NAME=value`
+
+`Hooks/mkdir-cd-assignment-heredoc-bash.json` is the 1 Bash call `guard.run-user-checkout` denied
+in a later 2026-10-05 brownfield practice trial: from the clone's checkout it made a validation
+slot's `.harness/qa/spec` with `mkdir -p`, `cd`'d into it, assigned a variable, and on the next
+line wrote a flow file there with a heredoc. The directory didn't exist when the hook ran, so the
+guard kept the starting directory in play and named the write in the user's checkout. It was
+captured with the command of the relative-heredoc section above, unchanged, from that trial's
+`run.jsonl`: the same scrub makes the clone `/CLONE` and the bundle id `com.example.App`, and
+every heredoc body is dropped.
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## Brownfield trial: a `cd` to a variable the same command assigned
 
 `Hooks/assigned-variable-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
@@ -5184,3 +5227,20 @@ sed "$S" $R/runs/20261005T162135Z-bd20614a/qa/report.json > at-base-1-qa-at-base
 ```
 
 `grep -niE '/Users|/private|caleb'` on the fixtures matched nothing.
+
+## Brownfield trial: a merge gate recorded from the user's checkout
+
+`RecordGate/merge-gate-report.json` and `RecordGate/merge-gate-run-event.json` are the `report.json`
+and the `gate.run` event (the first line of the run's `events/gate.jsonl`) of a GREEN `check merge`
+run a 2026-10-05 brownfield practice trial's orchestrator ran in the plan checkout. Its
+`build record-gate` from the user's checkout was BLOCKED because the run's history line was in the
+plan checkout's store. The history line itself didn't outlive the checkout, so a test records the
+captured report with the event's `command` and `time`. With `R` the run's directory in the trial's
+kept runs and `AREA` the app's area name, which becomes `App`:
+
+```sh
+sed "s/$AREA/App/g" $R/report.json > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-report.json
+head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-run-event.json
+```
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.

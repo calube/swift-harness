@@ -102,11 +102,46 @@ struct ShellWriteTargetsTests {
       .map(\.path)
     let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
     #expect(denied == "\(call.cwd)/launch-list.flow.json")
-    #expect(
-      Set(paths) == [
-        slot + "/.harness/qa/spec/launch-list.flow.json", slot + "/launch-list.flow.json",
-      ],
-      "\(paths)")
+    #expect(paths == [slot + "/.harness/qa/spec/launch-list.flow.json"], "\(paths)")
+  }
+
+  @Test(
+    "the trial's heredoc written on the line after `mkdir -p <slot dir> && cd <slot dir> && NAME=value` is named only under that directory — catches the guard refusing a write after a cd into a directory the same command makes"
+  )
+  func capturedHeredocAfterMkdirCdAndAssignmentFollowsIt() throws {
+    let call = try JSONDecoder().decode(
+      RefusedCall.self, from: Fixture.data("Hooks/mkdir-cd-assignment-heredoc-bash.json"))
+    let slot = "/CLONE-spec.slot-6"
+    let paths = ShellSyntax.writeTargets(in: call.command, directoryExists: { $0 == slot })
+      .map(\.path)
+    let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
+    #expect(denied == "\(call.cwd)/launch.flow.json")
+    #expect(paths == [slot + "/.harness/qa/spec/launch.flow.json"], "\(paths)")
+  }
+
+  @Test(
+    "a cd into a directory an earlier `mkdir -p` of the line made is as certain as one into a directory that exists, through trailing assignments and a newline, while a write after the same chain into the main checkout stays there — catches a made directory leaving the starting directory in play",
+    arguments: [
+      ("mkdir -p /wt/s && cd /wt/s && B=x\ncat > a <<EOF\nEOF\n", ["/wt/s/a"]),
+      ("mkdir -p /wt/s /wt/t && cd /wt/t && B=x && C=y\necho x > a", ["/wt/t/a"]),
+      ("cd /wt && mkdir -p -m 755 s && cd s && B=x\necho x > a", ["/wt/s/a"]),
+      ("cd /wt && B=x\necho x > a", ["/wt/a"]),
+      ("mkdir -p /main/s && cd /main/s && B=x\necho x > a", ["/main/s/a"]),
+    ])
+  func cdIntoAMadeDirectoryIsCertain(command: String, expected: [String]) {
+    #expect(Self.paths(command) == expected, "\(command)")
+  }
+
+  @Test(
+    "a cd into a directory only a `mkdir` without -p, a mkdir to an expansion, or a mkdir behind `||` made keeps the starting directory in play — catches a mkdir that can fail being read as certain",
+    arguments: [
+      "mkdir /wt/s && cd /wt/s\necho x > a",
+      "mkdir -p $D && cd /wt/s\necho x > a",
+      "true || mkdir -p /wt/s && cd /wt/s\necho x > a",
+      "mkdir -p /wt/s | cat && cd /wt/s\necho x > a",
+    ])
+  func cdIntoAnUncertainlyMadeDirectoryKeepsTheStart(command: String) {
+    #expect(Self.paths(command).contains("a"), "\(command)")
   }
 
   @Test(
@@ -114,7 +149,7 @@ struct ShellWriteTargetsTests {
     arguments: [
       ("cd /wt && cd sub && echo x > a", ["/wt/sub/a"]),
       ("cd /wt && cd ./sub && cd .. && echo x > a", ["/wt/./sub/../a"]),
-      ("cd /wt && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n", ["/wt/s/a", "/wt/a"]),
+      ("cd /wt && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n", ["/wt/s/a"]),
       ("cd /wt\ncd sub\necho x > a", ["/wt/sub/a", "/wt/a"]),
       ("cd sub && echo x > a", ["sub/a"]),
       ("cd /wt &&\necho x > a", ["/wt/a"]),

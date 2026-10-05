@@ -176,6 +176,18 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 
+### Screens driven by a clock or a swipe
+
+- For an app whose state advances on a clock, such as a repeating timer effect, at least 1 flow
+  row runs under the real scenario, never a rigged test scenario that ends in 1 clock step, and
+  waits for a state only several clock steps can produce. The contract exposes a step counter or
+  an entity's position as an accessibility value, such as
+  `.accessibilityValue("\(stepCount)")` on an identified element, so the flow's `wait` sees it
+  change with no sleep. A rigged scenario still suits a check of 1 transition.
+- A swipe step crosses the middle of the screen at half its height and takes no element, so a
+  swipe-driven screen's stub puts its gesture recognizer on the whole screen, which covers that
+  line. A recognizer on a smaller view misses the swipe.
+
 Unit tests are each task's own and never get a row. A requirement its tasks' unit tests prove
 alone gets 1 row with `Layer`, `Check`, `Runs after` and `Writer` empty, and a `Reason` saying
 why. Escape a `|` inside a cell as `\|`.

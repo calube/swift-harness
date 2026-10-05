@@ -1,0 +1,7 @@
+[
+  {"command": "open", "input": {"app": "com.example.SwipeProbe", "relaunch": true}},
+  {"command": "wait", "input": {"selector": "id=\"probe.count\" label=\"Swipes 0\"", "timeoutMs": 15000}},
+  {"command": "gesture", "input": {"kind": "swipe", "preset": "up"}},
+  {"command": "wait", "input": {"selector": "id=\"probe.direction\" label=\"left\"", "timeoutMs": 5000}},
+  {"command": "get", "input": {"format": "attrs", "target": {"kind": "selector", "selector": "id=\"probe.path\""}}}
+]

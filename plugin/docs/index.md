@@ -19,7 +19,7 @@ into a committed file.
 | Bounding a `qa run` with `--deadline`, sending its JSON with `--output`, and which rows the final run takes after a fix carried another task | [`simulator-qa-run-bounds.md`](simulator-qa-run-bounds.md) |
 | Proving validation rows red with `qa run --at-base`, a validation worker's `--prepared-by` run, the rows a later run reuses, and a task's rows before it merges | [`simulator-qa-at-base.md`](simulator-qa-at-base.md) |
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
-| Writing a flow step for a gesture a selector alone doesn't drive, such as pull to refresh | [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md) |
+| Writing a flow step for a gesture a selector alone doesn't drive, such as pull to refresh or a swipe | [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md) |
 | Writing a flow's `wait` and `is` steps: the input key each `wait` kind reads, and `qa.flow-kind-key` | [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) |
 | Rewriting a flow row its flow file kept red, with `qa run --requirement` and `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
 | How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |

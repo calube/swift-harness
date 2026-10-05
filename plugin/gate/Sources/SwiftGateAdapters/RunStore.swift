@@ -178,15 +178,42 @@ public struct RunStore: Sendable {
   public func readHistory() throws(RunStoreError) -> (
     records: [RunHistoryRecord], invalidLines: Int
   ) {
+    try Self.readHistory(at: historyFile)
+  }
+
+  private static func readHistory(at file: URL) throws(RunStoreError) -> (
+    records: [RunHistoryRecord], invalidLines: Int
+  ) {
     let data: Data
     do {
-      data = try Data(contentsOf: historyFile)
+      data = try Data(contentsOf: file)
     } catch CocoaError.fileReadNoSuchFile {
       return ([], 0)
     } catch {
-      throw .io(operation: "read", path: historyFile.path, reason: error.localizedDescription)
+      throw .io(operation: "read", path: file.path, reason: error.localizedDescription)
     }
     return RunHistoryJSON.decode(data)
+  }
+
+  /// The run history file of each checkout of `worktree`'s clone, `worktree`'s own first: a gate
+  /// run in the plan checkout is in its history, not the user's checkout's.
+  public static func historyFiles(sharing worktree: URL) -> [URL] {
+    QARunHistory.stateRoots(sharing: worktree).map {
+      $0.url(RunLayout.historyFile, directoryHint: .notDirectory).standardizedFileURL
+    }
+  }
+
+  /// The last history line of `runID` in the first of ``historyFiles(sharing:)`` that holds one;
+  /// `nil` when none does.
+  public static func historyRecord(runID: String, sharing worktree: URL)
+    throws(RunStoreError) -> RunHistoryRecord?
+  {
+    for file in historyFiles(sharing: worktree) {
+      if let found = try readHistory(at: file).records.last(where: { $0.runID == runID }) {
+        return found
+      }
+    }
+    return nil
   }
 
   /// Copies every run directory under this store into `destination`'s runs, so a worktree's gate

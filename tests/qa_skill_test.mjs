@@ -10,8 +10,9 @@
 // test files and `.harness/qa/<plan>/`, adds a contract name itself, or proves a red by hand rather
 // than through `qa run --at-base --prepared-by`; a worker call cut at the 120 s tool timeout, a
 // bare `ls` an alias turns into a wait on stdin, or a search of the whole disk for the record its
-// prepared run wrote; a pull-to-refresh flow on a gesture that never refreshes the list; and a
-// skill tuned to one app.
+// prepared run wrote; a pull-to-refresh flow on a gesture that never refreshes the list; a swipe
+// step the worker must dig out of the tool's package, or one that misses its recognizer; moving
+// state checked only under rigged scenarios; and a skill tuned to one app.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
@@ -242,6 +243,72 @@ export function refreshProblems(text, { pass, short }) {
     problems.push(`${least[1]} pt is not past the ${short.distance} pt drag that didn't refresh and within the ${pass.distance} pt one that did`)
   }
   if (!/`scroll`[^.]*\bnever\b[^.]*refresh/i.test(prose)) problems.push('the recipe never says a `scroll` never pulls to refresh')
+  return problems
+}
+
+const SWIPE_FIXTURE = 'gate/Tests/Fixtures/AgentDevice/swipe'
+const SWIPE_PRESETS = ['left', 'right', 'left-edge', 'right-edge']
+
+// 1 captured swipe batch: its step 3, whether the probe's recognizer saw it, and where it moved.
+function capturedSwipe(name) {
+  const steps = JSON.parse(read(`${SWIPE_FIXTURE}/${name}.steps.json`))
+  const output = JSON.parse(read(`${SWIPE_FIXTURE}/${name}.stdout`))
+  const results = output.data?.results ?? output.error.details?.partialResults ?? []
+  const data = results.find(result => result.step === 3)?.data
+  return { step: steps[2], seen: output.success === true, from: data?.from, to: data?.to }
+}
+
+/**
+ * Where a text's swipe step falls short of the captured runs: it writes the step as the
+ * `gesture` `kind: swipe` with a `preset` the pinned tool reads, names every preset, says the
+ * swipe runs across the middle of the screen, and says the recognizer must cover that line. A
+ * build trial's validation worker searched the tool's package for the step, and a retry brief
+ * had to ask for a recognizer the swipe would cross.
+ */
+export function swipeProblems(text, { recipe = true } = {}) {
+  const problems = []
+  const prose = flat(text)
+  if (recipe) {
+    const spans = [...prose.matchAll(/`(\{"command": "gesture", "input": \{"kind": "swipe".*?\}\})`/g)].map(m => m[1])
+    if (spans.length === 0) problems.push('no `gesture` `kind: swipe` step')
+    for (const span of spans) {
+      let step
+      try {
+        step = JSON.parse(span.replace(/<preset>/, 'right'))
+      } catch (error) {
+        problems.push(`the swipe step isn't JSON: ${error.message}`)
+        continue
+      }
+      const keys = Object.keys(step.input).sort().join(',')
+      if (keys !== 'kind,preset') problems.push(`the swipe step's keys are ${keys}, not kind,preset`)
+      if (!SWIPE_PRESETS.includes(step.input.preset)) problems.push(`the swipe step's preset \`${step.input.preset}\` is not 1 the pinned tool reads`)
+    }
+    const missing = SWIPE_PRESETS.filter(preset => !prose.includes(`\`${preset}\``))
+    if (missing.length) problems.push(`never names the preset ${missing.join(', ')}`)
+    if (!/\bmiddle of the screen\b|\bmid-height\b|\bhalf(?:way)? (?:down|its height)\b/i.test(prose)) problems.push('never says the swipe runs across the middle of the screen')
+  }
+  if (!/\brecogni[sz]er\b[^.]*\b(?:covers?|cross(?:es)?)\b/i.test(prose)) problems.push('never says the recognizer must cover the line the swipe crosses')
+  return problems
+}
+
+/**
+ * Where a text lets an app whose state advances on a clock pass on rigged scenarios alone: it
+ * asks for at least 1 flow under a real scenario, never a rigged one, that waits for a state
+ * only several clock steps produce, read from a step counter or an entity's position exposed as
+ * an accessibility value, with no sleep. In a build trial every check of moving state ran on a
+ * 1-step test scenario, and the only flow on the real scenario checked the launch screen.
+ */
+export function clockFlowProblems(text) {
+  const sentences = flat(text).split(/(?<=\.)\s+/)
+  const problems = []
+  const clock = sentences.filter(s => /\badvances on a clock\b/i.test(s))
+  if (clock.length === 0) return ['never names an app whose state advances on a clock']
+  const near = sentences.slice(sentences.indexOf(clock[0]), sentences.indexOf(clock[0]) + 6).join(' ')
+  if (!/\bat least 1 flow\b/i.test(near)) problems.push('never asks for at least 1 flow')
+  if (!/\b(?:real|default)\b[^.]*\bscenario\b[^.]*\bnever\b[^.]*\brigged\b|\bnot? (?:a )?rigged\b/i.test(near)) problems.push('never puts that flow under a real scenario rather than a rigged one')
+  if (!/\bseveral clock steps\b/i.test(near)) problems.push('never waits for a state only several clock steps produce')
+  if (!/\baccessibility value\b/i.test(near) || !/\bstep counter\b/i.test(near) || !/\bposition\b/i.test(near)) problems.push('never exposes a step counter or an entity\'s position as an accessibility value')
+  if (!/\b(?:no|never|without)\b[^.]*\bsleep/i.test(near)) problems.push('never forbids a sleep')
   return problems
 }
 
@@ -532,6 +599,55 @@ const tests = {
     assert.match(shortListProblems(good.replace('safeAreaInset', 'overlay')).join('\n'), /captured modifier/)
     assert.match(shortListProblems(good.replace('contract', 'worker')).join('\n'), /contract adds/)
     assert.match(shortListProblems(good.replace('<bottom id>', '<lower element>')).join('\n'), /never ends on/)
+  },
+
+  'the captured preset swipes each cross the screen at mid-height and the probe sees them, and the same swipe over a recognizer on a top band moves nothing — catches a swipe recipe built on a capture that shows nothing'() {
+    // The capture device is an iPhone 17, 874 pt tall.
+    const height = 874
+    for (const preset of SWIPE_PRESETS) {
+      const swipe = capturedSwipe(preset)
+      assert.equal(swipe.step.input.preset, preset)
+      assert.ok(swipe.seen, `${preset} was not seen`)
+      assert.equal(swipe.from.y, height / 2, `${preset} starts at y ${swipe.from.y}`)
+      assert.equal(swipe.to.y, height / 2, `${preset} ends at y ${swipe.to.y}`)
+    }
+    assert.ok(capturedSwipe('left-edge').from.x > capturedSwipe('left').from.x, 'left-edge starts no nearer the right edge than left')
+    assert.ok(capturedSwipe('right-edge').from.x < capturedSwipe('right').from.x, 'right-edge starts no nearer the left edge than right')
+    assert.equal(capturedSwipe('band').seen, false)
+  },
+
+  'the gestures doc and the validation worker write a swipe as the captured gesture with a preset, name every preset, and say the recognizer must cover the mid-height line; the plan shape has the contract place it so — catches a worker searching the tool\'s package for the step, and a swipe that misses its recognizer'() {
+    assert.deepEqual(swipeProblems(read(GESTURES)), [], GESTURES)
+    assert.deepEqual(swipeProblems(read(WORKER)), [], WORKER)
+    assert.deepEqual(swipeProblems(read(PLAN_SHAPE), { recipe: false }), [], PLAN_SHAPE)
+  },
+
+  'the swipe check names a missing step, wrong keys, an unknown preset, an unnamed preset, a missing line and a missing recognizer rule — catches a check that passes anything'() {
+    const good = 'Swipe: `{"command": "gesture", "input": {"kind": "swipe", "preset": "<preset>"}}`, with `left`, `right`, `left-edge` or `right-edge`, across the middle of the screen. The recognizer covers that line.'
+    assert.deepEqual(swipeProblems(good), [])
+    assert.deepEqual(swipeProblems(good.replace('"kind": "swipe"', '"kind": "fling"')), ['no `gesture` `kind: swipe` step'])
+    assert.match(swipeProblems(good.replace('"preset": "<preset>"', '"direction": "right"')).join('\n'), /keys are direction,kind/)
+    assert.match(swipeProblems(good.replace('"<preset>"', '"up"')).join('\n'), /`up` is not/)
+    assert.match(swipeProblems(good.replace('`left-edge`', 'the edge')).join('\n'), /never names the preset left-edge/)
+    assert.match(swipeProblems(good.replace('the middle of the screen', 'it')).join('\n'), /middle of the screen/)
+    assert.match(swipeProblems(good.replace('covers', 'sees')).join('\n'), /recognizer must cover/)
+    assert.deepEqual(swipeProblems('A recognizer that covers the line.', { recipe: false }), [])
+  },
+
+  'the validation worker and the plan shape ask, for an app whose state advances on a clock, for a flow under a real scenario that waits for a state only several clock steps produce, read from an accessibility value — catches moving state checked only on rigged 1-step scenarios'() {
+    assert.deepEqual(clockFlowProblems(read(WORKER)), [], WORKER)
+    assert.deepEqual(clockFlowProblems(read(PLAN_SHAPE)), [], PLAN_SHAPE)
+  },
+
+  'the clock flow check names each missing piece — catches a check that passes anything'() {
+    const good = 'For an app whose state advances on a clock, write at least 1 flow under a real scenario, never a rigged one. It waits for a state only several clock steps produce. The contract exposes a step counter or an entity\'s position as an accessibility value, so the wait sees it change with no sleep.'
+    assert.deepEqual(clockFlowProblems(good), [])
+    assert.deepEqual(clockFlowProblems('Flows run on scenarios.'), ['never names an app whose state advances on a clock'])
+    assert.match(clockFlowProblems(good.replace('at least 1 flow', 'a flow')).join('\n'), /at least 1 flow/)
+    assert.match(clockFlowProblems(good.replace('a real scenario, never a rigged one', 'any scenario')).join('\n'), /real scenario/)
+    assert.match(clockFlowProblems(good.replace('several clock steps', '1 step')).join('\n'), /several clock steps/)
+    assert.match(clockFlowProblems(good.replace('accessibility value', 'label')).join('\n'), /accessibility value/)
+    assert.match(clockFlowProblems(good.replace('with no sleep', 'after a pause')).join('\n'), /sleep/)
   },
 
   'the validation worker\'s repair mode rewrites 1 requirement\'s flow, keeps its assertions and proves it red at the base again — catches a repair that weakens a check to pass'() {

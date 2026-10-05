@@ -1,0 +1,70 @@
+{
+  "allowances" : [
+
+  ],
+  "areaTests" : [
+    {
+      "area" : "AppFeature",
+      "failed" : 0,
+      "passed" : 17,
+      "ran" : 17,
+      "skipped" : 0,
+      "step" : "test"
+    },
+    {
+      "area" : "App",
+      "failed" : 0,
+      "passed" : 1,
+      "ran" : 1,
+      "skipped" : 0,
+      "step" : "test"
+    }
+  ],
+  "durationMilliseconds" : 31865,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "Packages/AppFeature",
+      "line" : null,
+      "message" : "AppFeature has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "App has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: AppFeature's new or changed tests aren't proven again here: slice runs and proves them in each task's own gate, and merge proves only the areas whose slice builds without running them",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: no new or changed tests in App since 59d6273cb522038c2baf4ce8e8c9fcf4655528e1",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "headCommit" : "a75a8a332a5ffd2c757605d7fd5d95d6c0fa35c6",
+  "runID" : "20261005T170620Z-dc087158",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 31740,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}
