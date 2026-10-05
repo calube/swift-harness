@@ -19,6 +19,8 @@ enum BrownfieldProve {
     let layout: BrownfieldStateLayout?
     /// Each area's bound for a command in the scratch tree, by step.
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
+    /// How many tests a reverted run ran, from the reports it left.
+    var testCounts = AreaTestCountReader()
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
@@ -51,17 +53,14 @@ enum BrownfieldProve {
     }
   }
 
-  /// Whether the prove DerivedData of each `xcode` area in `areas` already holds a build; `none`
-  /// when none is an `xcode` area, since a scratch tree's other builds start in a fresh folder.
+  /// Whether the scratch-tree build directories of `areas` already hold a build; `none` when no
+  /// area's kind has 1 the harness places.
   static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
     -> GateDerivedData
   {
     GateStepCollector.derivedData(
-      buildDirectories: areas.filter { $0.kind == .xcode }.map {
-        URL(
-          filePath: XcodeDerivedData.provePath(area: $0.name, layout: layout) + "/Build",
-          directoryHint: .isDirectory)
-      })
+      buildDirectories: areas.flatMap { ScratchTreeBuild.buildDirectories(area: $0, layout: layout) }
+        .map { URL(filePath: $0, directoryHint: .isDirectory) })
   }
 
   /// - Parameters:
@@ -264,7 +263,8 @@ enum BrownfieldProve {
         area: area.name, step: step, command: command, workingDirectory: directory.path,
         deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
       return await dependencies.runner.run(
-        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request)
+        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+          ?? request)
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement

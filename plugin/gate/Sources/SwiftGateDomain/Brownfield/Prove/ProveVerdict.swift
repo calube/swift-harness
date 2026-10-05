@@ -3,13 +3,28 @@
 public enum ProveVerdict {
   /// Whether a run of `idCount` ids together that ended in `outcome` must be rerun 1 id at a time
   /// to say which ids it covers. A pass covers them all; a failure or crash may be any 1 of them.
-  public static func needsRerunAlone(_ outcome: AreaCommandOutcome, idCount: Int) -> Bool {
+  /// - Parameter executed: how many tests the run's report shows it ran; `nil` when it left none
+  ///   that reads.
+  public static func needsRerunAlone(
+    _ outcome: AreaCommandOutcome, idCount: Int, executed: Int? = nil
+  ) -> Bool {
     guard idCount > 1 else { return false }
     switch outcome {
     case .failed, .crashed: return true
     case .passed, .timedOut: return false
     }
   }
+
+  /// What a reverted run that selected some changed tests says about them, once its report says
+  /// how many tests ran: a pass that ran none of them never found them, because the revert took
+  /// away what holds them (a new target, a new module), which proves them as a build failure
+  /// does. `executed` is `nil` when the run left no report that reads.
+  public static func reading(_ outcome: AreaCommandOutcome, executed: Int?) -> AreaCommandOutcome {
+    outcome
+  }
+
+  /// The output tail ``reading(_:executed:)`` gives a run that found none of its tests.
+  public static let ranNoneTail = "the run found none of the selected tests with the source reverted"
 
   /// Judges each id by the outcome of the run that selected it. A time-out is never rerun: the
   /// ids of a run that hung each hang at the base.
