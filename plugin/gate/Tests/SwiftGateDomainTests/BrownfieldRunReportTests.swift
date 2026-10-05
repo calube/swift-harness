@@ -184,6 +184,27 @@ import Testing
     #expect(rendered.first != "none")
   }
 
+  @Test(
+    "a baseline failure whose merge base run was kept names its evidence folder — catches a whole-step excuse the reader can't look into"
+  )
+  func baselineFailureNamesEvidence() {
+    let kept = BaselineFile(
+      tree: "abc123",
+      records: [
+        BaselineRecord(
+          key: BaselineStepKey(area: "app", step: .test, command: "xcodebuild test"),
+          result: .failed, evidence: "abc123/app.test.1a2b")
+      ])
+    let report = BrownfieldRunReport.make(Self.inputs(baseline: .read(kept)))
+    #expect(
+      report.baselineFailures.items == [
+        .init(area: "app", step: .test, test: nil, evidence: "abc123/app.test.1a2b")
+      ])
+    #expect(
+      lines("Baseline failures", in: report.text)
+        == ["app test: the whole step (merge base run kept in baseline/abc123/app.test.1a2b)"])
+  }
+
   @Test("a section whose source read fine and holds nothing says none — catches an empty heading")
   func emptySectionSaysNone() {
     let clean = BaselineFile(
