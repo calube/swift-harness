@@ -1,14 +1,14 @@
 # Agentic profiling: implementation plan
 
 <!-- RESUME
-Status: NOT STARTED.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next. This plan never started: no `swiftgate profile` or `leaks` command exists.
 Spec: docs/designs/2026-09-28-agentic-profiling-design.md (approved 2026-09-28). Decision record: [ADR 0006](../adrs/0006-profiling-wraps-xctrace-report-only-first.md).
 Scope: sub-project 4. `swiftgate profile`, `profile calibrate` and `leaks`; the `xctrace`, `footprint`, `leaks` and flow adapters; the parsers, statistics, noise history and bands; SampleApp's spans, XCTMetric test and weak-reference test; the `validate` callers; an acceptance run on `examples/SampleApp`. The device lane (§11) and blocking on a band (§7) are out of scope.
 Depends on sub-project 3 (docs/plans/2026-09-28-simulator-qa-plan.md) in 2 tasks only: `validate-runs-leaks-and-profile` and `profiling-acceptance-on-sample-app`. Waves 1-7 build in parallel with it.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec by §.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan". Interfaces note: docs/handoffs/subproject-4-interfaces.md (the first wave's merge creates it; each wave appends).
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate, with mutate once on main per wave or per 2 waves.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

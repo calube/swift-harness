@@ -1,16 +1,15 @@
 # Build executor: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Waves 1–9 merged on local main 2026-09-27 (push tier GREEN, 1696 tests). Only the attended rehearsal waves 10–11 remain. The user asked for every wave to run.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): waves 1–9 and speed waves 1–3 merged. The attended rehearsal waves 10–11 never ran.
 Spec: docs/designs/2026-09-26-build-executor-design.md (approved 2026-09-26). Decisions: docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md.
-Next action: wave 10, interview-rehearsal-runs. The user must be present: they answer the frame questions and approve the sketch design. Every `ready` run first waits for other sessions' mutate runs with the shared-machine loop.
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-5-interfaces.md.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md (this plan changes only what "How to work this plan" says).
 Speed milestone (2026-09-27, the user's pick): the "Speed" section's speed waves 1–3 run before waves 10–11; the sub-project 2 orchestrator drives them. Speed waves 1–3 merged 2026-09-27/28 (push and prove GREEN each; mutate GREEN for waves 1–2, RED on 2 survivors for wave 3, fixed in the next wave).
-Open items: the rehearsal fixture under evals/ needs the evals session's agreement; the acceptance runs need the user; every `ready` run is BLOCKED until sub-project 2 fixes mutate's baseline (interfaces note, "Review fix wave 1"), which gates waves 10–11.
-Shared checkout: the sub-project 2 orchestrator and the evals session also merge into local main. Message them before merging, and run the push tier before every commit.
-Progress: git log. Update this header at every wave merge.
+Open items: the attended rehearsal waves 10–11 and the acceptance runs need the user; the rehearsal fixture under evals/ needs the evals owners' agreement.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

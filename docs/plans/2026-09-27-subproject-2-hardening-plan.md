@@ -1,7 +1,8 @@
 # Sub-project 2 hardening: implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS. Wave 1 merged 2026-09-28 (push and prove GREEN; interfaces note docs/handoffs/subproject-2-interfaces.md "Hardening wave 1"). Waves 2 and 3 merged 2026-09-28 (interfaces note "Hardening waves 2 and 3"). Wave 4 (`doctor-plugin-changed`) is running.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): waves 1–4 merged by 2026-09-28 (interfaces note docs/handoffs/subproject-2-interfaces.md, "Hardening wave 1" and "Hardening waves 2 and 3"; wave 4 is `doctor-plugin-changed`).
 Scope: the hardening queue the user approved (handoff docs/handoffs/2026-09-25-subproject-2.md, overnight queue item 4):
 hook guard plan-lock cache; §11 of the design-plan-workflows design rewritten to measured figures plus design-run
 telemetry; rule-index rows for every rule id; a lint for fixtures that hang on purpose; review.json telemetry; review
@@ -13,7 +14,7 @@ Specs: docs/designs/2026-09-25-design-plan-workflows-design.md (§11, §14), doc
 Resume: read this header, then "Wave map", then your task's section (grep for the task id).
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan".
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate, with mutate once on main.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

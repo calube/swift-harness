@@ -1,26 +1,19 @@
 # Handoff: sub-project 2, design and plan workflows
 
 <!-- RESUME
-LATEST (2026-09-29, context clear): read the "Status at the context clear" section at the top of
-docs/handoffs/2026-09-28-day-queue.md first; it supersedes the summary below for what's in flight and what's next.
-SUMMARY (2026-09-28 morning, for the next orchestrator session). Context was cleared on purpose. The user wants every
-remaining item done TODAY: read docs/handoffs/2026-09-28-day-queue.md next; it is the ordered queue, marks every step
-that needs the user, and lists what was in flight at the clear.
-State: local main holds every overnight merge; origin/main untouched (never push it without the user). Backup branch:
-origin backup/subproject-2-overnight-2026-09-27 (refresh with `git push origin main:refs/heads/backup/subproject-2-overnight-2026-09-27`
-after grepping `git diff origin/main..main` for interview-specific terms).
-Merged overnight, each through push + prove on an integration worktree and push on merged main: speed waves 2-3,
-fast-modes waves 1-3 (`surface-check`, `swiftgate sprint`, `/swift-harness:sprint`), sub-project 2 hardening waves 1-3
-plus `doctor-plugin-changed` (docs/plans/2026-09-27-subproject-2-hardening-plan.md), a shim-test leak fix, and tests
-killing every mutant that survived in the new rules. Interfaces: docs/handoffs/subproject-5-interfaces.md and
-docs/handoffs/subproject-2-interfaces.md (last sections). The user approved all 5 overnight decisions (2026-09-28).
-Rules from the user: every worker on opus; build for correctness (design approval, plan tasks, surface-first workers,
-push + prove merge gate, mutate once on main per wave); the orchestrator delegates ALL work to workers and only
-spawns, reads reports, merges, gates and checkpoints; one prove on the machine at a time (mkdir lock
-/tmp/swift-harness-speed-prove.lock); watchdog Monitor while workers run; keep the harness generic; sub-projects 3 and 4
-are designed WITH the user (they pick the QA/profiling CLIs and MCPs); the ready-lock branch stays parked.
-Read first: this header, docs/handoffs/2026-09-28-day-queue.md, the runbook in full
-(docs/handoffs/subproject-2-orchestrator-runbook.md, including both overnight lesson sections), docs/handoffs/worker-brief.md.
+FROZEN (2026-10-05): the harness froze after the brownfield one-shot loop. main is at the freeze tag
+`harness-freeze-2026-10-05`; all 7 practice apps pass `swiftgate run spec.md` with no input inside 40 minutes, with
+flow video and a Validation tab. No wave or worker is in flight and nothing is queued.
+Read first: docs/handoffs/2026-10-05-practice-app-results.md (results, lessons, and the open follow-ups, none
+started), then the runbook's "Lessons from the brownfield one-shot loop" section
+(docs/handoffs/subproject-2-orchestrator-runbook.md) and the last section of docs/handoffs/brownfield-interfaces.md.
+Open follow-ups, not started: a long qa step label drops its `qa.flow` event (`EventPayloadGuard` 512 B); qa lint
+should flag huge OR selectors; test-failure messages lead with `IssueReporting` boilerplate and get cut off; a
+sanctioned `swiftgate plan note` for halt decisions; the `build no-repair` contract-name parser takes prose reasons;
+`check` has no `--output` flag; owned-repo fix worktrees keep their own `.harness`; the viewer page doesn't render
+the deferred list; the parked `warmup-background-priority-unmerged` and `prove-only-changed-ui-tests-unmerged`
+branches; the simulator clone's boot cost for prove; no flow checks safe-area layout or the unheld launch state.
+Earlier states (2026-09-28 day queue, 2026-09-29 context clear) are history: docs/handoffs/2026-09-28-day-queue.md.
 -->
 
 ## 1. Where things are

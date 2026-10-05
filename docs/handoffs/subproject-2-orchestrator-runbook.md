@@ -6,6 +6,9 @@ the procedure the orchestrator actually used for waves 1–5. Workers never read
 
 ## Kickoff prompt for a fresh orchestrator session
 
+The harness is frozen at the tag `harness-freeze-2026-10-05` with no wave queued; see
+[the practice-app results](2026-10-05-practice-app-results.md). Use this prompt only if work resumes.
+
 Start a NEW Claude Code session in the repo root, then paste:
 
 > You are the orchestrator for sub-project 2 of swift-harness. On a machine that has never run a wave, do the

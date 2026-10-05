@@ -1,14 +1,15 @@
 # Simulator QA: implementation plan
 
 <!-- RESUME
-Status: NOT STARTED; amended 2026-10-04 before wave 1. Next: wave 1.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): built in part without updating this header. `swiftgate sim` and `qa run|lint|adopt|stage`, the agent-device adapter, scenarios, the validation table, recorded flows with video and the run viewer's Validation tab are on main, and every brownfield iOS run uses them; git log is the record of which tasks merged. The interfaces for the late work are in docs/handoffs/brownfield-interfaces.md; docs/handoffs/subproject-3-interfaces.md was never created. `simulator-qa-acceptance-on-sample-app` never ran.
 Spec: docs/designs/2026-09-28-simulator-qa-design.md (approved 2026-09-28), amended by docs/designs/2026-10-04-simulator-qa-layered-evidence-amendment.md (approved 2026-10-04). Decision records: [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), amended by [ADR 0008](../adrs/0008-simulator-qa-layered-validation.md).
 Scope: sub-project 3. `swiftgate sim up · snap · verify · down` and its holder process, the `agent-device` adapter and pin, dependency scenarios and `sim.scenario-drift`, the 7 `sim verify` rules, the validation table and `swiftgate qa run · lint` with the 5 `qa.flow-*` rules, the final pass with video and logs, the run viewer's tabs and Validation tab, `/swift-harness:qa`, its callers, a brownfield iOS trial, and an acceptance run on `examples/SampleApp`. Profiling (sub-project 4) is out of scope.
 Order: the waves reach a useful brownfield iOS run first: `sim up`, `qa run` over acceptance and state rows, the flow lint rules, the `## Validation` import and the batch flow runner land by wave 6, the brownfield wiring in wave 7 and its trial in wave 8. Recording, the final pass and the run viewer follow.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec and the amendment by §.
-Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan". Interfaces note: docs/handoffs/subproject-3-interfaces.md (the first wave's merge creates it; each wave appends).
+Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan". Interfaces note: docs/handoffs/brownfield-interfaces.md, "The one-shot loop, up to the freeze".
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate, with mutate once on main per wave or per 2 waves.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

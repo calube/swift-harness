@@ -1,20 +1,21 @@
 # Jev judge backend: implementation plan
 
 <!-- RESUME
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next. Of the items below, the GitHub issues they name are still open at the freeze; nothing else is pending.
 Status (2026-09-30, evening): waves 1 to 9 are merged on local main, which is GREEN; origin/main has waves 1 to 8 (7948d78). The user decided on 2026-09-30 not to label and to remove the block calibration gate; see the decisions table. The Opus labels are merged as agent labels (ac07204); the parked labels-test branches are dropped. Wave 8 ready-check-cascades-jev-to-claude is merged as 802b930 and removed the gate in code. Wave 9 is merged: the benchmark (evals/results/2026-09-30-judge-benchmark/) and the playbook. Open: issue #9 (the design dataset), and the evals dataset trial. The plan is done. The orchestrator approved §13 and a 25 USD benchmark cap under the user's delegation. The key is in the login Keychain as TYPESAFE_API_KEY.
 Remaining to call Jev done (orchestrator, 2026-10-03; items 1-4 merged on local main):
 1. Done: a configured judge that can't run fails loudly (doctor `doctor.judge-key`; at ready, 1 retry after 750 ms, then Claude; `judge.blocked` only when neither answers).
 2. Done: issue #11, `[judge]` thresholds default to 0.6 and 0.9.
 3. Done: issue #10, the plugin carries no version, so installs version by commit; push fails on a pinned version (`plugin-version.pinned`).
 4. Done: the live end-to-end check, recorded in `evals/results/2026-10-03-jev-live-end-to-end/`. Its 4 gaps are fixed: the `judge.blocked` rule id, the served model and escalation cause in `judge events`, no `PATH` in messages, and the retry backoff.
-5. Close the fixed issues (#1 to #6, #10, #11; #6 is fixed apart from the gate default staying the `sonnet` alias), push main (ask the user), and reinstall the plugin wherever it's installed. #8 stays open: its load-sensitive walk tests are skipped until a cleanup.
+5. Not started: close the fixed issues (#1 to #6, #10, #11; #6 is fixed apart from the gate default staying the `sonnet` alias) and reinstall the plugin wherever it's installed. #8 stays open.
 6. Optional, for stronger evidence: more labelled positives for `asserts-implementation` (2 in the tune split), the design-calibration dataset (needs a `calibrate design` run that keeps its replies), the evals session's trial. User action: rotate the TypeSafe key.
 Spec: docs/designs/2026-09-30-jev-judge-backend-design.md (approved 2026-09-30). Decision record: [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md).
 Scope: a working `JevJudge` behind the judge seam; a Jev block on any blocking question at the pinned model, with no block calibration (user, 2026-09-30); a Claude-written reason on every blocking finding; an Opus agent-labelled test-quality set (66 cases); the commit comment judge and `calibrate design` on either backend; per-backend recordings and a freshness check; `swiftgate judge ask`; `swiftgate judge bench` and `bench-render`; a Jev-native `test-quality@2-jev` rendering and a cascade that sends Jev's uncertain or uncalibrated blocking answers to Claude (design §13); a benchmark of pinned Sonnet 5.5 against pinned Jev on `@1`, Jev on `@2-jev` and the cascade, with committed results; an Opus agent-labelled comment set. Out of scope: moving eval rubrics onto `judge ask` (the evals owners trial 1 rubric first), and the design's §11.2 later candidates.
 Resume: read this header, then "Wave map", then your task's section (grep for the task id). Grep the spec by §.
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan". Interfaces note: docs/handoffs/jev-judge-interfaces.md (the first wave's merge creates it; each wave appends).
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate, with mutate once on main per wave or per 2 waves.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

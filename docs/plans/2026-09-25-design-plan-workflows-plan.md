@@ -1,13 +1,22 @@
 # Design & plan workflows — implementation plan
 
 <!-- RESUME
-Status: IN PROGRESS — waves 1–25, the 26–28 rehearsals and review fix waves 1–4 are merged; main GREEN at 42a6f53 (1746 tests; push + prove gate, mutate once on main). The review and its remaining tasks: docs/handoffs/subproject-2-review.md.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): waves 1–25, the 26–28 rehearsals and review fix waves 1–4 merged; the review and its tasks: docs/handoffs/subproject-2-review.md. The attended acceptance runs of 26–28 with the user never ran.
 Spec: docs/designs/2026-09-25-design-plan-workflows-design.md (approved 2026-09-25).
-Next action: see the handoff RESUME (docs/handoffs/2026-09-25-subproject-2.md): one mutate run on main, the ready-lock task in flight, then the next fix wave (hook guard cache, §11 rewrite and design-run telemetry, rule-index rows), then the attended acceptance runs with the user.
+Handoff RESUME: docs/handoffs/2026-09-25-subproject-2.md (frozen too).
 Resume: read this header → "Wave map" → your task's section (grep for the task id). Grep the spec by §; don't read it whole.
 Interfaces note: docs/handoffs/subproject-2-interfaces.md. Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md.
 Open items: the dead `.harness/plans` guard rule still ships (its removal drops `isOrchestrator` from `EditGuard.evaluate`, so it needs its own change); no command dumps the module graph (design and plan skills each build it); the attended runs of 26–28 still need the user.
-Progress: git log. Update this header at every wave merge.
+Open follow-ups at the freeze, none started (details on the results page): a long qa step label drops its
+`qa.flow` event (`EventPayloadGuard` 512 B), so a Validation row loses its step timeline; qa lint should flag huge OR
+selectors; test-failure messages lead with `IssueReporting` boilerplate and get cut off; a sanctioned
+`swiftgate plan note` for halt decisions; the `build no-repair` contract-name parser takes prose reasons; `check` has
+no `--output` flag; an owned-repo fix worktree keeps its own `.harness`, so its qa runs aren't seen from other
+checkouts; the viewer page doesn't render the deferred list; the parked `warmup-background-priority-unmerged` and
+`prove-only-changed-ui-tests-unmerged` branches (no measured win); the simulator clone's boot cost (about 50 s) for
+prove; no flow checks safe-area layout or the unheld launch state (a manual swipe-arcade run showed both).
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning
