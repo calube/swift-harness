@@ -144,6 +144,20 @@ public struct FileCountingLock: CountingLock {
     return LockLease(slot: slot, descriptor: fd)
   }
 
+  /// The live PIDs holding a slot now; a slot whose holder let go still names it, so only a slot
+  /// still locked counts.
+  public func livePIDs() -> [Int32] {
+    (0..<capacity).compactMap { slot in
+      guard let fd = try? Self.open(slotPath(slot)) else { return nil }
+      defer { close(fd) }
+      if flock(fd, LOCK_EX | LOCK_NB) == 0 {
+        flock(fd, LOCK_UN)
+        return nil
+      }
+      return Self.recordedOwner(fd).flatMap { Self.isAlive($0) ? $0 : nil }
+    }
+  }
+
   private static func open(_ path: String) throws(FileLockError) -> Int32 {
     let fd = Darwin.open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)
     guard fd >= 0 else { throw .io(operation: "open", path: path, errno: errno) }

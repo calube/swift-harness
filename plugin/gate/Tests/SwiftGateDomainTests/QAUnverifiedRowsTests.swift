@@ -19,7 +19,7 @@ struct QAUnverifiedRowsTests {
   }
 
   @Test(
-    "a run whose every row is unverified stays GREEN, since an unverified row is a nit, and its message leads with 0 of 3 rows verified — catches a GREEN that hides that nothing ran"
+    "a run whose every row was due to run but is unverified is BLOCKED, its message leading with 0 of 3 rows verified and naming why the first didn't run — catches a GREEN that hides that nothing ran, which a fixer reading only the verdict merges on"
   )
   func noRowVerified() throws {
     let captured = try Self.report("final-report.json")
@@ -28,9 +28,30 @@ struct QAUnverifiedRowsTests {
       runID: try #require(captured.runID), plan: "spec", after: nil, atBase: false,
       commit: captured.commit, rows: captured.rows)
 
-    #expect(report.verdict == .green)
+    #expect(report.verdict == .blocked)
     #expect(report.message.hasPrefix("0 of 3 rows verified"), "\(report.message)")
     #expect(report.message.contains("3 unverified"))
+    let first = try #require(captured.rows.first { $0.result == .unverified })
+    #expect(report.message.contains(first.message), "\(report.message)")
+  }
+
+  @Test(
+    "a run whose rows only wait on tasks not yet merged stays GREEN — catches a run blocked for rows that were never due"
+  )
+  func waitingRowsStayGreen() throws {
+    let captured = try Self.report("final-report.json")
+    let waiting = captured.rows.map { row in
+      QARow(
+        row: row.row, requirement: row.requirement, layer: row.layer, check: row.check,
+        runsAfter: row.runsAfter, result: .waiting, message: "waits on send-flow",
+        waitingOn: ["send-flow"])
+    }
+
+    let report = QAReport(
+      runID: try #require(captured.runID), plan: "spec", after: "amount-input", atBase: false,
+      commit: captured.commit, rows: waiting)
+
+    #expect(report.verdict == .green)
   }
 
   @Test(

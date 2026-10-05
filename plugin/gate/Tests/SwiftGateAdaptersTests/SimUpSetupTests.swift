@@ -61,6 +61,40 @@ extension SimUpTests {
   }
 }
 
+extension SimUpTests {
+  @Test(
+    "a holder still waiting for a sim slot when the run's cutoff comes is stopped there, and the row reads sim.no-slot naming the cutoff and the slot holders — catches a qa run that waits its whole lease timeout for a slot while the box runs out"
+  )
+  func slotWaitEndsAtTheCutoff() async throws {
+    let rig = rig(writesLease: false)
+    let now = Date(timeIntervalSince1970: 1_791_115_200)
+    let deadline = QARunDeadline(at: now.addingTimeInterval(20), name: "the run's cutoff")
+    let request = SimUp.Request(
+      worktree: worktree, config: try Self.config(), scenario: "fixed-fact", runID: Self.runID,
+      simDirectory: simDirectory, derivedDataPath: "/dd", swiftgateExecutable: "/plugin/bin/sg",
+      slotDeadline: deadline)
+    let terminated = rig.terminated
+    let dependencies = SimUp.Dependencies(
+      agentDevice: rig.agent, leases: store, launcher: rig.launcher, xcodebuild: rig.xcodebuild,
+      simctl: rig.simctl, bundles: rig.bundles,
+      git: FakeGit(revisions: ["HEAD": Self.head]), isAlive: { _ in true },
+      terminate: { terminated.append($0) }, slotHolders: { [31337, 31338] },
+      clock: rig.clock.clock, now: { now })
+
+    let failure = try #require(
+      Self.failure(
+        await SimUp(
+          dependencies: dependencies, leaseTimeout: .seconds(60), pollInterval: .seconds(1)
+        ).run(request)))
+
+    #expect(failure.rule == .noSlot)
+    #expect(failure.message.contains("the run's cutoff"), "\(failure.message)")
+    #expect(failure.message.contains("31337"), "\(failure.message)")
+    #expect(rig.terminated.all == [FakeHolderLauncher.pid])
+    #expect(rig.clock.now >= .seconds(20) && rig.clock.now < .seconds(30))
+  }
+}
+
 @Suite(
   "a build run's shared device is borrowed by 1 qa run at a time and released at the run's end")
 struct BuildRunDeviceTests {
