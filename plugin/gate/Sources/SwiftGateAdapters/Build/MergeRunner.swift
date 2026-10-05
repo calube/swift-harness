@@ -446,7 +446,7 @@ public struct BuildMerge: Sendable {
       let newest = log.events.last {
         switch $0 {
         case .merge, .undo: true
-        case .transition, .gate, .returnCheck, .finish: false
+        case .transition, .gate, .returnCheck, .finish, .rowsUnverified: false
         }
       }
       let lastMerge: BuildEvent.Merge
@@ -463,7 +463,7 @@ public struct BuildMerge: Sendable {
           command, context, .refused,
           "the run's newest merge, task `\(undo.task)`'s, is already undone",
           reason: .undoRefused)
-      case .transition, .gate, .returnCheck, .finish, nil:
+      case .transition, .gate, .returnCheck, .finish, .rowsUnverified, nil:
         throw stop(
           command, context, .refused, "build run \(context.run.runID) has no merge to undo",
           reason: .undoRefused)

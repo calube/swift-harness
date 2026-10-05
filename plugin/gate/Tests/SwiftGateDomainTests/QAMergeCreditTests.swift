@@ -69,6 +69,7 @@ struct QAMergeCreditTests {
         case .gate(let gate): gate.at < record.at
         case .returnCheck(let check): check.at < record.at
         case .finish: false
+        case .rowsUnverified(let left): left.at < record.at
         }
       }, damage: [])
     let head = try #require(

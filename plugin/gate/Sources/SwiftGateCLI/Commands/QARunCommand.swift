@@ -254,7 +254,8 @@ enum QARunRun {
           plan: slug)
       }
       runPlan = QARunPlan(
-        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended)
+        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended,
+        leftUnverified: runPlan.leftUnverified)
       guard !runPlan.entries.isEmpty else {
         return blocked(
           "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
@@ -262,7 +263,7 @@ enum QARunRun {
       if let requirement = options.requirement {
         runPlan = QARunPlan(
           entries: runPlan.entries.filter { $0.validation.requirement == requirement },
-          ended: runPlan.ended)
+          ended: runPlan.ended, leftUnverified: runPlan.leftUnverified)
         guard !runPlan.entries.isEmpty else {
           return blocked(
             "no row of \(tablePath) that `\(writer)` writes checks `\(requirement)`; no row ran",
@@ -831,7 +832,7 @@ enum QARunRun {
       switch event {
       case .merge(let merge): planCommits.formUnion([merge.preCommit, merge.postCommit])
       case .undo(let undo): planCommits.formUnion([undo.fromCommit, undo.toCommit])
-      case .transition, .gate, .returnCheck, .finish: continue
+      case .transition, .gate, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     var landed: [Landing] = []

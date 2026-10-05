@@ -103,6 +103,8 @@ public enum QAMergeReadiness: Sendable, Equatable {
   ///   - waiting: the other tasks whose checked return waits to merge, each at its branch's tip.
   ///     A row whose every unmerged task is here runs on 1 trial merge of all their branches,
   ///     before the first of them lands.
+  ///   - unverified: rows a `build no-repair` decision left unverified: red or unverified there,
+  ///     they hold no merge back.
   ///
   /// A report covers a row when its trial merge, on `base`, took `branch` at `tip` and each task
   /// the row still waits on at the tip in `waiting`, in any order and whatever else it took. Only
@@ -110,7 +112,7 @@ public enum QAMergeReadiness: Sendable, Equatable {
   public static func of(
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String,
-    waiting: [QATrialMerge.Branch] = []
+    waiting: [QATrialMerge.Branch] = [], unverified: Set<Int> = []
   ) -> QAMergeReadiness {
     let others = waiting.filter { $0.task != task }
     let held = Set(alongside(table: table, merged: merged, task: task, waiting: others))

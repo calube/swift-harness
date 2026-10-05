@@ -219,6 +219,7 @@ public struct HaltsSection: EventSummarySection {
     case .gate(let gate): gate.at
     case .returnCheck(let check): check.at
     case .finish(let finish): finish.at
+    case .rowsUnverified(let left): left.at
     }
   }
 
