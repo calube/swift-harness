@@ -276,16 +276,16 @@ struct WarmupTimesFeedTheTiersTests {
   }
 
   @Test(
-    "the live merge tier proves again only the areas whose warm test time is over slice_budget_s — catches merge re-proving every area or none"
+    "the live merge tier proves again every area whose test_files can't narrow a run, the 10 s one too, since its slice may have built it only once its files changed — catches a merge that judges by the warm time alone and never proves tests the slice left to it"
   )
-  func mergeReadsWarmTimes() async throws {
+  func mergeProvesUnselectableAreas() async throws {
     let (clone, _) = try await Self.clone()
     defer { clone.remove() }
 
-    let dependencies = try await BrownfieldMergeCheck.Dependencies.live(
-      root: clone.root, base: "main")
+    let dependencies = try await BrownfieldMergeCheck.Dependencies.live(root: clone.root)
 
-    #expect(dependencies.config.areas.filter(dependencies.sliceBuildsOnly).map(\.name) == ["web"])
+    #expect(
+      dependencies.config.areas.filter(dependencies.sliceBuildsOnly).map(\.name) == ["web", "api"])
   }
 
   @Test(
