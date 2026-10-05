@@ -60,9 +60,78 @@ public struct AreaCommandBounds: Sendable {
     self.fallback = fallback
   }
 
+  /// A test step in the checkout runs on the build its `build` step just made, so it gets
+  /// ``warmMultiple`` warm runs. Anything in a scratch tree, and a build, starts cold: it gets the
+  /// area's cold cost on top. `e2e`, which no warm-up times, and an unmeasured area get
+  /// ``fallback``. Then the box caps it: a `merge` step at the run's cutoff, and a `final` step or
+  /// one already inside the final reserve at the box's end.
   public func bound(area: String, step: AreaStep, tree: AreaCommandTree, now: Date)
     -> AreaCommandBound
   {
-    AreaCommandBound(duration: fallback, reason: "the flat \(fallback.components.seconds) s")
+    let measured = measure(area: area, step: step, tree: tree)
+    guard let cap = cap(now: now), cap.left < measured.duration else { return measured }
+    return AreaCommandBound(duration: cap.left, reason: cap.reason, expected: measured.expected)
+  }
+
+  private func measure(area: String, step: AreaStep, tree: AreaCommandTree) -> AreaCommandBound {
+    let record = times.areas[area]
+    guard step != .e2e, let record, let warm = record.warmTestMilliseconds else {
+      return AreaCommandBound(
+        duration: fallback,
+        reason: "the flat \(fallback.components.seconds) s: no warm-up measured \(area)'s "
+          + (step == .e2e ? "e2e" : "tests"))
+    }
+    let warmRuns = Self.warmMultiple * warm
+    let warmText = "\(Self.warmMultiple) × \(area)'s \(Self.seconds(warm)) s warm test"
+    let cold: Bool
+    switch (tree, step) {
+    case (.scratch, _), (.checkout, .build), (.checkout, .generate), (.checkout, .lint): cold = true
+    case (.checkout, .test), (.checkout, .testFiles), (.checkout, .e2e): cold = false
+    }
+    let milliseconds = cold ? record.coldMilliseconds + warmRuns : warmRuns
+    let reason =
+      cold
+      ? "\(area)'s \(Self.seconds(record.coldMilliseconds)) s cold build and test plus \(warmText)"
+      : warmText
+    // A build needs no test run, so only test steps and scratch runs can be measured against.
+    let expected: Duration? =
+      switch (tree, step) {
+      case (.checkout, .test), (.checkout, .testFiles): .milliseconds(warm)
+      case (.scratch, _): .milliseconds(record.coldMilliseconds)
+      default: nil
+      }
+    guard Duration.milliseconds(milliseconds) > Self.floor else {
+      return AreaCommandBound(
+        duration: Self.floor,
+        reason: "the \(Self.floor.components.seconds) s floor, above \(reason)",
+        expected: expected)
+    }
+    return AreaCommandBound(
+      duration: .milliseconds(milliseconds), reason: reason, expected: expected)
+  }
+
+  /// The time left to the box's limit for this tier at `now`, or `nil` with no box running.
+  private func cap(now: Date) -> (left: Duration, reason: String)? {
+    guard let box else { return nil }
+    let deadlines = box.deadlines
+    guard now < deadlines.endsAt else { return nil }
+    let toCutoff = tier != .final && now < deadlines.cutoffAt
+    let limit = toCutoff ? deadlines.cutoffAt : deadlines.endsAt
+    let milliseconds = max(1, Int64((limit.timeIntervalSince(now) * 1000).rounded()))
+    let left = Duration.milliseconds(milliseconds)
+    let seconds = (milliseconds + 999) / 1000
+    let when = limit.formatted(.iso8601)
+    return (
+      left,
+      toCutoff
+        ? "the \(seconds) s left before the run's cutoff at \(when)"
+        : "the \(seconds) s left before the run's box ends at \(when)"
+    )
+  }
+
+  /// `31715` → `31.7`.
+  private static func seconds(_ milliseconds: Int) -> String {
+    let tenths = (milliseconds + 50) / 100
+    return "\(tenths / 10).\(tenths % 10)"
   }
 }

@@ -90,7 +90,7 @@ struct BrownfieldProofsTests {
   }
 
   @Test(
-    "selected reverted runs map to proven with its location, passes-reverted and crashed, and a time-out records nothing — catches a judgement with no proof row, or a time-out recorded as a verdict"
+    "selected reverted runs map to proven with its location, passes-reverted, crashed and hangs-at-base — catches a judgement with no proof row, or a hang at the base read as no result"
   )
   func selectedOutcomes() throws {
     let run = try CapturedFailure("python")
@@ -116,6 +116,9 @@ struct BrownfieldProofsTests {
           assertion: nil),
         ProvedTest(
           test: "crashing", target: "gguf", outcome: .crashed, proofBase: "base0", assertion: nil),
+        ProvedTest(
+          test: "slow", target: "gguf", outcome: .hangsAtBase, proofBase: "base0",
+          assertion: nil),
       ])
   }
 

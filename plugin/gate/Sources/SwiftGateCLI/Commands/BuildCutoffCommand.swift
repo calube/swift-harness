@@ -118,7 +118,15 @@ enum BuildCutoffRun {
             "abandoning `\(decision.task)`: \(set.message); the decisions are in \(path)")
         }
       }
-      let notes = recordHalts(decisions, run: record.runID, telemetry: telemetry)
+      // A gate still running in an abandoned task's worktree would only hold the machine, and
+      // its scratch tree would outlive it.
+      let worktrees = ledger.tasks.filter { task in abandoned.contains { $0.task == task.id } }
+        .map(\.worktree)
+      let stopped = await leftovers?.stopGates(in: worktrees) ?? []
+      let sweep = await leftovers?.pruneScratchTrees() ?? ScratchWorktreeSweep()
+      let notes =
+        recordHalts(decisions, run: record.runID, telemetry: telemetry)
+        + sweep.failures.map { "a scratch tree wasn't pruned: \($0)" }
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green,
         report: BuildCutoffReport(
@@ -128,7 +136,8 @@ enum BuildCutoffRun {
           landed: tasks.filter { $0.stage == .landed }.map(\.id),
           abandoned: abandoned,
           notStarted: decisions.filter { $0.action == .notStarted }.map(\.task), path: path,
-          stoppedGates: [], prunedScratchTrees: [], notes: notes),
+          stoppedGates: stopped.map { "\($0.tier) in \($0.toplevel)" },
+          prunedScratchTrees: sweep.removed, notes: notes),
         holder: nil,
         message: "cut off build run \(record.runID): \(abandoned.count) task(s) abandoned")
     } catch {
@@ -197,7 +206,9 @@ struct BuildCutoffCommand: AsyncParsableCommand {
       + "already gating finish its merge while that merge, `final` and the report still fit "
       + "in the box, sets every other running task `abandoned` with the reason, and writes "
       + "the decisions to the run's cutoff.json. It also acts once starts have stopped with "
-      + "nothing running, naming the tasks that never started. A task whose merge is already "
+      + "nothing running, naming the tasks that never started. It stops any gate still running "
+      + "in an abandoned task's worktree and prunes the scratch trees of gates that ended "
+      + "unfinished. A task whose merge is already "
       + "recorded always finishes, and one whose merge gate is recorded GREEN is listed under "
       + "`landed`, with only its post-merge steps left. Exits 0 when it decided, 1 "
       + "when --session doesn't hold the plan's lock or the cutoff hasn't come, and 2 for an "
@@ -223,7 +234,9 @@ struct BuildCutoffCommand: AsyncParsableCommand {
     }
     let result = await BuildCutoffRun.run(
       slug: plan, session: session, git: BuildLoop.git(), clock: LiveBuildClock(),
-      telemetry: telemetry)
+      telemetry: telemetry,
+      leftovers: LiveRunLeftovers(
+        directory: URL(filePath: FileManager.default.currentDirectoryPath)))
     Console.write(BuildCutoffRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

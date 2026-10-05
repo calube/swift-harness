@@ -2,8 +2,9 @@ import Foundation
 
 /// What brownfield prove records for each changed test it ran, beside its findings.
 public enum BrownfieldProofs {
-  /// 1 ``ProvedTest`` per id whose reverted run says something about it. A time-out says
-  /// nothing, and neither does a crash of the whole `test` command, which no test owns.
+  /// 1 ``ProvedTest`` per id whose reverted run says something about it. A time-out marks every
+  /// id the run selected as hanging there; a crash of the whole `test` command, which no test
+  /// owns, says nothing.
   /// - Parameters:
   ///   - area: the area's name, as each result's target.
   ///   - outcomes: each id with the reverted run that selected it.
@@ -26,7 +27,7 @@ public enum BrownfieldProofs {
         guard !whole else { return nil }
         result = (.crashed, nil)
       case .timedOut:
-        return nil
+        result = (.hangsAtBase, nil)
       }
       return ProvedTest(
         test: id.name, target: area, outcome: result.0, proofBase: proofBase,

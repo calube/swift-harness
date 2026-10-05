@@ -52,25 +52,114 @@ public struct RunningGateRegistry: Sendable {
   /// Records this process as a gate checking `toplevel`; `nil` when it can't, and the gate runs
   /// unrecorded.
   public func register(pid: Int32, toplevel: String, tier: CheckTier, now: Date) -> URL? {
-    nil
+    guard let start = processes.startTime(of: pid) else { return nil }
+    let gate = RunningGate(
+      pid: pid, processStart: start, toplevel: Self.canonical(toplevel), tier: tier.rawValue,
+      startedAt: now)
+    let record = directory.appending(path: "\(pid).json")
+    do {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try Self.encoder.encode(gate).write(to: record, options: .atomic)
+    } catch {
+      return nil
+    }
+    return record
   }
 
-  public func unregister(_ record: URL) {}
+  public func unregister(_ record: URL) {
+    try? FileManager.default.removeItem(at: record)
+  }
 
-  /// Every recorded gate whose process still runs. A record whose process ended is removed.
-  public func running() -> [RunningGate] { [] }
+  /// Every recorded gate whose process still runs, by pid. A record whose process ended, or
+  /// whose pid now names a process that started at another time, is removed.
+  public func running() -> [RunningGate] {
+    let records =
+      (try? FileManager.default.contentsOfDirectory(
+        at: directory, includingPropertiesForKeys: nil)) ?? []
+    var gates: [RunningGate] = []
+    for record in records where record.pathExtension == "json" {
+      guard let data = try? Data(contentsOf: record),
+        let gate = try? Self.decoder.decode(RunningGate.self, from: data),
+        processes.startTime(of: gate.pid) == gate.processStart
+      else {
+        unregister(record)
+        continue
+      }
+      gates.append(gate)
+    }
+    return gates.sorted { $0.pid < $1.pid }
+  }
 
   /// Ends every running gate checking one of `toplevels`, and returns them.
-  public func stop(in toplevels: [String]) async -> [RunningGate] { [] }
+  public func stop(in toplevels: [String]) async -> [RunningGate] {
+    let wanted = Set(toplevels.map(Self.canonical))
+    var stopped: [RunningGate] = []
+    for gate in running() where wanted.contains(gate.toplevel) {
+      await processes.terminate(gate.pid)
+      unregister(directory.appending(path: "\(gate.pid).json"))
+      stopped.append(gate)
+    }
+    return stopped
+  }
+
+  /// Symlinks resolved and no trailing slash, so `/var/…` and `/private/var/…` name 1 worktree.
+  static func canonical(_ path: String) -> String {
+    URL(filePath: path, directoryHint: .isDirectory).resolvingSymlinksInPath()
+      .path(percentEncoded: false).trimmingSuffix("/")
+  }
+
+  private static var encoder: JSONEncoder {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    encoder.dateEncodingStrategy = .iso8601
+    return encoder
+  }
+
+  private static var decoder: JSONDecoder {
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    return decoder
+  }
+}
+
+extension String {
+  fileprivate func trimmingSuffix(_ suffix: String) -> String {
+    count > suffix.count && hasSuffix(suffix) ? String(dropLast(suffix.count)) : self
+  }
 }
 
 /// ``GateProcesses`` over `sysctl` and signals.
 public struct LiveGateProcesses: GateProcesses {
   public init() {}
 
-  public func startTime(of pid: Int32) -> Double? { nil }
+  /// How long a terminated gate gets to end its children and exit before it is killed.
+  static let grace: Duration = .seconds(10)
 
-  public func terminate(_ pid: Int32) async {}
+  public func startTime(of pid: Int32) -> Double? {
+    guard pid > 0 else { return nil }
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+    var info = kinfo_proc()
+    var size = MemoryLayout<kinfo_proc>.stride
+    guard sysctl(&mib, UInt32(mib.count), &info, &size, nil, 0) == 0, size > 0,
+      info.kp_proc.p_pid == pid
+    else { return nil }
+    let start = info.kp_proc.p_un.__p_starttime
+    return Double(start.tv_sec) + Double(start.tv_usec) / 1_000_000
+  }
+
+  /// SIGTERM, which a swiftgate process forwards to every child's process tree before it exits;
+  /// SIGKILL if it hasn't exited within ``grace``.
+  public func terminate(_ pid: Int32) async {
+    guard let start = startTime(of: pid) else { return }
+    kill(pid, SIGTERM)
+    let clock = ContinuousClock()
+    let deadline = clock.now.advanced(by: Self.grace)
+    while clock.now < deadline {
+      guard startTime(of: pid) == start else { return }
+      try? await Task.sleep(for: .milliseconds(200))
+    }
+    if startTime(of: pid) == start { kill(pid, SIGKILL) }
+  }
 }
 
 /// What a run leaves behind once it cuts or undoes a task: gates still running in the task's
@@ -92,7 +181,23 @@ public struct LiveRunLeftovers: RunLeftovers {
     self.runner = runner
   }
 
-  public func stopGates(in worktrees: [String]) async -> [RunningGate] { [] }
+  public func stopGates(in worktrees: [String]) async -> [RunningGate] {
+    guard let layout = try? await GitTrackedTree(runner: runner, directory: directory).stateLayout()
+    else { return [] }
+    let absolute = worktrees.map { worktree in
+      worktree.hasPrefix("/")
+        ? worktree : directory.appending(path: worktree).standardizedFileURL.path
+    }
+    return await RunningGateRegistry(layout: layout).stop(in: absolute)
+  }
 
-  public func pruneScratchTrees() async -> ScratchWorktreeSweep { ScratchWorktreeSweep() }
+  /// A failure to list or remove is left in the sweep's failures: pruning never stops the caller.
+  public func pruneScratchTrees() async -> ScratchWorktreeSweep {
+    let scratch = LiveScratchWorktrees(runner: runner, repositoryRoot: directory.path)
+    do {
+      return try await scratch.sweepRegisteredOrphans()
+    } catch {
+      return ScratchWorktreeSweep(failures: ["\(error)"])
+    }
+  }
 }

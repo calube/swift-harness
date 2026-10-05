@@ -422,12 +422,21 @@ public struct BuildMerge: Sendable {
           post: lastMerge.postCommit)
       }
       let (files, detail) = try await cutFix(command, context)
-      return report(
+      // The merge gate that sent this undo may have died inside its prove, leaving a scratch
+      // tree registered.
+      let sweep = await leftovers?.pruneScratchTrees()
+      let pruned = sweep.map { sweep in
+        (sweep.removed.isEmpty ? "" : " Pruned \(sweep.removed.count) scratch tree(s).")
+          + sweep.failures.map { " A scratch tree wasn't pruned: \($0)." }.joined()
+      }
+      var undone = report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
         gateRunId: gate.runID,
         message: "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to "
-          + "\(lastMerge.preCommit).\(gate.note) \(detail)")
+          + "\(lastMerge.preCommit).\(gate.note) \(detail)\(pruned ?? "")")
+      undone.prunedScratchTrees = sweep?.removed
+      return undone
     } catch {
       return error.report
     }

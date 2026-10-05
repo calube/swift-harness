@@ -17,15 +17,31 @@ enum BrownfieldCheck {
           + " to the owned profile; a brownfield tier takes only the steps it runs")
     }
     switch tier {
-    case .slice:
-      return try await BrownfieldSliceCheck.run(root: root, base: base, context: context)
-    case .merge, .final:
+    case .slice, .merge, .final:
+      // Recorded while it runs, so `build cutoff` can stop it once its task is cut.
+      let registry = await registry(root: root)
+      let record = registry?.register(
+        pid: getpid(), toplevel: root.path(percentEncoded: false), tier: tier, now: Date())
+      defer { if let record { registry?.unregister(record) } }
+      if tier == .slice {
+        return try await BrownfieldSliceCheck.run(root: root, base: base, context: context)
+      }
       return try await BrownfieldMergeCheck.run(
         root: root, tier: tier, base: base, context: context)
     case .fast, .push, .ready:
       return try notRun(
         tier, because: "it belongs to the owned profile; run it through check's owned tiers")
     }
+  }
+
+  /// The clone's running-gate records; `nil` when its git dirs can't be read, and the tier then
+  /// reports that itself.
+  private static func registry(root: URL) async -> RunningGateRegistry? {
+    guard
+      let layout = try? await GitTrackedTree(runner: LiveProcessRunner(), directory: root)
+        .stateLayout()
+    else { return nil }
+    return RunningGateRegistry(layout: layout)
   }
 
   /// The toplevel of the git worktree holding `directory`: area roots are toplevel-relative, so a

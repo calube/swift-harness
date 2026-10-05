@@ -206,9 +206,12 @@ enum BrownfieldProve {
   ) async -> AreaRun {
     let area = plan.area
     let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
+    // Read again for each run: the box's time left shrinks between them.
+    var bound: AreaCommandBound?
     var runs = 0
     func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> AreaCommandOutcome {
       runs += 1
+      bound = dependencies.bound?(area.name, step)
       var junit: String?
       if template.contains("{junit}") {
         try? FileManager.default.createDirectory(
@@ -222,7 +225,8 @@ enum BrownfieldProve {
       return await dependencies.runner.run(
         AreaCommandRequest(
           area: area.name, step: step, command: command, workingDirectory: directory.path,
-          deadline: dependencies.deadline, environment: [:], junitPath: junit))
+          deadline: bound?.duration ?? dependencies.deadline, environment: [:],
+          junitPath: junit))
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement
@@ -232,7 +236,8 @@ enum BrownfieldProve {
       whole = true
       let outcome = await run(command, step: .test, ids: plan.ids)
       outcomes = plan.ids.map { ($0, outcome) }
-      judgement = ProveVerdict.judgeWhole(area: area.name, ids: plan.ids, outcome: outcome)
+      judgement = ProveVerdict.judgeWhole(
+        area: area.name, ids: plan.ids, outcome: outcome, bound: bound)
     case .selected(let template):
       whole = false
       let together = await run(template, step: .testFiles, ids: plan.ids)
@@ -245,7 +250,7 @@ enum BrownfieldProve {
       } else {
         outcomes = plan.ids.map { ($0, together) }
       }
-      judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes)
+      judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes, bound: bound)
     }
     let proven = outcomes.filter {
       if case .failed = $0.1 { return true }

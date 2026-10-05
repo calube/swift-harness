@@ -28,12 +28,20 @@ enum BrownfieldMergeCheck {
     /// An area command may run as long as the area's own tests take.
     static let liveDeadline: Duration = .seconds(3600)
 
+    /// `area`'s bound for `step` in `tree` now, or the flat ``deadline`` with no ``bound``.
+    func bound(_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound {
+      bound?(area, step, tree)
+        ?? AreaCommandBound(
+          duration: deadline, reason: "the flat \(deadline.components.seconds) s")
+    }
+
     /// The clone's config and state, live git, scratch trees under the worktree's git dir and
     /// `/bin/sh` commands. `slice` builds only the areas whose warm test time, as the warm-up
     /// measured it at the merge base with `base`, doesn't fit the slice budget; with no `base`,
-    /// every area.
-    static func live(root: URL, base: String? = nil) async throws(BrownfieldCheckSetupError)
-      -> Dependencies
+    /// every area. Each command's bound comes from those times and the time box of the
+    /// `swiftgate run` going on, read as `tier` runs.
+    static func live(root: URL, base: String? = nil, tier: CheckTier = .merge)
+      async throws(BrownfieldCheckSetupError) -> Dependencies
     {
       let process = LiveProcessRunner()
       let tracked = GitTrackedTree(runner: process, directory: root)
@@ -64,7 +72,7 @@ enum BrownfieldMergeCheck {
       let runner = LeasedDeviceAreaRunner(
         base: LiveAreaCommandRunner(processRunner: process),
         leases: LiveTestDeviceLeases(runner: process))
-      let prove = BrownfieldProve.Dependencies.live(
+      let unbounded = BrownfieldProve.Dependencies.live(
         root: root, layout: layout, runner: runner, deadline: liveDeadline)
       let tree: @Sendable (String) async throws -> String = { commit in
         let output = try await process.run(
@@ -81,27 +89,39 @@ enum BrownfieldMergeCheck {
       // With no merge base or no warm-up there, no area is known to have run its changed tests
       // at `slice`, so every touched area proves again here.
       var times = WarmupTimesFile(tree: "")
-      if let base, let mergeBase = try? await prove.git.mergeBase("HEAD", base),
+      if let base, let mergeBase = try? await unbounded.git.mergeBase("HEAD", base),
         let baseTree = try? await tree(mergeBase)
       {
         times = WarmupTimesStore(layout: layout).load(tree: baseTree).file
       }
+      let bounds = AreaCommandBounds(
+        times: times, box: ActiveRunTimeBox.find(layout: layout, now: Date()), tier: tier,
+        fallback: liveDeadline)
+      // Each bound is taken as its command starts, so the box's time left is current.
+      let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
+        area, step, tree in
+        bounds.bound(area: area, step: step, tree: tree, now: Date())
+      }
+      let prove = BrownfieldProve.Dependencies(
+        git: unbounded.git, scratch: unbounded.scratch, runner: runner, deadline: liveDeadline,
+        bound: { area, step in bound(area, step, .scratch) })
       let budget = config.brownfield.sliceBudgetSeconds
       return Dependencies(
         config: config, layout: layout, git: prove.git, runner: runner,
         baseline: BaselineStore(layout: layout, runner: runner, scratch: prove.scratch),
         prove: prove, trackedTree: snapshot, tree: tree,
         sliceBuildsOnly: { [times] area in times.buildsOnly(area.name, budgetSeconds: budget) },
-        deadline: liveDeadline)
+        deadline: liveDeadline, bound: bound)
     }
   }
+
 
   static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
     async throws -> GateRunParts
   {
     let dependencies: Dependencies
     do {
-      dependencies = try await .live(root: root, base: base)
+      dependencies = try await .live(root: root, base: base, tier: tier)
     } catch {
       return try BrownfieldCheck.notRun(tier, because: error.reason)
     }
@@ -143,6 +163,8 @@ enum BrownfieldMergeCheck {
     let selection: [String]
     let request: AreaCommandRequest
     let outcome: AreaCommandOutcome
+    /// What the command was given before the gate would kill it.
+    let bound: AreaCommandBound
     /// Lint output whose failure the parser could place on no line: it goes to the baseline
     /// like a test failure, as `area.lint-failed`.
     let lintFindings: [Finding]
@@ -172,7 +194,7 @@ enum BrownfieldMergeCheck {
     let gated = tier == .final ? areas : touched
 
     var outcome = Outcome(baselineCount: 0)
-    let runs = await withTaskGroup(of: (findings: [Finding], runs: [StepRun]).self) { group in
+    let runs = await withTaskGroup(of: AreaSteps.self) { group in
       for area in gated {
         let files = added.map(\.path).filter { owner(of: $0, in: areas)?.name == area.name }
         group.addTask {
@@ -181,11 +203,12 @@ enum BrownfieldMergeCheck {
             dependencies: dependencies)
         }
       }
-      var all: [(findings: [Finding], runs: [StepRun])] = []
+      var all: [AreaSteps] = []
       for await result in group { all.append(result) }
-      return all.sorted { ($0.runs.first?.area.name ?? "") < ($1.runs.first?.area.name ?? "") }
+      return all.sorted { $0.area < $1.area }
     }
     outcome.findings += runs.flatMap(\.findings)
+    outcome.blocked = runs.contains(where: \.refused)
     let stepRuns = runs.flatMap(\.runs)
 
     let failing = stepRuns.filter { run in
@@ -211,13 +234,14 @@ enum BrownfieldMergeCheck {
           in: evidence)
         return BaselineQuery(key: key, head: run.outcome, headEvidence: headEvidence) { scratch in
           // The failing step was prepared from this area, so preparing it again can't be `nil`.
-          prepare(
+          let deadline = dependencies.bound(run.area.name, run.step, .scratch).duration
+          return prepare(
             run.area, step: run.step, repositoryRoot: scratch.path(percentEncoded: false),
-            files: run.selection, dependencies: dependencies)?.request
+            files: run.selection, deadline: deadline, dependencies: dependencies)?.request
             ?? AreaCommandRequest(
               area: run.area.name, step: run.step, command: "false",
               workingDirectory: scratch.path(percentEncoded: false),
-              deadline: dependencies.deadline, environment: [:], junitPath: nil)
+              deadline: deadline, environment: [:], junitPath: nil)
         }
       }
       let (lookup, milliseconds) = await GateRun.timed {
@@ -284,29 +308,44 @@ enum BrownfieldMergeCheck {
     return parent
   }
 
+  /// What 1 area's steps did.
+  private struct AreaSteps: Sendable {
+    let area: String
+    var findings: [Finding] = []
+    var runs: [StepRun] = []
+    /// A step wasn't started: the box left it less than its measured time.
+    var refused = false
+  }
+
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
-  /// share a build directory at once.
+  /// share a build directory at once. A step the box leaves too little time isn't started, and
+  /// neither is any after it.
   private static func run(
     _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
     context: GateRun.Context, dependencies: Dependencies
-  ) async -> (findings: [Finding], runs: [StepRun]) {
-    var findings: [Finding] = []
-    var runs: [StepRun] = []
+  ) async -> AreaSteps {
+    var result = AreaSteps(area: area.name)
     let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
     for step in steps {
       guard let template = AreaCommandExpansion.template(for: step, in: area) else {
         // `e2e` is optional: discovery proposes it only where it found one.
-        if step != .e2e, let dropped = dropped(area, step: step) { findings.append(dropped) }
+        if step != .e2e, let dropped = dropped(area, step: step) { result.findings.append(dropped) }
         continue
       }
       let selection = step == .lint ? files : []
       if step == .lint, template.contains(AreaCommandExpansion.filesPlaceholder), files.isEmpty {
         continue
       }
+      let bound = dependencies.bound(area.name, step, .checkout)
+      if bound.cannotFinish {
+        result.refused = true
+        if let refusal = notStarted(area, step: step, bound: bound) { result.findings.append(refusal) }
+        break
+      }
       guard
         let prepared = prepare(
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
-          dependencies: dependencies)
+          deadline: bound.duration, dependencies: dependencies)
       else { continue }
       let (outcome, milliseconds) = await GateRun.timed {
         await dependencies.runner.run(
@@ -326,24 +365,24 @@ enum BrownfieldMergeCheck {
       context.steps.record(
         gateStep(step), tier: nil, milliseconds: milliseconds,
         verdict: outcome == .passed ? .green : .red, area: area.name)
-      runs.append(
+      result.runs.append(
         StepRun(
           area: area, step: step, template: template, selection: selection,
-          request: prepared.request, outcome: outcome,
+          request: prepared.request, outcome: outcome, bound: bound,
           lintFindings: lintFindings, lintUnread: lintUnread))
     }
-    return (findings, runs)
+    return result
   }
 
   private static func prepare(
     _ area: BrownfieldArea, step: AreaStep, repositoryRoot: String, files: [String],
-    dependencies: Dependencies
+    deadline: Duration, dependencies: Dependencies
   ) -> PreparedAreaCommand? {
     AreaCommandExpansion.prepare(
       area: area, step: step, repositoryRoot: repositoryRoot, files: files, tests: [],
       junitPath: AreaCommandExpansion.junitPath(
         layout: dependencies.layout, area: area.name, step: step),
-      deadline: dependencies.deadline,
+      deadline: deadline,
       environment: AreaCacheEnvironment.make(
         area: area, layout: dependencies.layout, tree: dependencies.trackedTree
       ).variables)
@@ -368,20 +407,40 @@ enum BrownfieldMergeCheck {
       case .lint: .lintFailed
       case .test, .testFiles, .e2e: .testFailed
       }
-    let what = failure.test.map { "\($0) fails" } ?? "\(run.step.rawValue) failed"
+    let what: String
+    if case .timedOut = run.outcome {
+      what = "\(failure.test.map { "\($0) in " } ?? "")\(run.step.rawValue) hung"
+    } else {
+      what = failure.test.map { "\($0) fails" } ?? "\(run.step.rawValue) failed"
+    }
     let tail: String =
       switch run.outcome {
       case .passed: ""
       case .failed(let exit, let tail, _): "exit \(exit):\n\(tail)"
       case .crashed(let signal, let tail):
         "crashed\(signal.map { " with signal \($0)" } ?? ""):\n\(tail)"
-      case .timedOut(let tail): "timed out:\n\(tail)"
+      case .timedOut(let tail):
+        "hit its \(run.bound.seconds) s bound (\(run.bound.reason)), so the gate killed its "
+          + "process tree:\n\(tail)"
       }
     return try Finding(
       ruleID: rule.rawValue, severity: .major, file: run.area.root, line: nil,
       message:
         "\(run.area.name) \(what) at the head and not at the merge base (`\(run.template)`), "
         + tail,
+      failureScenario: nil)
+  }
+
+  /// Why a step wasn't started: a BLOCKED tier, never a RED one, since nothing ran.
+  private static func notStarted(_ area: BrownfieldArea, step: AreaStep, bound: AreaCommandBound)
+    -> Finding?
+  {
+    let expected = bound.expected.map { " its measured \($0.components.seconds) s" } ?? ""
+    return try? Finding(
+      ruleID: CheckRun.notRunRuleID, severity: .minor, file: area.root, line: nil,
+      message:
+        "merge: \(area.name) \(step.rawValue) not started: \(bound.reason) can't hold"
+        + "\(expected), so it would only be killed",
       failureScenario: nil)
   }
 

@@ -52,7 +52,8 @@ struct BuildMergeCommand: AsyncParsableCommand {
       + "../<repo>-<plan>-fix-<task> on <plan>/fix-<task> from main with the conflicted merge in "
       + "it. --undo resets main to the task's recorded pre commit, only while main is still at "
       + "its post commit, records the newest `check --tier` run at that commit as the task's merge "
-      + "gate unless the log holds it, records an undo event, and cuts the same fix worktree "
+      + "gate unless the log holds it, records an undo event, prunes the scratch trees of gates "
+      + "that ended unfinished, and cuts the same fix worktree "
       + "with the task merged in. In a brownfield clone, main is the plan branch swift-harness/<plan> checked "
       + "out at <git-common-dir>/swift-harness/plans/<plan>/checkout, merges land there, and the "
       + "fix worktree is that plan's worktrees/fix-<task>; the user's branch never moves. "
@@ -95,7 +96,9 @@ struct BuildMergeCommand: AsyncParsableCommand {
       git: LiveGit(runner: runner, repositoryRoot: root),
       workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root),
       merger: LiveMergeRunner(runner: runner), clock: LiveBuildClock(),
-      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)))
+      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)),
+      leftovers: LiveRunLeftovers(
+        directory: URL(filePath: root, directoryHint: .isDirectory), runner: runner))
     Console.write(BuildMergeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
