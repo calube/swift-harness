@@ -3,8 +3,9 @@ import SwiftGateAdapters
 import SwiftGateDomain
 import Synchronization
 
-/// PreToolUse (spec §8): Bash and Edit/Write guards (< 50ms), and the advisory comment pass on
-/// `git commit` (≤ 20s). A path a Bash command writes is judged exactly as a file tool's path.
+/// PreToolUse (spec §8): Bash, Monitor and Edit/Write guards (< 50ms), and the advisory comment
+/// pass on `git commit` (≤ 20s). A path a Bash command writes is judged exactly as a file tool's
+/// path.
 enum PreToolUseHook {
   static let fileTools: Set<String> = ["Edit", "Write", "MultiEdit", "NotebookEdit"]
 
@@ -69,6 +70,14 @@ enum PreToolUseHook {
       if brownfield == nil, BashGuard.isGitCommit(command) {
         context = joined(context, await commitContext(root: root, dependencies: dependencies))
       }
+    case "Monitor"?:
+      // A Monitor command is a shell script too: what the Bash guards deny, such as a wait on
+      // `pgrep`, it may not run either. Anything else goes to the normal permission flow.
+      guard let command = payload.command else { return nil }
+      if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
+        return deny(violation)
+      }
+      return nil
     case "Agent"?:
       // Only the launch guard reads an Agent call; the rest goes to the normal permission flow.
       if let violation = BuildAgentLaunchGuard.evaluate(

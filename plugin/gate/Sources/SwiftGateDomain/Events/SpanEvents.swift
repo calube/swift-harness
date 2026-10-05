@@ -109,6 +109,15 @@ public struct SpanEndEvent: Sendable, Equatable, Codable {
 public enum OpenSpans {
   /// Each `span.start` of `buildRun` in `events` with no `span.end`, oldest first.
   public static func of(_ events: [HarnessEvent], buildRun: String) -> [SpanStartEvent] {
-    []
+    var ended: Set<String> = []
+    for event in events {
+      if case .spanEnd(let end) = event.payload { ended.insert(end.spanID) }
+    }
+    return events.compactMap { event in
+      guard case .spanStart(let start) = event.payload, start.buildRun == buildRun,
+        !ended.contains(start.spanID)
+      else { return nil }
+      return start
+    }
   }
 }

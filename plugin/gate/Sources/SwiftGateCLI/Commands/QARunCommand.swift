@@ -246,6 +246,7 @@ enum QARunRun {
     } catch {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
+    dependencies.started?(runID, qaDirectory.appending(path: QAReport.fileName))
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
@@ -970,7 +971,14 @@ struct QARunCommand: AsyncParsableCommand {
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
         testDevices: LiveTestDeviceLeases(runner: runner),
-        deadline: await QARunRun.deadline(root: root, runner: runner, final: final)))
+        deadline: await QARunRun.deadline(root: root, runner: runner, final: final),
+        started: { runID, report in
+          // Before any row runs, so a caller that backgrounds the run waits on this file.
+          let line =
+            "\(QARunRun.command): run \(runID) started; its report will be written to "
+            + "\(report.path)\n"
+          FileHandle.standardError.write(Data(line.utf8))
+        }))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

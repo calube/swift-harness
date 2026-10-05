@@ -85,12 +85,23 @@ extension BuildEventLog {
       case .transition, .finish: continue
       }
     }
-    let ready = waiting.filter { running.contains($0.key) }.sorted {
+    let waitingRunning = waiting.filter { running.contains($0.key) }.sorted {
       $0.value.order < $1.value.order
     }
-    .map { MergeQueue.Ready(task: $0.key, fix: $0.value.fix) }
+    // A return checked before the task's newest retry went to a fixer, whose own return isn't
+    // checked yet.
+    func sentToFixer(_ task: String, _ order: Int) -> Bool {
+      guard let retry = retried[task], case .returnCheck(let check) = events[order] else {
+        return false
+      }
+      return check.at <= retry
+    }
+    let ready = waitingRunning.filter { !sentToFixer($0.key, $0.value.order) }
+      .map { MergeQueue.Ready(task: $0.key, fix: $0.value.fix) }
+    let fixing = waitingRunning.filter { sentToFixer($0.key, $0.value.order) }.map(\.key)
     return MergeQueue(
-      ready: ready, merging: merging.flatMap { running.contains($0.task) ? $0 : nil })
+      ready: ready, merging: merging.flatMap { running.contains($0.task) ? $0 : nil },
+      fixing: fixing)
   }
 }
 

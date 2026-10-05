@@ -9,7 +9,9 @@ those checks wait for.
 
 Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash tool's `timeout` at
 600000, never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
-the background while you wait on it, and every merge your rows name waits on you. Never search
+the background while you wait on it, and every merge your rows name waits on you. If 1 does,
+`qa run` printed `run <id> started; its report will be written to <path>` first: wait for that
+file, in Bash or Monitor, never for a process by name, which the hook denies. Never search
 outside your worktree: every file you need is in it, in the brief, or at a path `qa run` prints.
 List a folder by naming it, as `ls .harness/qa/<plan>`, never a bare `ls`: the tool's stdin never
 closes, and a shell alias such as `eza` given no path reads paths from stdin and waits.

@@ -40,7 +40,21 @@ public struct FinalGateReuse: Sendable, Equatable {
     _ areas: [BrownfieldArea], inputs: GateReuse.Inputs, repositoryRoot: String,
     layout: BrownfieldStateLayout, passed: (_ key: String) -> Bool
   ) -> [FinalGateArea] {
-    []
+    areas.map { area in
+      let unreused = steps.filter { step in
+        guard let template = AreaCommandExpansion.template(for: step, in: area),
+          !(step == .lint && template.contains(AreaCommandExpansion.filesPlaceholder)),
+          let prepared = AreaCommandExpansion.prepare(
+            area: area, step: step, repositoryRoot: repositoryRoot, files: [], tests: [],
+            junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: step),
+            deadline: .zero, environment: [:])
+        else { return false }
+        return !passed(
+          GateReuse.areaStepKey(
+            inputs, area: area.name, step: step, command: prepared.request.command))
+      }
+      return FinalGateArea(name: area.name, unreused: unreused)
+    }
   }
 
   /// How long the steps left take, in whole seconds: areas run side by side, so the slowest
@@ -48,6 +62,11 @@ public struct FinalGateReuse: Sendable, Equatable {
   /// cold cost; `unmeasured` when neither, or when an `e2e` step, which no warm-up times, is
   /// left. 0 when every step is reused.
   public func seconds(unmeasured: Int) -> Int {
-    0
+    areas.filter { !$0.unreused.isEmpty }.map { area in
+      guard !area.unreused.contains(.e2e), let record = times.areas[area.name] else {
+        return unmeasured
+      }
+      return ((record.warmTestMilliseconds ?? record.coldMilliseconds) + 999) / 1000
+    }.max() ?? 0
   }
 }

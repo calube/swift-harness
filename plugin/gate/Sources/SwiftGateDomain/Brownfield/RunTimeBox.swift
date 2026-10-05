@@ -265,6 +265,14 @@ public struct CutoffCosts: Sendable, Equatable, Codable {
         mergeGateSource: merge == nil ? .estimated : .measured, finalSeconds: final,
         finalSource: .measured)
     }
+    if let finalReuse {
+      return CutoffCosts(
+        mergeGateSeconds: merge ?? estimated.mergeGateSeconds,
+        mergeGateSource: merge == nil ? .estimated : .measured,
+        finalSeconds: max(
+          floorSeconds, finalReuse.seconds(unmeasured: merge ?? estimated.finalSeconds)),
+        finalSource: .areaSteps)
+    }
     guard let merge else { return estimated }
     return CutoffCosts(
       mergeGateSeconds: merge, mergeGateSource: .measured, finalSeconds: merge,
@@ -276,6 +284,10 @@ public struct CutoffCosts: Sendable, Equatable, Codable {
     switch (mergeGateSource, finalSource) {
     case (.estimated, .estimated): "estimated, as no gate is recorded"
     case (_, .mergeGates): "measured by this run's merge gates"
+    case (.estimated, .areaSteps):
+      "with final sized by the area steps it can't reuse, as no merge gate is recorded"
+    case (_, .areaSteps):
+      "measured by this run's merge gates, with final sized by the area steps it can't reuse"
     default: "measured by this run's gates"
     }
   }

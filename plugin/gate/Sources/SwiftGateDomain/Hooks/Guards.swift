@@ -156,8 +156,9 @@ public enum BashGuard {
         + "`swiftgate test-only` in the foreground with the Bash tool's `timeout` at 600000, its "
         + "longest. A gate that may outlast that runs with `run_in_background: true` and its "
         + "`--json` output redirected to a file, then `swiftgate build gate-wait <plan> --tier "
-        + "<tier> --output <file> --json` waits on that file. Stop a process you started by its "
-        + "pid with `kill <pid>`.")
+        + "<tier> --output <file> --json` waits on that file. A `swiftgate qa run` prints its run "
+        + "id and the report file it will write as it starts: wait for that file. Stop a process "
+        + "you started by its pid with `kill <pid>`.")
   }
 
   private static func namesOperand(_ arguments: ArraySlice<String>) -> Bool {

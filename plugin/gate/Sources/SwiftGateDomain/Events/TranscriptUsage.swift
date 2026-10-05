@@ -21,7 +21,18 @@ extension AgentRole {
   /// such as `swift-harness:build-fixer`; `nil` for a type no role describes, such as
   /// `general-purpose`.
   public static func of(agentType: String) -> AgentRole? {
-    nil
+    let prefix = "swift-harness:"
+    guard agentType.hasPrefix(prefix) else { return nil }
+    let name = String(agentType.dropFirst(prefix.count))
+    switch name {
+    case "build-worker": return .buildWorker
+    case "build-fixer": return .buildFixer
+    case "brownfield-explorer": return .explorer
+    case "design-decomposer": return .plan
+    case "verifier", "architecture", "test-quality", "swiftui", "concurrency", "api-errors":
+      return .review
+    default: return name.hasPrefix("design-") ? .design : nil
+    }
   }
 }
 

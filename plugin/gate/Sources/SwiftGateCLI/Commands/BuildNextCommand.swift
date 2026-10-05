@@ -27,8 +27,8 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   /// No other task merges until it is done or undone.
   let merging: MergeQueue.Merging?
   /// Running tasks whose checked return a halt sent to a fixer: none merges until its fixer's
-  /// return is checked.
-  var fixing: [String] = []
+  /// return is checked. Absent when there are none.
+  var fixing: [String]? = nil
   /// A `swiftgate run`'s box: when starts stop, when the cutoff comes and when the box ends.
   /// Absent for a run without one.
   let timeBox: TimeBox?
@@ -164,7 +164,10 @@ enum BuildNextRun {
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
         now: now, required: required, timeBox: timeBox,
         idle: running.filter { log.workerFinished(task: $0) })
-      let queue = log.mergeQueue(running: running)
+      // A halt answered retry sends a checked return to a fixer; unreadable halts leave none.
+      let halts = (try? BuildHaltLog(root: root).events()) ?? []
+      let queue = log.mergeQueue(
+        running: running, retried: BuildHalts.retried(in: halts, buildRun: runID))
       let secondsToCutoff = timeBox.map {
         max(0, Int($0.deadlines.cutoffAt.timeIntervalSince(now).rounded(.up)))
       }
@@ -180,6 +183,7 @@ enum BuildNextRun {
         stallMin: StallWatch.minutes(
           preset: record.preset.effectiveStallMin, secondsToCutoff: secondsToCutoff),
         readyToMerge: queue.ready, merging: queue.merging,
+        fixing: queue.fixing.isEmpty ? nil : queue.fixing,
         timeBox: timeBox.map { box in
           let deadlines = box.deadlines
           return BuildNextReport.TimeBox(
@@ -212,6 +216,9 @@ enum BuildNextRun {
       }
       if !report.readyToMerge.isEmpty {
         line += "; ready to merge: " + list(report.readyToMerge.map(\.task))
+      }
+      if let fixing = report.fixing {
+        line += "; fixing: " + list(fixing)
       }
       if let box = report.timeBox {
         line += "; \(box.secondsToCutoff) s to the cutoff"

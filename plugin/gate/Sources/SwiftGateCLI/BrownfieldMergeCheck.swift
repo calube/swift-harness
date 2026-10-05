@@ -357,7 +357,7 @@ enum BrownfieldMergeCheck {
     _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
     context: GateRun.Context, dependencies: Dependencies
   ) async -> AreaSteps {
-    let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
+    let steps: [AreaStep] = tier == .final ? FinalGateReuse.steps : [.build, .test, .lint]
     guard let warming = dependencies.runner as? any TestDeviceWarming else {
       return await run(
         area, tier: tier, steps: steps, files: files, added: added, root: root,
