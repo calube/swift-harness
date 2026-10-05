@@ -45,21 +45,49 @@ public struct QAReport: Sendable, Equatable {
     settled: Bool = false, commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [],
     notes: [String] = [], reasonOnly: Int = 0, checkableRows: Int? = nil
   ) {
+    let unverifiable = checkableRows == 0 && !atBase
     let findings =
       Self.findings(rows: rows, atBase: atBase, settled: settled)
       + Self.findings(gaps: gaps, rows: rows)
+      + (unverifiable
+        ? Self.noVerifiableRow(reasonOnly: reasonOnly, gates: settled || final) : [])
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
+    let verified =
+      "\(Self.verified(rows)) of \(rows.count + reasonOnly) rows verified"
+      + (reasonOnly > 0 ? " (\(reasonOnly) reason-only)" : "")
+    let message =
+      if unverifiable {
+        verified + ": unverified, no row has a check to run"
+      } else if rows.isEmpty {
+        "no validation row to run"
+      } else {
+        verified + ": " + counts.joined(separator: ", ")
+      }
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
       commit: commit,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
-      reasonOnly: reasonOnly, findings: findings, notes: notes,
-      message: rows.isEmpty
-        ? "no validation row to run"
-        : "\(Self.verified(rows)) of \(rows.count) rows verified: "
-          + counts.joined(separator: ", "))
+      reasonOnly: reasonOnly, findings: findings, notes: notes, message: message)
+  }
+
+  /// The finding for a table no row of which has a check: major once the build has ended or on
+  /// a `--final` run, a nit while tasks still merge.
+  private static func noVerifiableRow(reasonOnly: Int, gates: Bool) -> [Finding] {
+    let what =
+      reasonOnly == 0
+      ? "the validation table has no row"
+      : "all \(reasonOnly) of the validation table's requirements are reason-only"
+    // Every argument is non-empty, so the contract can't refuse it.
+    let finding = try? Finding(
+      ruleID: noVerifiableRowRuleID, severity: gates ? .major : .nit,
+      file: ValidationTable.fileName, line: nil,
+      message:
+        "\(what), so no check runs and nothing is verified; give the plan acceptance or flow "
+        + "rows",
+      failureScenario: nil)
+    return finding.map { [$0] } ?? []
   }
 
   /// How many of `rows` ran their check and got an answer, `pass` or `red`.

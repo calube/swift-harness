@@ -16,7 +16,13 @@ public enum PlanLintValidation {
 
   /// The obstacle kind `reason` opens with, when a detail follows its colon; `nil` otherwise.
   public static func obstacle(of reason: String) -> String? {
-    nil
+    let text = reason.trimmingCharacters(in: .whitespaces)
+    guard let colon = text.firstIndex(of: ":") else { return nil }
+    let kind = String(text[..<colon])
+    guard obstacleKinds.contains(kind),
+      !text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces).isEmpty
+    else { return nil }
+    return kind
   }
 
   /// A task as the screen check reads it: the requirements it covers and the paths it writes.
@@ -46,7 +52,8 @@ public enum PlanLintValidation {
   }
 
   /// Every finding, each `major`: uncovered requirements in plan order, then each row's findings
-  /// in table order, then the screen requirements with no flow row in plan order.
+  /// in table order, then the screen requirements with no flow row in plan order, then the app
+  /// areas with no flow row in area order.
   ///
   /// - Parameters:
   ///   - requirements: the plan's requirement ids, in plan order.
@@ -131,14 +138,18 @@ public enum PlanLintValidation {
               + "fails on leftovers"))
       }
     }
+    let screenTasks = tasks.filter { $0.id != contractTask }
     findings += try screenFindings(
-      table: table, requirements: requirements, tasks: tasks, appAreas: appAreas, file: file,
-      rowLines: rowLines, sectionLine: sectionLine)
+      table: table, requirements: requirements, tasks: screenTasks, appAreas: appAreas,
+      file: file, rowLines: rowLines, sectionLine: sectionLine)
+    findings += try appFindings(
+      table: table, screenTasks: screenTasks, allTasks: tasks, appAreas: appAreas, file: file,
+      sectionLine: sectionLine)
     return findings
   }
 
   /// 1 finding per requirement, in plan order, that a task covers while writing a screen of an
-  /// `xcode` area, with no `flow` row and no reason on any of its rows.
+  /// `xcode` area, with no `flow` row and no reason on any of its rows naming an obstacle.
   private static func screenFindings(
     table: ValidationTable, requirements: [String], tasks: [TaskWrites], appAreas: [AppArea],
     file: String, rowLines: [Int], sectionLine: Int?
@@ -147,27 +158,74 @@ public enum PlanLintValidation {
     var findings: [Finding] = []
     for requirement in requirements {
       let rows = table.rows.enumerated().filter { $0.element.requirement == requirement }
-      let reasoned =
-        table.unitOnly.contains { $0.requirement == requirement }
-        || rows.contains { !($0.element.reason ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
-      guard !reasoned, !rows.contains(where: { $0.element.layer == .flow }) else { continue }
+      let reasons =
+        (table.unitOnly.filter { $0.requirement == requirement }.map(\.reason)
+        + rows.compactMap(\.element.reason)).filter {
+          !$0.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+      guard !reasons.contains(where: { obstacle(of: $0) != nil }),
+        !rows.contains(where: { $0.element.layer == .flow })
+      else { continue }
       guard
         let (task, path, area) = tasks.lazy.filter({ $0.covers.contains(requirement) })
           .compactMap({ task in screenPath(task, appAreas).map { (task.id, $0.path, $0.area) } })
           .first
       else { continue }
       let line = rows.first.flatMap { $0.offset < rowLines.count ? rowLines[$0.offset] : nil }
+      let kinds = obstacleKinds.map { "`\($0):`" }.joined(separator: ", ")
+      let fix =
+        reasons.isEmpty
+        ? "add a flow row for its journey, or open its row's Reason with what stops a flow: "
+          + kinds
+        : "its Reason names no obstacle a flow can't pass, and unit or acceptance tests never "
+          + "stand in for a flow; add a flow row for its journey, or open the Reason with what "
+          + "stops a flow: " + kinds
       findings.append(
         try Finding(
           ruleID: screenWithoutFlowRuleID, severity: .major, file: file,
           line: line ?? sectionLine,
           message:
             "\(requirement) is on screen: `\(task)` writes `\(path)` in the xcode area "
-            + "`\(area)`, but \(requirement) has no flow row; add a flow row for its journey, "
-            + "or say in its row's Reason why no flow can check it",
+            + "`\(area)`, but \(requirement) has no flow row; \(fix)",
           failureScenario:
             "the screen merges with no flow, so no video is recorded, nothing runs red at the "
             + "base, and the Validation tab has no journey for \(requirement)"))
+    }
+    return findings
+  }
+
+  /// 1 finding per `xcode` area, in area order, whose screens a task writes while no `flow` row
+  /// runs after or covers the work of a task writing inside it. Reasons excuse single
+  /// requirements, never a whole app.
+  private static func appFindings(
+    table: ValidationTable, screenTasks: [TaskWrites], allTasks: [TaskWrites],
+    appAreas: [AppArea], file: String, sectionLine: Int?
+  ) throws(ReportContractViolation) -> [Finding] {
+    var findings: [Finding] = []
+    for area in appAreas {
+      guard
+        let (task, path) = screenTasks.lazy.compactMap({ task in
+          screenPath(task, [area]).map { (task.id, $0.path) }
+        }).first
+      else { continue }
+      let flowed = table.rows.contains { row in
+        row.layer == .flow
+          && allTasks.contains { task in
+            (row.runsAfter.contains(task.id) || task.covers.contains(row.requirement))
+              && task.writes.contains { contains(area.root, $0) }
+          }
+      }
+      guard !flowed else { continue }
+      findings.append(
+        try Finding(
+          ruleID: appWithoutFlowRuleID, severity: .major, file: file, line: sectionLine,
+          message:
+            "the xcode area `\(area.name)` gets screens (`\(task)` writes `\(path)`), but no "
+            + "flow row drives it; add at least 1 flow row for a journey through them: a "
+            + "Reason excuses 1 requirement, never the whole app",
+          failureScenario:
+            "the app merges with no flow run, so no video is recorded, nothing runs red at the "
+            + "base, and the Validation tab is empty"))
     }
     return findings
   }

@@ -286,7 +286,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     return (
       Validation(
         runID: report.runID, verdict: report.verdict, rows: report.rows.count,
-        verified: QAReport.verified(report.rows)), nil
+        verified: QAReport.verified(report.rows), reasonOnly: report.reasonOnly), nil
     )
   }
 
@@ -651,8 +651,12 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     }
     if let validation {
       let run = validation.runID.map { "qa run \($0), " } ?? ""
+      // No row with a check ran, so whatever the verdict nothing was verified.
+      let unverified = validation.rows == 0 ? "unverified, " : ""
+      let reasons = validation.reasonOnly > 0 ? ", \(validation.reasonOnly) reason-only" : ""
       out.append(
-        "validation: \(validation.verified) of \(validation.rows) rows verified "
+        "validation: \(unverified)\(validation.verified) of "
+          + "\(validation.rows + validation.reasonOnly) rows verified\(reasons) "
           + "(\(run)\(validation.verdict.rawValue))")
     } else if let validationNote {
       out.append("validation: not recorded; \(validationNote)")

@@ -118,9 +118,14 @@ Serve the report as CSV.
 - **flow** drives a user journey in the running app. It runs for `xcode` areas only. Every
   requirement a task covers while writing a screen needs 1: a `Writes` path inside an `xcode`
   area's root with a folder or file named `…View`, `…Views`, `…Screen`, `…Screens`,
-  `…ViewController`, `…UI` or `…UITests`, or a `.storyboard` or `.xib`. An acceptance UI test
-  doesn't replace it, since only a flow records a video and runs red at the base. A requirement no
-  flow can check states why in its row's `Reason`.
+  `…ViewController`, `…UI` or `…UITests`, or a `.storyboard` or `.xib`; the contract task's stub
+  screens don't count. An acceptance UI test doesn't replace it, since only a flow records a video
+  and runs red at the base. A requirement no flow can check opens its `Reason` with what stops
+  one, `network:`, `hardware:`, `account:`, `data:` or `system:`, then what the simulator lacks,
+  such as `data: needs a source with 50 chapters`. A reason saying unit or acceptance tests cover
+  it excuses nothing. A reason excuses 1 requirement, never the app: each `xcode` area whose
+  screens a task writes has at least 1 `flow` row whose `Runs after` or covering task writes in
+  that area.
 - **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
   straight after a `flow` row for the same requirement and `Runs after` tasks; in a repository
   with no `xcode` area, an `acceptance` row takes the flow's place.
@@ -140,7 +145,9 @@ on these `plan-lint` rules:
 | `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
 | `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
-| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen, with no `flow` row and no row `Reason` |
+| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen, with no `flow` row and no `Reason` opening with an obstacle kind |
+| `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
+| `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
 
 ```markdown
 ## Validation
@@ -177,6 +184,20 @@ Write the flow and state checks against the contract's names, and record why eac
 Its rows' `Check` cells then name `qa/<name>.flow.json`, `qa/<name>.state.sh` or
 `qa/<name>.acceptance.sh`. A `flow` row exists only for a requirement a user sees in an `xcode`
 area's app, and names the identifiers and labels its contract task declares.
+
+## Dependencies a check needs
+
+A task's own tests run in its gates before any task it doesn't depend on merges, so a task whose
+check exercises another task's work depends on that task, directly or through others:
+
+- An acceptance row's `Writer` depends on every other task in its `Runs after`.
+- A task whose `Acceptance` names a path or file another task writes, or that file's name, such
+  as `AmountInput` for `AmountInput.swift`, depends on that task.
+- A UI test shows the running app, so its writer depends on every task whose behaviour it shows,
+  such as the fake whose seed data a launch test reads, or the contract lands that data.
+
+`plan import` fails on the first 2 as `plan-lint.check-missing-dependency`. The third is yours to
+check: read each UI test's expected text back to the task that produces it.
 
 ## Write sets from the target graph
 

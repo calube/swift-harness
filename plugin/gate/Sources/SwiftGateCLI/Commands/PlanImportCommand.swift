@@ -137,10 +137,10 @@ enum PlanImportRun {
     } catch {
       return invalid(report, error, livePath)
     }
-    if let validation = livePlan.validation {
-      let findings: [Finding]
-      do throws(ReportContractViolation) {
-        findings = try PlanLintValidation.findings(
+    do throws(ReportContractViolation) {
+      var findings: [Finding] = []
+      if let validation = livePlan.validation {
+        findings += try PlanLintValidation.findings(
           table: validation.table, requirements: livePlan.requirements.map(\.id),
           taskIDs: Set(livePlan.tasks.map(\.id)),
           hasIOSArea: config.areas.contains { $0.kind == .xcode }, file: livePath,
@@ -150,11 +150,16 @@ enum PlanImportRun {
           },
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
-          })
-      } catch {
-        report.message = "linting the `## Validation` table of \(livePath): \(error)"
-        return report
+          },
+          contractTask: contract?.task)
       }
+      findings += try PlanLintCheckDependencies.findings(
+        tasks: livePlan.tasks.map {
+          PlanLintCheckDependencies.Task(
+            id: $0.id, deps: $0.deps, writes: $0.writes, acceptance: $0.brief.acceptance)
+        },
+        table: livePlan.validation?.table, file: livePath,
+        rowLines: livePlan.validation?.rowLines ?? [])
       let gating = findings.filter(\.severity.failsGate)
       if !gating.isEmpty {
         report.status = .invalid
@@ -166,6 +171,9 @@ enum PlanImportRun {
           }.joined(separator: "; ") + "; nothing was written"
         return report
       }
+    } catch {
+      report.message = "linting the plan's checks in \(livePath): \(error)"
+      return report
     }
 
     var landing: ContractLanding.Outcome?

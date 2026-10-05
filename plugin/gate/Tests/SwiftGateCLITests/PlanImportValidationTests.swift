@@ -120,7 +120,7 @@ private func line(of needle: String, in text: String) -> Int? {
 @Suite("plan import validation table")
 struct PlanImportValidationTests {
   @Test(
-    "the Aidoku trial's plan, whose acceptance row named a test source file, fails the import at that row with validation-check-source-file and writes nothing, and imports once the row names the test — catches the row qa run later ran as a path and read red on exit 126"
+    "the Aidoku trial's plan, whose acceptance row named a test source file, fails the import at that row with validation-check-source-file and writes nothing, and imports once the row names the test and req-prompt's reason names its obstacle — catches the row qa run later ran as a path and read red on exit 126"
   )
   func aidokuSourceFileCheckFailsImport() async throws {
     let captured = try String(
@@ -143,10 +143,12 @@ struct PlanImportValidationTests {
     #expect(!clone.exists("ledger.json"))
     #expect(!clone.exists("validation.json"))
 
+    let named = try replacing(
+      "`AidokuTests/LargeDownloadConfirmationTests.swift`",
+      with: "`test: AidokuTests/LargeDownloadConfirmationTests`", in: captured)
     try clone.write(
       plan: try replacing(
-        "`AidokuTests/LargeDownloadConfirmationTests.swift`",
-        with: "`test: AidokuTests/LargeDownloadConfirmationTests`", in: captured))
+        "| req-prompt | | | | | needs", with: "| req-prompt | | | | | data: needs", in: named))
     let fixed = await clone.run()
     #expect(fixed.status == .imported, "\(fixed.message)")
     let table = try ValidationTableJSON.decode(Data(contentsOf: clone.validationFile))
@@ -212,9 +214,10 @@ struct PlanImportValidationTests {
     #expect(report.status == .invalid, "\(report.message)")
     #expect(report.message.contains(PlanLintValidation.appWithoutFlowRuleID), "\(report.message)")
     let screens = report.message.components(
-      separatedBy: PlanLintValidation.screenWithoutFlowRuleID + ": ").dropFirst().map {
-        String($0.prefix { $0 != " " })
-      }
+      separatedBy: PlanLintValidation.screenWithoutFlowRuleID + ": "
+    ).dropFirst().map {
+      String($0.prefix { $0 != " " })
+    }
     #expect(
       screens == [
         "req-contact-search", "req-contact-select", "req-continue-rule", "req-confirm-send",

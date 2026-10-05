@@ -167,11 +167,10 @@ import Testing
       now.validation
         == .init(
           runID: "20261005T020255Z-74e7bef9", verdict: .red, rows: 0, verified: 0, reasonOnly: 12))
+    let line = now.text.split(separator: "\n").dropFirst().first.map(String.init)
     #expect(
-      now.text.split(separator: "\n").dropFirst().first
-        == "validation: unverified, 0 of 12 rows verified, 12 reason-only "
-        + "(qa run 20261005T020255Z-74e7bef9, RED)",
-      "\(now.text)")
+      line == "validation: unverified, 0 of 12 rows verified, 12 reason-only "
+        + "(qa run 20261005T020255Z-74e7bef9, RED)")
   }
 
   @Test(
