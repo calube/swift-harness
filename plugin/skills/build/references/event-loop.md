@@ -300,7 +300,6 @@ is a red gate, and the fixer gets only the new findings.
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 1 with `review-blocked-unanswered` | the return is `review-blocked`: halt the task as [Task halts](#task-halts) says. Only the person's **merge as is** lets it merge |
 | `build merge` exits 1 with `flows-unchecked` or `flows-red` | run [before each merge](#before-each-merge)'s `qa run`, or send its red rows to the fixer in the fix worktree `flows-red` cut |
-| `build merge` exits 0 with `status: deferred`, `reason: flows-pending` | not a halt: check the returns it names as their notices arrive, then run the combined `qa run`; with no notice by its `waitUntil`, merge again |
 | `build merge --fix` exits 1 with `fix-carries-unmerged` | merge the tasks it names first, then the fix |
 | `build merge` exits 2 | halt |
 
@@ -418,36 +417,26 @@ It runs only the rows whose `Runs after` names `<task>` and whose other tasks ar
 order: acceptance, then flow, then state, on 1 held device. `main` doesn't move. A red row stops
 its own requirement's later layers, never another requirement's (simulator QA amendment §6).
 `build merge` refuses `flows-unchecked` while a ready row has no such run GREEN at the branch's
-tip on `main`'s commit, so run it again after any commit to either. A run whose trial merge makes
+tip on `main`'s commit, so run it again after a commit to the branch. After another merge moves
+`main`, `build merge` still takes a run whose trial merge made the very tree this merge lands, as
+`merged-tree-run.json` beside its report names it: the code is identical, so merge again before
+running anything. Any other change to `main` needs the run again. A run whose trial merge makes
 the same tree as an earlier one in any checkout, a fixer's slot included, takes the rows that
 passed there with byte-identical checks, naming that run in `reusedFrom`, so repeating a fixer's
 passing run costs seconds.
 
-A row whose `Runs after` names tasks that haven't merged doesn't wait for the last of them. Once
-each unmerged task it names has a checked return in `build next`'s `readyToMerge` that still stands
-at its branch tip, it runs before the first of them merges, on 1 trial merge of all their branches
-onto `main`'s tip, each at its checked commit:
+Merge each task as soon as its own rows are GREEN. A row whose `Runs after` names a task that
+hasn't merged doesn't hold the others: `build merge` lands each of them on the rows it owns, with a
+note naming the rows still waiting, and the row runs before the last of its tasks lands, on that
+task's own trial merge. Never hold a ready task for another task's return, and never start a
+run over several branches to batch them. One that exists still counts:
 
 ```
 "$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json --output <plans>/<slug>/out/qa-<task>.json
 ```
 
-`build merge` of any of those tasks refuses `flows-unchecked` until a run took every one of their
-branches at its tip on `main`'s commit, in any order, naming the command with its task list; a
-GREEN one lets each merge in turn. Each merge reads only the rows whose `Runs after` names its task,
-and a row that runs after it alone counts from any run that took its branch at its tip. The held
-device and the reuse of a tree a passing run already checked work as above, so the last of them
-repeats the run in seconds when its merge makes the same tree. A task with a fixer's branch is no
-longer waiting: its rows run again before its fix merges.
-
-While another task such a row waits on has passed its worker's gate at its branch tip and its
-return isn't checked yet, or its checked return went back to work (a halt answered `retry`, a
-ledger reset, or a commit past the checked one), `build merge` defers: it exits 0 with `status: deferred`, `reason:
-flows-pending`, `action: wait` and a `waitUntil` time, since that return is minutes away and
-merging first would run the row twice. It is a wait, never a halt or a `gate-red`. Check the return
-when its notice arrives, then run the combined `qa run` the message names. The wait lapses 5
-minutes after that gate, or at `noNewStartsAt`, whichever is first: `waitUntil`. Merge again then
-if no notice came. A task back at work waits from the moment it went back.
+Its passes credit the tasks it took, and a RED row refuses the tasks that row's `Runs after`
+names, as below.
 
 - RED over several tasks: a red row refuses only the tasks its `Runs after` names. Pick the one
   that owns the red behaviour: the one whose write set holds the screen, state or code each red
