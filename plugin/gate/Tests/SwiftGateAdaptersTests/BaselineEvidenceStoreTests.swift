@@ -207,4 +207,30 @@ struct BaselineEvidenceStoreTests {
     #expect(leased.command.contains("id=\(FakeDevices.device.udid)"))
     #expect(leased.resultBundlePath == "/junit/app.test.xcresult")
   }
+
+  @Test(
+    "a test step moved to a worktree's own DerivedData keeps its result bundle, and a leased run keeps its DerivedData seed — catches 1 request rewrite dropping what another added"
+  )
+  func rewritesKeepEveryField() async throws {
+    let layout = BrownfieldStateLayout(
+      commonDir: URL(filePath: "/clone/.git", directoryHint: .isDirectory),
+      gitDir: URL(filePath: "/clone/.git/worktrees/task", directoryHint: .isDirectory))
+    let request = AreaCommandRequest(
+      area: "app", step: .test,
+      command:
+        "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' "
+        + "-resultBundlePath '/junit/app.test.xcresult'",
+      workingDirectory: "/work", deadline: .seconds(60), environment: [:], junitPath: nil,
+      resultBundlePath: "/junit/app.test.xcresult")
+
+    let seeded = XcodeDerivedData.request(request, layout: layout)
+    #expect(seeded.derivedDataSeed != nil)
+    #expect(seeded.resultBundlePath == "/junit/app.test.xcresult")
+
+    let base = FakeAreaCommandRunner { _ in .passed }
+    _ = await LeasedDeviceAreaRunner(base: base, leases: FakeTestDeviceLeases()).run(seeded)
+    let leased = try #require(base.requests.first)
+    #expect(leased.derivedDataSeed == seeded.derivedDataSeed)
+    #expect(leased.resultBundlePath == "/junit/app.test.xcresult")
+  }
 }
