@@ -8,7 +8,7 @@ public enum TestlintRules {
     NoAssertionRule(), TautologyRule(), ExistenceOnlyRule(), AssertsOwnDoubleRule(),
     SwallowedErrorRule(), SleepRule(), DuplicateTestRule(), UnnamedTestRule(),
     NonExhaustiveStoreRule(), XCUITestFlowRule(), MisplacedT2Rule(), TestClockSerializedRule(),
-    LeakedTestNameIdRule(), HangWithoutDeadlineRule(),
+    LeakedTestNameIdRule(), HangWithoutDeadlineRule(), UnboundedWaitRule(),
   ]
 }
 

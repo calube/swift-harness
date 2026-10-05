@@ -14,19 +14,23 @@ enum BrownfieldProve {
     let readFile: @Sendable (URL) -> String?
     /// Per command run.
     let deadline: Duration
+    /// The worktree's state, whose prove DerivedData an `xcodebuild` in the scratch tree builds
+    /// in; `nil` leaves each command as it is.
+    let layout: BrownfieldStateLayout?
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
       readFile: @escaping @Sendable (URL) -> String? = {
         try? String(contentsOf: $0, encoding: .utf8)
       },
-      deadline: Duration
+      deadline: Duration, layout: BrownfieldStateLayout? = nil
     ) {
       self.git = git
       self.scratch = scratch
       self.runner = runner
       self.readFile = readFile
       self.deadline = deadline
+      self.layout = layout
     }
 
     /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.
@@ -38,8 +42,22 @@ enum BrownfieldProve {
         git: LiveGit(runner: process, repositoryRoot: root.path),
         scratch: LiveScratchWorktrees(
           runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory),
-        runner: runner, deadline: deadline)
+        runner: runner, deadline: deadline,
+        layout: layout)
     }
+  }
+
+  /// Whether the prove DerivedData of each `xcode` area in `areas` already holds a build; `none`
+  /// when none is an `xcode` area, since a scratch tree's other builds start in a fresh folder.
+  static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
+    -> GateDerivedData
+  {
+    GateStepCollector.derivedData(
+      buildDirectories: areas.filter { $0.kind == .xcode }.map {
+        URL(
+          filePath: XcodeDerivedData.provePath(area: $0.name, layout: layout) + "/Build",
+          directoryHint: .isDirectory)
+      })
   }
 
   /// - Parameters:
@@ -215,10 +233,11 @@ enum BrownfieldProve {
         template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: ids),
         files: ChangedTestIDs.filesArgument(areaRoot: area.root, ids: ids),
         junit: junit.map(ChangedTestIDs.shellQuoted))
+      let request = AreaCommandRequest(
+        area: area.name, step: step, command: command, workingDirectory: directory.path,
+        deadline: dependencies.deadline, environment: [:], junitPath: junit)
       return await dependencies.runner.run(
-        AreaCommandRequest(
-          area: area.name, step: step, command: command, workingDirectory: directory.path,
-          deadline: dependencies.deadline, environment: [:], junitPath: junit))
+        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request)
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement

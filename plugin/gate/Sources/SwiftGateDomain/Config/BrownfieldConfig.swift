@@ -112,6 +112,19 @@ public struct BrownfieldArea: Sendable, Equatable {
   }
 }
 
+extension BrownfieldArea {
+  /// Whether `test_files` narrows a run to the changed tests (`{tests}` or `{files}`), so `slice`
+  /// can run and prove them even when the whole suite is over its budget.
+  /// A `{tests}` command selects only in a kind whose test ids `prove` reads.
+  public var selectsChangedTests: Bool {
+    guard let template = testFiles else { return false }
+    if template.contains(AreaCommandExpansion.testsPlaceholder) {
+      return kind != .xcode && kind != .command
+    }
+    return template.contains(AreaCommandExpansion.filesPlaceholder)
+  }
+}
+
 /// 1 `[[allow]]` entry: a finding waived on 1 line, matched by its text's hash, so a moved line
 /// keeps its waiver and an edited one loses it.
 public struct BrownfieldAllow: Sendable, Equatable {

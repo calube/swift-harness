@@ -418,4 +418,62 @@ struct BuildPlanBranchTests {
     #expect(report.verdict != .blocked, "\(report.message)")
     #expect(!report.message.contains("has no worktree"))
   }
+
+  @Test(
+    "check-return refuses a brownfield return whose slice ran no test of the area its new test file sits in, and accepts it once a gate ran that area's tests — catches a ready-to-merge task whose new tests first run at the merge gate"
+  )
+  func checkReturnRefusesUntestedAreaTests() async throws {
+    let scenario = try await PlanBranchScenario(
+      config: PlanBranchScenario.config.replacingOccurrences(
+        of: "test = \"pytest\"\n", with: "test = \"pytest\"\ntest_files = \"pytest {files}\"\n"))
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    let worktree = URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory)
+    let test = "Core/tests/test_value.py"
+    try FileManager.default.createDirectory(
+      at: worktree.appending(path: "Core/tests"), withIntermediateDirectories: true)
+    try Data("VALUE = 2\n".utf8).write(to: worktree.appending(path: "Core/value.py"))
+    try Data("def test_value():\n    assert VALUE == 2\n".utf8).write(
+      to: worktree.appending(path: test))
+    try await scenario.git("add", "-A", in: scenario.taskWorktree)
+    try await scenario.git("commit", "-q", "-m", "feat: value", in: scenario.taskWorktree)
+    let commit = try await scenario.git("rev-parse", "HEAD", in: scenario.taskWorktree)
+    let finished = Date(timeIntervalSince1970: 1_790_000_000)
+
+    func check(_ step: GateStep, suffix: UInt32) async throws -> BuildCheckReturnReport {
+      let runID = RunID.make(startedAt: finished, suffix: suffix)
+      try RunStore(worktreeRoot: worktree).record(
+        try RunReport(
+          runID: runID, durationMilliseconds: 1200,
+          tiers: [
+            TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)
+          ], findings: []),
+        finishedAt: finished, command: "check slice", headCommit: commit, dirty: false,
+        gateSteps: [
+          GateStepTiming(
+            step: step, tier: nil, milliseconds: 1, verdict: .green, derivedData: .none,
+            area: "core")
+        ])
+      let file = scenario.base.appending(path: "return-\(suffix).json")
+      try TaskReturnJSON.encode(
+        TaskReturn(
+          task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
+          gate: .init(tier: .slice, verdict: .green, runID: runID),
+          review: .init(mode: .classified, findings: []), testsAdded: [], notes: "value",
+          designConflict: nil)
+      ).write(to: file)
+      return await BuildCheckReturnRun.run(
+        file: file.path, plan: PlanBranchScenario.slug,
+        git: LiveGit(runner: scenario.runner, repositoryRoot: scenario.checkout),
+        profile: BuildPresetCatalog.profile(root: scenario.user))
+    }
+
+    let built = try await check(.areaBuild, suffix: 1)
+    #expect(built.findings.map(\.rule) == [.testsNotRun], "\(built.message) \(built.findings)")
+    #expect(built.findings.first?.message.contains(test) == true)
+
+    let tested = try await check(.areaTest, suffix: 2)
+    #expect(tested.verdict == .green, "\(tested.message) \(tested.findings)")
+  }
 }

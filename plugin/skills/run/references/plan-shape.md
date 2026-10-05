@@ -16,8 +16,8 @@ task and the line.
   isn't listed here fails the import naming it. A plan with no requirements section has no
   `Covers` lines.
 - `## Areas`: 1 bullet per touched area: its name, its warm test time from the warm-up, and
-  `build-only` when that time exceeds `slice_budget_s`, or `unknown` while the warm-up hasn't
-  reached it. The importer ignores this section; the report and the workers read it.
+  `build-only` when that time exceeds `slice_budget_s` and its `test_files` can't narrow a run
+  to the changed tests, or `unknown` while the warm-up hasn't reached it. The importer ignores this section; the report and the workers read it.
 - `## Validation`: the checks that prove each requirement once its tasks merge; see
   [The validation table](#the-validation-table). A plan without it imports with a note that no
   checks will run after each merge, unless its tasks write an `xcode` area's screens: then it
