@@ -11,6 +11,14 @@ public enum BuildAgentLaunchGuard {
   /// The violation when an Agent call launches one of ``agentTypes`` without
   /// `run_in_background: true`, else `nil`.
   public static func evaluate(subagentType: String?, runInBackground: Bool?) -> GuardViolation? {
-    nil
+    guard let subagentType, agentTypes.contains(subagentType), runInBackground != true else {
+      return nil
+    }
+    return GuardViolation(
+      ruleID: ruleID,
+      reason:
+        "launch `\(subagentType)` in the background: pass `run_in_background: true`. The build "
+        + "loop merges and starts other tasks while it works, and a foreground launch holds "
+        + "them all until it returns. Its completion arrives as a notice.")
   }
 }

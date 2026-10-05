@@ -78,7 +78,8 @@ call also builds the binary, which can take minutes, so before step 1 warm it wi
 the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
 `run_in_background` to one and never end one with a shell `&`. The 1 kind of background work in a
 run is the Workflow and Agent tool calls, which keep the session alive until they return; no timer
-runs beside them.
+runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
+passes `run_in_background: true`: a foreground one blocks every merge and start until it returns.
 
 ## 1. Read the spec
 
@@ -111,9 +112,9 @@ Open the phase: `"$SG" events span start --phase explore --build-run <slug>`, ke
 
 With 1 touched area, or a repository small enough to read in a few minutes, read the code yourself
 and skip the explorers. Otherwise launch 1 `swift-harness:brownfield-explorer` per touched area with
-the Agent tool, all in 1 message and in the background. Each prompt names the area, its `root`,
-its commands from `<config>`, the absolute path of `<spec>`, and the requirements that touch it.
-Note the time you launched them.
+the Agent tool, all in 1 message and in the background (`run_in_background: true`). Each prompt
+names the area, its `root`, its commands from `<config>`, the absolute path of `<spec>`, and the
+requirements that touch it. Note the time you launched them.
 
 Each explorer has a 3-minute soft and 4-minute hard deadline and returns in 300 words or fewer.
 At 3 minutes, send each explorer still running a message to return what it has now. At 4 minutes,
@@ -237,8 +238,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      has its node dependencies, so the worker runs those commands without an install first.
    - **The validation task commits nothing**, so it never merges and never runs the build-task
      workflow. When `build next` lists it, run `worktree create` and `ledger set … in-progress` as
-     for any task, then launch 1 Agent tool call in the background with `subagent_type`
-     `general-purpose` and `model` `opus`, the 1 alias the tool takes here. Its prompt names the
+     for any task, then launch 1 Agent tool call in the background, passing
+     `run_in_background: true`, with `subagent_type` `general-purpose` and `model` `opus`, the 1
+     alias the tool takes here. Its prompt names the
      task's worktree and id, `<slug>` as its plan, its rows from `## Validation`, the contract
      commit's sha, and says to work in that worktree and follow
      `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Its write set names no
@@ -371,7 +373,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
-   reports in the user's checkout, and `<plan-branch>` holds every commit.
+   reports in the user's checkout, then removes every task and fix worktree the run left, merged
+   or not, keeping their branches, and `<plan-branch>` holds every commit.
 
 ## 9. Report
 

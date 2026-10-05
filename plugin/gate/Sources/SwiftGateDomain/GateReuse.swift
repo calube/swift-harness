@@ -35,14 +35,27 @@ public enum GateReuse {
 
   /// A SHA-256 hex digest over every input, in a fixed order.
   public static func key(_ inputs: Inputs) -> String {
-    ""
+    var lines = [
+      "schema 1", "tier \(inputs.tier.rawValue)", "tree \(inputs.treeHash)",
+      "merge-base \(inputs.mergeBase)", "binary \(inputs.sourceHash)",
+    ]
+    for name in inputs.stateFiles.keys.sorted() {
+      lines.append("file \(name) \((inputs.stateFiles[name] ?? nil) ?? "absent")")
+    }
+    return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
-  /// The newest GREEN run of `command` recorded with `key` on a clean tree, or `nil`.
+  /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.
   public static func reusable(_ records: [RunHistoryRecord], command: String, key: String)
     -> RunHistoryRecord?
   {
-    nil
+    // Only the newest run on these inputs answers: a GREEN behind a later RED is a flake.
+    guard
+      let newest = records.last(where: {
+        $0.command == command && $0.reuseKey == key && $0.dirty == false
+      }), newest.verdict == .green
+    else { return nil }
+    return newest
   }
 
   /// The SHA-256 hex digest of `data`, for ``Inputs/stateFiles``.

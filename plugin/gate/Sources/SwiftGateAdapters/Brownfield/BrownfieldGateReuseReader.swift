@@ -52,6 +52,26 @@ public struct BrownfieldGateReuseReader: Sendable {
   /// The inputs `tier` would run on with `--base base`, or `nil` when any of them is unknown: a
   /// dirty tree, no merge base, no binary hash, or a state file that can't be read.
   public func inputs(tier: CheckTier, base: String) async -> GateReuse.Inputs? {
-    nil
+    guard let sourceHash,
+      let state = try? await workingTree.state(), !state.dirty, let treeHash = state.treeHash,
+      let mergeBase = try? await git.mergeBase("HEAD", base),
+      let baseTree = try? await tree(mergeBase)
+    else { return nil }
+    var files: [String: String?] = [:]
+    for (name, url) in [
+      ("config", layout.config), ("baseline", layout.baseline(tree: baseTree)),
+      ("warmup", layout.warmup(tree: baseTree)),
+    ] {
+      do {
+        files[name] = .some(GateReuse.digest(try Data(contentsOf: url)))
+      } catch CocoaError.fileReadNoSuchFile {
+        files[name] = .some(nil)
+      } catch {
+        return nil
+      }
+    }
+    return GateReuse.Inputs(
+      tier: tier, treeHash: treeHash, mergeBase: mergeBase, sourceHash: sourceHash,
+      stateFiles: files)
   }
 }

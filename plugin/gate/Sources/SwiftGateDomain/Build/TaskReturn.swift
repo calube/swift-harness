@@ -553,7 +553,13 @@ public enum TaskReturnCheck {
             + "outside its write set; a task that needs that edit returns a design conflict")
       ]
     }
-    let unexplained = evidence.filesOutsideWriteSet.filter { !taskReturn.notes.contains($0) }
+    let named = evidence.filesOutsideWriteSet.filter { taskReturn.notes.contains($0) }
+    // A generated file goes with the edits its notes explain in the same package or project.
+    let unexplained = evidence.filesOutsideWriteSet.filter { path in
+      guard !named.contains(path) else { return false }
+      guard let file = WriteSet.generated(path), !file.owner.isEmpty else { return true }
+      return !named.contains { $0.hasPrefix(file.owner) }
+    }
     guard !unexplained.isEmpty else { return [] }
     return [
       .init(

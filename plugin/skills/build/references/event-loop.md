@@ -143,8 +143,8 @@ with other tasks, or end the turn to wait; never poll.
 A design plan's decomposer adds 1 validation task when 2 or more tasks build UI. Its write set is
 `.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
 workflow. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
-as for any task, then launch 1 Agent tool call in the background with `subagent_type`
-`general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
+as for any task, then launch 1 Agent tool call in the background, passing
+`run_in_background: true`, with `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
 plan, its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
 surface, and says to work in that worktree and follow
 `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. When it returns:
@@ -212,7 +212,10 @@ Then the fixer, 1 attempt. Open its span first, a fix pass inside the task as th
 fix pass is: `"$SG" events span start --phase fix --build-run <run> --task <task> --role build-worker`,
 kept as `<span>`.
 
-Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and give it:
+Launch `swift-harness:build-fixer` with the Agent tool in the background, passing
+`run_in_background: true`, as every worker and fixer launch does: a foreground call blocks every
+merge and start until it returns. Keep `<agent>`, the id the launch result names in its
+`agentId: <agent>` line. Give it:
 
 - the plan slug and the task id;
 - `fixWorktree` and `fixBranch` from the `build merge` JSON;
@@ -232,17 +235,20 @@ Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and g
   that passes there. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
   (`guard.fixer-gate-cap`).
 
-When it returns, end the span by its outcome: `"$SG" events span end <span> --outcome ok` for
-`ready-to-merge`, else `"$SG" events span end <span> --outcome red`.
+Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
+end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `ready-to-merge`,
+else `"$SG" events span end <span> --outcome red`.
 
 Then record its usage under the task it fixed:
 `"$SG" events ingest --session <session> --agent-id <agent> --role build-worker --task <task> --build-run <run>`,
-where `<agent>` is the id the Agent tool's result names in its `agentId: <agent>` line. The fixer is
+with the `<agent>` its launch named. The fixer is
 this session's own subagent, which every other ingest files as the orchestrator's, so run this one
 first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
 other non-zero exit prints 1 line for the report and the step goes on.
 
-Write its reply to `.harness/build/<run>/fix-<task>.json` and check it:
+Write its reply, the notice's `<result>`, to `.harness/build/<run>/fix-<task>.json` and check it.
+The notice HTML-escapes it: turn `&lt;`, `&gt;` and `&amp;` back into `<`, `>` and `&`, and never
+read the output file the notice names, which is the fixer's whole transcript:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
 
 - The check passes and `outcome` is `ready-to-merge`:
