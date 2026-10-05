@@ -239,6 +239,9 @@ struct BrownfieldSliceCheckTests {
 
     let app = runner.requests.filter { $0.area == "app" }.map(\.step)
     #expect(app == [.build], "the slow area only builds")
+    #expect(
+      runner.requests.filter { $0.area == "app" }.map(\.command) == ["build"],
+      "an area that isn't xcode keeps its own build")
     #expect(runner.requests.contains { $0.area == "api" && $0.step == .testFiles })
     #expect(
       context.proofs.results.map { "\($0.target) \($0.test) \($0.outcome.rawValue)" }
@@ -251,6 +254,46 @@ struct BrownfieldSliceCheckTests {
     #expect(
       buildOnly.first { $0.file == "cli" }?.message.contains("no warm-up") == true,
       "an unmeasured area says why it only builds")
+    #expect(Self.verdict(parts) == .green)
+  }
+
+  @Test(
+    "the trial's xcode area, build-only at its 45.7 s warm test, compiles its test target with build-for-testing on the test destination and runs no test — catches a test target that first compiles at the merge gate"
+  )
+  func buildOnlyXcodeAreaBuildsForTesting() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml"))
+    let aidoku = try #require(config.areas.first)
+    let test = try #require(aidoku.test)
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: [aidoku],
+      changes: [
+        Change(
+          path: "Aidoku/Shared/Managers/DownloadManager.swift", text: "let limit = 50\n",
+          added: [1...1]),
+        Change(
+          path: "AidokuTests/LargeDownloadConfirmationTests.swift",
+          text: "func testLimit() { XCTAssertEqual(limit, 50) }\n", added: [1...1]),
+      ],
+      runner: runner, warm: ["Aidoku": 45_700], context: context)
+
+    let head = runner.requests.filter { $0.area == "Aidoku" && $0.step != .lint }
+    #expect(
+      head.map(\.command)
+        == [test.replacingOccurrences(of: "xcodebuild test ", with: "xcodebuild build-for-testing ")],
+      "the build-only step compiles the test target on the scheme and destination its tests use")
+    #expect(!runner.requests.contains { $0.step == .test || $0.step == .testFiles })
+    #expect(context.steps.steps.contains { $0.step == .areaBuild && $0.area == "Aidoku" })
+    let buildOnly = parts.findings.filter { $0.ruleID == BrownfieldRuleID.buildOnly.rawValue }
+    #expect(buildOnly.count == 1)
+    #expect(
+      buildOnly.first?.message.contains("compiles its tests") == true,
+      "\(buildOnly.map(\.message))")
     #expect(Self.verdict(parts) == .green)
   }
 
