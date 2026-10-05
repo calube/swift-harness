@@ -1,9 +1,8 @@
 # swift-harness: sub-project 5, the build executor
 
 <!-- RESUME
-Status: APPROVED 2026-09-26 by the user, after review of the published page. Source of truth for every decision:
-docs/handoffs/2026-09-26-subproject-5-brainstorm-decisions.md (D1–D14; D5 amends D1).
-Next action: build per docs/plans/2026-09-26-build-executor-plan.md.
+Status: APPROVED 2026-09-26 by the user, after review of the published page. Built. The brainstorm
+decisions record (D1–D14; D5 amends D1) and the plan now live only in the tag `harness-freeze-2026-10-05`.
 Read first: this header → §2 (decision map) → the section you need. Grep; don't read the whole file.
 Corrects Foundation spec §2 (sub-project map row 5) and sub-project 2 spec §5.7 (ledger states and fields). See §15.
 Open: whether a workflow agent can take a SendMessage fix round (§14).
@@ -21,7 +20,7 @@ Three pieces turn an approved plan, or a single spec file, into merged, gated co
 - **Named presets** in `.swiftgate.toml` set parallelism, review depth, gate tiers, worker models, the
   design tier and a time budget. Bootstrap stamps `default` and `interview`.
 
-The hand-run loop in the [orchestrator runbook](../handoffs/subproject-2-orchestrator-runbook.md) built
+The hand-run loop in the [orchestrator runbook](../process/orchestrator-runbook.md) built
 sub-projects 1 and 2. This spec turns that loop into commands, a workflow and a skill, and keeps the
 runbook's lessons as rules.
 

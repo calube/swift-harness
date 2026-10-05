@@ -2,12 +2,12 @@
 
 <!-- RESUME
 Status: APPROVED 2026-09-27 by the user, after answering every open question (§7).
-Plan: docs/plans/2026-09-27-fast-modes-plan.md (surface-check, then sprint; design-free ship waits for sprint's
-rehearsals).
-Why: interview trial run 2 (docs/handoffs/2026-09-27-interview-trial-run-2.md) and the ship speed research. Design
+Plan: built (surface-check, then sprint, then design-free ship); the plan now lives only in the
+tag `harness-freeze-2026-10-05`.
+Why: interview trial run 2 (its handoff now lives only in the tag `harness-freeze-2026-10-05`) and the ship speed research. Design
 and plan take 13–14 min before any code; only 27–40% of a run is model coding.
 Covers the research's changes 5 (a design-free ship path), 6 (a sprint skill) and 7 (surface commits and
-`swiftgate surface-check`). Changes 1–4, 8–10 are plan tasks in docs/plans/2026-09-26-build-executor-plan.md "Speed".
+`swiftgate surface-check`). The build executor plan carried changes 1–4, 8–10 as tasks in its "Speed" section.
 Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md), proposed.
 User decision 2026-09-27: sprint first, built for correctness. Building the harness is not the timed session: every
 harness change here goes through design approval, plan tasks, surface-first workers, the push + prove merge gate and

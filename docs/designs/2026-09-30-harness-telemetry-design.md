@@ -3,13 +3,13 @@
 <!-- RESUME
 Status: APPROVED 2026-09-30 by the user, with the 4 questions in §14 and the judge-log question decided.
 Built 2026-10-01: every kind, reader section and command below has merged. Where the code differed, this design now
-follows it, and the interfaces note records each difference:
-[`../handoffs/harness-telemetry-interfaces.md`](../handoffs/harness-telemetry-interfaces.md).
+follows it. The interfaces note that recorded each difference now lives only in
+the tag `harness-freeze-2026-10-05`.
 Why: the user asked for telemetry "to self improve" the harness. Today time, cost, wrong gates, flakes, stuck
 workers and halts are measured by hand after a run, and token cost isn't measured at all.
 Builds on: the shared event envelope from the `judge-emits-judgement-events` branch (`HarnessEvent`, the append-only
 writer, `.harness/events/<stream>.jsonl`, `judge.decision` and `judge.call`).
-Plan: [`../plans/2026-09-30-harness-telemetry-plan.md`](../plans/2026-09-30-harness-telemetry-plan.md).
+Plan: built; it now lives only in the tag `harness-freeze-2026-10-05`.
 Read first: this header, §3, §5 and §14.
 -->
 
