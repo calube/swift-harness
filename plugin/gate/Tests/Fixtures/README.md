@@ -3432,6 +3432,24 @@ PY
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: an area test step's reports
+
+`BrownfieldTrial/send-money-2-junit/` holds the `{junit}` reports the second send-money trial's
+`APIClient` package area left in the clone's state, written by its test command `swift test
+--xunit-output {junit}` during the run's warm-up: `APIClient.test.xml` is XCTest's, with no case,
+and `APIClient.test-swift-testing.xml` is Swift Testing's companion, with 7 passing cases. Every
+gate `report.json` of that run had `testCounts: null`, so how many tests an area ran was lost once
+a later step overwrote these files. `S` is the clone's state under its git common dir. From the
+repository root:
+
+```sh
+S=<clone>/.git/swift-harness F=plugin/gate/Tests/Fixtures/BrownfieldTrial/send-money-2-junit
+mkdir -p $F
+cp $S/junit/APIClient.test.xml $S/junit/APIClient.test-swift-testing.xml $F/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the 2 files matched nothing.
+
 ## Brownfield trial: a network-fed app excused from flows
 
 The first price-tracker trial ran `swiftgate run start spec.md` on the iOS app starter, whose 1

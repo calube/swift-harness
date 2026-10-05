@@ -254,7 +254,8 @@ enum WorktreeRun {
           "branch \(names.branch) isn't merged into \(names.baseBranch); merge it first")
       }
       if FileManager.default.fileExists(atPath: names.path) {
-        keeping = keepRuns(from: names.path, into: names.mainCheckout)
+        keeping = keepRuns(
+          from: names.path, into: names.mainCheckout, commonDirectory: names.commonDirectory)
         events = copyEvents(
           from: names.path, into: names.mainCheckout, commonDirectory: names.commonDirectory)
         try await workspace.removeWorktree(at: names.path, force: false)
@@ -307,7 +308,11 @@ enum WorktreeRun {
       }
       for worktree in [names, fixNames]
       where FileManager.default.fileExists(atPath: worktree.path) {
-        notes += keepRuns(from: worktree.path, into: worktree.mainCheckout).message
+        notes +=
+          keepRuns(
+            from: worktree.path, into: worktree.mainCheckout,
+            commonDirectory: worktree.commonDirectory
+          ).message
         notes +=
           copyEvents(
             from: worktree.path, into: worktree.mainCheckout,
@@ -394,14 +399,18 @@ enum WorktreeRun {
     var message = ""
   }
 
-  /// Copies the worktree's gate reports into the main checkout, so a task gate's evidence
-  /// outlives the worktree. A run it can't copy is named; removal still goes ahead, since the
-  /// branch is merged and a report is diagnostics, not work.
-  static func keepRuns(from path: String, into mainCheckout: String) -> KeptRuns {
+  /// Copies the worktree's gate reports where the run report reads them: the clone's common
+  /// state root in a brownfield clone, which outlives the plan checkout, else the main checkout's.
+  /// A run it can't copy is named; removal still goes ahead, since the branch is merged and a
+  /// report is diagnostics, not work.
+  static func keepRuns(from path: String, into mainCheckout: String, commonDirectory: String)
+    -> KeptRuns
+  {
     keepRuns(
       from: path,
-      into: StateRootResolver.resolve(
-        worktree: URL(filePath: mainCheckout, directoryHint: .isDirectory)))
+      into: StateRootResolver.keptRuns(
+        commonDir: URL(filePath: commonDirectory, directoryHint: .isDirectory),
+        mainCheckout: URL(filePath: mainCheckout, directoryHint: .isDirectory)))
   }
 
   /// ``keepRuns(from:into:)`` into the runs of the state root `destination`.

@@ -20,6 +20,8 @@ enum BrownfieldMergeCheck {
     let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
     /// Per command run.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
 
     /// An area command may run as long as the area's own tests take.
     static let liveDeadline: Duration = .seconds(3600)
@@ -327,8 +329,12 @@ enum BrownfieldMergeCheck {
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
           dependencies: dependencies)
       else { continue }
-      let (outcome, milliseconds) = await GateRun.timed {
-        await runner.run(XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
+      let request = XcodeDerivedData.request(prepared.request, layout: dependencies.layout)
+      let (outcome, milliseconds) = await GateRun.timed { await runner.run(request) }
+      if [.test, .testFiles, .e2e].contains(step),
+        let counts = await dependencies.testCounts.counts(of: request)
+      {
+        context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
       }
       var lintFindings: [Finding] = []
       var lintUnread = false
