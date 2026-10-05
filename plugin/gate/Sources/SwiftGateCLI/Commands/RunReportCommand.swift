@@ -87,6 +87,14 @@ enum BrownfieldRunReportRun {
       outcome.message = "reading the plan branch \(branch): \(error)"
       return outcome
     }
+    let build = await build(slug: slug, git: git)
+    switch build {
+    case .read(let run):
+      (outcome.runReport, outcome.runReportNote) = await BuildFinishRun.writeRunReport(
+        run: run.record.runID, root: root, pluginRoot: pluginRoot, git: git, now: now)
+    case .missing: outcome.runReportNote = "no build run to report"
+    case .unreadable(_, let reason): outcome.runReportNote = "the build run didn't read: \(reason)"
+    }
     let report = BrownfieldRunReport.make(
       BrownfieldRunReportInputs(
         slug: slug, planBranch: branch, planBranchHead: head,
@@ -94,7 +102,7 @@ enum BrownfieldRunReportRun {
         baseline: await baseline(
           layout: layout, base: base, branchExists: head != nil, branch: branch,
           git: git, runner: runner, root: root),
-        discover: discover(layout: layout), build: await build(slug: slug, git: git),
+        discover: discover(layout: layout), build: build,
         ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) },
         validation: files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName)
           ? QAFiles.newestWholeRun(
@@ -273,7 +281,10 @@ struct RunReportCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let outcome = await BrownfieldRunReportRun.write(
-      slug: slug, planBranch: planBranch, base: base, root: root, runner: LiveProcessRunner())
+      slug: slug, planBranch: planBranch, base: base, root: root, runner: LiveProcessRunner(),
+      pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
+        URL(filePath: $0, directoryHint: .isDirectory)
+      })
     Console.write(BrownfieldRunReportRun.render(outcome, json: json))
     if outcome.verdict != .green { throw ExitCode(outcome.verdict.exitCode) }
   }
