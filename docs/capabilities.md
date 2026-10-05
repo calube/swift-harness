@@ -45,7 +45,7 @@ behind each one. The [README](../README.md) has the highlights. Rule ids live in
 **`judge`** asks a model what static checks can't see: whether a test would fail if the
 behaviour broke, vague names, implementation-detail assertions and the wrong tier. It's opt-in,
 because it sends test source off the machine, and advisory below `ready`. The backend is Claude or
-TypeSafe's Jev ([playbook §5.4](../plugin/docs/testing-playbook.md#54-judge-seam-swiftgate-judge)).
+TypeSafe's Jev ([testing playbook](../plugin/docs/testing-playbook.md#54-judge-seam-swiftgate-judge)).
 Jev blocks on its own with a reason Claude writes, and hands its uncertain answers to Claude.
 `judge bench` scores backends on labelled cases
 ([first run](../evals/results/2026-09-30-judge-benchmark/summary.md)).
