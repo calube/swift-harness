@@ -1,0 +1,10 @@
+[
+  {"command": "open", "input": {"app": "com.example.SelectorProbe", "relaunch": true}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.count\"", "timeoutMs": 10000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "label=\"Step count\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.count\" value=\"3\"", "timeoutMs": 10000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "role=button label=\"Start\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "label=\"step COUNT\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.missing\" || id=\"probe.start\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "role=statictext id=\"probe.count\" value=\"3\""}}
+]

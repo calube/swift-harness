@@ -1,0 +1,13 @@
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_ARGS",
+    "message": "Batch step 2 wait input is invalid: Invalid wait selector: identifier=\"probe.count\"",
+    "cause": {
+      "message": "Invalid wait selector: identifier=\"probe.count\"",
+      "code": "INVALID_ARGS"
+    },
+    "hint": "Check command arguments and run --help for usage examples.",
+    "diagnosticId": "muvo1fco-85d22d9f"
+  }
+}

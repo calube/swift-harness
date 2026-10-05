@@ -21,6 +21,7 @@ into a committed file.
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
 | Writing a flow step for a gesture a selector alone doesn't drive, such as pull to refresh or a swipe | [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md) |
 | Writing a flow's `wait` and `is` steps: the input key each `wait` kind reads, and `qa.flow-kind-key` | [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) |
+| Naming an element in a flow step: the selector keys `id`, `label`, `value` and `role`, whole-value matching, several terms and `||` alternatives | [`simulator-qa-flow-selectors.md`](simulator-qa-flow-selectors.md) |
 | Rewriting a flow row its flow file kept red, with `qa run --requirement` and `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
 | How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |

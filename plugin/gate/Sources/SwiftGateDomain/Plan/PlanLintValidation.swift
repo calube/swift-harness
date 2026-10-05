@@ -278,20 +278,31 @@ public enum PlanLintValidation {
             && (task.covers.contains(row.requirement) || row.runsAfter.contains(task.id))
         })
       else { continue }
-      let seam =
-        contract.map { "the contract `\($0.id)` reads" } ?? "no task's brief reads"
+      let (read, target) =
+        contract.map {
+          (
+            "the Title, Scope and Acceptance lines of \(file)'s `### \($0.id)` section",
+            "that section"
+          )
+        }
+        ?? (
+          "the Title, Scope and Acceptance lines of every task section in \(file)",
+          "the task section that adds the seam"
+        )
       findings.append(
         try Finding(
           ruleID: clockUnheldRuleID, severity: .major, file: file,
           line: index < rowLines.count ? rowLines[index] : nil,
           message:
             "`\(task.id)` drives `\(path)` in the xcode area `\(area.name)` on a clock, and "
-            + "\(row.requirement)'s flow row checks it, but \(seam) no `\(scenarioArgument)` "
-            + "with a scenario named `held`: the clock starts when the screen appears, so a check "
-            + "of the starting state reads what the clock already moved. Add to the contract a "
-            + "composition root that reads `\(scenarioArgument)`, a `held` scenario whose clock "
-            + "starts at the first input, and seeded scenarios that place each entity a flow "
-            + "acts on at a known spot",
+            + "\(row.requirement)'s flow row checks it, but \(read) name no "
+            + "`\(scenarioArgument)` together with the word `held`: the clock starts when the "
+            + "screen appears, so a check of the starting state reads what the clock already "
+            + "moved. This rule reads the plan's text, not the source, so a held scenario in code "
+            + "alone doesn't clear it. Add a Scope line to \(target), such as \"the composition "
+            + "root reads `\(scenarioArgument)`: `launch-held` starts the clock at the first "
+            + "input\", and land that composition root, the `held` scenario and a seeded "
+            + "scenario placing each entity a flow acts on in the contract commit",
           failureScenario:
             "the flow reads the starting state after the clock moved it, so the row reads red on "
             + "a correct app, and a fixer retunes the product's pacing to win the race"))

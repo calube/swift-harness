@@ -1,8 +1,9 @@
 # Simulator QA flow steps: `wait` and `is`
 
 How to write the steps a flow row checks with, so the pinned `agent-device` runs each as written.
-How `qa run` drives a flow is in [`simulator-qa-flows.md`](simulator-qa-flows.md), and gestures in
-[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md). Rule ids are in
+How `qa run` drives a flow is in [`simulator-qa-flows.md`](simulator-qa-flows.md), gestures in
+[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md), and selector keys in
+[`simulator-qa-flow-selectors.md`](simulator-qa-flow-selectors.md). Rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index).
 
 ## Each `wait` kind reads 1 key
