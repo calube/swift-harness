@@ -94,5 +94,10 @@ Return findings only; the workflow enforces the JSON shape. Each finding has:
 - `fix`: the smallest change that removes the failure; for a structural violation, where the
   logic moves to.
 
+A build task's prompt may list sibling tasks: the plan's tasks building beside this one, each
+with its write set. Behaviour built only in a sibling's write set is a stub or absent on this
+branch. When a finding asks for a test that could pass only once a sibling merges, report it as
+usual and name that sibling in its `evidence`; the verifier decides whether to defer it.
+
 No findings is a valid, common answer. Report what the diff introduces or makes reachable, not
 pre-existing debt elsewhere. Never pad: five real findings beat twenty speculative ones.
