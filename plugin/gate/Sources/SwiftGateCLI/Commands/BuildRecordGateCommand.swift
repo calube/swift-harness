@@ -29,15 +29,16 @@ enum BuildRecordGateRun {
     {
       return refusal
     }
-    let runs = RunStore(worktreeRoot: root)
     let record: RunHistoryRecord
     do throws(RunStoreError) {
-      guard let found = try runs.readHistory().records.last(where: { $0.runID == runID }) else {
-        return .blocked(command, slug, "run \(runID) isn't in \(runs.historyFile.path)")
+      guard let found = try RunStore.historyRecord(runID: runID, sharing: root) else {
+        let files = RunStore.historyFiles(sharing: root).map(\.path)
+        return .blocked(
+          command, slug, "run \(runID) isn't in \(files.joined(separator: " or "))")
       }
       record = found
     } catch {
-      return .blocked(command, slug, "reading \(runs.historyFile.path): \(error)")
+      return .blocked(command, slug, "reading the run history: \(error)")
     }
     guard let tier = TaskReturnEvidence.GateRun.tier(ofCommand: record.command) else {
       return .blocked(
@@ -104,7 +105,8 @@ struct BuildRecordGateCommand: AsyncParsableCommand {
     commandName: "record-gate",
     abstract: "Record a merge gate or the final gate that ran on main in the build run's log.",
     discussion:
-      "Reads the gate run's tier and verdict from this checkout's run history and appends them "
+      "Reads the gate run's tier and verdict from the run history of this checkout or another "
+        + "checkout of the clone, and appends them "
       + "to the plan's newest build run, where the ledger page reads them. Exits 0, 1 when "
       + "--session doesn't hold the plan's lock, and 2 when the run isn't a recorded `check` run "
       + "or the build run can't be read.")
