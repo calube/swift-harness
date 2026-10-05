@@ -93,6 +93,58 @@ struct EventsSpanCommandTests {
     #expect(try Self.events(root).map(\.eventID) == ["start-1"])
   }
 
+  @Test(
+    "a start with --end-parent ends its still-open parent with that outcome before it starts, starts anyway when the parent already ended, and refuses an outcome outside the list with nothing written — catches a reviewer chaining the end of the stage before it with its own start in 1 Bash call, which its guard refuses"
+  )
+  func startEndsItsOpenParent() throws {
+    let root = Self.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let worker = "000000000000000a"
+    let review = "000000000000000b"
+    func log(at seconds: Double, span: String) -> SpanLog {
+      SpanLog(
+        root: root, now: { Self.runStart.addingTimeInterval(seconds) },
+        newEventID: { UUID().uuidString }, newSpanID: { span })
+    }
+    func start(at seconds: Double, span: String, phase: String, parent: String?, end: String?)
+      -> SpanRun.Output
+    {
+      SpanRun.start(
+        log: log(at: seconds, span: span), enabled: true, phase: phase, buildRun: Self.buildRun,
+        task: "parse-config", role: "review", parent: parent, endParent: end)
+    }
+
+    #expect(start(at: 0, span: worker, phase: "worker", parent: nil, end: nil).status == 0)
+    let reviewed = start(at: 10, span: review, phase: "review", parent: worker, end: "red")
+    #expect(reviewed.status == 0, "\(reviewed)")
+    #expect(reviewed.stdout == review)
+    #expect(
+      SpanRun.end(log: log(at: 15, span: review), enabled: true, spanID: review, outcome: "ok")
+        .status == 0)
+    let verified = start(
+      at: 20, span: "000000000000000c", phase: "verify", parent: review, end: "ok")
+    #expect(verified.status == 0, "\(verified)")
+    let refused = start(
+      at: 30, span: "000000000000000d", phase: "verify", parent: review, end: "done")
+    #expect(refused.status == 2, "\(refused)")
+
+    let payloads = try Self.events(root).map(\.payload)
+    #expect(payloads.count == 5, "\(payloads)")
+    #expect(
+      payloads.compactMap { payload -> SpanEndEvent? in
+        guard case .spanEnd(let end) = payload else { return nil }
+        return end
+      } == [
+        SpanEndEvent(spanID: worker, outcome: .red, milliseconds: 10_000),
+        SpanEndEvent(spanID: review, outcome: .ok, milliseconds: 5_000),
+      ])
+    #expect(
+      payloads.compactMap { payload -> String? in
+        guard case .spanStart(let start) = payload else { return nil }
+        return start.spanID
+      } == [worker, review, "000000000000000c"])
+  }
+
   @Test("a second end of 1 span exits 1 and writes nothing — catches a span closed twice")
   func secondEndIsRefused() throws {
     let root = Self.temporaryRoot()
