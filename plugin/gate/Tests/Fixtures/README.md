@@ -2896,6 +2896,46 @@ last `sed` replaced the clone's absolute path in the GREEN merge gate's baseline
 '/Users|/private|/var/folders|caleb|@[a-z]+\.|home|/tmp' RunView/brownfield-rejected` and the secrets grep
 above matched nothing.
 
+## Run view: worker gate runs of tasks running at once
+
+`RunView/brownfield-parallel-workers/` is the state a brownfield trial of 2026-10-05 left, a
+`swiftgate run` on a copy of the evals starter app, build run `20261005T130559Z-158c916a` of plan
+`spec`. It feeds crediting a worker's own gate runs to its task. The validation task and 3 build
+tasks moved to `in-progress` within 1 second of each other. The build workers ran 14 slice and
+test-only gates and 1 stop hook in the clone's shared store, which no ledger event or return names,
+and all their
+worktrees were removed before the run ended. 1 task's return lists its commits as abbreviated
+shas. Another task's first worker left commits that only its branch, never its return, holds.
+
+With `T` the trial's folder, `C=$T/state` (the clone's `swift-harness` state root, copied after the
+run), `P=$C/plan` and `R=$P/build/20261005T130559Z-158c916a`, copied 2026-10-05:
+
+```sh
+S='s#/Users/[^/]*/Developer/trials/practice/[^/"]*/repo-#../repo-#g; s#"/Users/[^"]*/spec\.md"#"/spec.md"#g'
+mkdir -p events returns
+cp $C/events/{gate,build}.jsonl events/
+sed -E "$S" $T/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+```
+
+`branch-commits/` holds, for each ledger task, what `git rev-list` printed for the task's branch
+and its fixer's: the commits those branches alone reach among the clone's local branches. The
+merged task's branch and the validation task's branch were deleted, so theirs are empty. With `G`
+the clone and `F` the fixture folder, after the run ended:
+
+```sh
+mkdir -p $F/branch-commits
+for t in <each ledger task id>; do b=spec/$t; x=spec/fix-$t
+  git --git-dir=$G/.git rev-list --ignore-missing refs/heads/$b refs/heads/$x --not \
+    --exclude=$b --exclude=$x --branches > $F/branch-commits/$(echo $b | tr / _).txt; done
+```
+
+The `sed` made each ledger worktree path relative
+(`../repo-spec-<task>`) and set `clock.json`'s `spec` and `origin` to `/spec.md`. `plan.json` and the
+other streams stayed out: the reader needs none of them to credit a gate run.
+`grep -rniE '/Users|/private|/var/folders|caleb|trials' RunView/brownfield-parallel-workers`
+matched nothing.
+
 ## Run view: brownfield runs cut off with an undone merge
 
 `RunView/price-tracker-1/` and `RunView/send-money-2/` are the state 2 brownfield trials of
@@ -2926,6 +2966,11 @@ cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/cutoff.js
 The `sed` made each ledger worktree path relative (`../repo-spec-<task>`) and set `clock.json`'s
 `spec` and `origin` to `/spec.md`, as `brownfield-blocked` spells them. The trials removed every
 task worktree before they ended, so neither capture has a `worktrees/` folder.
+
+`RunView/price-tracker-1/branch-commits/` came later the same day from the same clone, whose task
+branches outlived the run, by the `branch-commits` loop under "worker gate runs of tasks running at
+once" above, over its 6 ledger tasks. Only `app-core`'s (with its fixer's branch) and
+`client-live`'s branches hold commits no other branch reaches.
 
 `RunView/price-tracker-1/out/merge-{tracker-ui,app-core}.json` are the orchestrator's merge gate
 outputs, copied unedited with `cp $P/out/merge-{tracker-ui,app-core}.json out/`. The

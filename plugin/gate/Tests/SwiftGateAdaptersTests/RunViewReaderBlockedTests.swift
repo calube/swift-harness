@@ -7,7 +7,7 @@ import Testing
 /// A brownfield clone in a temp directory holding a captured brownfield run: its shared store, its
 /// plan state, and each task worktree with its own run store under its git dir, as `git worktree
 /// add` lays them out. Nothing here reads or writes this checkout's state.
-private struct BlockedClone {
+struct BlockedClone {
   /// A captured run: its fixture directory, the clone's directory name and its build run.
   struct Capture {
     let fixture: String
@@ -32,6 +32,10 @@ private struct BlockedClone {
   /// calls.
   static let sendMoney3 = Capture(
     fixture: "send-money-3", clone: "repo", buildRun: "20261005T042439Z-4562bb34")
+  /// 4 tasks in progress at once, their worktrees removed by the time the run ended, each
+  /// worker's slice and test-only runs in the clone's shared store.
+  static let parallelWorkers = Capture(
+    fixture: "brownfield-parallel-workers", clone: "repo", buildRun: "20261005T130559Z-158c916a")
   static let plan = "spec"
   static let store = "share-view-limit-store"
   static let web = "share-view-limit-web"
@@ -65,7 +69,9 @@ private struct BlockedClone {
       ("ledger-events.jsonl", run.appending(path: "events.jsonl")),
       ("returns", run.appending(path: "returns")),
     ]
-    for (name, target) in copies {
+    // A capture that kept no `plan.json` reads as a plan with no spec page.
+    for (name, target) in copies
+    where name != "plan.json" || files.fileExists(atPath: captured.appending(path: name).path) {
       try files.copyItem(at: captured.appending(path: name), to: target)
     }
     // The warm-up's times and baseline files, where the capture kept them.
@@ -95,10 +101,15 @@ private struct BlockedClone {
     }
   }
 
-  func view() throws -> RunView {
-    let input = try RunViewReader(commonDirectory: common, stateRoot: state, profile: .brownfield)
-      .read(buildRun: capture.buildRun)
-    return RunViewBuilder.build(input)
+  func input(branchCommits: (any BranchCommitReading)? = nil) throws -> RunViewInput {
+    try RunViewReader(
+      commonDirectory: common, stateRoot: state, profile: .brownfield,
+      branchCommits: branchCommits ?? CapturedBranchCommits(fixture: capture.fixture)
+    ).read(buildRun: capture.buildRun)
+  }
+
+  func view(branchCommits: (any BranchCommitReading)? = nil) throws -> RunView {
+    RunViewBuilder.build(try input(branchCommits: branchCommits))
   }
 
   func remove() { try? FileManager.default.removeItem(at: parent) }

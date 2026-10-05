@@ -28,9 +28,12 @@ public struct RunViewInput: Sendable, Equatable {
   public var unwritten: [RunView.Damage]
   /// Each task's brief, by task id; a task with none is absent.
   public var briefs: [String: RunView.Brief]
-  /// Gate runs no ledger event or return names, by run id: a worker's own runs, attributed to the
-  /// task whose window holds them.
+  /// Gate runs no ledger event or return names, by run id: a worker's own runs, each credited to
+  /// the task ``RunViewWorkerGates`` singles out.
   public var workerGateRuns: [String: String]
+  /// A worker's own gate runs that belong to the build run but that no evidence singles out 1
+  /// task for; the view shows them with no task.
+  public var unattributedGateRuns: Set<String>
   /// When `swiftgate run` started a brownfield run, before discovery and the build run; `nil`
   /// for a run no `swiftgate run` launched.
   public var launchedAt: Date?
@@ -53,7 +56,8 @@ public struct RunViewInput: Sendable, Equatable {
     ledger: Ledger? = nil, requirements: [RunViewRequirement] = [],
     damage: [RunView.Damage] = [], unwritten: [RunView.Damage] = [],
     briefs: [String: RunView.Brief] = [:],
-    workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
+    workerGateRuns: [String: String] = [:], unattributedGateRuns: Set<String> = [],
+    launchedAt: Date? = nil,
     gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = [],
     warmupBaselines: [String: BaselineStepResult] = [:], qaRuns: [String: RunViewQARun] = [:],
     validation: ValidationTable? = nil
@@ -67,6 +71,7 @@ public struct RunViewInput: Sendable, Equatable {
     self.unwritten = unwritten
     self.briefs = briefs
     self.workerGateRuns = workerGateRuns
+    self.unattributedGateRuns = unattributedGateRuns
     self.launchedAt = launchedAt
     self.gateReports = gateReports
     self.checkoutRoots = checkoutRoots
