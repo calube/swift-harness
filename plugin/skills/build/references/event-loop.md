@@ -152,8 +152,8 @@ with other tasks, or end the turn to wait; never poll.
 
 A design plan's decomposer adds 1 validation task when 2 or more tasks build UI. Its write set is
 `.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
-workflow. `build next` lists it first, ahead of every other ready task: the tasks its rows run
-after can't merge until its `--at-base` run is done. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
+workflow. `build next` lists it first, ahead of every other ready task: a merge that makes a
+row ready can't land until its `--at-base` run is done. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
 as for any task, then launch 1 Agent tool call in the background, passing
 `run_in_background: true`, with `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
 plan, its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
@@ -169,9 +169,10 @@ surface, and says to work in that worktree and follow
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
 3. Confirm each check fails before its tasks merge:
    `"$SG" qa run --plan <slug> --at-base --json --output <plans>/<slug>/out/qa-at-base.json`, in
-   the background under the [qa run watch](#qa-run-watch). This `--at-base` run is never skipped, and no task that a row's `Runs after`
-   names merges before it has run: such a task that finishes first keeps its checked return and
-   merges once this run is done. It takes each row the worker's `--prepared-by` run proved from
+   the background under the [qa run watch](#qa-run-watch). This `--at-base` run is never skipped,
+   and no row's pass counts before it has run: `build merge` refuses `at-base-unchecked` for a
+   merge that makes a row ready until this run took the row. A task whose rows all still wait on
+   other tasks merges without waiting for it. It takes each row the worker's `--prepared-by` run proved from
    the `at-base-run.json` the adopt copied while its check is byte-identical, naming that run in
    the row's `reusedFrom`, and runs only the rest. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
    tell the change from its absence. Name it in the report, and go on. A row that reads
@@ -214,8 +215,9 @@ second merge on top of an ungated one would block its undo. `build next` reports
 whose checked return waits to merge, in the order `build check-return` passed them, with
 `fix: true` for a fixer's return, which merges with `--fix`. A task whose halt was answered `retry`
 after its return was checked is in `fixing` instead, until its fixer's return is checked. Merge the
-first task in `readyToMerge` only while `merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
-run.
+first task in `readyToMerge` only while `merging` is absent. A task merges without waiting for
+the `--at-base` run unless its merge makes a validation row ready; `build merge` refuses that one
+`at-base-unchecked` until the run is done.
 
 A task whose return `build check-return` passed, or whose merge is on `main`, holds no slot: its
 worker is done, so `build next` starts another task in its place. Its write set stays reserved until it
@@ -301,6 +303,7 @@ is a red gate, and the fixer gets only the new findings.
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 1 with `review-blocked-unanswered` | the return is `review-blocked`: halt the task as [Task halts](#task-halts) says. Only the person's **merge as is** lets it merge |
 | `build merge` exits 1 with `flows-unchecked` or `flows-red` | run [before each merge](#before-each-merge)'s `qa run`, or send its red rows to the fixer in the fix worktree `flows-red` cut |
+| `build merge` exits 1 with `at-base-unchecked` | the `--at-base` run hasn't taken the rows it names: merge once that run is done. Start it if it isn't running |
 | `build merge --fix` exits 1 with `fix-carries-unmerged` | merge the tasks it names first, then the fix |
 | `build merge` exits 2 | halt |
 

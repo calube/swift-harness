@@ -1,0 +1,177 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : null,
+  "commit" : "d200fc752208fcb4300e04ac7c0a0423743afb6b",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "7 of 10 rows verified (3 reason-only): 0 pass, 7 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "7 rows (1, 2, 3, 4, 5, 6, 7) reused from qa run 20261005T161747Z-268dd01a by spec-validation: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 3 `wait` failed: Batch failed at step 6 (wait): wait timed out for selector: id=\"list.row.ada\". Current surface: <base screen>.",
+      "ms" : 0,
+      "requirement" : "req-launch-list",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 1,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-loading.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.loading\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-list-loading",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 2,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.error\". Current surface: <base screen>.; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-list-retry",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 3,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/thread-open.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-thread-open",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 4,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-sending.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-send-sending",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 5,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\". Current surface: <base screen>.; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-send-retry",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 6,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T161747Z-268dd01a by spec-validation at d200fc752208: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row7 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-preview-update",
+      "result" : "red",
+      "reusedFrom" : "20261005T161747Z-268dd01a",
+      "row" : 7,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T162135Z-bd20614a",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}
