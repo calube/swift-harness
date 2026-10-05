@@ -281,6 +281,37 @@ struct WarmupTests {
   }
 
   @Test(
+    "an xcode area's prove tree build is its test as build-for-testing in the tree, into the checkout's prove DerivedData — catches a checkout's first merge prove building cold in its kept tree"
+  )
+  func xcodeProveTreeBuildsForTesting() throws {
+    let slot = BrownfieldStateLayout(
+      commonDir: URL(filePath: "/clone/.git", directoryHint: .isDirectory),
+      gitDir: URL(filePath: "/clone/.git/worktrees/checkout", directoryHint: .isDirectory))
+    let app = area(
+      "app", kind: .xcode, build: "xcodebuild build -scheme App",
+      test: "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 17'")
+
+    let request = try #require(
+      Warmup.proveTreeRequest(area: app, toplevel: "/tree", layout: slot, deadline: .seconds(9)))
+
+    let prove = XcodeDerivedData.provePath(area: "app", layout: slot)
+    #expect(
+      request.command
+        == "xcodebuild -derivedDataPath '\(prove)' build-for-testing -scheme App "
+        + "-destination 'platform=iOS Simulator,name=iPhone 17'")
+    #expect(request.workingDirectory == "/tree/packages/app")
+    #expect(request.derivedDataSeed?.destination == prove)
+    #expect(request.buildLock?.directory == prove)
+    #expect(
+      Warmup.proveTreeRequest(
+        area: area("app", kind: .xcode, xcode: xcodegenConfig), toplevel: "/tree", layout: slot,
+        deadline: .seconds(9)) == nil)
+    #expect(
+      Warmup.proveTreeRequest(
+        area: area("web"), toplevel: "/tree", layout: slot, deadline: .seconds(9)) == nil)
+  }
+
+  @Test(
     "an XcodeGen area generates first and builds and tests in the generated tree — catches a build in the user's tree when the project is generated elsewhere"
   )
   func generatorAreaBuildsInItsTree() async {
