@@ -645,6 +645,82 @@ struct BuildLoopCommandTests {
     return root
   }
 
+  /// A checkout holding the captured before-merge `qa run` red on 1 row, under this plan, and
+  /// the captured repair reply and fixer's return beside it.
+  private func noRepairCheckout() throws -> (root: URL, reply: String, fixReturn: String) {
+    let root = TestTemporaryDirectory.root.appending(
+      path: "swiftgate-no-repair-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let folder = "BuildReturn/no-repair"
+    let report = try Fixture.text("\(folder)/qa-report.json")
+      .replacingOccurrences(of: "\"plan\" : \"spec\"", with: "\"plan\" : \"\(BuildScenario.plan)\"")
+    let directory = try RunStore(worktreeRoot: root).runDirectory(for: "20261005T151815Z-9de928dd")
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(report.utf8).write(to: directory.appending(path: QAReport.fileName))
+    let reply = root.appending(path: "reply.txt").path
+    let fixReturn = root.appending(path: "fix.json").path
+    try Fixture.data("\(folder)/repair-reply.txt").write(to: URL(filePath: reply))
+    try Fixture.data("\(folder)/fix-return.json").write(to: URL(filePath: fixReturn))
+    return (root, reply, fixReturn)
+  }
+
+  @Test(
+    "no-repair past no new starts records the captured red row left unverified once and answers merge — catches a no-repair halt that stops the build, or a decision build merge can't read"
+  )
+  func noRepairRecordsTheRowLeftUnverified() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [], surfaces: [:])
+    let (root, reply, fixReturn) = try noRepairCheckout()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let store = try #require(
+      try await BuildRunStore.latest(plan: BuildScenario.plan, git: scenario.git))
+    let late = try #require(try store.record().noNewStartsAt).addingTimeInterval(60)
+    let decide = {
+      await BuildNoRepairRun.run(
+        slug: BuildScenario.plan, task: "chat-thread", reply: reply,
+        qaRun: "20261005T151815Z-9de928dd", fixReturn: fixReturn, session: BuildScenario.alice,
+        root: root, git: scenario.git, clock: FixedClock(date: late))
+    }
+
+    let first = await decide()
+    let again = await decide()
+
+    let report = try #require(first.report, "\(first.message)")
+    #expect(report.action == .mergeUnverified, "\(first.message)")
+    #expect(report.answer == "merge")
+    #expect(report.recorded)
+    #expect(again.report?.recorded == false)
+    #expect(
+      try store.events().unverifiedRows()
+        == [
+          3: BuildEvent.RowsUnverified(
+            task: "chat-thread", requirement: "req-send-sending-sent", rows: [3],
+            qaRun: "20261005T151815Z-9de928dd", cause: .contractGap, at: late)
+        ])
+  }
+
+  @Test(
+    "no-repair with a reply that has no no-repair line is BLOCKED and records nothing — catches a repaired return decided as no repair"
+  )
+  func noRepairNeedsTheLine() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [], surfaces: [:])
+    let (root, reply, fixReturn) = try noRepairCheckout()
+    defer { try? FileManager.default.removeItem(at: root) }
+    try Data("repaired: req-send-sending-sent qa/send-sent.flow.json: red: x\n".utf8)
+      .write(to: URL(filePath: reply))
+
+    let result = await BuildNoRepairRun.run(
+      slug: BuildScenario.plan, task: "chat-thread", reply: reply,
+      qaRun: "20261005T151815Z-9de928dd", fixReturn: fixReturn, session: BuildScenario.alice,
+      root: root, git: scenario.git, clock: FixedClock(date: BuildScenario.startedAt))
+
+    #expect(result.verdict == .blocked)
+    #expect(result.message.contains("qa adopt --repair"), "\(result.message)")
+  }
+
   @Test(
     "record-gate appends the gate with the tier and verdict its own run recorded — catches a gate verdict the orchestrator could misreport"
   )

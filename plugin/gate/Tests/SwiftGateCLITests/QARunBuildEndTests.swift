@@ -58,6 +58,31 @@ struct QARunBuildEndTests {
   }
 
   @Test(
+    "after the final gate, a row a no-repair decision left unverified reads unverified with why and never runs — catches a final pass that reruns a row no repair can pass, or drops why it's unverified"
+  )
+  func leftRowReadsUnverifiedAtEnd() async throws {
+    let repo = try await Self.repo()
+    defer { repo.remove() }
+    let left = BuildEvent.RowsUnverified(
+      task: Self.setting, requirement: "req", rows: [1], qaRun: "20261004T235959Z-0000abcd",
+      cause: .contractGap, contractName: "slow-save",
+      at: Date(timeIntervalSince1970: 1_791_200_000))
+    let events = repo.planDirectory.appending(path: "build/\(Self.buildRun)/events.jsonl")
+    let handle = try FileHandle(forWritingTo: events)
+    try handle.seekToEnd()
+    try handle.write(contentsOf: try BuildEventJSON.encodeLine(.rowsUnverified(left)))
+    try handle.close()
+
+    let report = await repo.run(QARunRun.Options())
+
+    let row = try #require(report.rows.first { $0.row == 1 })
+    #expect(row.result == .unverified)
+    #expect(row.milliseconds == 0)
+    #expect(row.message.contains("left unverified when `\(Self.setting)` merged"), "\(row.message)")
+    #expect(row.message.contains("`slow-save`"), "\(row.message)")
+  }
+
+  @Test(
     "after the final gate, rows whose task was abandoned with no merge read abandoned and the run is RED — catches a GREEN final verdict over rows that never ran"
   )
   func abandonedAtEnd() async throws {
