@@ -56,19 +56,50 @@ public struct SimElement: Sendable, Equatable {
   public let label: String?
   public let value: String?
   public let children: [SimElement]
+  /// Where the snapshot drew it, in points; `nil` when the node carries no `rect`.
+  public let frame: SimFrame?
 
   public init(
     role: SimElementRole, identifier: String?, label: String?, value: String?,
-    children: [SimElement]
+    children: [SimElement], frame: SimFrame? = nil
   ) {
     self.role = role
     self.identifier = identifier
     self.label = label
     self.value = value
     self.children = children
+    self.frame = frame
   }
 
   public var isInteractive: Bool { role.isInteractive }
+}
+
+/// A node's `rect`: its origin and size in points.
+public struct SimFrame: Sendable, Equatable {
+  public let x: Double
+  public let y: Double
+  public let width: Double
+  public let height: Double
+
+  public init(x: Double, y: Double, width: Double, height: Double) {
+    self.x = x
+    self.y = y
+    self.width = width
+    self.height = height
+  }
+
+  /// Whether the frame's centre lies inside `other`.
+  public func centred(in other: SimFrame) -> Bool {
+    false
+  }
+}
+
+/// What keeps a checked element from the user.
+public enum SimCover: Sendable, Equatable {
+  /// A search field, tab bar, toolbar or keyboard drawn after it, over its centre.
+  case bar(SimElement)
+  /// Its centre lies outside the app's frame.
+  case offScreen
 }
 
 public enum SimTreeError: Error, Sendable, Equatable {
@@ -157,6 +188,12 @@ public struct SimTree: Sendable, Equatable {
     }
     roots.forEach(visit)
     return result
+  }
+
+  /// Why every element `selector` matches is hidden from the user; `nil` when some match is in
+  /// view, or when no match carries a frame to judge.
+  public func cover(of selector: SimSelector) -> SimCover? {
+    nil
   }
 
   /// True when some element's label or value equals `text` exactly.

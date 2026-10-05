@@ -18,6 +18,9 @@ public struct SimStep: Sendable, Equatable {
   public var label: String
   /// The text the step expects its tree to hold; `nil` when the step asserts nothing.
   public var assert: String?
+  /// The selector of the element the step checks is shown, which must be in view in its tree;
+  /// `nil` when the step checks no element's presence.
+  public var target: String?
   /// Relative to the run's `sim/` folder.
   public var screenshot: String
   /// Relative to the run's `sim/` folder; the `snapshot --json` output, unmodified. `nil` only
@@ -35,11 +38,12 @@ public struct SimStep: Sendable, Equatable {
 
   public init(
     n: Int, label: String, assert: String?, screenshot: String, tree: String?, settled: Bool?,
-    elapsedMs: Int, appState: SimAppState? = nil
+    elapsedMs: Int, appState: SimAppState? = nil, target: String? = nil
   ) {
     self.n = n
     self.label = label
     self.assert = assert
+    self.target = target
     self.screenshot = screenshot
     self.tree = tree
     self.settled = settled

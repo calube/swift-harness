@@ -17,6 +17,9 @@ public enum SimEvidenceRule: String, Sendable, Equatable, CaseIterable {
   case a11yLabel = "sim.a11y-label"
   /// The app wasn't running at a step, or crashed during the run.
   case appExited = "sim.app-exited"
+  /// Every element a step's checked selector matches lies under a bar drawn over it, or off the
+  /// screen: the check passed on an element the user can't see or tap.
+  case covered = "sim.covered"
 
   public var verdict: Verdict { .red }
 }

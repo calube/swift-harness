@@ -23,6 +23,9 @@ enum TestOnlyCheck {
       @Sendable (_ area: BrownfieldArea) async -> Result<
         [ChangedTestFile], BrownfieldCheckSetupError
       >
+    /// Whether a repository-relative directory exists, which finds the area holding a test's
+    /// target when none is named.
+    var directoryExists: @Sendable (_ path: String) -> Bool = { _ in false }
 
     /// The clone's config and state, and `/bin/sh` commands. Each bound reads the nearest
     /// warm-up on HEAD's first-parent history that measured the area, under the box of the
@@ -63,6 +66,12 @@ enum TestOnlyCheck {
           } catch {
             return .failure(BrownfieldCheckSetupError(reason: "git: \(error)"))
           }
+        },
+        directoryExists: { path in
+          var isDirectory: ObjCBool = false
+          return FileManager.default.fileExists(
+            atPath: root.appending(path: path).path(percentEncoded: false),
+            isDirectory: &isDirectory) && isDirectory.boolValue
         })
     }
 

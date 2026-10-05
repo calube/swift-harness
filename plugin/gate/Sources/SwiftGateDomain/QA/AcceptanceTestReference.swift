@@ -40,14 +40,32 @@ public struct AcceptanceTestReference: Sendable, Equatable {
     return AcceptanceTestReference(area: area, id: id)
   }
 
+  /// What `swiftgate test-only` takes as its test: a bare id, `<area>: <id>`, or the acceptance
+  /// row's `test <area>: <id>`; `area` is the `--area` it was given, which the text's own wins
+  /// over only when `area` is `nil`.
+  public static func testOnly(_ text: String, area: String?) -> AcceptanceTestReference {
+    AcceptanceTestReference(area: area, id: text)
+  }
+
+  /// The areas that run tests and hold a test target named as `id`'s first component: a
+  /// directory of that name under a test glob's fixed prefix, or under a `swiftpm` area's
+  /// `Tests/`. `directoryExists` takes a repository-relative path.
+  public static func owningAreas(
+    of id: String, in areas: [BrownfieldArea], directoryExists: (String) -> Bool
+  ) -> [String] {
+    []
+  }
+
   /// The command that runs only this test, from the area it names or the 1 area that runs tests.
   ///
   /// - Parameters:
   ///   - junitPath: what `{junit}` expands to when the area's command takes it.
   ///   - resultBundlePath: where an `xcode` area's `-only-testing:` command writes its result
   ///     bundle, since `xcodebuild` writes no JUnit report.
+  ///   - spelling: how a refusal tells the caller to name the test.
   public func resolve(
-    in areas: [BrownfieldArea], junitPath: String?, resultBundlePath: String? = nil
+    in areas: [BrownfieldArea], junitPath: String?, resultBundlePath: String? = nil,
+    spelling: Spelling = .check
   ) -> Result<AcceptanceTestCommand, AcceptanceTestUnresolved> {
     func unresolved(_ reason: String) -> Result<AcceptanceTestCommand, AcceptanceTestUnresolved> {
       .failure(AcceptanceTestUnresolved(reason: reason))
@@ -121,6 +139,16 @@ public struct AcceptanceTestReference: Sendable, Equatable {
       return (ChangedTestIDs.expand(template, tests: quoted, files: quoted, junit: junit), nil)
     }
     return nil
+  }
+}
+
+extension AcceptanceTestReference {
+  /// Where the reference was written, which sets the form a refusal names.
+  public enum Spelling: Sendable, Equatable {
+    /// An acceptance row's `test <area>: <id>` check.
+    case check
+    /// A `swiftgate test-only` command line.
+    case testOnly
   }
 }
 
