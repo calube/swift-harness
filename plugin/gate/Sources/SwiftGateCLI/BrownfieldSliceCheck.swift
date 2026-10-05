@@ -432,6 +432,10 @@ enum BrownfieldSliceCheck {
       }
     }
 
+    let labels = await inputLabels(area, added: added, root: root, context: context, dependencies)
+    result.findings += labels.findings
+    result.blocked = result.blocked || labels.blocked
+
     if let lint = await lint(
       area, files: added.map(\.path), added: change.added, root: root, context: context,
       dependencies: dependencies)
@@ -590,6 +594,32 @@ enum BrownfieldSliceCheck {
         result.blocked = true
       }
     }
+    return result
+  }
+
+  /// `a11y.input-label` on the area's changed Swift sources, timed as its `lint`: a field the
+  /// simulator audit would find unlabeled only once a flow reaches its screen is RED here.
+  private static func inputLabels(
+    _ area: BrownfieldArea, added: [AddedLines], root: URL, context: GateRun.Context,
+    _ dependencies: Dependencies
+  ) async -> AreaResult {
+    var result = AreaResult()
+    var files: [ChangedTestFile] = []
+    for change in added
+    where change.path.hasSuffix(".swift") && !ChangedTestIDs.isTestFile(change.path, of: area) {
+      guard let content = dependencies.prove.readFile(root.appending(path: change.path)) else {
+        result.findings += note("can't read \(change.path), so slice can't check its input labels")
+        result.blocked = true
+        continue
+      }
+      files.append(ChangedTestFile(path: change.path, content: content, added: change))
+    }
+    guard !files.isEmpty else { return result }
+    let (found, milliseconds) = await GateRun.timed { ChangedInputLabels.findings(files) }
+    context.steps.record(
+      .lint, tier: nil, milliseconds: milliseconds, verdict: found.isEmpty ? .green : .red,
+      area: area.name)
+    result.findings += found
     return result
   }
 
