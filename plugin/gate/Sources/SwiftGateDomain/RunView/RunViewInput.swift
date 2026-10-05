@@ -23,6 +23,9 @@ public struct RunViewInput: Sendable, Equatable {
   public var requirements: [RunViewRequirement]
   /// What the reader couldn't read.
   public var damage: [RunView.Damage]
+  /// Files a run writes as it goes that were absent, each with the reason it is damage once the
+  /// run has ended; until then the view lists it as not written yet.
+  public var unwritten: [RunView.Damage]
   /// Each task's brief, by task id; a task with none is absent.
   public var briefs: [String: RunView.Brief]
   /// Gate runs no ledger event or return names, by run id: a worker's own runs, attributed to the
@@ -46,7 +49,8 @@ public struct RunViewInput: Sendable, Equatable {
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
     ledger: Ledger? = nil, requirements: [RunViewRequirement] = [],
-    damage: [RunView.Damage] = [], briefs: [String: RunView.Brief] = [:],
+    damage: [RunView.Damage] = [], unwritten: [RunView.Damage] = [],
+    briefs: [String: RunView.Brief] = [:],
     workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
     gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = [],
     warmupBaselines: [String: BaselineStepResult] = [:], qaRuns: [String: RunViewQARun] = [:]
@@ -57,6 +61,7 @@ public struct RunViewInput: Sendable, Equatable {
     self.ledger = ledger
     self.requirements = requirements
     self.damage = damage
+    self.unwritten = unwritten
     self.briefs = briefs
     self.workerGateRuns = workerGateRuns
     self.launchedAt = launchedAt

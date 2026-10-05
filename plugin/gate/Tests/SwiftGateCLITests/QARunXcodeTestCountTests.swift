@@ -102,7 +102,7 @@ struct QARunXcodeTestCountTests {
   }
 
   @Test(
-    "a `test:` row in an xcode area whose captured bundle ran 1 passing test passes — catches a row read as running nothing"
+    "a `test:` row in an xcode area whose captured bundle ran 1 passing test passes, says 1 test passed and lists the bundle beside its output as evidence — catches a row read as running nothing, and a pass whose only evidence is `exit 0`"
   )
   func oneTestPasses() async throws {
     let repo = try await Self.repo()
@@ -113,6 +113,10 @@ struct QARunXcodeTestCountTests {
       xcresults: FakeXcresultReader(scenario: "one-test"))
 
     #expect(report.rows.map(\.result) == [.pass], "\(report.rows.map(\.message))")
+    #expect(report.rows.first?.message == "exit 0, 1 test passed")
+    #expect(
+      report.rows.first?.evidence
+        == ["qa/01-req-reset.acceptance.txt", "qa/01-req-reset.acceptance.xcresult"])
   }
 
   @Test(

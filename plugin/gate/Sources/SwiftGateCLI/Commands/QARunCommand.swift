@@ -506,6 +506,16 @@ enum QARunRun {
       } catch {
         message += "; its output wasn't saved: \(error)"
       }
+      // The run view reads a red row's evidence as text output, so only a row that isn't red
+      // lists the bundle and report files beside its output.
+      if result != .red {
+        var written = junit.map(JUnitReportFiles.files(at:)) ?? []
+        if case .tests = bundle, let resultBundle { written.append(resultBundle) }
+        let prefix = qaDirectory.path + "/"
+        evidence += written.filter { $0.hasPrefix(prefix) }.map {
+          "\(QAReport.directory)/\($0.dropFirst(prefix.count))"
+        }
+      }
       return QACheckOutcome(
         result: result, message: message, exitStatus: exitStatus,
         milliseconds: Self.milliseconds(output.elapsed), evidence: evidence)

@@ -199,7 +199,7 @@ is a red gate, and the fixer gets only the new findings.
 | What happened | Next |
 |---|---|
 | `build merge` exits 1 with `status` `conflicted` | `main` is untouched, and the fix worktree is cut |
-| the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main` and cuts the fix worktree |
+| the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main`, records that gate run as the task's merge gate (`gateRunId`) when `build record-gate` hasn't, and cuts the fix worktree |
 | `build merge` exits 1 with another `reason` | halt: `main-moved`, `dirty-checkout` and `not-on-main` need the user; `already-merged` means the ledger lags, so run `ledger set … done` and go on |
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 2 | halt |
@@ -381,7 +381,7 @@ orchestrator watches from outside. After each launch, run this with `run_in_back
 d=<dir>; m=<stall minutes>; e="${d%/subagents/workflows/*}/workflows/${d##*/}.json"; while /bin/sleep 60; do [ -e "$e" ] && { echo "ended: $d"; exit 0; }; [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
 ```
 
-`<stall minutes>` is `stallMin` from `build next`'s report, or 15 when the report has none. Every
+`<stall minutes>` is `stallMin` from `build next`'s report: the preset's `stall_min`, or 15, the run viewer's stall badge too. Every
 tool call and result appends to an agent's transcript, so that long with no change means no agent in
 that workflow has moved. The Workflow tool writes `workflows/<id>.json` in the session directory
 once the workflow ends, so the watch stops on its own then and prints `ended: <dir>`, which needs

@@ -46,7 +46,8 @@ assigned that run, `QA_DIR`, the plan's `qa/` folder, and `QA_EVIDENCE_DIR`, the
 Exit 0 is `pass`; any other exit, a signal or the 10-minute timeout is `red`; a check that couldn't
 start is `unverified`. A red row's message adds its first failure line. An acceptance check may write
 a JUnit or xUnit report to `$QA_JUNIT`, the path a `test:` row passes as `{junit}`; a report or result bundle showing
-no test ran is `red` at the merge base and `unverified` otherwise. A screenshot, tree or log never
+no test ran is `red` at the merge base and `unverified` otherwise. A pass counts the tests they show
+passed and lists them as evidence. A screenshot, tree or log never
 passes a row. A state row runs only once every flow row for its requirement passed.
 
 `--at-base` runs every row, whatever its tasks, at the merge base of `HEAD` and `main` (a brownfield

@@ -41,13 +41,13 @@
     const steps = flow.steps.map((st) => {
       const label = `step ${st.n}${st.label != null ? " " + st.label : ""}`;
       const text = flow.video != null
-        ? `<a class="qa-step-link" href="${esc(M.evidenceHref(flow.run, flow.video, st.offsetMs))}" target="_blank" rel="noopener">${esc(label)}</a>`
+        ? `<a class="qa-step-link" href="${esc(M.evidenceHref(flow.run, flow.video, st.offsetMs, current && current.evidenceBase))}" target="_blank" rel="noopener">${esc(label)}</a>`
         : `<span>${esc(label)}</span>`;
       return `<li class="qa-step" data-n="${st.n}" data-ok="${st.ok}"><span class="qa-mark ${st.ok ? "ok" : "bad"}" role="img" aria-label="${st.ok ? "passed" : "failed"}">${st.ok ? "✓" : "✗"}</span>${text}<span class="sub num">${seconds(st.offsetMs)}</span></li>`;
     }).join("");
     const links = [
-      flow.video != null ? `<a class="qa-video" href="${esc(M.evidenceHref(flow.run, flow.video))}" target="_blank" rel="noopener">video</a>` : `<span class="sub">no video</span>`,
-      flow.sheet != null ? `<a class="qa-sheet" href="${esc(M.evidenceHref(flow.run, flow.sheet))}" target="_blank" rel="noopener">contact sheet</a>` : `<span class="sub">no contact sheet</span>`
+      flow.video != null ? `<a class="qa-video" href="${esc(M.evidenceHref(flow.run, flow.video, null, current && current.evidenceBase))}" target="_blank" rel="noopener">video</a>` : `<span class="sub">no video</span>`,
+      flow.sheet != null ? `<a class="qa-sheet" href="${esc(M.evidenceHref(flow.run, flow.sheet, null, current && current.evidenceBase))}" target="_blank" rel="noopener">contact sheet</a>` : `<span class="sub">no contact sheet</span>`
     ].join(" · ");
     return `<div class="qa-flow"><ol class="qa-steps" aria-label="Flow steps">${steps}</ol><div class="qa-links">${links}</div></div>`;
   }

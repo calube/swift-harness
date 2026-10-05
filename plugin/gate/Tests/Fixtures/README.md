@@ -2915,3 +2915,20 @@ done
 ```
 
 `grep -rniE '/Users|/private|/var/folders|caleb' NodeInstall` matched nothing.
+
+## Brownfield trial: a cutoff after a task's merge gate
+
+`BrownfieldTrial/aidoku-validation-3-build-events.jsonl` is the build run's `events.jsonl` from the
+third iOS validation trial on `Aidoku/Aidoku`, and `aidoku-validation-3-cutoff.json` is the
+`cutoff.json` `build cutoff` wrote in that run. The setting task merged, its first merge was undone
+on a RED gate, the fixer's branch merged, and its GREEN merge gate was recorded in the same second
+as the cutoff, which then set the task `abandoned`. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/build-events.jsonl $F/aidoku-validation-3-build-events.jsonl
+cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
+nothing.
