@@ -63,7 +63,7 @@ struct PlanLintScreenFlowTests {
   }
 
   @Test(
-    "a Reason on the requirement's row, or a flow row, clears its finding and leaves the others — catches a rule that ignores the same-row reason or the flow it asks for"
+    "a Reason on the requirement's row opened with an obstacle kind, or a flow row, clears its finding and leaves the others, and the same Reason without the kind clears nothing — catches a rule that ignores the same-row reason or the flow it asks for, or takes any text as an excuse"
   )
   func reasonOrFlowClearsTheRequirement() throws {
     let text = try TrialPlan.text("tic-tac-toe-1-PLAN.md")
@@ -73,7 +73,9 @@ struct PlanLintScreenFlowTests {
     #expect(text.contains(old))
     let reasoned = text.replacingOccurrences(
       of: old,
-      with: String(old.dropLast(2)) + " needs a 2-player game no flow can set up |")
+      with: String(old.dropLast(2)) + " data: needs a 2-player game no flow can set up |")
+    let untagged = text.replacingOccurrences(
+      of: old, with: String(old.dropLast(2)) + " needs a 2-player game no flow can set up |")
     let flowed = text.replacingOccurrences(
       of: "| req-status-text | acceptance |", with: "| req-status-text | flow |")
 
@@ -82,25 +84,35 @@ struct PlanLintScreenFlowTests {
         String($0.message.prefix { $0 != " " })
       } == ["req-board-screen", "req-status-text"])
     #expect(
+      try TrialPlan.screenFindings(untagged, appAreas: TrialPlan.starter).map {
+        String($0.message.prefix { $0 != " " })
+      } == ["req-board-screen", "req-status-text", "req-new-game"])
+    #expect(
       try TrialPlan.screenFindings(flowed, appAreas: TrialPlan.starter).map {
         String($0.message.prefix { $0 != " " })
       } == ["req-board-screen", "req-new-game"])
   }
 
   @Test(
-    "the Aidoku trial's plan, whose setting task writes SettingView with flow rows and whose prompt task writes MangaView with a reason-only row, has no finding, and loses req-prompt's reason to 1 finding naming req-prompt — catches a rule that rejects a reasoned plan or misses a bare one"
+    "the Aidoku trial's plan, whose setting task writes SettingView with flow rows and whose prompt task writes MangaView with a reason-only row, gets 1 finding naming req-prompt, whose reason names no obstacle kind, none once it opens with `data:`, and 1 again with the row gone — catches a rule that rejects a plan whose screen reason names an obstacle, or misses a bare one"
   )
-  func aidokuPlanReasonClearsPrompt() throws {
+  func aidokuPlanObstacleClearsPrompt() throws {
     let text = try TrialPlan.text("aidoku-validation-2-PLAN.md")
     let aidoku = [PlanLintValidation.AppArea(name: "Aidoku", root: ".")]
     let reasonRow = try #require(
       text.split(separator: "\n").first { $0.hasPrefix("| req-prompt | | | | |") })
 
     let findings = try TrialPlan.screenFindings(text, appAreas: aidoku)
+    let tagged = try TrialPlan.screenFindings(
+      text.replacingOccurrences(
+        of: "| req-prompt | | | | | needs", with: "| req-prompt | | | | | data: needs"),
+      appAreas: aidoku)
     let bare = try TrialPlan.screenFindings(
       text.replacingOccurrences(of: reasonRow + "\n", with: ""), appAreas: aidoku)
 
-    #expect(findings.isEmpty, "\(findings.map(\.message))")
+    #expect(findings.count == 1, "\(findings.map(\.message))")
+    #expect(findings.first?.message.hasPrefix("req-prompt") == true)
+    #expect(tagged.isEmpty, "\(tagged.map(\.message))")
     #expect(bare.count == 1, "\(bare.map(\.message))")
     #expect(bare.first?.message.hasPrefix("req-prompt") == true, "\(bare.map(\.message))")
     #expect(bare.first?.message.contains("`Aidoku/Features/Manga/MangaView.swift`") == true)

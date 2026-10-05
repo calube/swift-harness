@@ -1,0 +1,153 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "account-fake" : {
+        "acceptance" : [
+          "AccountClientTests: the fake starts at 250, lists 8 contacts, a send of 40.25 leaves 209.75 and returns the payment, a failing send throws `.sendFailed` and leaves 250, an overdraw throws `.invalidAmount`; each fails against the stub first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the features and views"
+        ],
+        "scope" : [
+          "`Contact.samples`: 8 contacts with fixed UUIDs and distinct names",
+          "`AccountClient.inMemory(balance:contacts:failSends:)`: state held in a lock-isolated box shared by its closures; `send` throws `.sendFailed` when `failSends`, throws `.invalidAmount` for an amount not above 0 or above the balance, and otherwise lowers the balance and returns a Payment with a new UUID and the current date"
+        ],
+        "title" : "Implement the in-memory account backend: $250.00, 8 contacts, and a send that can fail.",
+        "why" : "the spec's Setup: \"a starting balance of $250.00, a list of about 8 contacts, and a send call that can be made to fail\"."
+      },
+      "amount-confirm" : {
+        "acceptance" : [
+          "AmountFeatureTests: keys reach the input, Continue is ignored at $0.00 and above the balance, and delegates at the balance",
+          "ConfirmFeatureTests: a send calls the client with the amount and contact and delegates the payment; a failed send shows the error; retry sends again; each fails against the stub first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "AmountInput's rules (amount-rules), the balance update and navigation (root-flow)"
+        ],
+        "scope" : [
+          "AmountFeature: `.keyTapped` calls `state.input.press`; `.continueButtonTapped` sends `.delegate(.continued(contact:amount:))` only when `isContinueEnabled`",
+          "AmountView: the contact's name, `input.formatted` (`AccessibilityID.amountValue`), a 3-column keypad of 1-9, \".\", 0 and delete (`amountKeyPrefix` + digit, `amountKeyDecimal`, `amountKeyDelete`), and a Continue button (`amountContinue`) disabled unless `isContinueEnabled`",
+          "ConfirmFeature: `.sendButtonTapped` and `.retryButtonTapped` clear `error`, set `isSending` and call `accountClient.send(amount, contact)`; success sends `.delegate(.sent(payment))`; an AccountError (or any other error, mapped to `.sendFailed`) sets `error` and clears `isSending`; a tap while sending does nothing",
+          "ConfirmView: the contact (`confirmContact`), the amount as USD currency (`confirmAmount`), a Send button (`confirmSend`) disabled while sending, and on error a message \"Couldn't send the money\" (`confirmError`) with a \"Try again\" button (`confirmRetry`)"
+        ],
+        "title" : "Build the amount screen with its custom keypad and the confirmation screen that sends the money.",
+        "why" : "sections 2 and 3 of the spec: the keypad screen, the Continue rule, and \"Send calls the client\" with its failure and retry."
+      },
+      "amount-rules" : {
+        "acceptance" : [
+          "AmountInputTests (Swift Testing) for each rule above, including \"007\", a second \".\", a third decimal digit, delete to empty, $0.00, exactly the balance and 1 cent above it; each fails against the stub first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the amount screen and its reducer"
+        ],
+        "scope" : [
+          "`press`: digits append; a leading \"0\" is replaced by the next digit (\"007\" gives \"7\"); \".\" is rejected when one exists and gives \"0.\" when first; a third digit after \".\" is rejected; delete removes the last character",
+          "`amount` as Decimal parsed without floating point (`Decimal(string:locale: en_US_POSIX)`), 0 when empty",
+          "`formatted` as USD currency with the en_US locale, such as \"$1,234.50\", \"$0.00\" when empty; while typing \"12.\" show \"$12.00\" style text with 2 fraction digits",
+          "`canContinue(balance:)`: amount > 0 and amount <= balance"
+        ],
+        "title" : "Implement the keypad rules, the amount, its currency text and the Continue rule in AmountInput.",
+        "why" : "section 2 of the spec, \"Enter an amount\", and the acceptance criteria on the keypad and Continue."
+      },
+      "contacts" : {
+        "acceptance" : [
+          "ContactsFeatureTests (TCA TestStore): loading, filtering by a partial lowercase name, a blank query, and the delegate on tap; each fails against the stub first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "navigation to the amount screen, which the root owns"
+        ],
+        "scope" : [
+          "ContactsFeature: `.task` loads `accountClient.contacts()` into `contacts` (a failure leaves the list empty and logs nothing new); `.queryChanged` sets `query`; `filteredContacts` matches a case-insensitive substring of the name, all contacts for a blank query; `.contactTapped` sends `.delegate(.contactSelected)`",
+          "ContactsView: a List of `filteredContacts` with `.searchable` bound to `query`, each row a button with `AccessibilityID.contactRow` and the contact's name as its label; title \"Send to\""
+        ],
+        "title" : "Build the searchable contact list: load contacts, filter by name, and report a tapped contact.",
+        "why" : "section 1 of the spec, \"Pick a contact\", and the acceptance criterion \"searching the contact list filters it by name\"."
+      },
+      "root-flow" : {
+        "acceptance" : [
+          "AppFeatureTests (TCA TestStore): the balance loads on appear; selecting a contact pushes the amount screen; continuing pushes confirm; a sent delegate lowers 250 by 40.25 to 209.75, puts the payment first ahead of an earlier one and pops to home; a failed send inside the stack leaves the balance at 250; each fails against the stub first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the child screens' own behaviour and views"
+        ],
+        "scope" : [
+          "AppFeature: State holds `balance: Decimal?`, `activity: [Payment]` (newest first) and `path: StackState<Path.State>`, with `@Reducer enum Path { case contacts(ContactsFeature), amount(AmountFeature), confirm(ConfirmFeature) }`; `.task` loads the balance from `accountClient.balance()`; `.sendMoneyButtonTapped` pushes contacts; contacts' `.contactSelected` pushes amount with the current balance; amount's `.continued` pushes confirm; confirm's `.sent(payment)` lowers the balance by `payment.amount`, inserts the payment at index 0 of `activity` and empties `path`; remove the posts loading and its APIClient use",
+          "AppView: a NavigationStack over `path` showing the balance as USD currency (`homeBalance`), a \"Send money\" button (`homeSendButton`), and the activity list, each row (`homeActivityRow`) with the contact's name and the amount; the destinations use ContactsView, AmountView and ConfirmView",
+          "App/InterviewStarterApp.swift only if the root store's construction must change",
+          "rewrite AppFeatureTests for the new root, and LaunchFlowUITests so launch shows the balance \"$250.00\""
+        ],
+        "title" : "Replace the posts screen with the home screen: balance, activity list, and the send flow as a navigation stack.",
+        "why" : "requirement \"on success, the balance drops by the amount, and the payment appears at the top of an activity list on the first screen\", and the Setup's \"replace that screen\"."
+      },
+      "send-money-contract" : {
+        "acceptance" : [
+          "the area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any behaviour"
+        ],
+        "scope" : [
+          "the AccountClient package: Contact, Payment, AccountError, the AccountClient interface and a stubbed `inMemory` fake",
+          "AmountInput with stubbed rules; ContactsFeature, AmountFeature and ConfirmFeature with their State and Action and an empty body; stub views; AccessibilityID",
+          "AppCoreTests and AccountClientTests in the scheme's test action"
+        ],
+        "title" : "Declare the account client, the amount input and the screen skeletons every task compiles against, with no behaviour.",
+        "why" : "every requirement crosses AccountClient, AppCore and AppUI, so all tasks build against 1 declared shape."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-account-fake",
+        "title" : "The account sits behind an AccountClient interface whose in-memory fake starts at a $250.00 balance, lists 8 contacts, and has a send call that can be made to fail"
+      },
+      {
+        "id" : "req-contact-search",
+        "title" : "Typing in the contact list's search field filters the contacts by name"
+      },
+      {
+        "id" : "req-contact-select",
+        "title" : "Tapping a contact moves to the amount screen for that contact"
+      },
+      {
+        "id" : "req-keypad-decimals",
+        "title" : "The keypad rejects a third digit after the decimal point and a second decimal point"
+      },
+      {
+        "id" : "req-keypad-leading-zeros",
+        "title" : "The keypad never keeps a leading zero (\"007\" shows as \"7\") and delete removes the last typed character"
+      },
+      {
+        "id" : "req-amount-format",
+        "title" : "The amount shows formatted as US-dollar currency as the user types"
+      },
+      {
+        "id" : "req-continue-rule",
+        "title" : "Continue is enabled only for an amount above $0.00 and no more than the current balance"
+      },
+      {
+        "id" : "req-decimal-money",
+        "title" : "Every money value is a Decimal, never a floating-point type"
+      },
+      {
+        "id" : "req-confirm-send",
+        "title" : "The confirmation screen shows the contact and the amount, and Send calls the account client"
+      },
+      {
+        "id" : "req-send-success",
+        "title" : "A successful send lowers the balance by the amount and puts the payment at the top of the first screen's activity list"
+      },
+      {
+        "id" : "req-send-failure",
+        "title" : "A failed send leaves the balance unchanged and shows an error with a way to try again"
+      },
+      {
+        "id" : "req-replace-screen",
+        "title" : "The posts screen is replaced by the send-money home screen, and the existing APIClient and LogClient tests still pass"
+      }
+    ]
+  },
+  "resume" : "planned; 6 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

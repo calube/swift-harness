@@ -956,12 +956,14 @@ function swiftStoredFields(source, typeName) {
 }
 
 // The validation table's shape and the rule ids `plan-lint` can report, as the gate declares them.
-// The screen rule needs the repository's app areas, so it counts only once `plan-lint` passes them.
+// The screen and app rules need the repository's app areas, so they count only once `plan-lint`
+// passes them.
 function validationContract() {
   const table = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/ValidationTable.swift'), 'utf8')
   const lint = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/PlanLintValidation.swift'), 'utf8')
   const command = readFileSync(join(root, 'gate/Sources/SwiftGateCLI/Commands/PlanLintCommand.swift'), 'utf8')
-  const screenRule = /screenWithoutFlowRuleID = "([^"]+)"/.exec(lint)?.[1]
+  const appAreaRules = [/screenWithoutFlowRuleID = "([^"]+)"/, /appWithoutFlowRuleID = "([^"]+)"/]
+    .map(pattern => pattern.exec(lint)?.[1])
   const lintCall = (command.split('PlanLintValidation.findings(')[1] ?? '').split(/\n\s*\}/)[0]
   const passesAppAreas = /\bappAreas:/.test(lintCall)
   const layerBody = (table.split(/\benum ValidationLayer\b[^{]*\{/)[1] ?? '').split(/\n\}/)[0]
@@ -970,7 +972,7 @@ function validationContract() {
     rowFields: swiftStoredFields(table, 'ValidationRow'),
     unitOnlyFields: swiftStoredFields(table, 'ValidationUnitOnly').map(f => f.name),
     layers: [...layerBody.matchAll(/^\s*case (\w+)/gm)].map(m => m[1]),
-    ruleIDs: [...lint.matchAll(/RuleID = "([^"]+)"/g)].map(m => m[1]).filter(id => passesAppAreas || id !== screenRule),
+    ruleIDs: [...lint.matchAll(/RuleID = "([^"]+)"/g)].map(m => m[1]).filter(id => passesAppAreas || !appAreaRules.includes(id)),
   }
 }
 

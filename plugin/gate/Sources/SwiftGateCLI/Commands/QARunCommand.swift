@@ -315,7 +315,7 @@ enum QARunRun {
     let report = QAReport(
       runID: runID, plan: slug, after: options.after, atBase: options.atBase,
       final: options.final, settled: ended != nil, commit: commit, rows: rows, gaps: gaps,
-      notes: notes)
+      notes: notes, reasonOnly: table.unitOnly.count, checkableRows: table.rows.count)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data

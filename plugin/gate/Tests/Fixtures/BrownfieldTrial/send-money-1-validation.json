@@ -1,0 +1,56 @@
+{
+  "rows" : [
+
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "AccountClientTests in account-fake check the balance, the 8 contacts, a successful send and a failing send",
+      "requirement" : "req-account-fake"
+    },
+    {
+      "reason" : "ContactsFeatureTests in contacts check the filter",
+      "requirement" : "req-contact-search"
+    },
+    {
+      "reason" : "ContactsFeatureTests and AppFeatureTests check the delegate and the push to the amount screen",
+      "requirement" : "req-contact-select"
+    },
+    {
+      "reason" : "AmountInputTests in amount-rules check both rejections",
+      "requirement" : "req-keypad-decimals"
+    },
+    {
+      "reason" : "AmountInputTests in amount-rules check \"007\" and delete",
+      "requirement" : "req-keypad-leading-zeros"
+    },
+    {
+      "reason" : "AmountInputTests in amount-rules check the currency text",
+      "requirement" : "req-amount-format"
+    },
+    {
+      "reason" : "AmountInputTests and AmountFeatureTests check $0.00, the balance and above it",
+      "requirement" : "req-continue-rule"
+    },
+    {
+      "reason" : "the contract's types are Decimal; review checks no Double or Float money enters",
+      "requirement" : "req-decimal-money"
+    },
+    {
+      "reason" : "ConfirmFeatureTests in amount-confirm check that Send calls the client",
+      "requirement" : "req-confirm-send"
+    },
+    {
+      "reason" : "AppFeatureTests in root-flow check the balance and activity after a sent delegate",
+      "requirement" : "req-send-success"
+    },
+    {
+      "reason" : "ConfirmFeatureTests and AppFeatureTests check the error, the retry and the unchanged balance",
+      "requirement" : "req-send-failure"
+    },
+    {
+      "reason" : "the final gate runs every package test and the rewritten launch UI test",
+      "requirement" : "req-replace-screen"
+    }
+  ]
+}

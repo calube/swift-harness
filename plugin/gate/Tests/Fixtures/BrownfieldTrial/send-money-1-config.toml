@@ -1,0 +1,42 @@
+schema = 1
+
+[harness]
+profile = "brownfield"
+
+[brownfield]
+discovered_at = "afe26d8b16d2648a9bd890a886fb4cfa9055ee74"
+slice_budget_s = 30
+time_budget_min = 0
+sensitive = []
+
+[[areas]]
+name = "InterviewStarter"
+root = "."
+language = "swift"
+kind = "xcode"
+test = "xcodebuild test -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation"
+build = "xcodebuild build -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
+test_globs = ["**/InterviewStarterUITests/**/*.swift"]
+packs = []
+
+[areas.xcode]
+project = "InterviewStarter.xcodeproj"
+inclusion = "synchronized"
+schemes = ["InterviewStarter"]
+
+[judge]
+backend = "claude"
+advisory_threshold = 0.6
+block_threshold = 0.9
+
+[build.presets.brownfield]
+design_tier = "none"
+max_parallel = 3
+review = "classified"
+task_gate = "slice"
+merge_gate = "merge"
+worker_model = "claude-sonnet-5-5"
+time_budget_min = 40
+stop_starts_before_min = 13
+on_design_conflict = "amend"
+task_proof = "prove"

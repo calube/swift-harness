@@ -179,8 +179,15 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   first. A
   task writes a screen when a `Writes` path inside the area's root has a folder or file named
   `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
-  `.storyboard` or `.xib`. A requirement no flow can check gives the reason in its row's `Reason`.
-  The import fails naming each requirement that has neither.
+  `.storyboard` or `.xib`; the contract's stubs don't count. A requirement no flow can check opens
+  its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
+  `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. A reason
+  excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
+  least 1 `flow` row. The import fails naming each requirement and area that breaks this.
+- A task whose own check exercises another task's work depends on that task: an acceptance row's
+  `Writer` on every other `Runs after` task, a task on any task whose files its `Acceptance`
+  names, and a UI test's writer on every task whose behaviour the test shows, such as a fake's
+  seed data. The reference's "Dependencies a check needs" says which of these the import checks.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
@@ -357,8 +364,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    rows for item 5 and step 9. A RED verdict with a `red` row
    counts as a red `final` in item 4, whose fix task owns the files the red rows' checks exercise,
    and item 4's second `final` runs this item again. After `final` a row that never verified,
-   `unverified` or `abandoned`, is RED too; with no `red` row no fix task makes it run, so it
-   goes to the report as is.
+   `unverified` or `abandoned`, is RED too, as is a table with no row a check runs; with no `red`
+   row no fix task makes it run, so it goes to the report as is.
 4. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its

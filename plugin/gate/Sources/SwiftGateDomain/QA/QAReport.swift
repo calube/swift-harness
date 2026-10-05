@@ -11,6 +11,7 @@ public struct QAReport: Sendable, Equatable {
   public static let checkFailedRuleID = "qa.check-failed"
   public static let checkUnverifiedRuleID = "qa.check-unverified"
   public static let checkPassesAtBaseRuleID = "qa.check-passes-at-base"
+  public static let noVerifiableRowRuleID = "qa.no-verifiable-row"
 
   public let schemaVersion: Int
   /// `nil` when the run stopped before it had one.
@@ -27,33 +28,66 @@ public struct QAReport: Sendable, Equatable {
   public let commit: String?
   public let verdict: Verdict
   public let rows: [QARow]
+  /// The table's requirements left to unit tests with only a reason, which no check runs.
+  public let reasonOnly: Int
   public let findings: [Finding]
   /// Non-gating notes, such as an event that wasn't written.
   public let notes: [String]
   public let message: String
 
   /// The report for rows that ran; its findings and verdict come from `rows`.
-  /// - Parameter gaps: final-pass evidence the flow rows didn't leave, each a nit.
+  /// - Parameters:
+  ///   - gaps: final-pass evidence the flow rows didn't leave, each a nit.
+  ///   - reasonOnly: the table's reason-only requirements.
+  ///   - checkableRows: the table's rows with a check, whatever this run took; `nil` when unknown.
   public init(
     runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
     settled: Bool = false, commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [],
-    notes: [String] = []
+    notes: [String] = [], reasonOnly: Int = 0, checkableRows: Int? = nil
   ) {
+    let unverifiable = checkableRows == 0 && !atBase
     let findings =
       Self.findings(rows: rows, atBase: atBase, settled: settled)
       + Self.findings(gaps: gaps, rows: rows)
+      + (unverifiable
+        ? Self.noVerifiableRow(reasonOnly: reasonOnly, gates: settled || final) : [])
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
+    let verified =
+      "\(Self.verified(rows)) of \(rows.count + reasonOnly) rows verified"
+      + (reasonOnly > 0 ? " (\(reasonOnly) reason-only)" : "")
+    let message =
+      if unverifiable {
+        verified + ": unverified, no row has a check to run"
+      } else if rows.isEmpty {
+        "no validation row to run"
+      } else {
+        verified + ": " + counts.joined(separator: ", ")
+      }
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
       commit: commit,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
-      findings: findings, notes: notes,
-      message: rows.isEmpty
-        ? "no validation row to run"
-        : "\(Self.verified(rows)) of \(rows.count) rows verified: "
-          + counts.joined(separator: ", "))
+      reasonOnly: reasonOnly, findings: findings, notes: notes, message: message)
+  }
+
+  /// The finding for a table no row of which has a check: major once the build has ended or on
+  /// a `--final` run, a nit while tasks still merge.
+  private static func noVerifiableRow(reasonOnly: Int, gates: Bool) -> [Finding] {
+    let what =
+      reasonOnly == 0
+      ? "the validation table has no row"
+      : "all \(reasonOnly) of the validation table's requirements are reason-only"
+    // Every argument is non-empty, so the contract can't refuse it.
+    let finding = try? Finding(
+      ruleID: noVerifiableRowRuleID, severity: gates ? .major : .nit,
+      file: ValidationTable.fileName, line: nil,
+      message:
+        "\(what), so no check runs and nothing is verified; give the plan acceptance or flow "
+        + "rows",
+      failureScenario: nil)
+    return finding.map { [$0] } ?? []
   }
 
   /// How many of `rows` ran their check and got an answer, `pass` or `red`.
@@ -63,8 +97,8 @@ public struct QAReport: Sendable, Equatable {
 
   private init(
     runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, settled: Bool,
-    commit: String?, verdict: Verdict, rows: [QARow], findings: [Finding], notes: [String],
-    message: String
+    commit: String?, verdict: Verdict, rows: [QARow], reasonOnly: Int = 0, findings: [Finding],
+    notes: [String], message: String
   ) {
     self.schemaVersion = Self.currentSchemaVersion
     self.runID = runID
@@ -76,6 +110,7 @@ public struct QAReport: Sendable, Equatable {
     self.commit = commit
     self.verdict = verdict
     self.rows = rows
+    self.reasonOnly = reasonOnly
     self.findings = findings
     self.notes = notes
     self.message = message
@@ -107,8 +142,8 @@ public struct QAReport: Sendable, Equatable {
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
-      commit: commit, verdict: verdict, rows: rows, findings: findings, notes: notes + more,
-      message: message)
+      commit: commit, verdict: verdict, rows: rows, reasonOnly: reasonOnly, findings: findings,
+      notes: notes + more, message: message)
   }
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
@@ -166,7 +201,7 @@ extension QAReport {
 extension QAReport: Codable {
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, runID, plan, after, atBase, final, settled, commit, verdict, rows,
-      findings, notes, message
+      reasonOnly, findings, notes, message
   }
 
   public init(from decoder: any Decoder) throws {
@@ -188,6 +223,8 @@ extension QAReport: Codable {
       commit: try c.decodeIfPresent(String.self, forKey: .commit),
       verdict: try c.decode(Verdict.self, forKey: .verdict),
       rows: try c.decode([QARow].self, forKey: .rows),
+      // Reports written before reason-only rows were counted hold no key.
+      reasonOnly: try c.decodeIfPresent(Int.self, forKey: .reasonOnly) ?? 0,
       findings: try c.decode([Finding].self, forKey: .findings),
       notes: try c.decode([String].self, forKey: .notes),
       message: try c.decode(String.self, forKey: .message))
@@ -206,6 +243,7 @@ extension QAReport: Codable {
     try c.encode(commit, forKey: .commit)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(rows, forKey: .rows)
+    try c.encode(reasonOnly, forKey: .reasonOnly)
     try c.encode(findings, forKey: .findings)
     try c.encode(notes, forKey: .notes)
     try c.encode(message, forKey: .message)

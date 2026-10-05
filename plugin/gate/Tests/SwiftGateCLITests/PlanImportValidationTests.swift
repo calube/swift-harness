@@ -120,7 +120,7 @@ private func line(of needle: String, in text: String) -> Int? {
 @Suite("plan import validation table")
 struct PlanImportValidationTests {
   @Test(
-    "the Aidoku trial's plan, whose acceptance row named a test source file, fails the import at that row with validation-check-source-file and writes nothing, and imports once the row names the test — catches the row qa run later ran as a path and read red on exit 126"
+    "the Aidoku trial's plan, whose acceptance row named a test source file, fails the import at that row with validation-check-source-file and writes nothing, and imports once the row names the test and req-prompt's reason names its obstacle — catches the row qa run later ran as a path and read red on exit 126"
   )
   func aidokuSourceFileCheckFailsImport() async throws {
     let captured = try String(
@@ -143,10 +143,12 @@ struct PlanImportValidationTests {
     #expect(!clone.exists("ledger.json"))
     #expect(!clone.exists("validation.json"))
 
+    let named = try replacing(
+      "`AidokuTests/LargeDownloadConfirmationTests.swift`",
+      with: "`test: AidokuTests/LargeDownloadConfirmationTests`", in: captured)
     try clone.write(
       plan: try replacing(
-        "`AidokuTests/LargeDownloadConfirmationTests.swift`",
-        with: "`test: AidokuTests/LargeDownloadConfirmationTests`", in: captured))
+        "| req-prompt | | | | | needs", with: "| req-prompt | | | | | data: needs", in: named))
     let fixed = await clone.run()
     #expect(fixed.status == .imported, "\(fixed.message)")
     let table = try ValidationTableJSON.decode(Data(contentsOf: clone.validationFile))
@@ -156,7 +158,7 @@ struct PlanImportValidationTests {
   }
 
   @Test(
-    "the tic-tac-toe trial's plan, whose screen task's requirements have only XCUITest acceptance rows, fails the import with validation-screen-without-flow naming each requirement and writes nothing, and imports once each row gives a reason — catches a UI plan imported with no flow row"
+    "the tic-tac-toe trial's plan, whose screen task's requirements have only XCUITest acceptance rows, fails the import with validation-screen-without-flow naming each requirement and writes nothing; with each row's reason naming an obstacle it still fails on app-without-flow alone, and imports once 1 row is a flow — catches a UI plan imported with no flow row"
   )
   func ticTacToeScreenWithoutFlowFailsImport() async throws {
     let captured = try String(
@@ -180,11 +182,76 @@ struct PlanImportValidationTests {
     #expect(!clone.exists("validation.json"))
 
     let check = "`test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen |"
+    let reasoned = captured.replacingOccurrences(
+      of: check + " |", with: check + " system: the app has no flow runner here |")
+    try clone.write(plan: reasoned)
+    let excused = await clone.run()
+    #expect(excused.status == .invalid, "\(excused.message)")
+    #expect(excused.message.contains(PlanLintValidation.appWithoutFlowRuleID), "\(excused.message)")
+    #expect(!excused.message.contains(PlanLintValidation.screenWithoutFlowRuleID))
+
     try clone.write(
-      plan: captured.replacingOccurrences(
-        of: check + " |", with: check + " the app has no flow runner here |"))
-    let reasoned = await clone.run()
-    #expect(reasoned.status == .imported, "\(reasoned.message)")
+      plan: reasoned.replacingOccurrences(
+        of: "| req-new-game | acceptance |", with: "| req-new-game | flow |"))
+    let flowed = await clone.run()
+    #expect(flowed.status == .imported, "\(flowed.message)")
+  }
+
+  @Test(
+    "the send-money trial's plan, every row a reason naming unit tests, fails the import with app-without-flow and a screen-without-flow per screen requirement, but not for req-decimal-money, which only the --contract task's stub ties to a screen — catches the trial's plan imported with no flow for 4 screens"
+  )
+  func sendMoneyReasonOnlyPlanFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-1-PLAN.md"), encoding: .utf8)
+    let clone = try await ValidationClone(plan: captured, config: "send-money-1-config.toml")
+    defer { clone.remove() }
+
+    let report = await PlanImportRun.run(
+      slug: ValidationClone.slug, root: clone.root,
+      git: LiveGit(runner: clone.runner, repositoryRoot: clone.root.path),
+      contract: .init(task: "send-money-contract", runID: "20261005T013039Z-242c4c56"))
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.message.contains(PlanLintValidation.appWithoutFlowRuleID), "\(report.message)")
+    let screens = report.message.components(
+      separatedBy: PlanLintValidation.screenWithoutFlowRuleID + ": "
+    ).dropFirst().map {
+      String($0.prefix { $0 != " " })
+    }
+    #expect(
+      screens == [
+        "req-contact-search", "req-contact-select", "req-continue-rule", "req-confirm-send",
+        "req-send-success", "req-send-failure", "req-replace-screen",
+      ], "\(report.message)")
+    #expect(!clone.exists("ledger.json"))
+  }
+
+  @Test(
+    "the send-money plan with its Validation section deleted fails the import with 1 app-without-flow naming the InterviewStarter area and the missing section, and writes nothing — catches a screen plan that skips every flow rule by leaving the section out"
+  )
+  func sendMoneyWithoutSectionFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-1-no-validation-PLAN.md"),
+      encoding: .utf8)
+    #expect(!captured.contains("## Validation"))
+    let clone = try await ValidationClone(plan: captured, config: "send-money-1-config.toml")
+    defer { clone.remove() }
+
+    let report = await PlanImportRun.run(
+      slug: ValidationClone.slug, root: clone.root,
+      git: LiveGit(runner: clone.runner, repositoryRoot: clone.root.path),
+      contract: .init(task: "send-money-contract", runID: "20261005T013039Z-242c4c56"))
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.verdict == .red)
+    #expect(
+      report.message.components(separatedBy: PlanLintValidation.appWithoutFlowRuleID).count == 2,
+      "\(report.message)")
+    #expect(report.message.contains("`InterviewStarter`"), "\(report.message)")
+    #expect(report.message.contains("`## Validation`"), "\(report.message)")
+    #expect(!report.message.contains(PlanLintValidation.screenWithoutFlowRuleID))
+    #expect(!clone.exists("ledger.json"))
+    #expect(!clone.exists("validation.json"))
   }
 
   @Test(
