@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
@@ -225,7 +226,7 @@ struct CalibrateDesignCommandTests {
     let record = try CalibrationRecord.decode(data)
     let expectedHash = DesignCalibrationHash.hash(
       try DesignCalibrationHash.discover(root: repository.root))
-    #expect(record.schemaVersion == 3)
+    #expect(record.schemaVersion == 4)
     #expect(record.contentHash == expectedHash)
     #expect(
       record.hashedFiles == [
@@ -335,9 +336,14 @@ struct CalibrateDesignCommandTests {
     #expect(try Self.exitCode(outcome) == 1)
     #expect(repository.data(DesignCalibrationLayout.recordPath) == Data(previous.utf8))
     let missed = Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }
-    #expect(missed.count == 1)
-    #expect(missed.first?.message.contains("design-claim-checker/overstated-claim on opus") == true)
-    #expect(missed.first?.message.contains("answered `supported`") == true)
+    // The miss earns a second attempt, which misses too, and two misses decide the case.
+    #expect(missed.count == 2)
+    #expect(
+      missed.allSatisfy {
+        $0.message.contains("design-claim-checker/overstated-claim on opus")
+          && $0.message.contains("answered `supported`")
+          && $0.message.contains("[miss, miss]")
+      })
   }
 
   @Test(
@@ -355,7 +361,8 @@ struct CalibrateDesignCommandTests {
 
     #expect(try Self.exitCode(outcome) == 1)
     let missed = Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }
-    #expect(missed.count == 2)
+    // Two cases, each missing on both of the attempts that decide it.
+    #expect(missed.count == 4)
     #expect(missed.allSatisfy { $0.message.contains("answered `no JSON object`") })
   }
 
@@ -537,6 +544,153 @@ struct CalibrateDesignCommandTests {
     #expect(arguments.contains("--restricted"))
   }
 
+  // MARK: - Retries
+
+  /// Plays each agent like ``recorded(_:judged:judgedProbability:)``, but answers the case whose
+  /// stdin carries a token with the next status in its list, one per attempt.
+  static func sequenced(_ statuses: [String: [String]]) -> FakeProcessRunner {
+    let served = Mutex<[String: Int]>([:])
+    return FakeProcessRunner { invocation throws(ProcessRunnerError) in
+      let stdin = Self.stdin(invocation)
+      guard let (token, sequence) = statuses.first(where: { stdin.contains($0.key) }) else {
+        return ProcessOutput(status: .exited(1), stdout: "", stderr: "unscripted case")
+      }
+      let index = served.withLock { counts in
+        defer { counts[token, default: 0] += 1 }
+        return counts[token, default: 0]
+      }
+      guard index < sequence.count else {
+        return ProcessOutput(status: .exited(1), stdout: "", stderr: "unscripted attempt")
+      }
+      let reply =
+        #"{"verdicts": [{"id": "ev-case", "status": "\#(sequence[index])", "reason": "r"}]}"#
+      return ProcessOutput(status: .exited(0), stdout: envelope(result: reply))
+    }
+  }
+
+  static func agentRuns(_ runner: FakeProcessRunner, token: String) -> Int {
+    runner.invocations.filter { !isJudge($0) && stdin($0).contains(token) }.count
+  }
+
+  /// `agent/case` and the attempts the record holds for it.
+  static func recordedAttempts(_ repository: Repository) throws -> [String: [String]] {
+    let cases = try #require(try recordJSON(repository)["cases"] as? [[String: Any]])
+    var attempts: [String: [String]] = [:]
+    for entry in cases {
+      attempts["\(entry["agent"] ?? "")/\(entry["case"] ?? "")"] =
+        entry["attempts"] as? [String] ?? []
+    }
+    return attempts
+  }
+
+  @Test(
+    "a case that misses, then passes twice, passes, and the record holds its attempts beside the first-try pass — catches one ambiguous miss failing the run, or a retried pass recorded as a first-try one"
+  )
+  func missThenTwoPassesPasses() async throws {
+    let repository = try Repository.calibrated()
+    let runner = Self.sequenced([
+      "TOKEN-A": ["supported", "overstated", "overstated"], "TOKEN-B": ["overstated"],
+    ])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 0)
+    #expect(
+      try Self.recordedAttempts(repository) == [
+        "design-claim-checker/overstated-claim": ["miss", "pass", "pass"],
+        "design-challenger/refuted-api": ["pass"],
+      ])
+    #expect(Self.agentRuns(runner, token: "TOKEN-A") == 3)
+    let retried = Self.findings(outcome).first {
+      $0.ruleID == "calibrate-design.usage"
+        && $0.message.contains("design-claim-checker/overstated-claim")
+        && $0.message.contains("[miss, pass, pass]")
+    }
+    #expect(retried?.message.contains("answered `supported`") == true)
+  }
+
+  @Test(
+    "a case that passes its first attempt runs once — catches every case paying for three attempts"
+  )
+  func firstPassRunsOnce() async throws {
+    let repository = try Repository.calibrated()
+    let runner = Self.sequenced([
+      "TOKEN-A": ["overstated", "supported", "supported"], "TOKEN-B": ["overstated"],
+    ])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 0)
+    #expect(Self.agentRuns(runner, token: "TOKEN-A") == 1)
+    #expect(Self.agentRuns(runner, token: "TOKEN-B") == 1)
+    #expect(
+      try Self.recordedAttempts(repository) == [
+        "design-claim-checker/overstated-claim": ["pass"], "design-challenger/refuted-api": ["pass"],
+      ])
+  }
+
+  @Test(
+    "a case that passes one attempt of three fails the run, names each attempt's miss and leaves the record — catches a consistently wrong agent passing on one lucky retry"
+  )
+  func oneOfThreeFails() async throws {
+    let repository = try Repository.calibrated()
+    let previous = "{\"previous\": \"record\"}\n"
+    try repository.write(DesignCalibrationLayout.recordPath, previous)
+    let runner = Self.sequenced([
+      "TOKEN-A": ["supported", "overstated", "supported"], "TOKEN-B": ["overstated"],
+    ])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 1)
+    #expect(repository.data(DesignCalibrationLayout.recordPath) == Data(previous.utf8))
+    let missed = Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }
+    #expect(missed.count == 2)
+    #expect(missed.allSatisfy { $0.message.contains("[miss, pass, miss]") })
+    #expect(missed.contains { $0.message.contains("attempt 1 ") })
+    #expect(missed.contains { $0.message.contains("attempt 3 ") })
+  }
+
+  @Test(
+    "two misses fail the case without a third attempt — catches a paid attempt that can't change the verdict"
+  )
+  func twoMissesStop() async throws {
+    let repository = try Repository.calibrated()
+    let runner = Self.sequenced([
+      "TOKEN-A": ["supported", "supported", "overstated"], "TOKEN-B": ["overstated"],
+    ])
+
+    let outcome = await Self.run(repository, runner: runner)
+
+    #expect(try Self.exitCode(outcome) == 1)
+    #expect(Self.agentRuns(runner, token: "TOKEN-A") == 2)
+  }
+
+  @Test(
+    "a replay judges each attempt the live run kept and reaches the same verdict, running no agent — catches a replay that re-runs a retry or stops at the first kept reply"
+  )
+  func replayUsesKeptAttempts() async throws {
+    let repository = try Repository.calibrated()
+    let live = await Self.run(
+      repository,
+      runner: Self.sequenced([
+        "TOKEN-A": ["supported", "overstated", "overstated"], "TOKEN-B": ["overstated"],
+      ]),
+      replies: Self.replies(repository, .keep))
+    #expect(try Self.exitCode(live) == 0)
+    let replayRunner = Self.sequenced([:])
+
+    let replay = await Self.run(
+      repository, runner: replayRunner, replies: Self.replies(repository, .replay))
+
+    #expect(try Self.exitCode(replay) == 0)
+    #expect(Self.agentRuns(replayRunner).isEmpty)
+    let retried = Self.findings(replay).first {
+      $0.ruleID == "calibrate-design.usage" && $0.message.contains("[miss, pass, pass]")
+    }
+    #expect(retried?.message.contains("design-claim-checker/overstated-claim") == true)
+  }
+
   // MARK: - Kept replies and replay
 
   static let keptRunID = "20260930T120000Z-0000abcd"
@@ -617,12 +771,13 @@ struct CalibrateDesignCommandTests {
       repository, runner: replayRunner, replies: Self.replies(repository, .replay))
 
     #expect(Self.agentRuns(replayRunner).isEmpty)
-    #expect(replayRunner.invocations.filter(Self.isJudge).count == 1)
+    // The drafter's judged case misses twice, so both kept attempts are judged again.
+    #expect(replayRunner.invocations.filter(Self.isJudge).count == 2)
     #expect(try Self.exitCode(replay) == 1)
     let missed = { (outcome: StaticCheckOutcome) in
       Self.findings(outcome).filter { $0.ruleID == "calibrate-design.label-missed" }.map(\.message)
     }
-    #expect(missed(live).count == 2)
+    #expect(missed(live).count == 4)
     #expect(missed(replay) == missed(live))
   }
 
