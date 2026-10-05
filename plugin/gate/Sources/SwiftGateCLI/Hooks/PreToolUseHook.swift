@@ -27,7 +27,9 @@ enum PreToolUseHook {
       if let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType) {
         return deny(violation)
       }
-      if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
+        return deny(violation)
+      }
       if let violation = fixerGateCap(command, payload: payload) { return deny(violation) }
       if let brownfield {
         switch DirtyFileRead.read(brownfield.discoverDirty) {

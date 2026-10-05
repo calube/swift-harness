@@ -517,9 +517,24 @@ const brief = () =>
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')
 
+// At the Bash tool's default 120 s timeout a gate moves to the background, and a worker left to
+// improvise the wait has polled with `pgrep -f`, which matches its own shell and never ends.
+const gateRunLines = () => {
+  const scratch = A.profile === 'brownfield' ? `${A.stateRoot}/tmp` : `${A.worktree}/.harness/tmp`
+  return [
+    `Gate runs: run every \`${SG} check\` and \`${SG} test-only\` in the foreground with the Bash tool's \`timeout\` at 600000, its longest. ` +
+      'At the default 120 s the tool moves the gate to the background.',
+    `A gate that may outlast 600 s runs with \`run_in_background: true\` and \`--json > ${scratch}/gate.json\`; then run ` +
+      `\`${SG} build gate-wait ${A.plan} --tier ${A.taskGate} --output ${scratch}/gate.json --json\` with the same timeout, again while its action is \`wait\`, ` +
+      'and read that file once it is `read`. On `overrun` or `cutoff`, return gate-red with redReason `environment`.',
+    'Never wait on or stop a process by name: the hook denies `pgrep -f`, `pkill`, `killall` and a `while` or `until` loop on `pgrep`. ' +
+      '`pgrep -f` matches the shell running it, so such a loop never ends.',
+  ].join('\n')
+}
+
 function workerPrompt(fix, parent) {
   const span = spanLines(fix ? 'fix' : 'worker', 'build-worker', parent, SPAN_END_RULES.worker)
-  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${brief()}\n\n${span}`
+  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${brief()}\n${gateRunLines()}\n\n${span}`
   if (!fix) return base
   return (
     `${base}\n\nThis is the fix pass, the only one: an earlier attempt worked in this same worktree and branch. ` +

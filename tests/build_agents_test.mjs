@@ -5,8 +5,9 @@
 // that isn't opus; a return example that drifts from `TaskReturn`'s keys, so `build check-return`
 // rejects every return; an outcome the gate doesn't accept; a prompt that stops forbidding a
 // command the PreToolUse guard denies, so the worker burns a turn on a denial; a worker that loses
-// the `task-status.json` design-conflict report, test-first or the foreground rule; a fixer that
-// may commit to `main` or merge.
+// the `task-status.json` design-conflict report, test-first or the foreground rule; an agent never
+// told to run its gates at the 600000 timeout, so a gate is backgrounded and watched by a `pgrep -f`
+// loop that matches its own shell; a fixer that may commit to `main` or merge.
 //
 // `checkBuildAgentText(fileName, text)` is exported so the checks run against edited copies too.
 import assert from 'node:assert/strict'
@@ -107,6 +108,9 @@ const COMMON = {
     'swiftgate check --tier',
     'GREEN',
     'foreground',
+    "the Bash tool's `timeout` at 600000",
+    '`build gate-wait`',
+    '`pgrep -f`',
     'never push',
     'Co-Authored-By',
     ...FORBIDDEN_GROUPS.map(g => `\`swiftgate ${g}\``),

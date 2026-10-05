@@ -3491,6 +3491,60 @@ PY
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: waiting on a gate by process name
+
+In a practice brownfield trial (2026-10-05), 2 build agents ran their slice gate at the Bash tool's
+default 120s timeout, so the tool moved it to the background. Each then waited with
+`while pgrep -f "swiftgate check" >/dev/null; do sleep 5; done`, which matches its own shell, so
+both loops ran to the 600s timeout after the gates had finished. The fix pass then ran
+`pkill -f "pgrep"`, and another call `pkill -f "swift-test|swift-build"`.
+`Hooks/practice-trial-process-match-wait-bash.json` holds those 4 calls with their `timeout`, and
+the tool result of each that timed out. `T` is the trial's copied `transcripts` folder. From the
+repository root:
+
+```sh
+T=<trial transcripts folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+T, F = os.environ["T"], os.environ["F"]
+calls = [
+    ("session/subagents/workflows/wf_b7641878-793/agent-aeb18af089741a5fa.jsonl", "toolu_019Sn67CartPsCYePjLdi6LW"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01Cqa4NGuGxn34gkz1qUvkM2"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01YXwHdeLYH914n8Qff9USxD"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a4a821ed2bf56fc5d.jsonl", "toolu_01AR6o1rTni1KPGAZnFf63Wk"),
+]
+scrubs = [
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec-[^/\s;]+", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;]|$)", "/CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/]+", "/HARNESS"),
+    (r"/private/tmp/claude-\d+/[^\s]+?/tasks/", "/TASKS/"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+def flat(content):
+    if isinstance(content, str): return content
+    return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+out = []
+for path, use in calls:
+    command = timeout = result = None
+    for line in open(f"{T}/{path}"):
+        entry = json.loads(line)
+        for block in (entry.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict): continue
+            if block.get("id") == use:
+                command = block["input"]["command"]; timeout = block["input"].get("timeout")
+            if block.get("tool_use_id") == use: result = flat(block["content"])
+    call = {"command": scrub(command), "timeout": timeout}
+    if "did not complete within" in result: call["result"] = scrub(result)
+    out.append(call)
+open(f"{F}/Hooks/practice-trial-process-match-wait-bash.json", "w").write(
+    json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## Brownfield trial: the warm-up times and time box an area command's bound reads
 
 `BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run wrote at its
@@ -3660,6 +3714,60 @@ cp $S/plans/spec/returns/send-money-contract.json $F/send-money-2-contract-retur
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.
+
+## Brownfield trial: a test file emptied to its imports, and a new target's tests at the base
+
+The third send-money trial's send-views task emptied `AppFeatureTests.swift` to a comment and an
+import, as its plan said, and `check-return` refused the return for that file's "unrun" tests. Its
+contract added an `AccountClient` target with 4 tests to the `APIClient` package, and prove read
+them as passing with the source reverted: with `Package.swift` reverted, the target is gone, and
+`swift test --filter` ran 0 tests and exited 0. `$RUNS` is the trials' report folder and `$TRIALS`
+the trial clones' folder. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+R=$TRIALS/send-money-3/repo F=AppFeatureTests.swift P=Packages/AppFeature/Tests/AppCoreTests/$F
+cp $RUNS/send-money-3/state/config.toml BrownfieldTrial/send-money-3-config.toml
+git -C $R show 0eb5b82:$P > BrownfieldTrial/send-money-3-AppFeatureTests-base.swift
+git -C $R show spec/send-views:$P > BrownfieldTrial/send-money-3-AppFeatureTests-emptied.swift
+```
+
+`send-money-3-prove-new-target/` is prove's reverted run of the contract's 4 tests. Its capture
+ran again in a scratch clone of the trial repository (`$SCRATCH/newtarget`), with the contract's
+non-test changes reverted to its merge base, as prove's scratch tree holds them.
+`send-money-3-prove-new-target/head/` is the same command in a second clone (`$SCRATCH/seeded`)
+at the contract commit, where the target exists. Each ran with Apple Swift 6.2 on macOS 26:
+
+```sh
+D=BrownfieldTrial/send-money-3-prove-new-target B=0eb5b8291b6f0ba5c4d9453fa8ff19b28795daae
+git clone -q $R $SCRATCH/newtarget && git -C $SCRATCH/newtarget checkout -q d676ad6
+(cd $SCRATCH/newtarget && git checkout -q $B -- .swiftgate.toml App/InterviewStarterApp.swift \
+  Packages/APIClient/Package.swift Packages/AppFeature/Package.swift &&
+  git rm -q Packages/APIClient/Sources/AccountClient/AccountClient.swift \
+  Packages/AppFeature/Sources/AppCore/{AmountFeature,AmountInput,ConfirmFeature}.swift \
+  Packages/AppFeature/Sources/AppCore/{HarnessScenario,SendMoneyFeature}.swift \
+  Packages/AppFeature/Sources/AppUI/AccessibilityID.swift)
+git clone -q $SCRATCH/newtarget $SCRATCH/seeded && git -C $SCRATCH/seeded checkout -q d676ad6
+T='^AccountClientTests\.AccountClientTests'
+c="swift test --parallel --xunit-output '$SCRATCH/junit/APIClient-prove-1.xml' --filter \
+'($T/seed\(\)|$T/sendDebits\(\)|$T/failingSendKeepsBalance\(\)|$T/overdraftRefused\(\))'"
+for pair in newtarget:$D seeded:$D/head; do
+  tree=${pair%%:*} out=${pair#*:}; mkdir -p $out $SCRATCH/junit
+  (cd $SCRATCH/$tree/Packages/APIClient && rm -rf .build &&
+    /bin/sh -c "$c" > $OLDPWD/$out/stdout 2> $OLDPWD/$out/stderr; echo $? > $OLDPWD/$out/exit)
+  printf '%s\n' "$c" | sed "s#$SCRATCH/junit#<junit>#" > $out/command
+  cp $SCRATCH/junit/APIClient-prove-1.xml $out/junit.xml
+  cp $SCRATCH/junit/APIClient-prove-1-swift-testing.xml $out/junit-swift-testing.xml
+  sed -i '' -e "s#$SCRATCH/$tree#<repo>#g" -e "s#$SCRATCH/junit#<junit>#g" $out/stdout $out/stderr
+done
+git -C $R show d676ad6:Packages/APIClient/Tests/AccountClientTests/AccountClientTests.swift \
+  > $D/AccountClientTests.swift
+git -C $R diff 0eb5b82 d676ad6 -- Packages/APIClient/Package.swift > $D/Package.swift.diff
+```
+
+The reverted run exits 0 and warns that no test case matched, and both of its reports hold
+`tests="0"`; the head run exits 0 with the 4 tests passing in its Swift Testing report. Both
+built the package from no `.build`. `grep -rniE '/Users|/private|/var/folders|caleb'` over
+these files matched nothing.
 
 ## Brownfield trial: a task the cutoff abandoned after its merged tree passed every flow
 

@@ -45,6 +45,7 @@ struct BrownfieldMergeCheckTests {
   private static func run(
     _ clone: Clone, tier: CheckTier, areas: [BrownfieldArea], changed: [String],
     runner: FakeAreaCommandRunner, sliceBuildsOnly: Bool = false,
+    buildsOnly: (@Sendable (BrownfieldArea) -> Bool)? = nil,
     context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil,
     bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
@@ -71,7 +72,8 @@ struct BrownfieldMergeCheckTests {
         git: git, scratch: scratch, runner: runner, readFile: { _ in "it('works')\n" },
         deadline: .seconds(5), bound: scratchBound),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      sliceBuildsOnly: { _ in sliceBuildsOnly }, deadline: .seconds(5), bound: bound,
+      sliceBuildsOnly: buildsOnly ?? { _ in sliceBuildsOnly }, deadline: .seconds(5),
+      bound: bound,
       reuse: reuse)
     return try await BrownfieldMergeCheck.run(
       root: clone.root, tier: tier, base: "main",
@@ -647,7 +649,7 @@ extension BrownfieldMergeCheckTests {
     #expect(second.scratchRuns == 0)
     let summaries = second.parts.findings.filter { $0.ruleID == "prove.summary" }.map(\.message)
     #expect(
-      summaries.contains { $0.hasPrefix("prove: no new or changed tests since") },
+      summaries.contains { $0.hasPrefix("prove: no new or changed tests in Aidoku since") },
       "\(summaries)")
 
     let first = try await Self.trialRun(clone, branch, tier: .merge, at: branch.firstMerge)
@@ -699,6 +701,35 @@ extension BrownfieldMergeCheckTests {
     #expect(
       head.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(path)' ") },
       "\(head.map(\.command))")
+  }
+}
+
+extension BrownfieldMergeCheckTests {
+  @Test(
+    "the send-money merge that brought AppFeature's reducer tests says merge proves only the build-only area and that slice proved AppFeature's tests, not that the merge has no new tests — catches a merge line that reads as if the merge added no tests"
+  )
+  func mergeSaysWhichAreasSliceProved() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: config.areas,
+      changed: [
+        "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/ConfirmFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/SendMoneyFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/SendMoneyFeatureTests.swift",
+      ],
+      runner: FakeAreaCommandRunner { _ in .passed }, buildsOnly: { !$0.selectsChangedTests })
+
+    let summaries = parts.findings.filter { $0.ruleID == ProofRules.summaryRuleID }.map(\.message)
+    #expect(
+      !summaries.contains { $0.hasPrefix("prove: no new or changed tests since") },
+      "\(summaries)")
+    #expect(
+      summaries.contains { $0.contains("AppFeature") && $0.contains("slice") }, "\(summaries)")
   }
 }
 

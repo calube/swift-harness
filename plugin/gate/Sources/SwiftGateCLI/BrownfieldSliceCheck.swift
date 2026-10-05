@@ -235,13 +235,20 @@ enum BrownfieldSliceCheck {
     }
 
     let failing = results.flatMap(\.runs).filter(\.failing)
+    let layout = dependencies.layout
     let queries = failing.compactMap { run -> BaselineQuery? in
       guard let rerun = run.rerun else { return nil }
       return BaselineQuery(
         key: BaselineStepKey(
           area: run.area.name, step: run.step, command: run.template, selection: run.selection),
-        head: run.outcome, request: rerun)
+        head: run.outcome,
+        request: { scratch in
+          ScratchTreeBuild.request(rerun(scratch), kind: run.area.kind, layout: layout)
+        })
     }
+    // Read before the reruns: whether their scratch-tree builds start warm.
+    let baselineDerivedData = BrownfieldProve.derivedData(
+      failing.filter { $0.rerun != nil }.map(\.area), layout: layout)
     for run in failing where run.rerun == nil {
       outcome.findings.append(
         try finding(
@@ -256,7 +263,7 @@ enum BrownfieldSliceCheck {
       let remaining = lookup.verdict.remaining
       context.steps.record(
         .baseline, tier: nil, milliseconds: milliseconds,
-        verdict: remaining.isEmpty ? .green : .red)
+        verdict: remaining.isEmpty ? .green : .red, derivedData: baselineDerivedData)
       outcome.findings += lookup.notes
       outcome.baselineCount = lookup.verdict.baselineCount
       for failure in remaining {
@@ -705,8 +712,8 @@ enum BrownfieldSliceCheck {
         deadline: dependencies.deadline, environment: [:], junitPath: nil)
   }
 
-  /// A run in this worktree builds in its own DerivedData; a rerun in a scratch tree keeps
-  /// Xcode's default, so it never overwrites this worktree's build.
+  /// A run in this worktree builds in its own DerivedData; a rerun in a scratch tree builds where
+  /// ``ScratchTreeBuild`` puts it, so it never overwrites this worktree's build.
   private static func atHead(_ request: AreaCommandRequest, _ dependencies: Dependencies)
     -> AreaCommandRequest
   {
