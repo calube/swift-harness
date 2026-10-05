@@ -1,0 +1,51 @@
+name: Snapshots
+
+on: workflow_dispatch
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    name: Record snapshots for unit & ui tests
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Cache bundler gems
+        uses: actions/cache@v6
+        with:
+          path: vendor/bundle
+          key: ${{ runner.os }}-gems-${{ hashFiles('**/Gemfile.lock') }}
+          restore-keys: ${{ runner.os }}-gems-
+      - name: Cache Mint packages
+        id: mint-cache
+        uses: actions/cache@v6
+        with:
+          path: /Users/runner/.mint
+          key: ${{ runner.os }}-mint-${{ hashFiles('**/Mintfile') }}
+          restore-keys: ${{ runner.os }}-mint-
+      - name: Bundler
+        run: |
+          bundle config path vendor/bundle
+          bundle install --jobs 4 --retry 3
+      - name: Record snapshots
+        run: bundle exec fastlane record_snapshots
+      - name: Trigger tests workflow
+        if: success()
+        run: gh workflow run tests.yml --ref ${{ github.ref_name }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Upload Tests results"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: xcresult
+          path: fastlane/test_output

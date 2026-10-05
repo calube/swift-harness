@@ -834,4 +834,33 @@ struct RunCommandTests {
     #expect(report.committedConfig?.items == [record.reportLine])
     #expect(report.text.contains("## Committed config"))
   }
+
+  @Test(
+    "run in a clone that commits a .swiftgate.toml writes discovery's discover.run event under the git dir, never in the tree — catches 1 event escaping the run's single state root"
+  )
+  func discoverEventLandsUnderTheGitDir() async throws {
+    let clone = try await RunClone(files: [
+      "Package.swift": "// swift-tools-version:6.0\n",
+      Config.fileName: try Fixture.text("BrownfieldTrial/starter-swiftgate.toml"),
+    ])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    var dependencies = clone.dependencies(
+      warmup: FakeWarmup(steps: Steps(), config: clone.layout.config))
+    dependencies.discover.events = nil
+
+    _ = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil, dependencies: dependencies)
+
+    #expect(try await clone.git("status", "--porcelain", "--ignored") == "")
+    #expect(
+      !FileManager.default.fileExists(
+        atPath: clone.root.appending(path: RunLayout.treeDirectory).path))
+    let events = clone.layout.cloneRoot.appending(path: "events", directoryHint: .isDirectory)
+    let written = (FileManager.default.enumerator(at: events, includingPropertiesForKeys: nil)?
+      .compactMap { $0 as? URL } ?? [])
+      .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+    #expect(written.contains { $0.contains("discover.run") }, "nothing under \(events.path)")
+  }
 }

@@ -150,21 +150,26 @@ struct BaselineEvidenceTests {
   }
 
   @Test(
-    "the starter's test globs cover its UI test folder and every local package's Tests folder, and no source — catches prove reading 4 added tests as no changed tests"
+    "the starter's test globs cover its UI test folder and every local package's Tests folder, each in exactly 1 area, and no source — catches prove reading 4 added tests as no changed tests"
   )
   func starterTestGlobsMatchItsTests() throws {
     let tree = try starterTree()
     let area = try starterArea()
+    let areas = Discover.propose(tree: tree, head: "abc", dirty: []).areas.map(
+      BrownfieldArea.init(proposed:))
     let swift = tree.paths.filter { $0.hasSuffix(".swift") && !$0.hasSuffix("Package.swift") }
     let tests = swift.filter { $0.hasPrefix("UITests/") || $0.contains("/Tests/") }
     let sources = swift.filter { !tests.contains($0) }
 
     #expect(!tests.isEmpty && !sources.isEmpty)
     for path in tests {
-      #expect(ChangedTestIDs.isTestFile(path, of: area), "\(path) is a test file")
+      #expect(
+        areas.filter { ChangedTestIDs.isTestFile(path, of: $0) }.count == 1,
+        "\(path) is a test file of 1 area")
     }
     for path in sources {
-      #expect(!ChangedTestIDs.isTestFile(path, of: area), "\(path) is no test file")
+      #expect(
+        !areas.contains { ChangedTestIDs.isTestFile(path, of: $0) }, "\(path) is no test file")
     }
     #expect(
       ChangedTestIDs.isTestFile("UITests/NewFlowUITests.swift", of: area),

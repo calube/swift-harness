@@ -94,7 +94,7 @@ public enum AreaCommandExpansion {
       percentEncoded: false)
   }
 
-  /// Where an `xcode` area's test step writes its result bundle: beside its `{junit}` path, so
+  /// Where a test step that runs `xcodebuild` writes its result bundle: beside its `{junit}` path, so
   /// it too stays under the worktree's git dir.
   public static func resultBundlePath(junitPath: String) -> String {
     (junitPath.hasSuffix(".xml") ? String(junitPath.dropLast(4)) : junitPath) + ".xcresult"
@@ -136,7 +136,7 @@ public enum AreaCommandExpansion {
     let root = ([repositoryRoot] + areaComponents).joined(separator: "/")
     var command = expanded.command
     var bundle: String?
-    if area.kind == .xcode, [.test, .testFiles, .e2e].contains(step) {
+    if [.test, .testFiles, .e2e].contains(step) {
       let path = resultBundlePath(junitPath: junitPath)
       if let requesting = requestingResultBundle(command, at: path) {
         command = requesting

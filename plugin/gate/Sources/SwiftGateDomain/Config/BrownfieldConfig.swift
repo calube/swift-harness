@@ -57,16 +57,20 @@ public struct XcodeAreaConfig: Sendable, Equatable {
   /// The generator's spec (`project.yml`, `Project.swift`); required for XcodeGen and Tuist.
   public let manifest: String?
   public let schemes: [String]
+  /// The local packages its projects and workspace build, other than 1 at the area's own root:
+  /// a change in one can break the app, so it gates this area too.
+  public let packages: [String]
 
   public init(
     workspace: String?, project: String?, inclusion: XcodeInclusion, manifest: String?,
-    schemes: [String]
+    schemes: [String], packages: [String] = []
   ) {
     self.workspace = workspace
     self.project = project
     self.inclusion = inclusion
     self.manifest = manifest
     self.schemes = schemes
+    self.packages = packages
   }
 }
 

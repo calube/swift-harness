@@ -14,7 +14,53 @@ public struct XcodeReader: EcosystemReader {
   static let headlessFlags = " -skipMacroValidation -skipPackagePluginValidation"
 
   public func areas(in tree: TrackedTreeSnapshot) -> [ProposedArea] {
-    Self.units(in: tree).map { $0.proposed(tree) }
+    let apart = Set(Self.packagesTestedApart(in: tree).keys)
+    return Self.units(in: tree).map { $0.proposed(tree, packagesTestedApart: apart) }
+  }
+
+  /// The local packages an Xcode area builds whose test targets its test scheme doesn't all run,
+  /// each with the ones it does: such a package becomes its own area, so its tests still run.
+  /// A package at an area's own root never does, since 2 areas can't share a root.
+  static func packagesTestedApart(in tree: TrackedTreeSnapshot) -> [String: Set<String>] {
+    var runs: [String: Set<String>] = [:]
+    let units = units(in: tree)
+    let roots = Set(units.map(\.root))
+    for unit in units {
+      let scheme = unit.testScheme(tree)
+      for package in unit.localPackages(tree) where !roots.contains(package) {
+        let ran = (scheme?.testables ?? []).filter { testable in
+          testable.container.flatMap {
+            SwiftDiscoverPaths.resolve($0, in: SwiftDiscoverPaths.dirname(scheme?.container ?? "."))
+          } == package
+        }.map(\.name)
+        runs[package, default: []].formUnion(ran)
+      }
+    }
+    return runs.filter { package, ran in
+      let manifest = text(tree, SwiftDiscoverPaths.join(package, "Package.swift")) ?? ""
+      return !Set(SwiftPMManifest.testTargets(in: manifest)).isSubset(of: ran)
+    }
+  }
+
+  /// The `-destination` a scheme's build or test names: a generic one to build, a named
+  /// simulator to test on. The simulator a test runs on is this machine's to name; the warm-up
+  /// proves the guess.
+  static func destination(scheme: String, generic: Bool) -> String {
+    let platform =
+      [
+        ("macOS", "macOS"), ("tvOS", "tvOS Simulator"), ("watchOS", "watchOS Simulator"),
+        ("visionOS", "visionOS Simulator"),
+      ].first { scheme.contains($0.0) }?.1 ?? "iOS Simulator"
+    if generic { return AreaCommandExpansion.shellQuoted("generic/platform=\(platform)") }
+    let device =
+      switch platform {
+      case "macOS": ""
+      case "tvOS Simulator": ",name=Apple TV"
+      case "watchOS Simulator": ",name=Apple Watch Series 11 (46mm)"
+      case "visionOS Simulator": ",name=Apple Vision Pro"
+      default: ",name=iPhone 17"
+      }
+    return AreaCommandExpansion.shellQuoted("platform=\(platform)\(device)")
   }
 
   /// Directories whose `Package.swift` an Xcode area already builds: each area's own directory,
@@ -274,7 +320,15 @@ public struct XcodeReader: EcosystemReader {
 }
 
 extension XcodeReader.Unit {
-  func proposed(_ tree: TrackedTreeSnapshot) -> ProposedArea {
+  /// The scheme the area's `test` runs: of the shared schemes with a test target, the preferred.
+  func testScheme(_ tree: TrackedTreeSnapshot) -> XcodeReader.Scheme? {
+    let testable = XcodeReader.sharedSchemes(self, tree).filter { !$0.testTargets.isEmpty }
+    return preferred(testable.map(\.name)).flatMap { name in
+      testable.first { $0.name == name }
+    }
+  }
+
+  func proposed(_ tree: TrackedTreeSnapshot, packagesTestedApart: Set<String>) -> ProposedArea {
     let schemes = XcodeReader.sharedSchemes(self, tree)
     let names = Array(Set(schemes.map(\.name) + declaredSchemes)).sorted()
     let inclusion = self.inclusion ?? observedInclusion(tree)
@@ -295,14 +349,12 @@ extension XcodeReader.Unit {
       missing[.build] = "no shared scheme in tracked files"
     }
     let testable = schemes.filter { !$0.testTargets.isEmpty }
-    if let container, let testScheme = preferred(testable.map(\.name)),
-      let scheme = testable.first(where: { $0.name == testScheme })
-    {
-      // The simulator a test runs on is this machine's to name; the warm-up proves the guess.
+    if let container, let scheme = testScheme(tree) {
       commands[.test] = Sourced(
         value:
-          "xcodebuild test \(container) -scheme \(SwiftDiscoverText.shellWord(testScheme))"
-          + " -destination \(destination(testScheme, generic: false))" + XcodeReader.headlessFlags,
+          "xcodebuild test \(container) -scheme \(SwiftDiscoverText.shellWord(scheme.name))"
+          + " -destination \(destination(scheme.name, generic: false))"
+          + XcodeReader.headlessFlags,
         source: scheme.path, confidence: .guessed)
     } else {
       missing[.test] = "no shared scheme with a test target in tracked files"
@@ -316,11 +368,12 @@ extension XcodeReader.Unit {
       name: SwiftDiscoverText.areaName(root == "." ? name : SwiftDiscoverPaths.basename(root)),
       root: root, language: .swift, kind: .xcode, source: source, commands: commands,
       missing: missing,
-      testGlobs: testGlobs(testable, tree),
+      testGlobs: testGlobs(testable, tree, packagesTestedApart: packagesTestedApart),
       xcode: Sourced(
         value: XcodeAreaConfig(
           workspace: workspace, project: project,
-          inclusion: inclusion, manifest: manifest, schemes: names),
+          inclusion: inclusion, manifest: manifest, schemes: names,
+          packages: localPackages(tree).filter { $0 != root }),
         source: manifest ?? source, confidence: .found),
       generatedProjectTracked: generatedProjectTracked)
   }
@@ -341,21 +394,7 @@ extension XcodeReader.Unit {
   }
 
   private func destination(_ scheme: String, generic: Bool) -> String {
-    let platform =
-      [
-        ("macOS", "macOS"), ("tvOS", "tvOS Simulator"), ("watchOS", "watchOS Simulator"),
-        ("visionOS", "visionOS Simulator"),
-      ].first { scheme.contains($0.0) }?.1 ?? "iOS Simulator"
-    if generic { return AreaCommandExpansion.shellQuoted("generic/platform=\(platform)") }
-    let device =
-      switch platform {
-      case "macOS": ""
-      case "tvOS Simulator": ",name=Apple TV"
-      case "watchOS Simulator": ",name=Apple Watch Series 11 (46mm)"
-      case "visionOS Simulator": ",name=Apple Vision Pro"
-      default: ",name=iPhone 17"
-      }
-    return AreaCommandExpansion.shellQuoted("platform=\(platform)\(device)")
+    XcodeReader.destination(scheme: scheme, generic: generic)
   }
 
   private func word(_ path: String) -> String {
