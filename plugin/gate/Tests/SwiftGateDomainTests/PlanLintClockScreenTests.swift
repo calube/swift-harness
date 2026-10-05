@@ -61,7 +61,7 @@ private enum ClockScreenPlan {
 @Suite("plan-lint validation: a screen whose state advances on a clock needs a held scenario, and a seed makes a moving target placeable")
 struct PlanLintClockScreenTests {
   @Test(
-    "the captured plan: spec-screen's timer drives the screen its req-launch flow row checks while the contract names no `-harness-scenario` seam, so clock-unheld fires once at that row's line; req-motion, req-cut-target and req-hazard, excused as random or moving while the engine takes a seed, are obstacle-seedable; req-seed, req-cut-test and req-miss stay clear — catches the plan whose launch check raced the clock and whose gesture requirements never got a flow"
+    "the captured plan: spec-screen's timer drives the screen its req-launch flow row checks while the contract names no `-harness-scenario` seam, so clock-unheld fires once at that row's line, naming the contract's PLAN.md section it read and the Scope line to add there; req-motion, req-cut-target and req-hazard, excused as random or moving while the engine takes a seed, are obstacle-seedable; req-seed, req-cut-test and req-miss stay clear — catches the plan whose launch check raced the clock and whose gesture requirements never got a flow, and a message that sends the fix to the source the rule never reads"
   )
   func capturedPlanNeedsHeldAndSeededScenarios() throws {
     let text = try ClockScreenPlan.captured
@@ -72,9 +72,15 @@ struct PlanLintClockScreenTests {
     #expect(unheld.count == 1, "\(findings.map(\.message))")
     #expect(unheld.first?.line == ClockScreenPlan.line(of: "| req-launch | flow |", in: text))
     #expect(unheld.first?.message.contains("`spec-screen`") == true)
-    #expect(unheld.first?.message.contains("`spec-contract`") == true)
     #expect(unheld.first?.message.contains("`-harness-scenario`") == true)
     #expect(unheld.first?.message.contains("`held`") == true)
+    let message = try #require(unheld.first?.message)
+    #expect(
+      message.contains(
+        "the Title, Scope and Acceptance lines of PLAN.md's `### spec-contract` section"),
+      "\(message)")
+    #expect(message.contains("not the source"), "\(message)")
+    #expect(message.contains("Add a Scope line to that section"), "\(message)")
     #expect(
       ClockScreenPlan.requirements(findings, PlanLintValidation.obstacleSeedableRuleID)
         == ["req-motion", "req-cut-target", "req-hazard"], "\(findings.map(\.message))")
