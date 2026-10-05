@@ -11,6 +11,8 @@ Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash too
 600000, never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
 the background while you wait on it, and every merge your rows name waits on you. Never search
 outside your worktree: every file you need is in it, in the brief, or at a path `qa run` prints.
+List a folder by naming it, as `ls .harness/qa/<plan>`, never a bare `ls`: the tool's stdin never
+closes, and a shell alias such as `eza` given no path reads paths from stdin and waits.
 
 ## What you get
 
