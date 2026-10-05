@@ -337,29 +337,6 @@ enum QARunRun {
       kind: RunningGateRegistry.qaRunKind, now: dependencies.now())
     defer { if let record { running?.unregister(record) } }
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
-    // Each row's qa.check goes out as the row ends, so a watcher sees the run's progress; a row
-    // whose event couldn't be written goes again with the run's last events.
-    let written = Mutex<Set<Int>>([])
-    let rowEnded: @Sendable (QARow, String?) -> Void = {
-      [
-        newEventID = dependencies.newEventID, now = dependencies.now, atBase = options.atBase,
-        repairProof = options.preparedBy != nil && options.requirement != nil
-      ] row, head in
-      guard let events else { return }
-      do {
-        try events.append(
-          contentsOf: [
-            HarnessEvent(
-              eventID: newEventID(), time: now(), runID: runID, head: head,
-              source: HarnessEventSource(route: nil),
-              payload: .qaCheck(
-                QACheckEvent(plan: slug, row: row, atBase: atBase, repairProof: repairProof)))
-          ])
-        written.withLock { _ = $0.insert(row.row) }
-      } catch {
-        return
-      }
-    }
     // A build run's device stays booted across its qa runs, each queueing for it in turn; a run
     // outside a build holds its own for its rows. A run no flow row of which drives the device
     // never queues behind another run's rows for it.
@@ -418,6 +395,48 @@ enum QARunRun {
             ? dependencies.finalPass?.recorder.withoutWaiting() : nil,
           hold: hold)
       })
+
+    // Each row's qa.setup, qa.flow and qa.check go out as the row ends, so a watcher sees the
+    // run's progress; a row whose events couldn't be written goes again with the run's last events.
+    let written = Mutex<Set<Int>>([])
+    let rowEnded: @Sendable (QARow, String?) async -> Void = {
+      [
+        newEventID = dependencies.newEventID, now = dependencies.now, atBase = options.atBase,
+        repairProof = options.preparedBy != nil && options.requirement != nil, checks
+      ] row, head in
+      guard let events else { return }
+      let time = now()
+      func event(_ payload: HarnessEventPayload) -> HarnessEvent {
+        HarnessEvent(
+          eventID: newEventID(), time: time, runID: runID, head: head,
+          source: HarnessEventSource(route: nil), payload: payload)
+      }
+      let setup = (await checks.setupSteps())[row.row] ?? []
+      let flow = (await checks.flowRecords())[row.row]
+      do {
+        try events.append(
+          contentsOf: setup.map {
+            event(.qaSetup(QASetupEvent(plan: slug, row: row.row, atBase: atBase, setup: $0)))
+          }
+            + (flow.map {
+              [
+                event(
+                  .qaFlow(
+                    QAFlowEvent(
+                      plan: slug, row: row.row, requirement: row.requirement, atBase: atBase,
+                      record: $0)))
+              ]
+            } ?? [])
+            + [
+              event(
+                .qaCheck(
+                  QACheckEvent(plan: slug, row: row, atBase: atBase, repairProof: repairProof)))
+            ])
+        written.withLock { _ = $0.insert(row.row) }
+      } catch {
+        return
+      }
+    }
 
     let rows: [QARow]
     let commit: String?
@@ -490,7 +509,7 @@ enum QARunRun {
                     result: .unverified,
                     message: "not run: \(merging) conflicts with \(into) in "
                       + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
-                }, rowEnded: { rowEnded($0, nil) })
+                }, rowEnded: { await rowEnded($0, nil) })
               return .conflicted(files: files, rows: rows)
             }
           }
@@ -516,7 +535,7 @@ enum QARunRun {
           }
           let rows = await runPlan.execute(
             atBase: false, check: { await onTree.run($0, in: tree.path) },
-            rowEnded: { [commit] in rowEnded($0, commit) })
+            rowEnded: { [commit] in await rowEnded($0, commit) })
           return .merged(
             commit: commit, tree: merged, rows: rows, notes: treeNotes,
             released: await onTree.finishFlows())
@@ -572,7 +591,7 @@ enum QARunRun {
       if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
         rows = await runPlan.execute(
           atBase: true, check: { await checks.run($0, in: root.path) },
-          rowEnded: { rowEnded($0, base) })
+          rowEnded: { await rowEnded($0, base) })
       } else {
         let asked = ContinuousClock.now
         do throws(ScratchWorktreeError) {
@@ -583,7 +602,7 @@ enum QARunRun {
             treeSetup = Self.treeStep(tree, since: asked)
             let rows = await runPlan.execute(
               atBase: true, check: { await checks.run($0, in: tree.path) },
-              rowEnded: { rowEnded($0, base) })
+              rowEnded: { await rowEnded($0, base) })
             return (rows: rows, released: await checks.finishFlows())
           }
           rows = ran.rows
@@ -640,18 +659,19 @@ enum QARunRun {
       }
       rows = await runPlan.execute(
         atBase: false, check: { await onHead.run($0, in: root.path) },
-        rowEnded: { [commit] in rowEnded($0, commit) })
+        rowEnded: { [commit] in await rowEnded($0, commit) })
     }
     notes += await checks.finishFlows()
     await checks.testDevices?.releaseAll()
     let flowRecords = await checks.flowRecords()
     let gaps = await checks.gaps()
     let rowSetup = await checks.setupSteps()
+    let unwritten = written.withLock { written in rows.filter { !written.contains($0.row) } }
     let setupEvents: [QASetupEvent] =
       ([deviceWait, treeSetup].compactMap { $0 }.map {
         QASetupEvent(plan: slug, row: nil, atBase: options.atBase, setup: $0)
       })
-      + rows.flatMap { row -> [QASetupEvent] in
+      + unwritten.flatMap { row -> [QASetupEvent] in
         (rowSetup[row.row] ?? []).map {
           QASetupEvent(plan: slug, row: row.row, atBase: options.atBase, setup: $0)
         }
@@ -660,7 +680,6 @@ enum QARunRun {
     if let events {
       let time = dependencies.now()
       do {
-        let unwritten = written.withLock { written in rows.filter { !written.contains($0.row) } }
         try events.append(
           contentsOf: unwritten.map { row in
             HarnessEvent(
@@ -671,7 +690,7 @@ enum QARunRun {
                   plan: slug, row: row, atBase: options.atBase,
                   repairProof: options.preparedBy != nil && options.requirement != nil)))
           }
-            + rows.compactMap { row in
+            + unwritten.compactMap { row in
               flowRecords[row.row].map { record in
                 HarnessEvent(
                   eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,

@@ -105,8 +105,16 @@ enum TestOnlyCheck {
     let bundle = context.directory.appending(path: "test-only.xcresult").path(
       percentEncoded: false)
     let resolved: AcceptanceTestCommand
-    switch AcceptanceTestReference(area: area, id: test).resolve(
-      in: dependencies.areas, junitPath: junit, resultBundlePath: bundle)
+    var reference = AcceptanceTestReference.testOnly(test, area: area)
+    if reference.area == nil {
+      let owners = AcceptanceTestReference.owningAreas(
+        of: reference.id, in: dependencies.areas, directoryExists: dependencies.directoryExists)
+      if owners.count == 1 {
+        reference = AcceptanceTestReference(area: owners[0], id: reference.id)
+      }
+    }
+    switch reference.resolve(
+      in: dependencies.areas, junitPath: junit, resultBundlePath: bundle, spelling: .testOnly)
     {
     case .success(let found): resolved = found
     case .failure(let unresolved): return try notRun(unresolved.reason)
@@ -244,10 +252,16 @@ struct TestOnlyCommand: AsyncParsableCommand {
       "Compile and run 1 test through a brownfield area's test command, with no baseline or "
       + "prove: the cheap loop before a merge gate.")
 
-  @Argument(help: "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode.")
+  @Argument(
+    help: ArgumentHelp(
+      "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode, or "
+        + "<area>: <id>."))
   var test: String
 
-  @Option(help: "The area to run it in; defaults to the 1 area with a test command.")
+  @Option(
+    help: ArgumentHelp(
+      "The area to run it in; defaults to the 1 area with a test command, or the 1 holding the "
+        + "id's test target."))
   var area: String?
 
   @OptionGroup var output: OutputOptions

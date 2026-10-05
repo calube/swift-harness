@@ -298,8 +298,8 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   store of this build holds;
 - that the gate run it returns must start at its last commit on a clean tree: commit first, then
   gate. `check-return --fix` rejects any other run as `build-return.stale-gate`;
-- that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
-  or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
+- that it iterates on `"$SG" test-only --area <area> <Target>/<Class>` for a failing test in a
+  brownfield clone, or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
   passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`, its JSON
   written with `--output .harness/tmp/qa-<task>.json` and read by its `summary`, never piped
   through `head` or `tail` (`guard.qa-run-truncated`) nor wrapped in `timeout`

@@ -496,6 +496,37 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/under-search-bar
+
+A list row iOS 26's floating bottom `.searchable` field covers, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. The seventh send-money trial's flow
+passed `wait selector id="activity.row.0"` on a row its last video frame shows under the field.
+The app is `CoveredRowProbe.swift` with `Info.plist`: 30 rows, `probe.row.0` to `probe.row.29`, in
+a `List` with `.searchable(text:prompt: "Search rows")`. Row 12 (y 792 to 844) sits under the
+field (y 803 to 841), and row 5 (y 428) is in view. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/under-search-bar/capture.sh
+```
+
+The script works as `AgentDevice/searchable`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app.
+
+| Files | Outcome |
+|---|---|
+| `wait-covered-row.{steps.json,stdout,stderr,status}` | `wait` `id="probe.row.12"`: exits 0 |
+| `wait-covered-row-hittable.{…}` | `wait` `id="probe.row.12" hittable=true`: exits 0 |
+| `wait-shown-row-hittable.{…}` | `wait` `id="probe.row.5" hittable=true`: exits 0 |
+| `is-visible-covered-row.{…}` | `is visible id="probe.row.12"` after row 5 shows: exits 0 |
+| `is-visible-covered-row-hittable.{…}` | `is visible id="probe.row.12" hittable=true`: exits 0 |
+| `evidence.{…}` | `wait` row 12, `snapshot`, `wait` row 5, `snapshot`, as `qa run` keeps a tree after each check: in step 3's tree row 12 reads `hittable: true` and the `SearchField` follows it; in step 5's a `Toolbar` (y 788) joins the tree and row 12 reads `hittable: false` |
+| `snapshot-raw.json` | `snapshot --raw` once the batches ended: row 12 `hittable: true`, the field's container a `_UIFloatingBarContainerView` |
+
+Probes on a device of the same kind, kept open for several minutes, matched the plain and `is
+visible` captures, while `hittable=true` refused row 12 there. The pin's `hittable` is geometric
+(`SnapshotGeometry.isGeometricallyActionable`: the centre inside the viewport), so it follows when
+the toolbar joins the tree, not what is drawn over the row.
+
 ### AgentDevice/wait-kinds
 
 Each `wait` kind in the input key `agent-device` reads it from, and a `kind: absent` wait whose
@@ -4581,5 +4612,35 @@ cp together.xml $F/prove-together.xml; cp together-swift-testing.xml $F/prove-to
 cp together.status $F/prove-together.status; cp Tests/LibTests/DoubleTests.swift $F/prove-together-DoubleTests.swift
 for x in stdout stderr; do sed "s#$P#/FIXTURE#g" together.$x > $F/prove-together.$x; done
 ```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: send-money-7's covered activity row and refused test-only calls
+
+The seventh send-money trial's send-success flow passed step 23, `wait selector
+id="activity.row.0" label="Chloe Nguyen, $12.50"`, and step 4, `is exists id="activity.empty"`, on
+elements its video shows under the floating `Search contacts` field. Its fixer's 4 `test-only`
+calls were refused, each refusal naming a form the next refused. `T` is the trial's folder under
+the harness runs, `Q` its send-success row's folder in the run report:
+
+```sh
+T=<send-money-7 run folder> F=BrownfieldTrial R=<the trial's practice folder>
+Q=$T/report/runs/20261005T111401Z-5e6bfd29/qa/06-req-send-success.flow
+cp $R/repo/.git/swift-harness/config.toml $F/send-money-7-config.toml
+cp $R/repo/.git/swift-harness/plans/spec/qa/send-success.flow.json $F/send-money-7-send-success.flow.json
+python3 -c "
+import json,sys
+d={r['step']:r for r in json.load(open(sys.argv[1]))['data']['results']}
+for s,name in ((12,'activity-empty'),(56,'home-balance'),(61,'activity-row')):
+  open(sys.argv[2]+'/send-money-7-send-success-%s.tree.json'%name,'w').write(json.dumps({'success':True,'data':d[s]['data']},sort_keys=True,separators=(',',':'))+'\n')
+" $Q/batch.json $F
+```
+
+Driven steps 12, 56 and 61 are the first `snapshot` after the flow's steps 4, 21 and 23, the tree
+`qa run` kept for each. `send-money-7-test-only-calls.json` is each `swiftgate test-only` argument
+in the fixer's transcript, `$T/transcripts/<session>/subagents/workflows/<workflow>/<agent>.jsonl`,
+with the `test-only not run:` line its result printed: a `tool_use` whose `command` holds
+`swiftgate test-only <argument> 2>&1`, its quotes and escapes dropped, paired by `tool_use_id`
+with its `tool_result`. The first call's output went through `grep`, so it kept no refusal line.
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

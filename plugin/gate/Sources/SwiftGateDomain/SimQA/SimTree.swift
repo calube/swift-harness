@@ -88,9 +88,12 @@ public struct SimFrame: Sendable, Equatable {
     self.height = height
   }
 
-  /// Whether the frame's centre lies inside `other`.
+  /// Whether the frame's centre lies inside `other`, whose right and bottom edges are open.
   public func centred(in other: SimFrame) -> Bool {
-    false
+    let midX = x + width / 2
+    let midY = y + height / 2
+    return midX >= other.x && midX < other.x + other.width && midY >= other.y
+      && midY < other.y + other.height
   }
 }
 
@@ -98,8 +101,10 @@ public struct SimFrame: Sendable, Equatable {
 public enum SimCover: Sendable, Equatable {
   /// A search field, tab bar, toolbar or keyboard drawn after it, over its centre.
   case bar(SimElement)
-  /// Its centre lies outside the app's frame.
-  case offScreen
+
+  /// The roles iOS draws as bars over the content before them, such as iOS 26's floating bottom
+  /// search field.
+  static let barRoles: Set<SimElementRole> = [.searchField, .tabBar, .toolbar, .keyboard]
 }
 
 public enum SimTreeError: Error, Sendable, Equatable {
@@ -165,7 +170,10 @@ public struct SimTree: Sendable, Equatable {
       }
       return SimElement(
         role: role, identifier: node.identifier.nonEmpty, label: node.label.nonEmpty,
-        value: node.value.nonEmpty, children: children)
+        value: node.value.nonEmpty, children: children,
+        frame: node.rect.map {
+          SimFrame(x: $0.x, y: $0.y, width: $0.width, height: $0.height)
+        })
     }
 
     var roots: [SimElement] = []
@@ -193,7 +201,40 @@ public struct SimTree: Sendable, Equatable {
   /// Why every element `selector` matches is hidden from the user; `nil` when some match is in
   /// view, or when no match carries a frame to judge.
   public func cover(of selector: SimSelector) -> SimCover? {
-    nil
+    // Depth first, parents first, as the snapshot lists its nodes: an element later in this
+    // order and outside the subtree is drawn over it.
+    var order: [(element: SimElement, end: Int)] = []
+    func visit(_ element: SimElement) {
+      let position = order.count
+      order.append((element, position))
+      element.children.forEach(visit)
+      order[position].end = order.count
+    }
+    roots.forEach(visit)
+    var cover: SimCover?
+    for entry in order where selector.matches(entry.element) {
+      guard let frame = entry.element.frame, !SimCover.barRoles.contains(entry.element.role)
+      else { return nil }
+      let bar = order[entry.end...].first { later in
+        guard SimCover.barRoles.contains(later.element.role), let over = later.element.frame
+        else { return false }
+        return frame.centred(in: over)
+      }
+      guard let bar else { return nil }
+      cover = cover ?? .bar(bar.element)
+    }
+    return cover
+  }
+
+  /// The same tree with no element's frame, so 2 captures compare by what they hold, not where
+  /// it was drawn.
+  public var withoutFrames: SimTree {
+    func strip(_ element: SimElement) -> SimElement {
+      SimElement(
+        role: element.role, identifier: element.identifier, label: element.label,
+        value: element.value, children: element.children.map(strip))
+    }
+    return SimTree(roots: roots.map(strip), isTruncated: isTruncated)
   }
 
   /// True when some element's label or value equals `text` exactly.
@@ -222,6 +263,14 @@ public struct SimTree: Sendable, Equatable {
     let identifier: String?
     let label: String?
     let value: String?
+    let rect: Rect?
+  }
+
+  private struct Rect: Decodable {
+    let x: Double
+    let y: Double
+    let width: Double
+    let height: Double
   }
 }
 

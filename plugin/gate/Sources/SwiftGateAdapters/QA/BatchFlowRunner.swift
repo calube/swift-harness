@@ -244,7 +244,8 @@ public struct BatchFlowRunner: Sendable {
           SimStep(
             n: n, label: evidence.label, assert: evidence.assert,
             screenshot: SimStep.screenshotPath(n: n), tree: SimStep.treePath(n: n),
-            settled: SimStep.settled(before: treeJSON, after: settleJSON), elapsedMs: elapsed)
+            settled: SimStep.settled(before: treeJSON, after: settleJSON), elapsedMs: elapsed,
+            target: evidence.target)
         }
       } catch {
         store.discard(staging)

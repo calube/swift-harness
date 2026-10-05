@@ -199,7 +199,7 @@ public struct BatchFlowPlan: Sendable, Equatable {
         Evidence(
           after: step.number, label: "after step \(step.number): \(label(step))",
           assert: expectedText(step), snapshot: first, screenshot: first + 1, settle: first + 2,
-          screenshotPath: path))
+          screenshotPath: path, target: checkedTarget(step)))
     }
     return BatchFlowPlan(
       steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo)
@@ -248,7 +248,19 @@ public struct BatchFlowPlan: Sendable, Equatable {
   /// The selector of the element `step` checks is shown: a `wait` for a selector, or an `is`
   /// whose predicate holds only for an element that is there. `nil` for any other step.
   public static func checkedTarget(_ step: FlowStep) -> String? {
-    nil
+    guard case .string(let selector)? = step.input["selector"] else { return nil }
+    switch step.command {
+    case "wait":
+      if case .string(let kind)? = step.input["kind"], kind != "selector" { return nil }
+      return selector
+    case "is":
+      guard case .string(let predicate)? = step.input["predicate"],
+        ["exists", "visible", "text"].contains(predicate)
+      else { return nil }
+      return selector
+    default:
+      return nil
+    }
   }
 
   /// A step's label: its command and what it acts on, such as `is text id="counter.value" "1"`.

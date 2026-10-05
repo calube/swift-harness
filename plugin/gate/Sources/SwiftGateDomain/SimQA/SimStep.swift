@@ -3,10 +3,10 @@ import Foundation
 /// One line of `sim/steps.ndjson`: what `sim snap` captured at one point of a QA run.
 ///
 /// Encoded as one JSON object with exactly the keys `n`, `label`, `screenshot`, `tree`,
-/// `elapsedMs` and, when set, `assert`, `settled` and `appState`. Only a step whose `appState` is
-/// `notRunning` may omit `tree`: an exited app has no tree to capture. Any other key, a missing
-/// key, an unknown app state, or an empty string fails decoding: `sim verify` judges the run from
-/// these lines, so a line it can't fully read must stop it rather than pass.
+/// `elapsedMs` and, when set, `assert`, `target`, `settled` and `appState`. Only a step whose
+/// `appState` is `notRunning` may omit `tree`: an exited app has no tree to capture. Any other
+/// key, a missing key, an unknown app state, or an empty string fails decoding: `sim verify` judges
+/// the run from these lines, so a line it can't fully read must stop it rather than pass.
 public struct SimStep: Sendable, Equatable {
   /// The step log, inside the run's `sim/` folder.
   public static let logFileName = "steps.ndjson"
@@ -73,11 +73,11 @@ public struct SimStep: Sendable, Equatable {
     guard let first = try? SimTree.parse(snapshotJSON: before),
       let second = try? SimTree.parse(snapshotJSON: after)
     else { return nil }
-    return first == second
+    return first.withoutFrames == second.withoutFrames
   }
 
   static let keys: Set<String> = [
-    "n", "label", "assert", "screenshot", "tree", "settled", "elapsedMs", "appState",
+    "n", "label", "assert", "target", "screenshot", "tree", "settled", "elapsedMs", "appState",
   ]
 
   /// One JSON object with sorted keys and no trailing newline.
@@ -87,6 +87,7 @@ public struct SimStep: Sendable, Equatable {
     ]
     if let tree { object["tree"] = tree }
     if let assert { object["assert"] = assert }
+    if let target { object["target"] = target }
     if let settled { object["settled"] = settled }
     if let appState { object["appState"] = appState.rawValue }
     // Strings, integers and a boolean always encode.
@@ -150,7 +151,8 @@ public struct SimStep: Sendable, Equatable {
     return SimStep(
       n: try integer("n", minimum: 1), label: try required("label"), assert: try text("assert"),
       screenshot: try required("screenshot"), tree: tree, settled: settled,
-      elapsedMs: try integer("elapsedMs", minimum: 0), appState: appState)
+      elapsedMs: try integer("elapsedMs", minimum: 0), appState: appState,
+      target: try text("target"))
   }
 
   /// Every line of a step log in order. An empty log has no steps; a blank line, a line that

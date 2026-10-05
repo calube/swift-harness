@@ -70,6 +70,11 @@ exists and fails for the reason the feature is missing.
   A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
   {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
   `fill` or `press` on the list's id. Check the result by the ids of the count and rows.
+  An element a `wait` for a selector, an `is exists`, `is visible` or `is text` checks must be in
+  view: `sim verify` reds the row as `sim.covered` when every match lies under a later search
+  field, tab bar, toolbar or keyboard, as a list's last rows do under iOS 26's floating search
+  field. `hittable=true` doesn't catch it. Scroll a row into view before checking it; a row the
+  list can't scroll clear of the bar is the app's defect, not the flow's.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its

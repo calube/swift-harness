@@ -44,7 +44,21 @@ public struct AcceptanceTestReference: Sendable, Equatable {
   /// row's `test <area>: <id>`; `area` is the `--area` it was given, which the text's own wins
   /// over only when `area` is `nil`.
   public static func testOnly(_ text: String, area: String?) -> AcceptanceTestReference {
-    AcceptanceTestReference(area: area, id: text)
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let row = parse(trimmed) {
+      return AcceptanceTestReference(area: area ?? row.area, id: row.id)
+    }
+    if let colon = trimmed.firstIndex(of: ":") {
+      let head = String(trimmed[..<colon])
+      if let first = head.first, first.isLetter,
+        head.allSatisfy({ $0.isLetter || $0.isNumber || "._-".contains($0) })
+      {
+        return AcceptanceTestReference(
+          area: area ?? head,
+          id: trimmed[trimmed.index(after: colon)...].trimmingCharacters(in: .whitespaces))
+      }
+    }
+    return AcceptanceTestReference(area: area, id: trimmed)
   }
 
   /// The areas that run tests and hold a test target named as `id`'s first component: a
@@ -53,7 +67,21 @@ public struct AcceptanceTestReference: Sendable, Equatable {
   public static func owningAreas(
     of id: String, in areas: [BrownfieldArea], directoryExists: (String) -> Bool
   ) -> [String] {
-    []
+    guard let target = id.split(separator: "/").first.map(String.init), !target.isEmpty,
+      id.contains("/")
+    else { return [] }
+    return areas.filter { area in
+      guard area.test != nil || area.testFiles != nil else { return false }
+      var parents = area.testGlobs.map { glob in
+        glob.split(separator: "/").prefix { !$0.contains("*") }.joined(separator: "/")
+      }
+      if area.kind == .swiftpm {
+        parents.append(area.root == "." ? "Tests" : "\(area.root)/Tests")
+      }
+      return parents.contains { parent in
+        directoryExists(parent.isEmpty ? target : "\(parent)/\(target)")
+      }
+    }.map(\.name)
   }
 
   /// The command that runs only this test, from the area it names or the 1 area that runs tests.
@@ -71,9 +99,16 @@ public struct AcceptanceTestReference: Sendable, Equatable {
       .failure(AcceptanceTestUnresolved(reason: reason))
     }
     guard !id.isEmpty, !id.contains(where: \.isWhitespace) else {
-      return unresolved(
-        "`\(Self.keyword):` names no test: write 1 id with no spaces, such as "
-          + "`test: <Target>/<Class>/<method>`")
+      switch spelling {
+      case .check:
+        return unresolved(
+          "`\(Self.keyword):` names no test: write 1 id with no spaces, such as "
+            + "`test: <Target>/<Class>/<method>`")
+      case .testOnly:
+        return unresolved(
+          "`\(id)` isn't 1 test id: run 1 test as "
+            + "`\(Self.testOnlyCommand(area: "<area>", id: "<Target>/<Class>[/<method>]"))`")
+      }
     }
     let area: BrownfieldArea
     if let name = self.area {
@@ -91,10 +126,19 @@ public struct AcceptanceTestReference: Sendable, Equatable {
       case 1:
         area = running[0]
       default:
-        return unresolved(
-          "\(running.count) areas run tests ("
-            + running.map { "`\($0.name)`" }.joined(separator: ", ")
-            + "); name 1 as `\(Self.keyword) <area>: \(id)`")
+        let names = running.map { "`\($0.name)`" }.joined(separator: ", ")
+        switch spelling {
+        case .check:
+          return unresolved(
+            "\(running.count) areas run tests (\(names)); name 1 as "
+              + "`\(Self.keyword) <area>: \(id)`")
+        case .testOnly:
+          return unresolved(
+            "\(running.count) areas run tests (\(names)), and no 1 of them alone holds the test "
+              + "target `\(id.split(separator: "/").first.map(String.init) ?? id)`; run "
+              + "`\(Self.testOnlyCommand(area: "<area>", id: id))` with `<area>` the 1 that "
+              + "runs it")
+        }
       }
     }
     guard let (command, bundle) = command(for: area, junitPath: junitPath, resultBundlePath)
@@ -108,6 +152,11 @@ public struct AcceptanceTestReference: Sendable, Equatable {
     return .success(
       AcceptanceTestCommand(
         area: area.name, root: area.root, command: command, resultBundlePath: bundle))
+  }
+
+  /// The `swiftgate test-only` command line that runs `id` in `area`.
+  public static func testOnlyCommand(area: String, id: String) -> String {
+    "\"$SG\" test-only --area \(area) \(id)"
   }
 
   /// `test_files` with `{tests}`, then an `xcode` area's `test` with `-only-testing:` and any
