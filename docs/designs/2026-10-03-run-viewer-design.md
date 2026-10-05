@@ -1,5 +1,17 @@
 # swift-harness: the run viewer
 
+**Status: Built.** `swiftgate report --html|--json`, `swiftgate view`, `swiftgate events span start|end`, the
+`span`, `prove.result` and `agent.tools` events, the `RunView` contract and the page under `plugin/viewer/` all
+ship. The shipped report is a folder, shows dollar cost, and refreshes the whole view on each poll; notes in §1
+and §6 mark where the code differs.
+
+**In brief.** The run viewer shows 1 build run as 1 page: what ran, in what order, for how long, at what token and
+dollar cost, and with what proof. A build run spreads across skills, workflows, worktrees and shell commands, and
+without the viewer nobody can follow it as a whole. `swiftgate report --html` writes a self-contained report that
+works offline, and `swiftgate view` serves the same page on 127.0.0.1 and refreshes it each second during a run.
+The page has tabs for Overview, Timeline, Board, Graph, Spec, Gates, Tokens and Validation. It draws on span,
+proof and tool-use events plus the plan's ledger. User guide: [`plugin/docs/run-viewer.md`](../../plugin/docs/run-viewer.md).
+
 <!-- RESUME
 Status: APPROVED 2026-10-03: the user's 15 decisions in §3 (5 at drafting, 4 answers to the open questions, 6 from
 the mock review). §10 records the answered questions. 2026-10-04: the user replaced §7's 1 page of regions with
@@ -29,6 +41,10 @@ them how the harness works.
 - Comparing runs, trends or regressions. That page serves prep and evals, and comes later.
 - Dollar cost. The page shows tokens.
 - Any control over the run. The page reads; it never writes.
+
+> Note: the shipped code differs from 2 lines above. `report --html` writes a folder, `reports/<build run>/`,
+> holding `index.html`, `view.json` and a `runs/` folder of evidence. The page also shows dollar cost, from
+> `cost.usd` and each role's `costUSD`.
 
 ## 2. What exists today
 
@@ -191,7 +207,7 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
 ```
 
 - **Embedded.** `report --html` writes `<script type="application/json" id="run-view">`, with `<` escaped as
-  `<`, into a copy of `viewer/run-viewer.html` with its CSS and JS inlined. The template comes from the plugin
+  `\u003c`, into a copy of `viewer/run-viewer.html` with its CSS and JS inlined. The template comes from the plugin
   root, as bootstrap reads `templates/`. The default output goes under the run state root as
   `reports/<build run id>.html`; `--out` overrides it.
 - **Streamed.** `view` serves `GET /` (the page), `GET /view.json` (a full `RunView`) and `GET /changes?after=
@@ -205,6 +221,17 @@ and every imported store, plus `BuildJoinReader` and the plan. The CLI wires the
   properties, links and activity only. The drawer's wave comes from the deps, and its activity from `spans`,
   `gates`, `halts` and `commits`; neither is a field.
 - **Damage.** An unreadable file shows in `damage` and in the page footer, never as a silent gap.
+
+> Note: where the shipped code differs from this section.
+>
+> - `RunView` is `Encodable` only.
+> - The page polls `GET /view.json?after=<token>`, not `/changes`. The server answers 204 when nothing changed,
+>   or sends the whole view, and the page replaces its view. The token is a digest of each file's length and
+>   modification time, not byte offsets.
+> - The reader parses the design doc and the brownfield `PLAN.md` for requirements and briefs, and `PLAN.md`
+>   marks coverage with a `- Covers:` list line.
+> - The build skill emits `final` and `fix` spans. The brownfield run skill emits `spec-read`, `explore`, `plan`,
+>   `contract` and `final`, and the reader derives `discover` and `warmup` spans from their events.
 
 ## 7. Layout
 

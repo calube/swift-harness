@@ -1,7 +1,7 @@
 # 0003. Ship may skip the design step
 
-Status: accepted, 2026-09-27, with the fast modes design
-(`docs/designs/2026-09-27-fast-modes-design.md`). Changes the build executor spec §3.1 and §5.1.
+Status: accepted 2026-09-27, built. Goes with the [fast modes design](../designs/2026-09-27-fast-modes-design.md),
+and changes §3.1 and §5.1 of the [build executor design](../designs/2026-09-26-build-executor-design.md).
 
 ## Context
 
@@ -12,9 +12,10 @@ we build and is it feasible"; for a spec that already answers that, they add tim
 
 ## Decision
 
-A preset may set `design_tier = "none"`. Ship then replaces design and plan's design doc with a 1-page spec, and builds from a surface commit that `swiftgate surface-check` proves has no behaviour.
+A preset may set `design_tier = "none"`. Ship then skips the design doc: it plans from a 1-page spec page, and
+builds from a surface commit that `swiftgate surface-check` proves has no behaviour.
 
-Only a preset or an explicit flag selects it; `design-scope` never recommends it. A repo's profile may pick such a
+Only a preset selects it. No flag does, and `design-scope` never recommends it. A repo's profile may pick such a
 preset, which makes it that repo's default. The user confirms the spec page once, unless every slice maps to an
 acceptance test the spec file already lists. The quality floor in the fast
 modes design §6 still holds: test-first, same-line reasons on escape hatches, GREEN merge gates, and 1 final
@@ -22,7 +23,7 @@ modes design §6 still holds: test-first, same-line reasons on escape hatches, G
 
 ## Consequences
 
-- Code starts at about minute 7 instead of 13–14 in a timed run (estimated from trial run 2's phase times).
+- Code starts at about minute 7 instead of 13–14 in a timed run (estimated from the trial runs' phase times).
 - No research lane or evidence check: a wrong assumption in the spec surfaces as a failing test or a RED gate, not as
   a design finding. That's acceptable only when the spec states what to build.
 - `plan-lint` needs a second coverage source, the spec page's acceptance tests.

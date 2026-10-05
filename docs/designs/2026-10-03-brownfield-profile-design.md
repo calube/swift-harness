@@ -1,7 +1,19 @@
 # swift-harness: the brownfield profile
 
+**Status: Built.** `swiftgate discover`, `claude`, `run`, `warmup`, `xcode add-file`, `allow` and `test-only` ship,
+with the `slice`, `merge` and `final` tiers. So do state in the git common dir, the language-neutral `neutral.*`
+rules, the `brownfield-explorer` agent and the `/swift-harness:run` skill. Trial runs sit under `evals/results/`. The `finding-severity` question set exists, but nothing asks it. Notes in §2, §11 and §13
+mark where the code moved past this design.
+
+**In brief.** The brownfield profile lets the harness work in a repository it doesn't own, in any mix of languages
+and build systems. It exists so a timed, single-session build can start from a fresh clone and finish with proven
+tests and no harness files in the tree. The harness keeps its config and state under the git common dir and never
+commits on the user's branch. `swiftgate discover` proposes each area's own test, lint and build commands, and
+`swiftgate run` plans and builds a provided `spec.md` on a plan branch with no input from the user. A 30-second
+slice gate still proves each changed test fails with the change reverted.
+
 <!-- RESUME
-Status: APPROVED by the user 2026-10-03, with 16 decisions; next is a plan.
+Status: APPROVED by the user 2026-10-03, with 16 decisions. Built.
 Why: the harness assumes it owns the repository. Bootstrap writes `.swiftgate.toml` and git hooks into the tree,
 the default rules assume TCA, `@Dependency` and module kinds, and every change passes through design, plan and
 build stages. None of that fits a repository someone else owns, with several languages and its own commands.
@@ -17,7 +29,7 @@ systems, with its own architecture and its own commands. The harness adds proof 
 parallel workflow, and leaves no trace in the tree. It reads a provided `spec.md` and builds it in 1 shot, with no
 input from the user.
 
-Input: the code in §2 and 36 hitches from timed practice runs (§16).
+Input: the code in §2 and 36 hitches from timed, single-session practice builds (§16).
 
 ### Goals
 
@@ -51,6 +63,9 @@ Input: the code in §2 and 36 hitches from timed practice runs (§16).
 | Proof | `ChangedTestChecks.prove` (`plugin/gate/Sources/SwiftGateCLI/ChangedTestChecks.swift`), `ScratchWorktrees.swift` | Swift host tests only |
 | Judge | `CascadingJudge.swift` (`plugin/gate/Sources/SwiftGateAdapters/Judge/`); playbook "Jev blocks, Claude settles" | built; this design reuses it |
 | Telemetry | `plugin/docs/telemetry.md`, the telemetry design | events under `.harness/events/` |
+
+> Note: this table records the code before this design. In a brownfield clone, config, run state and events now
+> live under `<git common dir>/swift-harness/`, and the source has no `.harness/` literals left.
 
 ## 3. Decision map
 
@@ -314,6 +329,10 @@ user asks.
 Jev rates each slice's diff `low`, `medium` or `high`: the gate only, 1 Sonnet reviewer, or a full review plus QA.
 Paths the config marks sensitive are always `high`. Opus decides every finding that would block.
 
+> Note: in the shipped code, `swiftgate judge diff-risk` asks whichever backend `[judge]` names, and `discover`
+> writes `backend = "claude"` by default, since Jev stays opt-in
+> ([ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md)). Nothing asks the `finding-severity` set.
+
 ### 11.6 One-shot run
 
 The user provides the spec; the harness never writes it. `swiftgate run <spec.md>` reads it by path and copies an
@@ -353,6 +372,10 @@ A repository with a committed `.swiftgate.toml` keeps today's behavior. The exec
 | `stall_min` | unset, so 15: a first cold gate can build for 5 min | yes |
 
 A `--preset` from another profile fails and names the profile.
+
+> Note: the shipped `brownfield` preset also sets `time_budget_min = 40`, `stop_starts_before_min = 13` and
+> `on_design_conflict = "amend"`. A one-shot run always has this time box, so the `[brownfield] time_budget_min = 0`
+> in §5 never turns the clock off.
 
 ## 14. Pass bar
 

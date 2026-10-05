@@ -1,8 +1,8 @@
 # 0007. Jev is an opt-in second judge backend
 
-Status: accepted by the user, 2026-09-30, with the Jev judge backend design
-(`docs/designs/2026-09-30-jev-judge-backend-design.md`) and the 5 decisions in its §12.
-Amended by the user later on 2026-09-30: see "Amended 2026-09-30" at the end.
+Status: accepted 2026-09-30 and amended the same day, built. Goes with the
+[Jev judge backend design](../designs/2026-09-30-jev-judge-backend-design.md) and the 5 decisions in its §12. The
+Decision below states the rule as amended; "History" at the end records what changed.
 
 ## Context
 
@@ -30,14 +30,15 @@ Claude stays the default backend. Jev is opt-in per repository, because it sends
 to a third party: `backend = "jev"` needs `send_to = "api.typesafe.ai"` beside it. Its API key comes from
 `TYPESAFE_API_KEY` and never from config.
 
-Jev may block the `ready` tier on its own, but only for a question with a passing calibration. For each
-question id and pinned Jev model, the code checks the committed Jev recording against the evals design's bar.
-The bar is at least 30 person-labelled cases, and true-positive and true-negative rates of at least 0.8 and at
-least Claude's, at the repository's block threshold. Without that, the finding is advisory with a note saying why. A new Jev model makes
-the calibration stale until someone records it again.
+Jev may block the `ready` tier on its own, at the repository's block threshold, with no per-question calibration.
+A cascade sends Jev's uncertain answers, those inside a question's band, to Claude, and Claude's answer replaces
+Jev's. The pinned Jev model id goes into the cache key and every recording.
 
 A Jev finding that blocks carries a reason Claude writes about that subject. An advisory Jev finding carries a
 template reason: the question, the probability and the model.
+
+The labelled datasets carry an Opus agent's blind labels, marked `labeller: agent`. The benchmark reports on them
+for information and says they may favour Claude.
 
 A general `swiftgate judge ask` takes a question set and subjects as JSON, so other callers, the eval runner
 among them, can ask the same judge instead of building their own. The eval runner trials it on 1 rubric, split
@@ -48,29 +49,23 @@ into 1 Noul per clause, before anything else moves.
 - A repository can try Jev with 1 config line and an API key, and turn it off the same way. Nothing changes for
   a repository that doesn't opt in.
 - `swiftgate judge bench` compares pinned Sonnet 5.5 (`claude-sonnet-5-5`) with pinned Jev on the same labelled
-  datasets, k times, and commits a versioned result with every number's n and interval. Jev's thresholds come
-  from each dataset's tune split, never from the cases the benchmark reports. A threshold tuned on Claude never
-  carries over, because Jev's probabilities differ in shape.
+  datasets, k times, and commits a versioned result with every number's n and interval. Jev's thresholds and
+  bands come from each dataset's tune split, never from the cases the benchmark reports. A threshold tuned on
+  Claude never carries over, because Jev's probabilities differ in shape.
 - The 22-case test-quality set can't rank the 2 backends: Sonnet 5.5 scores at or near 1.00 on it. A harder,
   person-labelled set has to exist before the benchmark can say which backend is better.
-- A blocking Jev finding still costs 1 Claude call, for its reason. Claude runs only on those findings.
-- Jev can't block anything until a person labels at least 30 cases per blocking question; the 22 cases the
-  tuning agent labelled don't count.
-- The cache key and every recording carry the pinned Jev model id, so a new Jev release re-asks, and the
-  calibration record shows which judge scored it.
+- A blocking Jev finding still costs 1 Claude call, for its reason, and each uncertain answer costs 1 more.
+- Jev blocks with no person-labelled evidence that it blocks well. The agent labels can't stand in for that,
+  since they may favour Claude.
+- A new Jev release re-asks every question, and the recordings show which judge scored each case.
 - `swiftgate` gains its first HTTP client. It lives in 1 adapter behind a protocol, and tests replay captured
   replies.
-- Jev's service, rate limits and prices can change without notice. A Jev outage costs a `judge.not-run` note,
-  never a RED gate.
+- Jev's service, rate limits and prices can change without notice. A Jev outage costs a `judge.not-run` note.
+  When neither Jev nor Claude answers a blocking question at `ready`, the gate reports `judge.blocked`.
 
-## Amended 2026-09-30
+## History
 
-The user changed 2 decisions later that day; the sections above stay as accepted.
-
-1. **Let Jev cook.** Jev may block `ready` on its own at the block threshold, with no calibration and no person
-   labels. The cascade escalates only uncertain answers. The Claude reason, the pin, `send_to` and
-   `TYPESAFE_API_KEY` stay.
-2. **Agent labels stand.** An Opus agent labelled the sheets blind, as `labeller: agent`. The benchmark reports
-   on them for information and says they may favour Claude.
-
-Why: the user won't label, so the bar could never pass.
+As first accepted, Jev could block only for a question with a passing calibration: at least 30 person-labelled
+cases, and true-positive and true-negative rates of at least 0.8 and at least Claude's, at the block threshold.
+Without that, a Jev finding was advisory. Later on 2026-09-30 the user dropped that gate, since no person would
+label the cases and the bar could never pass. The same change let the agent labels stand.

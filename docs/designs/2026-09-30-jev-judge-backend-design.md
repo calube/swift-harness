@@ -1,5 +1,18 @@
 # swift-harness: Jev as a second judge backend
 
+**Status: Built, §13 included.** The `JevJudge` HTTP adapter, the `send_to` opt-in, `swiftgate judge ask`,
+`judge bench` and `bench-render`, the Jev-only `test-quality@2-jev` rendering and the cascade (`JudgeCascade`) all
+ship. Of the benchmark's datasets, the calibrate-design set failed on Claude's schema and the eval-rubric set never
+ran. Notes in §2, §4.3, §8 and §13 mark where the code moved past this design.
+
+**In brief.** This design adds TypeSafe's Jev as a second judge backend for `swiftgate`, beside Claude. Jev answers
+typed yes/no, choice and score questions with probabilities, faster and cheaper than Claude, but it writes no
+reason. A repository opts in with `[judge] backend = "jev"` and `send_to = "api.typesafe.ai"`, and keeps its key in
+`TYPESAFE_API_KEY`. Jev may block the `ready` gate on its own; a cascade sends its uncertain answers to Claude, and
+Claude writes the reason for every block. `swiftgate judge bench` compares the 2 backends on labelled datasets, and
+`judge ask` lets other callers reuse the same judge. [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md)
+records the decision.
+
 <!-- RESUME
 Status: APPROVED 2026-09-30 by the user, with the 5 decisions in §12. Later that day the user removed the block
 calibration: Jev may block `ready` on its own for any blocking question, and the labelled sets carry an Opus
@@ -10,7 +23,7 @@ Decision record: [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.m
 Plan: built; it now lives only in the tag `harness-freeze-2026-10-05`.
 Read first: this header, §3, §7 and §12.
 §13 (the Jev-native question set and the cascade) was added on 2026-09-30 from the question design study
-(evals/results/2026-09-30-jev-question-design/). The user hasn't approved it yet; its plan tasks wait for that.
+(evals/results/2026-09-30-jev-question-design/). It later shipped: `JudgeCascade`, `test-quality@2-jev`.
 -->
 
 ## 1. Purpose
@@ -40,6 +53,9 @@ confidence, models and jaggedness pages (read 2026-09-30), and the evals design'
 | Callers | `TestJudgeCheck`, `JudgeCommand`, `ConfiguredCommitCommentJudge`, `JudgeSelfTest` in `plugin/gate/Sources/SwiftGateCLI/Commands/JudgeCommands.swift`; `check --tier ready` | `swiftgate judge [--ready]`, the `ready` tier's judge step, the advisory comment judge on `git commit` in the PreToolUse hook, `self-test --judge` |
 | Calibration set | `plugin/gate/Fixtures/judge/` | 22 cases (11 good, 11 useless) that the tuning agent labelled, `baseline.json` (precision and recall at least 0.8 per question), `recording.json` from `claude/sonnet` |
 | Design calibration | `DesignCalibrationRunner` in `plugin/gate/Sources/SwiftGateAdapters/Calibration/` | Judged labels are Choice questions to a concrete `ClaudeCLIJudge`; a judged answer passes at p of 0.7 or more (`CalibrationRecord.QuestionResult.passMargin`) |
+
+> Note: this table records the code before this design. `JevJudge` is now a full HTTP adapter, and `[judge]` also
+> takes `send_to`.
 | Eval judge | `gradeLLM` in `evals/runner/session.mjs` | Free-text PASS/FAIL from `claude -p`, 3 votes, 2 passes win; 10 rubrics use it |
 
 The seam fits Jev: 1 subject and 1 question set become 1 request, which is the batching Jev wants.
@@ -129,6 +145,8 @@ argument list and add a tool version to pin, so the design doesn't use it.
   check throws (§9), since the caller must slice the state. Any other status, or a body that isn't the reply
   shape, is `malformedReply`.
 - **Outcome.** As with Claude, a failed judge is a non-gating `judge.not-run` note, never RED.
+  (In the shipped cascade, when neither backend answers a blocking question at `ready`, the gate reports
+  `judge.blocked` and returns BLOCKED.)
 
 ### 4.4 Identity, pin and cache
 
@@ -228,7 +246,7 @@ fails a reply whose served model isn't the pin. A new pin no longer changes whet
 
 ### 7.4 Growing the labelled set
 
-Today's 22 cases carry the tuning agent's labels, a bias the sub-project 2 review names. The set grew to 66
+Today's 22 cases carry the tuning agent's labels, a bias an earlier review of the harness names. The set grew to 66
 cases for the benchmark (§10.3), with about 1 in 3 in the tune split (§10.5).
 
 - Each case in `labels.json` carries `labeller`: `person`, `agent` or `seed`. A case without it reads as
@@ -264,6 +282,10 @@ Input:
   "subjects": [ { "id": "…", "source": "…", "context": "…" } ]
 }
 ```
+
+> Note: the shipped input is `{"schemaVersion": 1, "inlineQuestionSet": {…}, "subjects": […]}`, or
+> `"questionSet": "<id>@<version>"` for a built-in set. Asking Jev also needs `--send-to api.typesafe.ai`.
+> `swiftgate judge ask --help` gives the full shape.
 
 Output, versioned like every report: `schemaVersion`, `identity`, and per subject the validated distribution per
 question, the rationale when the backend gave one, and `usage`. `ask` applies no policy. The caller picks its own
@@ -461,6 +483,10 @@ Each needs its own labelled set before it counts.
 found that Jev answers the same questions far better when the adapter splits each into narrow
 sub-questions over named state fields and code combines the answers. This section adopts that design as a Jev-only
 rendering of the same questions, and adds a cascade that hands Jev's uncertain answers to Claude.
+
+> Note: this section shipped, as `test-quality@2-jev` and `JudgeCascade`. The shipped uncertain bands are 0.4 to
+> 0.9 for `fails-if-broken` and 0.3 to 0.95 for `asserts-implementation`, and the cascade also escalates when Jev
+> gives no answer. A committed Jev recording, `recording-jev.json`, now exists.
 
 ### 13.1 The version
 

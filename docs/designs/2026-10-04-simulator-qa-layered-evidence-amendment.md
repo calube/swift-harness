@@ -1,5 +1,18 @@
 # swift-harness: simulator QA amendment, layered validation and evidence
 
+**Status: Partly built.** Shipped: `swiftgate qa run|lint|adopt|stage`, validation rows checked at the merge base
+and after each merge, the `qa.flow-*` and `plan-lint.validation-*` rules, the 1-slot recording lock, final-pass
+video, contact sheets and logs, and the run viewer's Validation tab. Not shipped: bootstrap doesn't stamp the
+typed accessibility-id module, T3 doesn't set keep-always attachments itself, and raw responses and backend
+output aren't evidence kinds. Notes in §2, §7, §8 and §13 give the details.
+
+**In brief.** The amendment plans each requirement's checks before the code exists, across 4 layers: unit,
+acceptance, flow and state. A validation task writes acceptance tests, flow steps files and state scripts while
+the build runs, and `swiftgate qa run --at-base` proves each one fails first. After each merge, `qa run --after`
+runs the rows that merge unblocks, cheapest layer first, and a red row stops the next merge. The final pass records
+a video, a contact sheet and app logs for each flow. A row passes on an assertion or a state script's exit status,
+never on video or logs.
+
 <!-- RESUME
 Status: APPROVED 2026-10-04 by the user, who accepted every recommendation in §12 and chose decisions 1, 10 and 17
 themselves. Decision record: [ADR 0008](../adrs/0008-simulator-qa-layered-validation.md), amending [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md).
@@ -24,6 +37,10 @@ check's exit status passes a row. Video, logs and stored data become evidence be
 - Visual diffing of video frames. T2 snapshot tests own pixels.
 
 ## 2. What exists today
+
+> Note: this table records the state on the day of the amendment. Since then `swiftgate sim`, the
+> `AgentDevice` adapter and `/swift-harness:qa` have shipped, and the `validate` stage runs `qa run --final` or
+> prints `validate: sim_qa off`.
 
 | Piece | State on `main` at 7305f994 |
 |---|---|
@@ -190,7 +207,7 @@ agent-device record contact-sheet <ev>/<name>.mp4 --out <ev>/<name>-sheet.png
 ```
 
 A kept XCUITest flow leaves its MP4 through keep-always attachments in T3, and the same contact sheet command reads
-it (§11.1). Claude reads the contact sheet PNG to confirm the journey reached its end state. The MP4 is for people. Neither passes
+it (§11.1). (The shipped recorder puts `record start` inside the batch as its first step.) Claude reads the contact sheet PNG to confirm the journey reached its end state. The MP4 is for people. Neither passes
 a row (§6.2).
 
 Limits the installed help states:
@@ -237,6 +254,16 @@ The evidence extends approved design §5.1 with a sibling folder:
 Each flow's batch adds `snapshot` and `screenshot` steps at every assertion, so `sim/` keeps a tree and a PNG per
 asserted step, and the 7 `sim verify` rules keep their input. Whether `batch --json` returns each step's snapshot
 in a form `sim snap` can store is unverified, and the fixture capture task settles it (§11).
+
+> Note: where the shipped code differs from §8.1 and §8.2.
+>
+> - Raw responses and backend output aren't separate evidence kinds. Each row saves its command's stdout and
+>   stderr to `qa/<NN>-<req>.<layer>.txt`.
+> - The network capture runs `network dump 25` and reads the dump from the app log.
+> - Each flow gets a folder, `qa/<NN>-<requirement>.flow/`, holding `steps.json`, `batch.json`, `flow.json`,
+>   `video.mp4`, `sheet.png` and `sim/`. Logs go under `qa/logs/<NN>-<req>/`. A recorded batch takes each step's
+>   PNG from a video frame. [`plugin/docs/simulator-qa-flows.md`](../../plugin/docs/simulator-qa-flows.md) has the
+>   current layout.
 
 ### 8.3 Running beside another session
 
@@ -418,3 +445,8 @@ brownfield iOS run first.
 - A run viewer task adds the tabs, the Validation tab with its flow-step records and timeline ticks, and the Why
   popovers.
 - A brownfield task teaches `plan import` the `## Validation` section.
+
+> Note: the accessibility-id and keep-always task shipped only in part. The typed id module lives in
+> `examples/SampleApp` and reaches the flow rules through the opt-in `[qa] accessibility_ids` key; bootstrap
+> doesn't stamp it. Keep-always video comes from the app's test plan (`uiTestingScreenshotsLifetime` and
+> `screenRecording`), which only `examples/SampleApp` sets. Every other task here shipped.

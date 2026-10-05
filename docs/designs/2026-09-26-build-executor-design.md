@@ -1,4 +1,16 @@
-# swift-harness: sub-project 5, the build executor
+# swift-harness: the build executor
+
+**Status: Built.** `/swift-harness:build`, `/swift-harness:ship`, the `build-task` workflow, the `build-worker` and
+`build-fixer` agents, `swiftgate build`, `ledger` and `worktree`, and the `default` and `interview` presets all ship.
+The `validate` stage shipped as simulator QA under a preset's `sim_qa` key; profiling has no code. Notes in §1,
+§5.1 and §8.6 mark where the code moved past this design.
+
+**In brief.** The build executor turns an approved plan, or 1 spec file, into merged code on a green `main`.
+`/swift-harness:build` starts each task once its dependencies merge, runs 1 worker per task in its own warm
+worktree, gates each merge and keeps the ledger current. `/swift-harness:ship` chains design, plan and build from
+1 spec file. Named presets in `.swiftgate.toml` set parallelism, review depth, gates, worker models and a time
+budget; the `interview` preset fits a timed, single-session build. It exists to turn a hand-run build loop into
+commands, a workflow and a skill that keep that loop's lessons as rules.
 
 <!-- RESUME
 Status: APPROVED 2026-09-26 by the user, after review of the published page. Built. The brainstorm
@@ -16,7 +28,7 @@ Three pieces turn an approved plan, or a single spec file, into merged, gated co
   reach `main`, runs 1 worker per task in its own warm worktree, reviews the result, merges it to `main`, gates
   merged `main`, and keeps the ledger current.
 - **`/swift-harness:ship <spec-file> --preset <name>`** chains design → plan → build from 1 file, such as
-  an interview README, with a single command.
+  the task README of a timed, single-session build, with a single command.
 - **Named presets** in `.swiftgate.toml` set parallelism, review depth, gate tiers, worker models, the
   design tier and a time budget. Bootstrap stamps `default` and `interview`.
 
@@ -28,7 +40,7 @@ runbook's lessons as rules.
 
 - Simulator QA and profiling. Sub-projects 3 and 4 give an agent the ability to validate and to profile an
   implementation, and the user chooses their tools. The executor ends in a `validate` stage that calls
-  what they provide (§8.6).
+  what they provide (§8.6). (Simulator QA later shipped and runs in that stage; profiling did not ship.)
 - Pushing to a remote. Merges stay on local `main`, as in the runbook.
 - CI. Every step is a `swiftgate` command a CI job could call later.
 
@@ -46,7 +58,7 @@ runbook's lessons as rules.
 | D8 | `validate` stage; sub-projects 3–4 plug in | §8.6, §15 |
 | D9 | `swiftgate worktree create` seeds warm builds | §6.2 |
 | D10 | Decomposer tags each task's worker model | §5.2 |
-| D11 | Interview gates: `fast` per task, `push` per merge, `ready` at the end | §10 |
+| D11 | `interview` preset gates: `fast` per task, `push` per merge, `ready` at the end | §10 |
 | D12 | Rehearsal fixture app and practice specs | §13 |
 | D13 | `/swift-harness:ship` | §3.1 |
 | D14 | `design-conflict` blocks only the affected tasks | §8.4 |
@@ -177,6 +189,12 @@ worker's green gate that skipped either. Under `final` the task gate drops `--pr
 `check-return` stops requiring them of a worker, and they run once, in the build's final `ready` gate
 over every merged task's surface commit. A fixer's merge gate never needs them.
 
+> Note: the shipped presets differ from the block above in 2 ways. Every preset in an owned repository must also
+> set `sim_qa` (the template stamps `sim_qa = "changed"`), so a copy of this block fails `swiftgate doctor`
+> without it. Every task gate also runs `--impact --coverage --app-build`
+> ([ADR 0004](../adrs/0004-proof-and-mutation-may-run-once-in-the-final-gate.md)). Copy presets from
+> `plugin/templates/swiftgate.toml`, not from here.
+
 ### 5.2 Ledger changes
 
 | Change | Rule |
@@ -230,6 +248,11 @@ Exit codes follow Foundation: **0** pass, **1** violations, **2** gate error. Ev
 | `ledger set <plan> <task> <status>` | one status change under the orchestrator lock; rejects illegal transitions | domain + PlanState adapter |
 | `worktree create <plan> <task>` | `git worktree add` on the ledger's name and branch; APFS clone of `.build` and DerivedData; drops `ModuleCache` | adapter |
 | `worktree warm-check` | fails when no warm build exists to clone | adapter |
+
+> Note: in the shipped CLI, `build start` no longer claims the plan; the caller must already hold the lock from
+> `swiftgate plan claim`. `warm-check` looks only for each configured package's `.build`. `build` also has
+> `proof-bases`, `record-gate`, `halt`, `resume`, `cutoff`, `gate-wait` and `no-repair`, and `build merge` takes
+> `--undo` and `--fix`. `swiftgate build --help` lists them.
 | `worktree remove <plan> <task>` | removes a merged task's worktree and branch | adapter |
 
 ### 6.2 Command detail
@@ -315,9 +338,12 @@ After the `ready` tier, the skill runs the `validate` stage. Until sub-projects 
 prints `validate: not configured` and passes. When they ship, it runs their QA and profiling
 checks on merged `main`.
 
+> Note: the shipped stage runs simulator QA (`swiftgate qa run --final` and `/swift-harness:qa`) when the preset
+> sets `sim_qa = "changed"`, and prints `validate: sim_qa off` otherwise. It runs no profiling, which has no code.
+
 ## 9. The `sketch` design tier
 
-`sketch` exists for a spec that already states what to build, such as an interview README.
+`sketch` exists for a spec that already states what to build, such as the task README of a timed, single-session build.
 
 | Phase | `quick` | `sketch` |
 |---|---|---|
@@ -332,8 +358,8 @@ status frontmatter records `tier: sketch`, so a later reader knows no research l
 
 ## 10. The interview preset
 
-The `interview` preset in §5.1 targets 45 minutes. It budgets about 5 minutes for design and plan, 30
-for the build, and leaves the rest for the user to explain the harness while it runs.
+The `interview` preset in §5.1 targets a timed, single-session build of 45 minutes. It budgets about 5 minutes
+for design and plan, 30 for the build, and leaves the rest as slack for the person running it.
 
 | Knob | Value | Why |
 |---|---|---|
@@ -352,7 +378,7 @@ Figures marked *est.* are estimates, not measurements.
 
 | Dimension | Figure |
 |---|---|
-| Worker wall time | 9–35 min per harness task (runbook, measured); interview-sized app tasks *est.* 5–12 min |
+| Worker wall time | 9–35 min per harness task (runbook, measured); app tasks sized for a timed session *est.* 5–12 min |
 | Merge + push tier | 45–70 s per merge on the harness (measured); an app's push tier is unmeasured |
 | Worktree setup | seconds with an APFS clone; minutes cold (TCA and swift-syntax macro builds) |
 | Fan-out | `max_parallel` workers, plus up to 2 reviewers and 2 verifiers each under `full` |
@@ -401,7 +427,7 @@ stays out of scope, as in sub-project 2.
 | Background workflow notices | the event loop depends on a completion notice per `build-task.js` run |
 | Semantic conflicts inside a wave | disjoint write sets don't prevent them; the push tier on each merge catches the compile-level ones |
 | Worker time on app tasks | unmeasured until rehearsal; §10 values are guesses |
-| Starter code in the interviewer's project | if the task must happen in their project, the warm-build clone is unavailable |
+| Starter code in someone else's project | if the task must happen in their project, the warm-build clone is unavailable |
 | Main-session context | a long build's completion notices fill the orchestrator's context; returns stay small (§5.3) |
 
 ## 15. Corrections to earlier specs

@@ -1,12 +1,13 @@
 # 0004. Proof and mutation may run once, in the final gate
 
-Status: accepted, 2026-09-27, with the build executor plan's "Speed" section
-(the plan now lives only in the tag `harness-freeze-2026-10-05`). Changes the build executor spec §5.1.
+Status: accepted 2026-09-27, built. Changes §5.1 of the
+[build executor design](../designs/2026-09-26-build-executor-design.md); the plan that built it lives only in the
+tag `harness-freeze-2026-10-05`.
 
 ## Context
 
 Every build task's gate ran `check --tier <taskGate> --base main --prove --mutate`, whatever the preset said, and
-`check-return` rejected a worker's return without a proved and mutated run. In interview trial run 2 that cost
+`check-return` rejected a worker's return without a proved and mutated run. In a timed trial run that cost
 13.7 minutes of a 32.8-minute critical path. Prove has a floor of about 55 s per call. One worker was
 done after about 6 minutes, then spent 885 s rewriting its code to stubs so prove had a base. The final `ready`
 gate proves and mutates the whole diff again (145 s of prove at 3 bases and 100 s of mutation, measured), so the

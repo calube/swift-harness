@@ -1,14 +1,26 @@
 # swift-harness: fast modes (surface commits, sprint, design-free ship)
 
+**Status: Built.** `swiftgate surface-check`, `/swift-harness:sprint` with `swiftgate sprint
+start|surface|slice|finish|status`, and the design-free ship path (`design_tier = "none"`, `spec-page check`,
+`plan confirm`, `plan surface`) all ship. The bootstrap template stamps no preset at `none`, so a repository that
+wants that path writes its own preset.
+
+**In brief.** Fast modes cut the time from a spec to green, merged code in a timed, single-session build, and keep
+the quality floor. In timed trial runs, design and plan took 13 to 14 minutes before any code. A surface commit
+holds only new API with stub bodies, and `swiftgate surface-check` rejects any body with behaviour, so every test
+proves against 1 base. `/swift-harness:sprint` builds slice by slice on 1 branch, and its `swiftgate sprint`
+commands refuse any step out of order. A preset with `design_tier = "none"` swaps the design step for a 1-page
+spec page and a surface commit. All 3 shipped.
+
 <!-- RESUME
 Status: APPROVED 2026-09-27 by the user, after answering every open question (§7).
 Plan: built (surface-check, then sprint, then design-free ship); the plan now lives only in the
 tag `harness-freeze-2026-10-05`.
-Why: interview trial run 2 (its handoff now lives only in the tag `harness-freeze-2026-10-05`) and the ship speed research. Design
+Why: timed trial run 2 (its handoff now lives only in the tag `harness-freeze-2026-10-05`) and the ship speed research. Design
 and plan take 13–14 min before any code; only 27–40% of a run is model coding.
 Covers the research's changes 5 (a design-free ship path), 6 (a sprint skill) and 7 (surface commits and
 `swiftgate surface-check`). The build executor plan carried changes 1–4, 8–10 as tasks in its "Speed" section.
-Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md), proposed.
+Decision record: [ADR 0003](../adrs/0003-ship-may-skip-the-design-step.md), accepted.
 User decision 2026-09-27: sprint first, built for correctness. Building the harness is not the timed session: every
 harness change here goes through design approval, plan tasks, surface-first workers, the push + prove merge gate and
 mutate on main. Speed is what the shipped mode gives a consumer, never a shortcut in building it.
@@ -28,13 +40,13 @@ Three changes, in build order:
    build it as parallel slices off 1 surface commit.
 
 Build order, by the user's decision: surface commits, then sprint. Design-free ship waits for sprint's rehearsal
-results.
+results. (All 3 have since shipped.)
 
 ### Non-goals
 
 - A mode tuned to 1 kind of app. Every rule here applies to any spec; no preset, rule or prompt names an app shape.
 - Lowering the quality floor (§6). The fast modes move checks later or run them once; they never drop them.
-- Sub-projects 3 and 4 (simulator QA, profiling). The user designs those in their own sessions.
+- Simulator QA and profiling. Each has its own design.
 
 ## 2. Decision map
 

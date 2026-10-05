@@ -1,4 +1,16 @@
-# swift-harness: simulator QA (sub-project 3)
+# swift-harness: simulator QA
+
+**Status: Built.** `swiftgate sim up|snap|verify|down`, the `agent-device` adapter and its `doctor` pin check, the
+`sim.*` evidence rules, launch-argument dependency scenarios (`plugin/templates/Scenario.swift`), the `sim_qa`
+preset key and `/swift-harness:qa` all ship. The [layered evidence amendment](2026-10-04-simulator-qa-layered-evidence-amendment.md)
+later added `swiftgate qa` and planned validation rows. Notes in §4, §6 and §8.2 mark where the code differs.
+
+**In brief.** Simulator QA lets an agent run the app it built on an iOS Simulator and tap through the changed
+screens as a user would. `swiftgate sim up`, `snap`, `verify` and `down` lease a device, save a screenshot and an
+accessibility tree for each checked step, and judge that evidence. The agent decides what to try, and `sim verify`
+alone gives the verdict: it fails a run on missing evidence, absent text, a crash or an unlabelled control. A flow
+worth keeping becomes an XCUITest that the T3 tier runs, so an agent's judgment never decides a merge. A pinned
+`agent-device` drives the device. User guide: [`plugin/docs/simulator-qa.md`](../../plugin/docs/simulator-qa.md).
 
 <!-- RESUME
 Status: APPROVED 2026-09-28 by the user: the tool choice (§2), and every choice in §11, with kept flows as T3 UI
@@ -20,7 +32,8 @@ Input: the QA and profiling tool survey (2026-09-26), sections 1, 2, 4, 5 and 6.
 
 ### Non-goals
 
-- Profiling, leaks and timing. Sub-project 4 owns them, even where `agent-device` offers `perf` commands.
+- Profiling, leaks and timing. The [agentic profiling design](2026-09-28-agentic-profiling-design.md) owns them,
+  even where `agent-device` offers `perf` commands. That design never shipped.
 - Physical devices, Android and CI. The Foundation design locks iOS Simulator on 1 Mac with no CI.
 - A second regression format. The repo holds no `.ad` scripts and no Maestro YAML (§2).
 - Visual diffing. T2 snapshot tests already own pixels.
@@ -65,6 +78,8 @@ Verdicts follow the Foundation design §5.3. `--json` reports carry `schemaVersi
 The pinned version lives in the plugin beside the `agent-device` fixtures, because the adapter parses its output.
 `swiftgate doctor` reports a missing or different version as `BLOCKED` with the exact
 `npm i -g agent-device@<pin>` line. The survey found 0.21.15; the worker who captures the fixtures sets the pin.
+
+> Note: in the shipped CLI, `BLOCKED` exits 2, as in every other `swiftgate` command, not 3. The pin is 0.21.18.
 
 Layering: an `AgentDevice` protocol in `SwiftGateAdapters` wraps the CLI through `ProcessRunner`. Parsing the tree,
 the step log and the rules in §5.2 is pure `SwiftGateDomain` code. The CLI wires them.
@@ -121,6 +136,8 @@ A scenario is a named set of dependency overrides, such as `empty`, `network-off
 Whether `agent-device open` forwards launch arguments is unverified. If it does, `sim up` uses it. If not, `sim up`
 launches with `simctl launch` and then opens the session on the running app.
 
+> Note: it does. The shipped `sim up` launches through `agent-device open <bundle> --launch-args`.
+
 ## 7. Devices, claims and the simulator lock
 
 The harness already runs simulators for T2 and T3 (Foundation design §4.4). It clones or creates a device per run
@@ -162,6 +179,9 @@ The skill decides what to try. The verdict comes only from `sim verify`.
 | `/swift-validate` | adds a "Simulator QA" row with the verify run's id, verdict and step count; a skipped QA goes under "Not run" |
 
 `sim_qa` is a closed enum, `changed` or `off`. The template stamps `changed` in every preset.
+
+> Note: the shipped validate skill is `/swift-harness:validate`, and it adds 1 row per validation row that
+> `swiftgate qa run` checked, as the amendment describes.
 
 ### 8.3 Keeping a flow
 
