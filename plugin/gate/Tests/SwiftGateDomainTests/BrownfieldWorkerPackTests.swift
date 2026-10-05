@@ -83,6 +83,56 @@ struct BrownfieldWorkerPackTests {
   }
 
   @Test(
+    "a swiftpm area's section names its exact test-only and build-only lines, each of which the raw-swift-build guard passes, while the area's own build and test commands are refused — catches a worker reading `build = swift build` in its pack and running it bare, which the hook refused 3 times in 1 run"
+  )
+  func swiftPMAreaNamesItsAllowedCommands() throws {
+    let feature = BrownfieldArea(
+      name: "Feature", root: "Packages/Feature", language: .swift, kind: .swiftpm,
+      test: "swift test --parallel --xunit-output {junit}",
+      testFiles: "swift test --parallel --xunit-output {junit} --filter {tests}", lint: nil,
+      build: "swift build", e2e: nil, testGlobs: ["Packages/Feature/Tests/**/*.swift"], packs: [],
+      xcode: nil)
+    let layout = BrownfieldStateLayout(
+      commonDir: URL(filePath: "/repo/.git"), gitDir: URL(filePath: "/repo/.git/worktrees/slot-1"))
+
+    let pack = try ContextPack.brownfieldWorkerPack(
+      BrownfieldWorkerInputs(
+        task: Self.task(writeSet: ["Packages/Feature/Sources/Core/Thread.swift"]),
+        plan: Self.plan, areas: [feature], standards: try Self.standards(), dependencyNotes: [],
+        layout: layout))
+
+    let lines = pack.slices.flatMap(\.lines)
+    let testOnly = "\"$SG\" test-only --area Feature <Target>.<Suite>[/<test>]"
+    let buildOnly =
+      "swift build --package-path Packages/Feature --scratch-path "
+      + "/repo/.git/swift-harness/caches/swiftpm-scratch/Feature"
+    #expect(lines.contains("run 1 test = \(testOnly)"))
+    #expect(lines.contains("build only = \(buildOnly)"))
+    for allowed in [testOnly, buildOnly] {
+      #expect(BrownfieldBuildGuard.evaluate(allowed, layout: layout) == nil, "\(allowed)")
+    }
+    for raw in ["swift build", "swift test --filter ThreadTests"] {
+      #expect(BrownfieldBuildGuard.evaluate(raw, layout: layout) != nil, "\(raw)")
+    }
+  }
+
+  @Test(
+    "an area of another kind names its test-only line in its own filter spelling and no build-only line — catches a scratch path offered to a build that has none"
+  )
+  func otherAreaNamesTestOnlyOnly() throws {
+    let layout = BrownfieldStateLayout(
+      commonDir: URL(filePath: "/repo/.git"), gitDir: URL(filePath: "/repo/.git"))
+    let pack = try ContextPack.brownfieldWorkerPack(
+      BrownfieldWorkerInputs(
+        task: Self.task(writeSet: ["web/a.ts"]), plan: Self.plan, areas: Self.areas,
+        standards: try Self.standards(), dependencyNotes: [], layout: layout))
+
+    let lines = pack.slices.flatMap(\.lines)
+    #expect(lines.contains("run 1 test = \"$SG\" test-only --area web <id>"))
+    #expect(!lines.contains { $0.hasPrefix("build only = ") })
+  }
+
+  @Test(
     "a dependency's notes ride along under its id, and a dependency with no return throws naming it — catches a dependent starting blind to its dependency's notes"
   )
   func dependencyNotes() throws {

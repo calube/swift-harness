@@ -12,16 +12,20 @@ public struct BrownfieldWorkerInputs: Sendable, Equatable {
   /// The harness's `docs/standards.md`, whose brownfield profile section holds the rules.
   public let standards: ContextSource
   public let dependencyNotes: [DependencyReturnNotes]
+  /// The clone's state layout, which places each swiftpm area's shared scratch path; `nil` leaves
+  /// the pack without a build-only line.
+  public let layout: BrownfieldStateLayout?
 
   public init(
     task: LedgerTask, plan: ContextSource, areas: [BrownfieldArea], standards: ContextSource,
-    dependencyNotes: [DependencyReturnNotes]
+    dependencyNotes: [DependencyReturnNotes], layout: BrownfieldStateLayout? = nil
   ) {
     self.task = task
     self.plan = plan
     self.areas = areas
     self.standards = standards
     self.dependencyNotes = dependencyNotes
+    self.layout = layout
   }
 }
 
@@ -71,7 +75,8 @@ extension ContextPack {
     for area in held {
       slices.append(
         ContextPackSlice(
-          sourceLabel: "config.toml area \(area.name)", anchor: nil, lines: areaLines(area)))
+          sourceLabel: "config.toml area \(area.name)", anchor: nil,
+          lines: areaLines(area) + workerCommandLines(area, layout: inputs.layout)))
     }
 
     let standards = MarkdownDocument.parse(inputs.standards.rawText)
@@ -159,6 +164,25 @@ extension ContextPack {
     }
     if let xcode = area.xcode {
       lines.append("xcode inclusion = \(xcode.inclusion.rawValue)")
+    }
+    return lines
+  }
+
+  /// The commands a worker runs itself in `area`: 1 test through `test-only`, and for a swiftpm
+  /// area a build in the scratch path the clone's gates share, which the raw-swift-build guard
+  /// passes. The area's own `build` and `test` are the gate's; run bare, they build cold.
+  private static func workerCommandLines(_ area: BrownfieldArea, layout: BrownfieldStateLayout?)
+    -> [String]
+  {
+    let testOnly = AcceptanceTestReference.testOnlyCommand(
+      area: area.name, id: AcceptanceTestReference.filterSpelling(of: area.kind))
+    var lines = ["run 1 test = \(testOnly)"]
+    if area.kind == .swiftpm, let layout {
+      let root = trimmed(area.root)
+      let scratch = ScratchTreeBuild.swiftPMScratchPath(area: area.name, layout: layout)
+      lines.append(
+        "build only = swift build --package-path \(root.isEmpty ? "." : root) --scratch-path \(scratch)"
+      )
     }
     return lines
   }
