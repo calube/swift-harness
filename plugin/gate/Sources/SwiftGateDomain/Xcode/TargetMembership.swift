@@ -73,6 +73,21 @@ public struct TargetMembership: Sendable {
     }.map(\.target)
   }
 
+  /// The folders `target` compiles from: its synchronized folders and the folders of the files
+  /// its Sources phase names, without a folder another of them holds; `nil` for no such target.
+  func folders(of target: String) -> [String]? {
+    let named = entries.filter { $0.target.name == target }
+    guard !named.isEmpty else { return nil }
+    var folders: Set<String> = []
+    for entry in named {
+      folders.formUnion(entry.compiled.map(pbxDirectory(of:)))
+      folders.formUnion(entry.folders.map(\.root))
+    }
+    return folders.filter { folder in
+      !folders.contains { $0 != folder && ($0.isEmpty || folder.hasPrefix($0 + "/")) }
+    }.sorted()
+  }
+
   /// Folders that hold a file some target compiles, and every synchronized folder.
   public var sourceRoots: [String] {
     var roots: Set<String> = []

@@ -226,7 +226,18 @@ public struct XcodeReader: EcosystemReader {
   struct Scheme {
     let name: String
     let path: String
-    let testTargets: [String]
+    /// The project or workspace the scheme is shared from.
+    let container: String
+    let testables: [Testable]
+    var testTargets: [String] { testables.map(\.name) }
+  }
+
+  /// 1 test target a scheme's test action runs.
+  struct Testable {
+    let name: String
+    /// What `ReferencedContainer` names after `container:`, relative to the scheme's container's
+    /// folder: a project, or a package's folder.
+    let container: String?
   }
 
   /// Shared schemes only: a scheme under `xcuserdata` is 1 user's and never reaches a clone.
@@ -234,27 +245,31 @@ public struct XcodeReader: EcosystemReader {
     let containers = unit.projects.map(\.path) + [unit.workspace].compactMap { $0 }
     return tree.paths.compactMap { path in
       guard path.hasSuffix(".xcscheme"),
-        containers.contains(where: { path.hasPrefix($0 + "/xcshareddata/xcschemes/") })
+        let container = containers.first(where: {
+          path.hasPrefix($0 + "/xcshareddata/xcschemes/")
+        })
       else { return nil }
       let xml = text(tree, path) ?? ""
-      return Scheme(name: stem(path), path: path, testTargets: testableNames(in: xml))
+      return Scheme(
+        name: stem(path), path: path, container: container, testables: testables(in: xml))
     }.sorted { $0.name < $1.name }
   }
 
-  static func testableNames(in scheme: String) -> [String] {
-    var names: [String] = []
+  static func testables(in scheme: String) -> [Testable] {
+    var testables: [Testable] = []
     var rest = scheme[...]
     while let start = rest.range(of: "<TestableReference") {
       let end = rest.range(of: "</TestableReference>", range: start.upperBound..<rest.endIndex)
-      let block = rest[start.upperBound..<(end?.lowerBound ?? rest.endIndex)]
-      if let name = SwiftDiscoverText.quoted(
-        after: "BlueprintName =", in: String(block))
-      {
-        names.append(name)
+      let block = String(rest[start.upperBound..<(end?.lowerBound ?? rest.endIndex)])
+      if let name = SwiftDiscoverText.quoted(after: "BlueprintName =", in: block) {
+        let reference = SwiftDiscoverText.quoted(after: "ReferencedContainer =", in: block)
+        let container =
+          reference.map { $0.hasPrefix("container:") ? String($0.dropFirst(10)) : $0 }
+        testables.append(Testable(name: name, container: container))
       }
       rest = rest[(end?.upperBound ?? rest.endIndex)...]
     }
-    return names
+    return testables
   }
 }
 
@@ -297,12 +312,11 @@ extension XcodeReader.Unit {
     } else {
       missing[.lint] = SwiftDiscoverLint.missingReason
     }
-    let testTargets = Array(Set(testable.flatMap(\.testTargets))).sorted()
     return ProposedArea(
       name: SwiftDiscoverText.areaName(root == "." ? name : SwiftDiscoverPaths.basename(root)),
       root: root, language: .swift, kind: .xcode, source: source, commands: commands,
       missing: missing,
-      testGlobs: testTargets.map { SwiftDiscoverPaths.join(root, "**/\($0)/**/*.swift") },
+      testGlobs: testGlobs(testable, tree),
       xcode: Sourced(
         value: XcodeAreaConfig(
           workspace: workspace, project: project,

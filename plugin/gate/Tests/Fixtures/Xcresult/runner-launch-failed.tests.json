@@ -1,0 +1,55 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "DEVICE-UDID",
+      "deviceName" : "iPhone 17",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C52",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.InterviewStarterUITests.xctrunner. The request was denied by service delegate (SBMainWorkspace) for reason: Busy (\"Application failed preflight checks\"). (Underlying Error: The request to open \"com.example.InterviewStarterUITests.xctrunner\" failed. The request was denied by service delegate (SBMainWorkspace) for reason: Busy (\"Application failed preflight checks\"). (Underlying Error: The operation couldn’t be completed. Application failed preflight checks)))",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "InterviewStarterUITests-Runner encountered an error",
+                  "nodeIdentifier" : "InterviewStarterUITests-Runner encountered an error",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "System Failures",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "InterviewStarterUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/InterviewStarter/InterviewStarterUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "InterviewStarter",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

@@ -348,7 +348,9 @@ gates whatever merged, the contract alone when nothing else did. A run whose `pl
 Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
-   `lint` and `build` against the baseline, plus each area's `e2e`.
+   `lint` and `build` against the baseline, plus each area's `e2e`. A test step that also fails
+   whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
+   names where the head's and the merge base's output tail and report were kept: read those first.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
 3. `"$SG" qa run --plan <slug> --final --json` in `<checkout>` runs every validation row whose
    tasks merged, and records each flow with a video. Read its verdict, and keep its `runID` and

@@ -109,11 +109,15 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     public let step: AreaStep
     /// `nil` when the whole step failed with no test id to read.
     public let test: String?
+    /// The folder holding the merge base run's output and report, relative to the baseline
+    /// directory; `nil` when none was kept.
+    public let evidence: String?
 
-    public init(area: String, step: AreaStep, test: String?) {
+    public init(area: String, step: AreaStep, test: String?, evidence: String? = nil) {
       self.area = area
       self.step = step
       self.test = test
+      self.evidence = evidence
     }
   }
 
@@ -422,12 +426,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     // appear once per command.
     var seen: Set<String> = []
     var lines: [BaselineFailureLine] = []
-    for failure in file.records.flatMap({ Baseline.failures(of: $0.key, $0.result) }) {
-      let line = BaselineFailureLine(
-        area: failure.key.area, step: failure.key.step, test: failure.test)
-      let identity = [line.area, line.step.rawValue, line.test.map { "test:" + $0 } ?? "step"]
-      guard seen.insert(identity.joined(separator: "\u{0}")).inserted else { continue }
-      lines.append(line)
+    for record in file.records {
+      for failure in Baseline.failures(of: record.key, record.result) {
+        let line = BaselineFailureLine(
+          area: failure.key.area, step: failure.key.step, test: failure.test,
+          evidence: record.evidence)
+        let identity = [
+          line.area, line.step.rawValue, line.test.map { "test:" + $0 } ?? "step",
+        ]
+        guard seen.insert(identity.joined(separator: "\u{0}")).inserted else { continue }
+        lines.append(line)
+      }
     }
     return Section(
       items: lines.sorted {
@@ -656,6 +665,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     out += render("Assumptions", assumptions) { $0 }
     out += render("Baseline failures", baselineFailures) {
       "\($0.area) \($0.step.rawValue): " + ($0.test ?? "the whole step")
+        + ($0.evidence.map { " (merge base run kept in baseline/\($0))" } ?? "")
     }
     out += render("Build-only areas", buildOnlyAreas) { $0 }
     out += render("Dropped steps", droppedSteps) {

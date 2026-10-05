@@ -70,7 +70,7 @@ public enum XcodeBuildForTesting {
 
 extension String {
   /// Where `word` stands alone, unquoted: between whitespace or the text's ends.
-  fileprivate func ranges(ofBareWord word: String) -> [Range<String.Index>] {
+  func ranges(ofBareWord word: String) -> [Range<String.Index>] {
     var found: [Range<String.Index>] = []
     var start = startIndex
     while let range = range(of: word, range: start..<endIndex) {

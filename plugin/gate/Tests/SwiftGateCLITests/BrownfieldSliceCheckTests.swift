@@ -286,7 +286,10 @@ struct BrownfieldSliceCheckTests {
     #expect(
       head.map(\.command)
         == [
-          test.replacingOccurrences(of: "xcodebuild test ", with: "xcodebuild build-for-testing ")
+          XcodeDerivedData.command(
+            test.replacingOccurrences(
+              of: "xcodebuild test ", with: "xcodebuild build-for-testing "),
+            derivedDataPath: XcodeDerivedData.path(area: "Aidoku", layout: clone.layout))
         ],
       "the build-only step compiles the test target on the scheme and destination its tests use")
     #expect(!runner.requests.contains { $0.step == .test || $0.step == .testFiles })
@@ -606,4 +609,53 @@ final class RecordedStrings: Sendable {
   func append(_ value: String) { stored.withLock { $0.append(value) } }
 
   var all: [String] { stored.withLock { $0 } }
+}
+
+extension BrownfieldSliceCheckTests {
+  /// Whether `request` runs in the scratch tree. An area rooted at `.` runs prove in the scratch
+  /// tree's own directory, with no trailing slash for ``Clone/inScratch(_:)`` to match.
+  private static func inScratchTree(_ request: AreaCommandRequest, _ clone: Clone) -> Bool {
+    URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
+      .path(percentEncoded: false).hasPrefix(clone.scratch.path(percentEncoded: false))
+  }
+
+  @Test(
+    "the trial's xcode area builds and tests at the head in the worktree's own DerivedData seeded from the area's seed, and prove's scratch tree doesn't — catches a task worktree's first slice compiling cold in Xcode's path-keyed default, or a scratch tree overwriting the worktree's build",
+    arguments: [45_700, 10_000])
+  func xcodeHeadRunsUseTheWorktreeDerivedData(warm: Int) async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml"))
+    let aidoku = try #require(config.areas.first)
+    let runner = FakeAreaCommandRunner { _ in .passed }
+
+    _ = try await Self.run(
+      clone, areas: [aidoku],
+      changes: [
+        Change(
+          path: "Aidoku/Shared/Managers/DownloadManager.swift", text: "let limit = 50\n",
+          added: [1...1]),
+        Change(
+          path: "AidokuTests/LargeDownloadConfirmationTests.swift",
+          text: "func testLimit() { XCTAssertEqual(limit, 50) }\n", added: [1...1]),
+      ],
+      runner: runner, warm: ["Aidoku": warm])
+
+    let own = XcodeDerivedData.path(area: "Aidoku", layout: clone.layout)
+    let seed = AreaCacheEnvironment.derivedDataSeed(area: "Aidoku", layout: clone.layout)
+    let inScratch = { (request: AreaCommandRequest) in Self.inScratchTree(request, clone) }
+    let head = runner.requests.filter { !inScratch($0) && $0.step != .lint }
+    #expect(!head.isEmpty)
+    for request in head {
+      #expect(
+        request.command.hasPrefix("xcodebuild -derivedDataPath '\(own)' "), "\(request.command)")
+      #expect(request.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: own))
+    }
+    #expect(runner.requests.contains(where: inScratch) == (warm < 30_000))
+    #expect(
+      runner.requests.filter(inScratch).allSatisfy {
+        !$0.command.contains(XcodeDerivedData.option) && $0.derivedDataSeed == nil
+      })
+  }
 }
