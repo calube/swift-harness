@@ -743,7 +743,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `qa.flow-no-assert` | simulator QA amendment §6.1, decision 4; no step is an `is` or a `wait` that looks for something: `kind` `text`, `ref`, `selector` or `absent`, or with no `kind` a `text`, `ref`, `selector` or `absent` key (major). `get` reads without a predicate, and a `duration` or `stable` wait only pauses, so neither counts |
 | `qa.flow-schema` | simulator QA amendment §6.1, §11.1; a step breaks the pinned tool's schema (major): the step's own keys or a command a batch can't run, checked against the item schema of `batch`'s `steps`, then its `input` against that command's `inputSchema`. Each message names the step number, the command, the key path and the rule broken, and a misspelt key names the closest key the schema allows |
 | `qa.flow-unknown-id` | simulator QA amendment §6.1, decision 17; an `id="…"` (or bare `id=…`) selector names an identifier the configured `AccessibilityID` enum doesn't declare (major). A case with no raw value declares its name; cases inside `#if` count in every branch |
-| `qa.flow-ids-unknown` | simulator QA amendment §6.1; a nit that never gates: no `.swiftgate.toml`, or no `[qa] accessibility_ids` key, so no identifier was checked. Once per run, naming the key to set |
+| `qa.flow-ids-unknown` | simulator QA amendment §6.1; a nit that never gates: no `.swiftgate.toml`, or no `[qa] accessibility_ids` key, so no identifier was checked. Once per run, naming the key to set; never in a brownfield clone, which has no such key |
 
 ### Design, docs and prose (`design-lint`, `design-diff`, `docs-lint`, `prose`)
 

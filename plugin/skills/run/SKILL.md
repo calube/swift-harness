@@ -227,8 +227,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      workflow. When `build next` lists it, run `worktree create` and `ledger set … in-progress` as
      for any task, then launch 1 Agent tool call in the background with `subagent_type`
      `general-purpose` and `model` `opus`, the 1 alias the tool takes here. Its prompt names the
-     task's worktree, `<slug>` as its plan, its rows from `## Validation`, the contract commit's sha,
-     and says to work in that worktree and follow
+     task's worktree and id, `<slug>` as its plan, its rows from `## Validation`, the contract
+     commit's sha, and says to work in that worktree and follow
      `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Its write set names no
      test file, so it writes `.harness/qa/<slug>/` alone. When it returns:
      1. From `<checkout>`, `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into

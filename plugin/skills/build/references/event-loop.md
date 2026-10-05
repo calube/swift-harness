@@ -144,8 +144,8 @@ A design plan's decomposer adds 1 validation task when 2 or more tasks build UI.
 `.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
 workflow. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
 as for any task, then launch 1 Agent tool call in the background with `subagent_type`
-`general-purpose` and `model` `opus`. Its prompt names the task's worktree, `<slug>` as its plan,
-its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
+`general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
+plan, its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
 surface, and says to work in that worktree and follow
 `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. When it returns:
 
