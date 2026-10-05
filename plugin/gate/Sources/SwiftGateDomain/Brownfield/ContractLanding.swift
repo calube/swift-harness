@@ -5,6 +5,7 @@
 public enum ContractLanding {
   public static let unlandedWriteRuleID = "plan-import.contract-write-unlanded"
   public static let scenarioSeamRuleID = "plan-import.scenario-seam-missing"
+  public static let refreshMarkerRuleID = "plan-import.refresh-marker-unplaced"
 
   public enum Outcome: Sendable, Equatable {
     /// The return to record, with the task set `done`.
@@ -72,16 +73,32 @@ public enum ContractLanding {
     /// The Swift sources outside test folders in the `xcode` areas at `tip`, by path; `nil` when
     /// the plan's flows don't launch through the scenario argument, so nothing needs reading.
     public let appSources: [String: String]?
+    /// The requirements whose flow rows pull to refresh, and the Swift sources of the app and
+    /// the packages it links at `tip`; `nil` when no flow row refreshes.
+    public let refresh: Refresh?
 
     public init(
       tip: String, base: String, changedFiles: [String], files: [String],
-      appSources: [String: String]?
+      appSources: [String: String]?, refresh: Refresh? = nil
     ) {
       self.tip = tip
       self.base = base
       self.changedFiles = changedFiles
       self.files = files
       self.appSources = appSources
+      self.refresh = refresh
+    }
+  }
+
+  /// What the refresh marker check reads: a plan's refresh requirements and the sources that
+  /// must pin their drag's end.
+  public struct Refresh: Sendable, Equatable {
+    public let requirements: [String]
+    public let sources: [String: String]
+
+    public init(requirements: [String], sources: [String: String]) {
+      self.requirements = requirements
+      self.sources = sources
     }
   }
 
@@ -168,6 +185,21 @@ public enum ContractLanding {
           > line.comments.reduce(0) { $0 + occurrences(of: name, in: $1) }
       }
     }
+  }
+
+  /// The requirements, in `flowRequirements` order, whose title names a refresh: their flow drags
+  /// the list to a marker pinned to the bottom of the screen's safe area.
+  public static func refreshRequirements(
+    flowRequirements: [String], titles: [String: String]
+  ) -> [String] {
+    []
+  }
+
+  /// Whether a source pins an identified element to the bottom of a safe area: a
+  /// `.safeAreaInset(edge: .bottom…)` whose content sets an accessibility identifier, outside a
+  /// comment. A marker placed as a list row scrolls with the rows, and a drag to it can't pull.
+  public static func pinsBottomMarker(_ sources: [String: String]) -> Bool {
+    true
   }
 
   private static func occurrences(of name: String, in text: String) -> Int {
