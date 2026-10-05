@@ -45,6 +45,8 @@ public enum GateDerivedData: String, Sendable, Codable, CaseIterable {
   case cold
   /// The step builds nothing.
   case none
+  /// The step ran nothing: it took the pass an earlier gate recorded on the same inputs.
+  case reused
 }
 
 /// What a step took and decided, as a run collects it before recording.

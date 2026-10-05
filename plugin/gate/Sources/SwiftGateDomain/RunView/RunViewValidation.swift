@@ -84,6 +84,22 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     }
   }
 
+  /// The newest passing check of a row whose own newest check didn't pass or recorded no video:
+  /// a passing run's flow, from the newest one that recorded a video when any did.
+  public struct LastPass: Sendable, Equatable, Encodable {
+    public var qaRun: String
+    /// Which run passed and how, and, when the row's newest check is another run's, what that
+    /// check read.
+    public var label: String
+    public var flow: RunViewFlow?
+
+    public init(qaRun: String, label: String, flow: RunViewFlow? = nil) {
+      self.qaRun = qaRun
+      self.label = label
+      self.flow = flow
+    }
+  }
+
   /// 1 validation row as its newest `qa.check` left it, joined to its `qa/report.json` row.
   public struct Row: Sendable, Equatable, Encodable {
     /// 1-based position in the plan's `validation.json`.
@@ -118,13 +134,15 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var atBase: Bool
     /// Every kept `qa run`'s check of the row, newest first, the merge base's included.
     public var history: [Attempt]
+    /// `nil` when the newest check passed with a video, or no check of the row passed.
+    public var lastPass: LastPass?
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
       at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil,
-      atBase: Bool = false, history: [Attempt] = []
+      atBase: Bool = false, history: [Attempt] = [], lastPass: LastPass? = nil
     ) {
       self.row = row
       self.requirement = requirement
@@ -144,6 +162,7 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.flow = flow
       self.atBase = atBase
       self.history = history
+      self.lastPass = lastPass
     }
   }
 
@@ -281,7 +300,7 @@ extension RunViewKeptFlow {
 extension RunViewValidation.Row {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence
-    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history
+    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history, lastPass
     case milliseconds = "ms"
   }
 
@@ -305,6 +324,18 @@ extension RunViewValidation.Row {
     try c.encode(flow, forKey: .flow)
     try c.encode(atBase, forKey: .atBase)
     try c.encode(history, forKey: .history)
+    try c.encode(lastPass, forKey: .lastPass)
+  }
+}
+
+extension RunViewValidation.LastPass {
+  private enum CodingKeys: String, CodingKey { case qaRun, label, flow }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(label, forKey: .label)
+    try c.encode(flow, forKey: .flow)
   }
 }
 

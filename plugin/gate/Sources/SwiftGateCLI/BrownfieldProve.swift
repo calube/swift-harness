@@ -64,6 +64,25 @@ enum BrownfieldProve {
       })
   }
 
+  /// What a prove decided, and how its reverted runs built: `none` when it ran none.
+  struct Outcome: Sendable, Equatable {
+    let judgement: ChangedTestJudgement
+    let derivedData: GateDerivedData
+  }
+
+  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, with the build its runs
+  /// started from: `cold` when any started from a build directory that didn't exist yet.
+  static func prove(
+    root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
+    proofs: ProveResultCollector, dependencies: Dependencies
+  ) async -> Outcome {
+    Outcome(
+      judgement: await run(
+        root: root, base: base, config: config, junitDirectory: junitDirectory, proofs: proofs,
+        dependencies: dependencies),
+      derivedData: .none)
+  }
+
   /// - Parameters:
   ///   - root: the worktree's toplevel.
   ///   - junitDirectory: where `{junit}` paths point.
