@@ -17,13 +17,56 @@ public struct QAFlowStep: Sendable, Equatable, Codable {
   /// from the batch's start.
   public let offsetMs: Int
   public let ok: Bool
+  /// How long the steps `qa run` added after this one took before the flow's next step: the
+  /// evidence captures after a check, and a final pass's `record start` after an opening `open`.
+  /// Each step after it starts that much later. `nil` when `qa run` added none.
+  public let captureMs: Int?
 
-  public init(n: Int, label: String, offsetMs: Int, ok: Bool) {
+  public init(n: Int, label: String, offsetMs: Int, ok: Bool, captureMs: Int? = nil) {
     self.n = n
     self.label = label
     self.offsetMs = offsetMs
     self.ok = ok
+    self.captureMs = captureMs
   }
+}
+
+/// How long a flow's opening `open` took to bring the app up, as `agent-device` measured it.
+public struct QAFlowLaunch: Sendable, Equatable, Codable {
+  /// From the open's dispatch until `agent-device` first saw the app settle.
+  public let launchMs: Int
+  /// The part of `launchMs` spent waiting for the app to settle; `nil` when none was reported.
+  public let settleMs: Int?
+
+  public init(launchMs: Int, settleMs: Int?) {
+    self.launchMs = launchMs
+    self.settleMs = settleMs
+  }
+}
+
+/// Where the time before a batch's failing step went, on the batch's clock.
+public struct QAFlowDelay: Sendable, Equatable {
+  /// The flow file's step that failed.
+  public let step: Int
+  /// Every driven step before it.
+  public let beforeMs: Int
+  /// The flow's own `open` steps among them.
+  public let openMs: Int
+  /// The steps `qa run` added among them: evidence captures and a `record start`.
+  public let captureMs: Int
+  /// The flow's opening `open`'s launch, when it reported one.
+  public let launch: QAFlowLaunch?
+
+  public init(step: Int, beforeMs: Int, openMs: Int, captureMs: Int, launch: QAFlowLaunch?) {
+    self.step = step
+    self.beforeMs = beforeMs
+    self.openMs = openMs
+    self.captureMs = captureMs
+    self.launch = launch
+  }
+
+  /// The clause a red row's message ends with, such as `step 5 began 22.7 s into the batch: …`.
+  public var sentence: String { "" }
 }
 
 /// 1 flow, whichever source ran it: what the run viewer draws a flow row's steps from.
@@ -43,6 +86,9 @@ public struct QAFlowRecord: Sendable, Equatable, Codable {
   public let videoUnverified: QARecordingGapReason?
   /// Why a final pass that made a video left no contact sheet.
   public let sheetUnverified: QARecordingGapReason?
+  /// How long the flow's opening `open` took to bring the app up; `nil` for a flow that opens
+  /// nothing first, an `open` that reported no launch, or a kept XCUITest flow.
+  public let launch: QAFlowLaunch?
   /// The `[[flows]]` entry a kept XCUITest flow maps to; `nil` for a batch flow.
   public let flow: String?
   /// The kept flow's test, `<Class>/<method>()` as the result bundle names it; `nil` for a batch
@@ -52,8 +98,10 @@ public struct QAFlowRecord: Sendable, Equatable, Codable {
   public init(
     source: QAFlowSource, steps: [QAFlowStep], video: String? = nil, sheet: String? = nil,
     videoUnverified: QARecordingGapReason? = nil,
-    sheetUnverified: QARecordingGapReason? = nil, flow: String? = nil, test: String? = nil
+    sheetUnverified: QARecordingGapReason? = nil, launch: QAFlowLaunch? = nil,
+    flow: String? = nil, test: String? = nil
   ) {
+    self.launch = launch
     self.flow = flow
     self.test = test
     self.source = source
@@ -81,12 +129,15 @@ public struct BatchStepOutcome: Sendable, Equatable {
   public let command: String
   public let ok: Bool
   public let durationMs: Int
+  /// An `open`'s launch, from its `data.startup` and `data.timing`; `nil` for any other step.
+  public let launch: QAFlowLaunch?
 
-  public init(index: Int, command: String, ok: Bool, durationMs: Int) {
+  public init(index: Int, command: String, ok: Bool, durationMs: Int, launch: QAFlowLaunch? = nil) {
     self.index = index
     self.command = command
     self.ok = ok
     self.durationMs = durationMs
+    self.launch = launch
   }
 }
 
@@ -225,6 +276,12 @@ public struct BatchFlowPlan: Sendable, Equatable {
     let byIndex = Dictionary(
       results.map { ($0.index, $0.durationMs) }, uniquingKeysWith: { first, _ in first })
     return (1...recordIndex).reduce(0) { $0 + (byIndex[$1] ?? 0) }
+  }
+
+  /// Where the time before the failing step went; `nil` when no flow step failed or nothing ran
+  /// before it.
+  public func delay(results: [BatchStepOutcome], failedAt: Int?) -> QAFlowDelay? {
+    nil
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.

@@ -89,12 +89,18 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   /// When the batch's `record start` ended: when the video's first frame came, on the batch's
   /// clock. `nil` when the batch recorded nothing.
   public var videoStartMs: Int?
+  /// Where the time before a failing flow step went; `nil` when no flow step failed.
+  public var delay: QAFlowDelay?
 
-  public init(stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil) {
+  public init(
+    stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil,
+    delay: QAFlowDelay? = nil
+  ) {
     self.stop = stop
     self.record = record
     self.files = files
     self.videoStartMs = videoStartMs
+    self.delay = delay
   }
 }
 
