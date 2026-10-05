@@ -16,9 +16,9 @@ takes these steps, in this order:
    no device starts; a lint that can't run (no plugin root, say) leaves the row `unverified`.
 2. It runs `sim up` in the tree the row runs in, opening the app with the `launchArgs` of a
    leading `open` step. A failed `sim up` leaves the row `unverified`, naming its rule.
-3. It runs 1 `agent-device batch --on-error stop` on the leased UDID and session. After each `wait`
-   or `is` step it adds a `snapshot`, a `screenshot` and a second `snapshot`, so each assertion
-   leaves a `sim/` step with its tree and PNG. An `is text` step's value
+3. It runs 1 `agent-device batch --on-error stop` on the leased UDID and session. Each `wait` or
+   `is` step gets a `sim/` step: a `snapshot` after it, and as PNG the video's frame from then, or
+   in an unrecorded batch a `screenshot` and a second `snapshot`. An `is text` step's value
    becomes that step's assert.
 4. On a batch that exits 0 it runs the requirement's state rows while the device is up, if this is
    the requirement's last flow row. They get `QA_SIM_UDID`, `QA_SIM_SESSION`, `QA_SIM_BUNDLE_ID` and
@@ -30,8 +30,8 @@ takes these steps, in this order:
 
 The row passes only when the batch exits 0 and `sim verify` is GREEN. A failing step is `red`,
 named by its number in the flow file, with any `sim verify` RED findings. A steps file
-`agent-device` refuses, or a `sim verify` RED, is `red`. A driver or machine failure, or a failed capture `qa run` added,
-is `unverified`. A state row behind a flow that isn't `pass` reads `unverified`, even when it ran on
+`agent-device` refuses, or a `sim verify` RED, is `red`. A driver or machine failure, a failed capture, or an unreadable video
+frame is `unverified`. A state row behind a flow that isn't `pass` reads `unverified`, even when it ran on
 the device first. `--at-base` runs flow rows too, in the scratch tree, and runs the state rows on
 the flow's device whatever the batch showed; with no device up, they read `unverified`.
 

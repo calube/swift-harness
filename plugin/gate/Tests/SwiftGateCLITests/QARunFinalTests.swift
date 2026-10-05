@@ -137,7 +137,8 @@ struct QARunFinalTests {
     let flow = try #require(report.rows.first { $0.layer == .flow })
     #expect(flow.result == .unverified)
     #expect(
-      flow.message.hasPrefix("not judged: a check's screenshot is the video's frame, and after step 1"),
+      flow.message.hasPrefix(
+        "not judged: a check's screenshot is the video's frame, and after step 1"),
       "\(flow.message)")
     #expect(flow.message.contains("after step 3"), "\(flow.message)")
   }

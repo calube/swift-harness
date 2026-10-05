@@ -80,6 +80,7 @@ enum BuildCheckReturnRun {
       }
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       let verdict: Verdict = findings.isEmpty ? .green : .red
+      let flowRows = FlowRowVerdict.parse(notes: taskReturn.notes)
       var rules: [TaskReturnFinding.Rule] = []
       for finding in findings where !rules.contains(finding.rule) { rules.append(finding.rule) }
       return BuildCheckReturnReport(
@@ -92,7 +93,8 @@ enum BuildCheckReturnRun {
         haltAdvice: await haltAdvice(
           taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git,
           profile: profile),
-        outcome: taskReturn.outcome)
+        outcome: taskReturn.outcome,
+        flowRows: flowRows.isEmpty ? nil : flowRows)
     } catch {
       return blocked(taskReturn.task, error.message)
     }
@@ -250,7 +252,8 @@ enum BuildCheckReturnRun {
         .returnCheck(
           .init(
             task: task, fix: fix, verdict: report.verdict, commit: report.commit,
-            checkID: eventID, rules: rules, at: now, outcome: report.outcome)))
+            checkID: eventID, rules: rules, at: now, outcome: report.outcome,
+            flowRows: report.flowRows ?? [])))
     } catch {
       return [
         "\(notRecorded) in build run \(buildRun), so `build merge` will refuse this return: "

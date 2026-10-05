@@ -68,7 +68,8 @@ struct BatchFlowPlanTests {
     #expect(plan.evidence.map(\.snapshot) == [4, 6, 8])
     #expect(plan.evidence.map(\.screenshot) == [nil, nil, nil])
     #expect(plan.evidence.map(\.settle) == [nil, nil, nil])
-    #expect(plan.evidence.map(\.screenshotPath) == ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"])
+    #expect(
+      plan.evidence.map(\.screenshotPath) == ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"])
   }
 
   @Test(

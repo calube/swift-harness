@@ -59,16 +59,20 @@ never gates, when a flow sees a selector appear and then go with only `wait`, `i
 `snapshot` or `screenshot` steps between, under a `-harness-scenario` whose name lacks the word
 `held`. Run such a flow under the contract's `held` scenario, whose call holds the state.
 A screen whose state advances on a clock runs the same race however fast the app settles. After
-each `wait` or `is` step, `qa run` captures a snapshot, a screenshot and a snapshot: about 1.2 s,
-and over 10 s on a loaded machine. So a check of its starting state runs under the contract's
-`held` scenario, whose clock starts at the first input.
+each `wait` or `is` step, `qa run` captures a snapshot: about 0.4 s in a recorded run, and about
+1.2 s with the screenshot and snapshot an unrecorded run adds, over 10 s on a loaded machine. So a
+check of its starting state runs under the contract's `held` scenario, whose clock starts at the
+first input.
 
 ## A state that changes on a clock
 
-After each `wait` or `is`, `qa run`'s captures take about 1 s before the next step, and far longer
-on a loaded machine: 1 screenshot has taken 11 s. A flow that reads a value the app changes on a
-timer races them. Launch it under a scenario that holds the clock until the first input. A red
-row's message says where the time before its failing step went.
+`qa run`'s captures after each `wait` or `is` delay the next step, far longer on a loaded
+machine: 1 screenshot has taken 11 s. A flow that reads a value the app changes on a timer races
+them. Launch it under a scenario that holds the clock until the first input. A red row's message
+says where the time before its failing step went. When the tree `qa run` captured just before the
+failing step shows the element it checks, the message says `capture delay`: the state was on
+screen and ended during the captures, so the red is no evidence against the app, the flow or the
+contract.
 
 ## What `qa lint` refuses
 

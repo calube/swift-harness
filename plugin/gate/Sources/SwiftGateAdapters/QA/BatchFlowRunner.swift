@@ -91,8 +91,8 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   public var videoStartMs: Int?
   /// Where the time before a failing flow step went; `nil` when no flow step failed.
   public var delay: QAFlowDelay?
-  /// The `sim/` steps whose PNG is the video's frame, waiting for the video ``BatchFlowRunner/
-  /// commitFrames(_:video:store:)`` reads them from once the recording stops.
+  /// The `sim/` steps whose PNG is the video's frame, waiting for the recording to stop:
+  /// ``BatchFlowRunner/commitFrames(_:video:store:)`` reads each frame then.
   public var frames: [PendingFrame]
 
   public init(
@@ -158,7 +158,34 @@ public struct BatchFlowRunner: Sendable {
   public func commitFrames(_ pending: [PendingFrame], video: URL?, store: SimRunStore) async
     -> [String]
   {
-    []
+    var missing: [String] = []
+    for frame in pending {
+      guard let video else {
+        store.discard(frame.staging)
+        missing.append("\(frame.label): no video to take its screenshot from")
+        continue
+      }
+      do throws(VideoFrameError) {
+        try await frames.frame(video: video, atMs: frame.videoMs, to: frame.staging.screenshot)
+      } catch {
+        store.discard(frame.staging)
+        missing.append("\(frame.label): its frame at \(frame.videoMs) ms: \(error.message)")
+        continue
+      }
+      do {
+        _ = try store.commit(frame.staging, treeJSON: frame.treeJSON) { n in
+          SimStep(
+            n: n, label: frame.label, assert: frame.assert,
+            screenshot: SimStep.screenshotPath(n: n), tree: SimStep.treePath(n: n),
+            settled: nil, elapsedMs: frame.elapsedMs, target: frame.target)
+        }
+      } catch {
+        store.discard(frame.staging)
+        store.appendLog("qa run: \(error.message)")
+        missing.append("\(frame.label): \(error.message)")
+      }
+    }
+    return missing
   }
 
   /// - Parameters:
@@ -214,15 +241,33 @@ public struct BatchFlowRunner: Sendable {
       }
     }
     let results = printed.map(Self.results) ?? []
-    commitEvidence(plan, stagings: stagings, results: results, store: store)
+    let pending = commitEvidence(plan, stagings: stagings, results: results, store: store)
     let outcomes = results.map(\.outcome)
     let delay: QAFlowDelay? =
-      if case .flow(.step, _)? = stop { plan.delay(results: outcomes, failedAt: failedAt) } else {
+      if case .flow(.step, _)? = stop {
+        plan.delay(results: outcomes, failedAt: failedAt, trees: Self.captureTrees(plan, results))
+      } else {
         nil
       }
     return BatchFlowOutcome(
       stop: stop, record: plan.record(results: outcomes, failedAt: failedAt),
-      files: files, videoStartMs: plan.videoStartMs(results: outcomes), delay: delay)
+      files: files, videoStartMs: plan.videoStartMs(results: outcomes), delay: delay,
+      frames: pending)
+  }
+
+  /// The tree of each `snapshot` `qa run` added that passed and parses, by driven index.
+  private static func captureTrees(_ plan: BatchFlowPlan, _ results: [PrintedStep])
+    -> [Int: SimTree]
+  {
+    var trees: [Int: SimTree] = [:]
+    for step in results where step.outcome.ok && step.outcome.command == "snapshot" {
+      let index = step.outcome.index
+      guard index >= 1, index <= plan.origin.count, plan.origin[index - 1] == nil,
+        let json = envelope(step.data), let tree = try? SimTree.parse(snapshotJSON: json)
+      else { continue }
+      trees[index] = tree
+    }
+    return trees
   }
 
   /// A failing step is evidence about the app; a refused steps file is the flow's fault; any
@@ -294,13 +339,29 @@ public struct BatchFlowRunner: Sendable {
   }
 
   /// Commits 1 `sim/` step per assertion whose 3 captures all ran, with the first snapshot as
-  /// its tree, and discards the screenshot staging of every other.
+  /// its tree, and discards the screenshot staging of every other. An assertion whose PNG is the
+  /// video's frame and whose snapshot ran is returned to commit once the video is saved.
   private func commitEvidence(
     _ plan: BatchFlowPlan, stagings: [SimStepStaging], results: [PrintedStep], store: SimRunStore
-  ) {
+  ) -> [PendingFrame] {
     let byIndex = Dictionary(
       results.map { ($0.outcome.index, $0) }, uniquingKeysWith: { first, _ in first })
+    let times = plan.frameTimes(results: results.map(\.outcome))
+    var pending: [PendingFrame] = []
     for (evidence, staging) in zip(plan.evidence, stagings) {
+      if evidence.screenshot == nil {
+        guard let tree = byIndex[evidence.snapshot], tree.outcome.ok,
+          let treeJSON = Self.envelope(tree.data), let videoMs = times[evidence.after]
+        else {
+          store.discard(staging)
+          continue
+        }
+        pending.append(
+          PendingFrame(
+            staging: staging, treeJSON: treeJSON, label: evidence.label, assert: evidence.assert,
+            target: evidence.target, elapsedMs: tree.outcome.durationMs, videoMs: videoMs))
+        continue
+      }
       guard let tree = byIndex[evidence.snapshot], tree.outcome.ok,
         let shot = evidence.screenshot.flatMap({ byIndex[$0] }), shot.outcome.ok,
         let settle = evidence.settle.flatMap({ byIndex[$0] }), settle.outcome.ok,
@@ -324,6 +385,7 @@ public struct BatchFlowRunner: Sendable {
         store.appendLog("qa run: \(error.message)")
       }
     }
+    return pending
   }
 
   /// A batch `snapshot` step's `data` in the envelope `snapshot --json` prints, which `sim verify`
@@ -385,6 +447,7 @@ public actor QAFlowRunner {
   private let finalPass: QAFinalPass?
   private let recorder: FinalPassRecorder?
   private let hold: QAFlowDeviceHold?
+  private let frames: any VideoFrameReading
   /// The tree whose rows have asked for the shared device, once 1 has.
   private var heldIn: URL?
   private var flowRecords: [Int: QAFlowRecord] = [:]
@@ -398,14 +461,17 @@ public actor QAFlowRunner {
   ///     the row's message says why it has no video.
   ///   - hold: the device every row borrows in turn, held until ``finish()``; `nil` brings a
   ///     device up for each row.
+  ///   - frames: reads a recorded check's screenshot from the flow's video.
   public init(
     simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil,
-    recorder: FinalPassRecorder? = nil, hold: QAFlowDeviceHold? = nil
+    recorder: FinalPassRecorder? = nil, hold: QAFlowDeviceHold? = nil,
+    frames: any VideoFrameReading = AVVideoFrames()
   ) {
     self.simulator = simulator
     self.finalPass = finalPass
     self.recorder = recorder
     self.hold = hold
+    self.frames = frames
   }
 
   /// Gives back the device the rows shared, in the tree they ran in. Returns what went wrong,
@@ -483,7 +549,7 @@ public actor QAFlowRunner {
 
     let target = AgentDeviceTarget(udid: started.udid, session: started.session)
     let store = SimRunStore(simDirectory: simDirectory)
-    let runner = BatchFlowRunner(agentDevice: simulator.agentDevice)
+    let runner = BatchFlowRunner(agentDevice: simulator.agentDevice, frames: frames)
     let batch: BatchFlowOutcome
     var record: QAFlowRecord
     var finalFiles: [String] = []
@@ -516,6 +582,10 @@ public actor QAFlowRunner {
         stepsFile: row.stepsFile, on: target, store: store, flowDirectory: row.directory)
       record = batch.record
     }
+    let video = record.video.map { _ in
+      row.directory.appending(path: FinalPassRecorder.videoFileName)
+    }
+    let missingFrames = await runner.commitFrames(batch.frames, video: video, store: store)
     evidence += batch.files.map { "\(row.relativeDirectory)/\($0.lastPathComponent)" }
     if !record.steps.isEmpty {
       flowRecords[row.row] = record
@@ -560,6 +630,12 @@ public actor QAFlowRunner {
       (result, message) = (.unverified, "not run: record start failed: \(failure.message)")
     case .flow(.recordStart, let why)?:
       (result, message) = (.unverified, "not run: record start failed: \(why)")
+    case nil where !missingFrames.isEmpty:
+      (result, message) = (
+        .unverified,
+        "not judged: a check's screenshot is the video's frame, and "
+          + missingFrames.joined(separator: "; ")
+      )
     case nil:
       (result, message) = (verdict.result, verdict.message)
     }

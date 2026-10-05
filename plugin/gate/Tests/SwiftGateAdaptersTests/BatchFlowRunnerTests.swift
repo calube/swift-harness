@@ -321,7 +321,8 @@ struct BatchFlowRunnerTests {
       #expect(image.width > 0 && image.height > image.width, "a portrait frame of the device")
       let tree = try Data(
         contentsOf: run.store.simDirectory.appending(path: try #require(step.tree)))
-      #expect(try SimTree.parse(snapshotJSON: tree).elements.contains { $0.identifier == "app.new" })
+      let ids = try SimTree.parse(snapshotJSON: tree).elements.map(\.identifier)
+      #expect(ids.contains("app.new"))
     }
   }
 

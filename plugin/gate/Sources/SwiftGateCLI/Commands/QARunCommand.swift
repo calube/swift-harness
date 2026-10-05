@@ -202,6 +202,7 @@ enum QARunRun {
     var merged: Set<String>?
     var ended: [String: TaskStatus]?
     var leftUnverified: [Int: String] = [:]
+    var flowVerdicts: [FlowRowVerdict] = []
     if !options.atBase || options.after != nil {
       let progress: LedgerProgress
       do throws(PlanStateStoreError) {
@@ -220,6 +221,7 @@ enum QARunRun {
         if options.after == nil, options.final || build?.finalGated == true {
           ended = progress.statuses
           leftUnverified = (build?.unverifiedRows() ?? [:]).mapValues(Self.leftMessage)
+          flowVerdicts = build?.flowRowVerdicts() ?? []
           let landed = await landedUnmerged(
             progress: progress, merged: mergedTasks, log: build, slug: slug, git: git)
           mergedTasks.formUnion(landed.map(\.task))
@@ -686,8 +688,17 @@ enum QARunRun {
           notes.append("no earlier run's rows reused: reading HEAD's tree: \(error)")
         }
       }
+      // A pass of a flow a fixer proved racy, unchanged since, won the race.
+      let history =
+        flowVerdicts.isEmpty ? [] : QARunHistory.mergedTreeRuns(worktree: root)
       rows = await runPlan.execute(
-        atBase: false, check: { await onHead.run($0, in: root.path) },
+        atBase: false,
+        check: { [flowVerdicts, digests] entry in
+          QAFlakyRows.outcome(
+            await onHead.run(entry, in: root.path), requirement: entry.validation.requirement,
+            layer: entry.validation.layer, check: entry.validation.check,
+            digest: digests[entry.row], verdicts: flowVerdicts, history: history)
+        },
         rowEnded: { [commit] in await rowEnded($0, commit) })
     }
     notes += await checks.finishFlows()

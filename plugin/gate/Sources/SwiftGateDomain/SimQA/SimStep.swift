@@ -28,7 +28,8 @@ public struct SimStep: Sendable, Equatable {
   public var tree: String?
   /// Whether a second snapshot taken after the screenshot held the same elements as the kept
   /// tree, so the screenshot shows the screen the tree records. `nil` when either snapshot
-  /// didn't parse, which `sim verify` reports on the tree itself.
+  /// didn't parse, which `sim verify` reports on the tree itself, or when the screenshot is a
+  /// recorded flow's video frame, which no second snapshot follows.
   public var settled: Bool?
   /// How long the step's captures took.
   public var elapsedMs: Int

@@ -30,7 +30,8 @@ public enum CapturedFinalPass {
   ///   - batch: the capture every `batch` answers with: `record/recorded-pass` or
   ///     `record/recorded-fail` under `Fixtures/AgentDevice/`, or `batch/pass` or `batch/fail`.
   ///   - failing: call keys answered with exit 1 and no output, as a call that broke.
-  ///   - capturedVideo: `false` leaves bytes no player opens as the video, as an export that broke.
+  ///   - capturedVideo: `false` leaves bytes AVFoundation can't open as the video, as an export
+  ///     that broke.
   public static func runner(
     batch: String, home: URL, failing: Set<String> = [], capturedVideo: Bool = true
   ) throws -> FakeProcessRunner {

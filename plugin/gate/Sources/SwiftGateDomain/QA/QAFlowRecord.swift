@@ -86,8 +86,18 @@ public struct QAFlowDelay: Sendable, Equatable {
     if captureMs > 0 { parts.append("\(Self.seconds(captureMs)) in captures qa run added") }
     let rest = beforeMs - openMs - captureMs
     if rest > 0 { parts.append("\(Self.seconds(rest)) in the flow's other steps") }
-    return "step \(step) began \(Self.seconds(beforeMs)) into the batch: "
+    var sentence =
+      "step \(step) began \(Self.seconds(beforeMs)) into the batch: "
       + parts.joined(separator: ", ")
+    if let lost {
+      sentence +=
+        "; capture delay: the tree qa run captured after step \(lost.after) shows "
+        + "`\(lost.selector)` \(Self.seconds(lost.beforeMs)) before step \(step) began, so the "
+        + "state was on screen and ended during the \(Self.seconds(lost.captureMs)) of captures "
+        + "qa run added there: this red is qa run's, no evidence against the app, the flow or "
+        + "the contract"
+    }
+    return sentence
   }
 
   private static func seconds(_ ms: Int) -> String {
@@ -302,17 +312,21 @@ public struct BatchFlowPlan: Sendable, Equatable {
       guard FlowRules.asserts(step), evidence.count < screenshots.count else { continue }
       let path = screenshots[evidence.count]
       let first = driven.count + 1
-      driven += [
-        snapshot,
-        .object(["command": .string("screenshot"), "input": .object(["path": .string(path)])]),
-        snapshot,
-      ]
-      origin += [nil, nil, nil]
+      let fromVideo = recordIndex != nil
+      driven.append(snapshot)
+      origin.append(nil)
+      if !fromVideo {
+        driven += [
+          .object(["command": .string("screenshot"), "input": .object(["path": .string(path)])]),
+          snapshot,
+        ]
+        origin += [nil, nil]
+      }
       evidence.append(
         Evidence(
           after: step.number, label: "after step \(step.number): \(label(step))",
-          assert: expectedText(step), snapshot: first, screenshot: first + 1, settle: first + 2,
-          screenshotPath: path, target: checkedTarget(step)))
+          assert: expectedText(step), snapshot: first, screenshot: fromVideo ? nil : first + 1,
+          settle: fromVideo ? nil : first + 2, screenshotPath: path, target: checkedTarget(step)))
     }
     return BatchFlowPlan(
       steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo,
@@ -333,7 +347,15 @@ public struct BatchFlowPlan: Sendable, Equatable {
   /// When each evidence whose PNG is the video's frame began its snapshot, on the video's clock,
   /// by the flow file's step it follows. Empty when the batch recorded nothing.
   public func frameTimes(results: [BatchStepOutcome]) -> [Int: Int] {
-    [:]
+    guard let start = videoStartMs(results: results) else { return [:] }
+    let byIndex = Dictionary(
+      results.map { ($0.index, $0.durationMs) }, uniquingKeysWith: { first, _ in first })
+    var times: [Int: Int] = [:]
+    for evidence in self.evidence where evidence.screenshot == nil {
+      let began = (1..<evidence.snapshot).reduce(0) { $0 + (byIndex[$1] ?? 0) }
+      times[evidence.after] = max(0, began - start)
+    }
+    return times
   }
 
   /// The failing step's target as the tree `qa run` captured just before it showed it; `nil`
@@ -342,7 +364,27 @@ public struct BatchFlowPlan: Sendable, Equatable {
   public func captureLoss(
     results: [BatchStepOutcome], failedAt: Int?, trees: [Int: SimTree]
   ) -> QAFlowCaptureLoss? {
-    nil
+    guard let failedAt, let n = origin(of: failedAt),
+      let step = steps.first(where: { $0.number == n }),
+      let selector = Self.checkedTarget(step), let parsed = SimSelector.parse(selector),
+      let previous = (1..<failedAt).last(where: { origin(of: $0) != nil }),
+      let after = origin(of: previous)
+    else { return nil }
+    let captures = (previous + 1)..<failedAt
+    let text = Self.expectedText(step)
+    guard
+      let shown = captures.last(where: { index in
+        guard let tree = trees[index] else { return false }
+        return tree.elements.contains(where: parsed.matches)
+          && text.map(tree.contains(text:)) != false
+      })
+    else { return nil }
+    let byIndex = Dictionary(
+      results.map { ($0.index, $0.durationMs) }, uniquingKeysWith: { first, _ in first })
+    return QAFlowCaptureLoss(
+      after: after, selector: selector,
+      beforeMs: (shown..<failedAt).reduce(0) { $0 + (byIndex[$1] ?? 0) },
+      captureMs: captures.reduce(0) { $0 + (byIndex[$1] ?? 0) })
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.
@@ -406,7 +448,9 @@ public struct BatchFlowPlan: Sendable, Equatable {
 
   /// Where the time before the failing step went; `nil` when no flow step failed or nothing ran
   /// before it.
-  public func delay(results: [BatchStepOutcome], failedAt: Int?) -> QAFlowDelay? {
+  public func delay(
+    results: [BatchStepOutcome], failedAt: Int?, trees: [Int: SimTree] = [:]
+  ) -> QAFlowDelay? {
     guard let failedAt, let n = origin(of: failedAt), failedAt > 1 else { return nil }
     let byIndex = Dictionary(
       results.map { ($0.index, $0) }, uniquingKeysWith: { first, _ in first })
@@ -425,7 +469,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
     guard before > 0 else { return nil }
     return QAFlowDelay(
       step: n, beforeMs: before, openMs: opens, captureMs: captures,
-      launch: launch(results: results))
+      launch: launch(results: results),
+      lost: captureLoss(results: results, failedAt: failedAt, trees: trees))
   }
 
   /// The selector of the element `step` checks is shown: a `wait` for a selector, or an `is`
