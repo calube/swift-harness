@@ -37,12 +37,12 @@ skill or a task.
 | Caller | Spans |
 |---|---|
 | build skill | `final`, and a `fix` span around the merge fixer, whose usage it ingests alone with `events ingest --agent-id` |
-| each `build-task.js` stage agent | its own `worker`, `review`, `verify` or `fix` span, with `--task` and the previous stage as parent; the workflow requires `buildRun` and `pluginRoot`, and stages run `<pluginRoot>/bin/swiftgate` |
+| `build-task.js` | the worker and the fix pass run their own `worker` or `fix` span; a plain span agent started beside each reviewer and verifier runs its `review` or `verify` span. Each has `--task` and the previous stage as parent; the workflow requires `buildRun` and `pluginRoot`, and every span runs `<pluginRoot>/bin/swiftgate` |
 | ship skill | `ship` |
 | brownfield run skill | `spec-read`, `explore`, `plan`, `contract` and `final` |
 
-A reviewer's or verifier's Bash may run only 1 span line through the plugin's own `swiftgate`
-(`guard.reviewer-bash`, [`hooks.md`](hooks.md)).
+Reviewers and verifiers hold no Bash. If one is given it, it may run only 1 span line through the
+plugin's own `swiftgate` (`guard.reviewer-bash`, [`hooks.md`](hooks.md)).
 
 ## What the page shows
 

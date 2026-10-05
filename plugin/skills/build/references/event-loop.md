@@ -124,10 +124,11 @@ ISO 8601 UTC time. The worker and its fix pass get it as their deadline. Leave i
   alone as a stub, checks it with `swiftgate surface-check <sha>`, and returns the stub as
   `surfaceCommit`. [`build proof-bases`](#final-gate) lists the plan surface first, then each stub in
   merge order. `null` leaves the worker's prompt exactly as it was before the arg existed.
-- `buildRun`: `<run>`, the `runId` `build start` printed. Every agent the workflow runs, the
-  worker, each reviewer, each verifier and the fix pass, opens and closes its own run-viewer span
-  in this build run from its prompt, so no stage spends an agent on a span. A span call that fails
-  never changes a stage's outcome. Leaving `buildRun` out throws `build-task: buildRun is required`.
+- `buildRun`: `<run>`, the `runId` `build start` printed. The worker and the fix pass open and
+  close their own run-viewer span in this build run from their prompt. Reviewers and verifiers hold
+  no Bash, so a plain span agent started beside each runs its span, and the task returns once every
+  span it opened has ended. A span call that fails never changes a stage's outcome. Leaving
+  `buildRun` out throws `build-task: buildRun is required`.
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.

@@ -107,7 +107,10 @@ extension ContextPackRun {
       areas: config.areas,
       standards: ContextSource(
         label: "harness \(WorkerPackSources.standardsPath)", rawText: standardsText),
-      dependencyNotes: dependencyNotes)
+      dependencyNotes: dependencyNotes,
+      layout: ConfigLoader.commonDirectory(enclosing: root).map {
+        BrownfieldStateLayout(commonDir: $0, gitDir: $0)
+      })
     return .success((.brownfieldWorker(inputs), [], o.key ?? taskID))
   }
 }
