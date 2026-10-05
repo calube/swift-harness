@@ -421,10 +421,12 @@ function installPrefixes(files) {
 /**
  * Where a red flow row the fixer returns can only halt the one-shot run: the build loop's
  * `## Flow repair` sends a row the fixer's `flow row:` line names to a validation worker in repair
- * mode, re-adopts that row alone through `qa adopt --repair` with the build run, the cause, the
- * reason and both red runs, caps it at 1 repair per row per run, launches the fixer again, and
- * halts as before when the adopt isn't GREEN; the run skill's step 7 takes that path and records 1
- * assumption naming the repaired row.
+ * mode, 1 requirement per round, re-adopts that row alone through `qa adopt --repair` with the
+ * build run, the cause, the reason and both red runs, takes a second round only before
+ * `noNewStartsAt`, launches the fixer again, sends a refused repair back to the worker with the
+ * refusal's messages instead of halting while the cutoff is ahead, and halts on a `no repair:`
+ * return; the run skill's step 7 takes that path, records 1 assumption naming the repaired row,
+ * and never stops the build over a refused repair while time remains.
  */
 export function flowRepairProblems(loop, run) {
   const problems = []
@@ -436,13 +438,17 @@ export function flowRepairProblems(loop, run) {
   if (!part.includes('"$SG" qa adopt <fixWorktree> --repair <requirement> --build-run <run> --cause <cause> --reason "<why>" --red-run <run id> --red-run <run id> --json')) {
     problems.push('no `qa adopt --repair` of the row alone')
   }
-  if (!/\b1 repair per row per run\b/.test(part)) problems.push('no cap of 1 repair per row per run')
+  if (!/up to 2 adopted repairs per run, the second only before `noNewStartsAt`/.test(part)) problems.push('no cap of 2 repairs per row per run, the second before no new starts')
+  if (!/Repair 1 requirement per round/.test(part)) problems.push('never repairs 1 requirement per round')
   if (!/`still-red`/.test(part) || !/`flow-side`/.test(part)) problems.push('never picks the cause `flow-side` or `still-red`')
   if (!/launch the fixer again/.test(part)) problems.push('never launches the fixer again after the repair')
-  if (!/not GREEN[^.]*halt|halt[^.]*not GREEN/.test(part)) problems.push('a refused repair never halts as before')
+  if (!/RED, before `cutoffAt`: no halt, and never stop the build/.test(part)) problems.push('a refused repair halts or stops the build before the cutoff')
+  if (!/quoting each finding's message/.test(part)) problems.push('a retried repair never quotes the refusal')
+  if (!/`no repair:` return[^.]*halt/.test(part)) problems.push('a `no repair:` return never halts')
   const step7 = (run.split('\n## ').find(p => p.startsWith('7. ')) ?? '').replace(/\s+/g, ' ')
   if (!step7.includes('(../build/references/event-loop.md#flow-repair)')) problems.push('run step 7 never takes the flow repair path')
   if (!/1 assumption naming the repaired row/.test(step7)) problems.push('run step 7 never records the repair as an assumption')
+  if (!/never a reason to stop the build while time remains/.test(step7)) problems.push('run step 7 lets a refused repair stop the build')
   return problems
 }
 
@@ -771,7 +777,7 @@ const tests = {
     assert.ok(problems.includes('a design conflict never recommends a retry with a widened write set'), problems.join('\n'))
   },
 
-  'a fixer\'s flow row goes to a repair worker and back through qa adopt --repair once per run, not to a halt — catches a one-shot run stopped by its own flow file'() {
+  'a fixer\'s flow row goes to a repair worker and back through qa adopt --repair, retried with the refusal\'s messages rather than halted while the cutoff is ahead — catches a one-shot run stopped by its own flow file'() {
     assert.deepEqual(flowRepairProblems(read('skills/build/references/event-loop.md'), read('skills/run/SKILL.md')), [])
   },
 

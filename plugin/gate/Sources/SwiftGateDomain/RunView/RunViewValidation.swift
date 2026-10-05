@@ -463,8 +463,15 @@ enum RunViewValidationFold {
     taskOfGateRun: [String: String] = [:], table: ValidationTable? = nil,
     into view: inout RunView
   ) {
+    let adoptedProofs = Set(
+      events.compactMap { event -> String? in
+        guard case .qaRepair = event.payload else { return nil }
+        return event.runID
+      })
+    // A repair candidate's proof joins the row only once a `qa.repair` adopted that run.
     let checks = events.compactMap { event -> Entry? in
       guard case .qaCheck(let check) = event.payload else { return nil }
+      if check.repairProof == true, !adoptedProofs.contains(event.runID ?? "") { return nil }
       return (event, check)
     }
     var damage: [RunView.Damage] = []

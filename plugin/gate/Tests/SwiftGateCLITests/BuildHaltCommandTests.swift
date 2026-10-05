@@ -164,6 +164,17 @@ struct BuildHaltCommandTests {
   }
 
   @Test(
+    "`--answer stop`, as the run skill words stopping the build, parses as abandon — catches the trial's stop refused as an unknown answer"
+  )
+  func stopIsAbandon() async throws {
+    let parsed = try await SwiftGate.asyncParseAsRoot([
+      "build", "resume", "--run", Self.buildRun, "--task", "spec-watchlist", "--answer", "stop",
+    ])
+    let command = try #require(parsed as? BuildResumeCommand)
+    #expect(command.answer == .abandon)
+  }
+
+  @Test(
     "an unknown --reason or --answer fails parsing and names every allowed value — catches a free-text reason reaching the store"
   )
   func unknownReasonOrAnswerNamesTheAllowedValues() async throws {

@@ -243,12 +243,15 @@ enum QAAdoptRun {
           ?? found.first { $0.result == .red } ?? found.first)
     }
 
+    // A second repair needs the build run's box, read from its own record.
+    let buildRecord = try? await BuildRunStore.open(plan: name, runID: repair.buildRun, git: git)
+      .record()
     report.findings = QAFlowRepair.findings(
       QAFlowRepair.Input(
         requirement: repair.requirement, rows: rows, adopted: adopted, repaired: repaired,
         preparedFiles: preparedFiles, adoptedRecord: adoptedRecord,
         preparedRecord: preparedRecord, redRuns: redRuns, earlier: earlier,
-        buildRun: repair.buildRun))
+        buildRun: repair.buildRun, now: now(), noNewStartsAt: buildRecord?.noNewStartsAt))
     guard report.findings.isEmpty, let preparedRecord else {
       return refused(
         "\(report.findings.count) finding(s) refuse the repair of \(repair.requirement)")

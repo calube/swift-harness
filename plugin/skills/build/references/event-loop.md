@@ -428,19 +428,26 @@ combined `qa run` the message names. The refusal lapses 5 minutes after that gat
 A fixer's `flow row:` line names a flow row 2 `qa run`s left red. Its flow file is plan state,
 which neither the fixer nor this skill edits, so a validation worker in repair mode rewrites it.
 The cause is `flow-side` when the line says `flow-side: yes`, and `still-red` for `flow-side: no`
-or a row red again after a fixer's `ready-to-merge`. Each row gets 1 repair per row per run:
-`qa adopt --repair` refuses a second with `qa.repair-cap`. A repair is no halt, so record none.
+or a row red again after a fixer's `ready-to-merge`. A row gets up to 2 adopted repairs per run,
+the second only before `noNewStartsAt`: `qa adopt --repair` refuses any other with
+`qa.repair-cap`. A repair is no halt, so record none.
 
-1. Fill the fix worktree's prepared folder with the requirement's adopted checks, its flow and
-   state rows' files: `mkdir -p <fixWorktree>/.harness/qa/<slug>`, then
+Repair 1 requirement per round. With several `flow row:` lines, run a round for each, 1 after
+another in the same fix worktree, starting with the row whose step failed first.
+
+1. Fill the fix worktree's prepared folder with this requirement's adopted checks alone, its flow
+   and state rows' files: `/bin/rm -rf <fixWorktree>/.harness/qa`, then
+   `mkdir -p <fixWorktree>/.harness/qa/<slug>` and
    `/bin/cp -p <plans>/<slug>/qa/<file> <fixWorktree>/.harness/qa/<slug>/` for each.
 2. Launch 1 Agent tool call in the background, passing `run_in_background: true`, with
    `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the fix worktree as its
    worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from
    `validation.json`. It quotes the `flow row:` line, both red run ids and the evidence paths their
    `qa/report.json` rows name, and says to follow the repair mode of
-   `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Record its usage as for the
-   validation task, under the task the row runs after.
+   `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`, which runs the at-base proof
+   itself. Never prescribe the edit: the fixer's suggestion, such as an `is` in place of a `wait`,
+   can weaken the check. Record its usage as for the validation task, under the task the row
+   runs after.
 3. On a `repaired:` return, from the main checkout:
 
    ```
@@ -448,12 +455,18 @@ or a row red again after a fixer's `ready-to-merge`. Each row gets 1 repair per 
    ```
 
    `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
-   - GREEN: launch the fixer again, 1 more attempt with its own span, ingest and check, given its
-     last return and the adopt's `repaired` record. It runs the before-merge `qa run --fix` again
-     and returns `ready-to-merge` once its rows are GREEN, which merges as above. A `flow row:`
-     line for the same row in that return halts: its 1 repair already ran.
-   - A repair not GREEN, or a `no repair:` return: halt as the fixer's `Anything else` bullet says,
-     quoting the findings or the worker's reason.
+   - GREEN: go on to the next requirement's round, if any. Once every round is taken, launch the
+     fixer again, 1 more attempt with its own span, ingest and check, given its last return and
+     each adopt's `repaired` record. It runs the before-merge `qa run --fix` again and returns
+     `ready-to-merge` once its rows are GREEN, which merges as above. A `flow row:` line for a
+     repaired row in that return takes a second round while `run clock` is before
+     `noNewStartsAt`, and halts after it.
+   - RED, before `cutoffAt`: no halt, and never stop the build. Launch the repair worker again
+     for that requirement, its prompt quoting each finding's message as written, since each says
+     what would pass, and adopt again. A refused adopt records no repair, so this retry isn't
+     capped; `build cutoff` decides the task when the cutoff comes first.
+   - A `no repair:` return, or a RED adopt after `cutoffAt`: halt as the fixer's `Anything else`
+     bullet says, quoting the worker's reason or the findings.
 
 ## Recording halts
 

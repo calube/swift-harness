@@ -179,7 +179,7 @@ extension RuleIndexTests {
       QAReport.checkPassesAtBaseRuleID, QAReport.noVerifiableRowRuleID, FlowRules.unparsedRuleID,
       FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
-      FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
+      FlowRules.idsUnknownRuleID, FlowRules.kindKeyRuleID, SimAuditScope.untargetedRuleID,
       QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,
       QAFlowRepair.capRuleID, QAFlowRepair.outsideRowRuleID, QAFlowRepair.weakensRuleID,
       QAFlowRepair.unchangedRuleID, QAFlowRepair.notRedRuleID, QAFlowRepair.wrongRedRuleID,

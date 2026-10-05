@@ -11,7 +11,7 @@ public enum FlowIDs: Sendable, Equatable {
   case undeclarable
 }
 
-/// The 5 batch steps file rules (simulator QA amendment §6.1), each `RED`, and the note that says
+/// The batch steps file rules (simulator QA amendment §6.1), each `RED`, and the note that says
 /// identifiers weren't checked.
 public enum FlowRules {
   public static let unparsedRuleID = "qa.flow-unparsed"
@@ -20,6 +20,16 @@ public enum FlowRules {
   public static let schemaRuleID = "qa.flow-schema"
   public static let unknownIDRuleID = "qa.flow-unknown-id"
   public static let idsUnknownRuleID = "qa.flow-ids-unknown"
+  public static let kindKeyRuleID = "qa.flow-kind-key"
+
+  /// The input key a `wait` of each `kind` reads its target from. The pinned tool drops `kind`
+  /// before it runs the step and takes whichever 1 of these keys is present, so a target under
+  /// another kind's key runs as that other kind. The pinned `wait` schema names every kind in its
+  /// `kind` enum and every key as a property; the schema alone doesn't pair them.
+  public static let waitTargetKeys: [String: String] = [
+    "duration": "durationMs", "text": "text", "ref": "ref", "selector": "selector",
+    "absent": "absent", "stable": "stable",
+  ]
 
   /// Keys whose strings are app content, not selectors: what a step types, or the text a
   /// predicate compares with.
@@ -62,6 +72,11 @@ public enum FlowRules {
             schemaRuleID, file,
             "\(named): \(problem); agent-device \(schemas.version) refuses this step"))
       }
+      if stepProblems.isEmpty, inputProblems.isEmpty {
+        for problem in kindKeyProblems(step) {
+          findings.append(finding(kindKeyRuleID, file, "\(named): \(problem)"))
+        }
+      }
       if case .declared(let source, let declared) = ids {
         for id in selectorIDs(in: .object(step.input), key: nil) where !declared.contains(id) {
           findings.append(
@@ -98,6 +113,81 @@ public enum FlowRules {
       findings.append(note)
     }
     return FlowLintReport(files: files.map(\.path), findings: findings)
+  }
+
+  /// Why `step` would run as another step than its `kind` or `predicate` says, each naming the key
+  /// to use; empty when its input keys match. A `wait` holds exactly 1 target key, the 1 its
+  /// `kind` reads, and an `is` holds a `value` exactly when its predicate is `text`.
+  static func kindKeyProblems(_ step: FlowStep) -> [String] {
+    switch step.command {
+    case "wait": waitProblems(step.input)
+    case "is": isProblems(step.input)
+    default: []
+    }
+  }
+
+  /// The target keys `input` holds, in the order ``waitTargetKeys`` sorts them.
+  static func waitTargets(in input: [String: FlowJSON]) -> [String] {
+    Set(waitTargetKeys.values).filter { input[$0] != nil }.sorted()
+  }
+
+  /// `input` with its target under the key its `kind` reads, when it holds exactly 1 target key
+  /// and a `kind` that reads another; `nil` otherwise.
+  static func correctedWait(_ input: [String: FlowJSON]) -> [String: FlowJSON]? {
+    guard case .string(let kind)? = input["kind"], let key = waitTargetKeys[kind] else {
+      return nil
+    }
+    let targets = waitTargets(in: input)
+    guard targets.count == 1, let found = targets.first, found != key else { return nil }
+    var fixed = input
+    fixed[key] = fixed.removeValue(forKey: found)
+    return fixed
+  }
+
+  private static func waitProblems(_ input: [String: FlowJSON]) -> [String] {
+    let targets = waitTargets(in: input)
+    let listed = targets.map { "`\($0)`" }.joined(separator: ", ")
+    var problems: [String] = []
+    if case .string(let kind)? = input["kind"], let key = waitTargetKeys[kind] {
+      if let fixed = correctedWait(input), let found = targets.first {
+        let runsAs = waitTargetKeys.first { $0.value == found }?.key ?? found
+        problems.append(
+          "`kind` `\(kind)` reads its target from `\(key)`, but this step puts it under "
+            + "`\(found)`; the pinned tool drops `kind` and runs whichever target key is present, "
+            + "so this runs as a `\(runsAs)` wait. Write \(FlowJSON.object(fixed).jsonText)")
+      } else if targets.isEmpty {
+        problems.append("`kind` `\(kind)` reads its target from `\(key)`, which this step lacks")
+      } else if targets != [key] {
+        problems.append(
+          "it holds the target keys \(listed); a `wait` takes exactly 1, and `kind` `\(kind)` "
+            + "reads `\(key)`")
+      }
+    } else if targets.count != 1 {
+      let every = Set(waitTargetKeys.values).sorted().map { "`\($0)`" }.joined(separator: ", ")
+      problems.append(
+        "a `wait` takes exactly 1 target key of \(every), and this step holds "
+          + (targets.isEmpty ? "none" : listed))
+    }
+    if input["quietMs"] != nil, !targets.isEmpty, targets != ["stable"] {
+      problems.append(
+        "`quietMs` applies only to a `stable` wait, so the pinned tool drops it from this step")
+    }
+    return problems
+  }
+
+  private static func isProblems(_ input: [String: FlowJSON]) -> [String] {
+    guard case .string(let predicate)? = input["predicate"] else { return [] }
+    if predicate == "text", input["value"] == nil {
+      return ["`predicate` `text` compares the element's text with `value`, which this step lacks"]
+    }
+    if predicate != "text", input["value"] != nil {
+      return [
+        "`value` goes only with `predicate` `text`; the pinned tool drops it from an "
+          + "`is \(predicate)`, so the step never compares it. Use `predicate` `text`, or drop "
+          + "`value`"
+      ]
+    }
+    return []
   }
 
   /// A `wait` that looks for something, or any `is`. A `duration` or `stable` wait only pauses.
@@ -246,5 +336,41 @@ extension FlowLintReport: Codable {
     try c.encode(verdict, forKey: .verdict)
     try c.encode(findings, forKey: .findings)
     try c.encode(message, forKey: .message)
+  }
+}
+
+extension FlowJSON {
+  /// Compact JSON with sorted keys and escaped strings, which a flow file can hold as written.
+  var jsonText: String {
+    switch self {
+    case .string(let value):
+      var escaped = "\""
+      for scalar in value.unicodeScalars {
+        switch scalar {
+        case "\"": escaped += "\\\""
+        case "\\": escaped += "\\\\"
+        case "\n": escaped += "\\n"
+        case "\t": escaped += "\\t"
+        case "\r": escaped += "\\r"
+        default:
+          if scalar.value < 0x20 {
+            let hex = String(scalar.value, radix: 16)
+            escaped += "\\u" + String(repeating: "0", count: 4 - hex.count) + hex
+          } else {
+            escaped.unicodeScalars.append(scalar)
+          }
+        }
+      }
+      return escaped + "\""
+    case .array(let values):
+      return "[" + values.map(\.jsonText).joined(separator: ",") + "]"
+    case .object(let fields):
+      return "{"
+        + fields.keys.sorted().map {
+          "\(FlowJSON.string($0).jsonText):\(fields[$0]?.jsonText ?? "null")"
+        }.joined(separator: ",") + "}"
+    default:
+      return rendered
+    }
   }
 }

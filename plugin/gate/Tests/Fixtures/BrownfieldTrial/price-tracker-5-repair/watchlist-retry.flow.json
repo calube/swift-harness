@@ -1,0 +1,75 @@
+[
+  {
+    "command": "open",
+    "input": {
+      "app": "com.example.InterviewStarter",
+      "relaunch": true,
+      "launchArgs": [
+        "-harness-scenario",
+        "load-failure"
+      ]
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.error\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.retry\""
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "Try again",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "click",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"watchlist.retry\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.row.bitcoin\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "absent",
+      "selector": "id=\"watchlist.error\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.ethereum\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.solana\""
+    }
+  }
+]
