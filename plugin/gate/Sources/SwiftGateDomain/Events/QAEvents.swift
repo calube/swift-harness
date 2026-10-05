@@ -72,6 +72,8 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
   public let videoUnverified: QARecordingGapReason?
   /// Why a final pass that made a video left no contact sheet; absent otherwise.
   public let sheetUnverified: QARecordingGapReason?
+  /// How long the flow's opening `open` took to bring the app up; absent when it reported none.
+  public let launch: QAFlowLaunch?
   /// The `[[flows]]` entry a kept XCUITest flow maps to; absent for a batch flow.
   public let flow: String?
   /// The kept flow's test, `<Class>/<method>()`; absent for a batch flow.
@@ -90,6 +92,7 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
     self.sheet = record.sheet
     self.videoUnverified = record.videoUnverified
     self.sheetUnverified = record.sheetUnverified
+    self.launch = record.launch
     self.flow = record.flow
     self.test = record.test
   }
@@ -97,7 +100,7 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
   public var record: QAFlowRecord {
     QAFlowRecord(
       source: source, steps: steps, video: video, sheet: sheet, videoUnverified: videoUnverified,
-      sheetUnverified: sheetUnverified, flow: flow, test: test)
+      sheetUnverified: sheetUnverified, launch: launch, flow: flow, test: test)
   }
 }
 

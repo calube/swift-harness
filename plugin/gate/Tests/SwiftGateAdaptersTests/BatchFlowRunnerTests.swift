@@ -183,4 +183,59 @@ struct BatchFlowRunnerTests {
       try Data(contentsOf: run.flowDirectory.appending(path: BatchFlowRunner.outputFileName))
         == (try Fixture.data("\(directory)/press-switch.stdout")))
   }
+
+  /// A `qa run` batch's output as printed, from `Fixtures/QA/capture-delay/`, answered with the
+  /// exit status `agent-device` gives a batch that passed or failed.
+  static func captureDelayRunner(_ name: String, status: Int32) throws -> FakeProcessRunner {
+    let output = ProcessOutput(
+      status: .exited(status),
+      stdout: CapturedStream(bytes: try Fixture.data("QA/capture-delay/\(name).batch.json")),
+      stderr: CapturedStream(bytes: Data()), elapsed: .zero)
+    return FakeProcessRunner { _ throws(ProcessRunnerError) in output }
+  }
+
+  @Test(
+    "the captured relaunching batch records its open's launch and settle time, and each check's capture time — catches a flow record that can't say how long the app took to come up or how long qa run's own steps held the flow"
+  )
+  func relaunchingBatchRecordsLaunchAndCaptures() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+
+    let outcome = await run.run(
+      try Self.captureDelayRunner("pass", status: 0), flow: "QA/capture-delay/pass.flow.json")
+
+    #expect(outcome.stop == nil)
+    #expect(outcome.record.launch == QAFlowLaunch(launchMs: 1818, settleMs: 964))
+    #expect(outcome.record.steps.map(\.captureMs) == [nil, 2129, 1483])
+    #expect(outcome.delay == nil, "a batch that passed has no failing step to explain")
+  }
+
+  @Test(
+    "the captured batch whose slow screenshot pushed its `is` to 13.7 s names that delay: 1.6 s opening the app, 11.5 s in qa run's captures — catches a red row that blames the app for time qa run spent"
+  )
+  func failingBatchNamesWhereTheTimeWent() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+
+    let outcome = await run.run(
+      try Self.captureDelayRunner("fail", status: 1), flow: "QA/capture-delay/fail.flow.json")
+
+    guard case .flow(let stop, _)? = outcome.stop else {
+      Issue.record("expected a flow stop, got \(String(describing: outcome.stop))")
+      return
+    }
+    #expect(stop == .step(n: 3, command: "is"))
+    #expect(outcome.record.launch == QAFlowLaunch(launchMs: 1404, settleMs: 820))
+    #expect(outcome.record.steps.map(\.captureMs) == [nil, 11530, nil])
+    let delay = try #require(outcome.delay)
+    #expect(
+      delay
+        == QAFlowDelay(
+          step: 3, beforeMs: 13650, openMs: 1627, captureMs: 11530,
+          launch: QAFlowLaunch(launchMs: 1404, settleMs: 820)))
+    #expect(
+      delay.sentence
+        == "step 3 began 13.7 s into the batch: 1.6 s opening the app (1.4 s to launch, 0.8 s of it settling), 11.5 s in captures qa run added, 0.5 s in the flow's other steps"
+    )
+  }
 }

@@ -1,0 +1,35 @@
+{
+  "review": {
+    "findings": [
+      {
+        "category": "missing-edge-case",
+        "evidence": "FieldFeatureTests.swift:22-35 is the only test that crosses a entity, and it starts from isFinished: true. FieldFeature.swift:59 `state.simulation.cut(along: [last, point])` has no test that sees the count change.",
+        "failure_scenario": "Delete `state.simulation.cut(along: [last, point])` at FieldFeature.swift:59. dragBuildsAndClearsTrail only checks the trail. dragAfterFinished expects the count to stay at 4, and it does when cutting never happens. No test covers a drag over entity in a running session. The count never rises and every test still passes.",
+        "file": "Packages/AppFeature/Tests/AppCoreTests/FieldFeatureTests.swift",
+        "fix": "Add a test that starts a running session with a entity at (100,100), sends .dragChanged at (50,100) and then (150,100), and expects count == 1 and the entity removed. Optionally add a hazard case that expects a lost charge.",
+        "kind": "defect",
+        "line": 22,
+        "severity": "major",
+        "title": "No test cuts entity during a running session"
+      }
+    ]
+  },
+  "verify": {
+    "findings": [
+      {
+        "category": "missing-edge-case",
+        "evidence": "FieldFeatureTests.swift:22-35 is the only test whose drag crosses a entity, and it starts from `FieldSimulation(seed: 1, objects: [entity], count: 4, charges: 0, isFinished: true)`. FieldFeature.swift:57-62 `case .dragChanged(let point): if let last = state.trail.last { state.simulation.cut(along: [last, point]) }` has no test that checks the count or the objects after a live drag.",
+        "failure_scenario": "Delete `state.simulation.cut(along: [last, point])` at FieldFeature.swift:59. dragBuildsAndClearsTrail (lines 8-20) starts from FieldFeature.State(seed: 1), turns exhaustivity off, and only asserts the trail. dragAfterFinishedCountsNothing (lines 22-35) starts with isFinished: true and expects count == 4, which still holds when cutting never runs. tickAdvancesSimulation, restartResets and timerTicksAcrossSessions never send .dragChanged. LaunchFlowUITests only asserts the label reads 'Count: 0'. So the count never rises in a running session and every test still passes.",
+        "file": "Packages/AppFeature/Tests/AppCoreTests/FieldFeatureTests.swift",
+        "fix": "Add a test that starts a running session (`FieldSimulation(seed: 1, objects: [entity at (100,100), radius 20])`), sends .dragChanged at (50,100) and then (150,100), and expects count == 1 and the entity removed. Optionally add a hazard case that expects a lost charge.",
+        "kind": "defect",
+        "line": 22,
+        "severity": "major",
+        "severity_rule": "defect-narrow-trigger",
+        "title": "No test cuts entity during a running session",
+        "verification_note": "I read FieldFeatureTests.swift in full, FieldFeature.swift, and grepped UITests for count and cut. The only call to cut is at FieldFeature.swift:59. None of the five unit tests asserts that cutting changes anything in a running session. The trail test uses exhaustivity .off with no count check. The finished test passes whether cut runs or not, because the cut should do nothing after finished anyway. The UI test only checks the starting 'Count: 0'. So removing line 59 would leave the suite green, as the finding says. This is a test gap, not a runtime failure users hit, so I rated it under defect-narrow-trigger (major), which is the reviewer's severity.",
+        "verified": true
+      }
+    ]
+  }
+}

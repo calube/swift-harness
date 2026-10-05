@@ -187,6 +187,22 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
 - A swipe step crosses the middle of the screen at half its height and takes no element, so a
   swipe-driven screen's stub puts its gesture recognizer on the whole screen, which covers that
   line. A recognizer on a smaller view misses the swipe.
+- The contract gives a screen whose state advances on a clock the same seam as a network-fed
+  screen: its composition root reads `-harness-scenario`, and with no argument the app runs as
+  shipped. A scenario named with the word `held`, such as `launch-held`, starts the clock only at
+  the first input or an explicit start, never when the screen appears, so a flow checking the
+  starting state reads it before anything moves. Without it the check races the clock however
+  fast the app settles: `qa run` takes a snapshot, a screenshot and a snapshot after each `wait`
+  or `is` step, about 1.2 s and over 10 s on a loaded machine, so the clock has moved the state
+  before the next step reads it. `plan import` fails such a plan as
+  `plan-lint.validation-clock-unheld`.
+- When the engine takes a seed, the contract adds a seeded scenario per interaction a requirement
+  names, such as `entity-center`: it places 1 entity at a known spot, motionless, with the clock
+  held, and gives it an accessibility element and identifier at its frame. The flow launches
+  under it and performs the gesture on that id: a `gesture` `drag` whose `source` is the entity's
+  id and whose `destination` is an id across the screen starts on the entity, then a `wait` for
+  what the interaction changes. A random or moving position is then no obstacle, and
+  `plan import` fails such a Reason as `plan-lint.validation-obstacle-seedable`.
 
 Unit tests are each task's own and never get a row. A requirement its tasks' unit tests prove
 alone gets 1 row with `Layer`, `Check`, `Runs after` and `Writer` empty, and a `Reason` saying
@@ -205,6 +221,8 @@ on these `plan-lint` rules:
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind, or with `gate:` on an existing-tests requirement's reason-only row naming `merge` or `final` |
 | `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
+| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract reads no `-harness-scenario` with a `held` scenario |
+| `plan-lint.validation-obstacle-seedable` | a requirement with no `flow` row whose Reason names a moving or random entity while a brief gives the app a seed or a scenario |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
 

@@ -120,10 +120,11 @@ extension QAFlowRecord {
       source: source,
       steps: steps.map { step in
         QAFlowStep(
-          n: step.n, label: step.label, offsetMs: max(0, step.offsetMs - shift), ok: step.ok)
+          n: step.n, label: step.label, offsetMs: max(0, step.offsetMs - shift), ok: step.ok,
+          captureMs: step.captureMs)
       },
       video: recording.video, sheet: recording.sheet,
       videoUnverified: recording.videoGap?.reason, sheetUnverified: recording.sheetGap?.reason,
-      flow: flow, test: test)
+      launch: launch, flow: flow, test: test)
   }
 }

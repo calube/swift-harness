@@ -2786,6 +2786,47 @@ The `sed` replaces the trial clone's parent folder in each `sim up` message with
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation`
 matched nothing.
 
+## qa run: a relaunching flow whose captures delayed its check
+
+`QA/capture-delay/` is a real `swiftgate qa run` over 2 flow rows on a copy of
+`evals/apps/interview-starter`, for the launch and capture times a flow record carries and the
+delay a red row names. Captured 2026-10-05 with `agent-device` 0.21.18 and Xcode 26.2, from a
+`swiftgate` debug build of the surface commit, on a clone the harness made under its `sim` lock,
+on a loaded machine. The plan and inputs follow `RunView/qa-flows/`: the ledger is
+`RunView/build-run-1/ledger.json`, and `validation.json`, `pass.flow.json` and `fail.flow.json` are
+hand-written inputs. `pass.flow.json` relaunches the app, waits for `id="app.status"` and checks it
+reads `100 posts available`; `fail.flow.json` is the same flow expecting `5 posts available`, made
+with `sed 's/"100 posts available"/"5 posts available"/'`. From `plugin/gate` after
+`swift build --product swiftgate`, with `<harness>` this checkout and `<inputs>` a folder holding
+the 3 input files:
+
+```sh
+SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
+T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/interview-starter/ $T/app/ && cd $T/app
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
+mkdir -p $P && cp $F/ledger.json $P/ledger.json
+cp $IN/validation.json $IN/status.flow.json $IN/wrong-status.flow.json $P/
+$SG qa run    # exit 1, RED: row 1 pass, row 2 red at step 3 `is`
+Q=.harness/runs/20261005T181211Z-e93fca7a/qa X=<fixtures>/QA/capture-delay
+SCRUB="s#/private$T#/SCRATCH#g; s#$T#/SCRATCH#g; s#$HOME#/HOME#g; s#<udid>#UDID#g"
+for r in 01:pass 02:fail; do d=$(echo $Q/${r%%:*}-*.flow); k=${r##*:}
+  sed -E "$SCRUB" $d/batch.json > $X/$k.batch.json; sed -E "$SCRUB" $d/steps.json > $X/$k.steps.json
+  sed -E "$SCRUB" $d/flow.json > $X/$k.flow-record.json; done
+sed -E "$SCRUB" $Q/report.json > $X/report.json
+```
+
+The inputs were saved as `status.flow.json` and `wrong-status.flow.json` and are kept here as
+`pass.flow.json` and `fail.flow.json`. The `sed` replaces the scratch folder, the home folder and
+the clone's UDID, and changes nothing else. In `fail.batch.json` the `open` reports
+`startup.durationMs` 1404 and `timing.postOpenSettleDurationMs` 820, the `wait` after it took
+493 ms, and the `screenshot` `qa run` added after the `wait` took 10532 ms, so the `is` ran 13650 ms
+into the batch. `fail.flow-record.json` and `report.json` are the record and report from before a
+flow record carried those times. `grep -rniE '/Users|/private|/var/folders|caleb' QA/capture-delay`
+matched nothing.
+
 ## qa run: a state row behind another requirement's red flow
 
 `QA/aidoku-validation-2/` holds what the iOS validation trial's second attempt on `Aidoku/Aidoku`
@@ -3164,6 +3205,48 @@ cp $P/validation.json $F/; cp $R/run.json $F/; cp $R/events.jsonl $F/
 
 The repair worker's reply arrived at 2026-10-05T15:23:00.391Z, the time the tests decide at.
 `grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair` matched nothing.
+
+## Build returns: a no-repair red run made in a fixer's slot
+
+`BuildReturn/no-repair-slot/` is what a brownfield trial left when a fixer's before-merge
+`qa run --fix`, made in its pooled slot, was red on row 1 alone and passed row 2, and its flow
+repair worker then returned `no repair:` for row 1. `qa-report.json` is that run's report and
+`build-events.jsonl` the build run's events, whose `rows-unverified` line `build no-repair`
+wrote for row 1. `refusals.jsonl` holds the 2 refusals the orchestrator met, each a command's
+JSON output: `build no-repair` run from the plan checkout, BLOCKED because the run lay in the
+slot's runs, and the following `build merge --fix`, refused `flows-unchecked` on row 2 for the
+same reason. `C` is the trial clone and `S` the trial folder holding the orchestrator's
+`run.jsonl`. The `sed` renames give the app's names neutral ones. From this directory:
+
+```sh
+F=BuildReturn/no-repair-slot P=$C/.git/swift-harness/plans/spec R=$P/build/20261005T173155Z-d1423864
+mkdir -p $F
+scrub() {
+  sed -e "s#$(dirname "$C")#/TRIAL#g" -e 's/<app id prefix>\.<counter id>/entity.count/g' \
+    -e 's/<counter label>: /Count: /g' -e 's/<flow 1 name>/launch-state/g' \
+    -e 's/<flow 2 name>/end-and-restart/g'
+}
+scrub < $C/.git/swift-harness/runs/20261005T174655Z-334e7e64/qa/report.json > $F/qa-report.json
+scrub < $R/events.jsonl > $F/build-events.jsonl
+S=$S F=$F python3 - <<'PY' | scrub > $F/refusals.jsonl
+import json, os
+for line in open(f"{os.environ['S']}/run.jsonl"):
+    try: o = json.loads(line)
+    except ValueError: continue
+    for c in (o.get("message") or {}).get("content") or []:
+        if not (isinstance(c, dict) and c.get("type") == "tool_result"): continue
+        t = c.get("content")
+        t = t if isinstance(t, str) else "\n".join(x.get("text", "") for x in t)
+        blocked = '"command" : "build no-repair"' in t and '"BLOCKED"' in t
+        refused = '"command" : "build merge"' in t and "flows-unchecked" in t
+        if blocked or refused:
+            body = t[t.index("{\n"):]
+            print(json.dumps(json.JSONDecoder().raw_decode(body)[0], sort_keys=True))
+PY
+```
+
+The `<...>` patterns stand for the app's own selector, label and flow names, left out here.
+`grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair-slot` matched nothing.
 
 ## Brownfield trial: a contract landed before import
 
@@ -5244,3 +5327,62 @@ head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-
 ```
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
+
+## Brownfield trial: a review blocked on a sibling task's stubbed behaviour
+
+`BuildReturn/sibling-stub/` holds a 2026-10-05 brownfield practice trial's screen task, which
+built in parallel with an engine task, both on the plan contract's stubs. `second-review.json` holds
+the test-quality reviewer's and its verifier's answers in the build-task workflow's second review
+pass. Its verified major asks for a test of behaviour only the engine task's write set built, so
+on the screen task's branch the test could only fail on the stub. `ledger-tasks.json` is the 2
+tasks' `id`, `deps` and `writeSet` from the plan's `ledger.json`. `W` is the screen task's first
+build-task workflow transcript directory, the one holding `journal.jsonl`. `L` is the trial
+clone's `.git/swift-harness/plans/spec/ledger.json`. `S` is a `sed` script renaming the app's
+domain words to generic ones (`Field…` types, entity, cut, count, charges, session, drag,
+finished), given here as placeholders:
+
+```sh
+S='s/<App type prefix>/Field/g; s/<domain noun>/entity/g; s/<action verb>/cut/g; s/<tally>/count/g; s/<allowance>/charges/g; s/<run word>/session/g; s/<gesture>/drag/g; s/<end state>/finished/g'
+F=BuildReturn/sibling-stub; mkdir -p $F
+python3 - $W/journal.jsonl review:test-quality verify:test-quality <<'PY' | sed "$S" > $F/second-review.json
+import json,sys
+labels,out={},{}
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    if d['type']=='started': labels[d['key']]=d['label']
+    elif d['type']=='result' and labels.get(d['key']) in sys.argv[2:]:
+        out[labels[d['key']].split(':')[0]]=d['result']
+print(json.dumps(out,indent=2,sort_keys=True))
+PY
+python3 - $L <<'PY' | sed "$S" > $F/ledger-tasks.json
+import json,sys
+d=json.load(open(sys.argv[1]))
+print(json.dumps([{k:t[k] for k in ('id','deps','writeSet')} for t in d['tasks'] if t['id'] in ('spec-engine','spec-screen')],indent=2))
+PY
+```
+
+The journal holds 2 review passes under the same labels, and the script keeps the last, the second.
+`grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
+
+## Brownfield trial: a screen driven by a clock, with no held scenario
+
+`BrownfieldTrial/clock-screen-1-PLAN.md` is the `PLAN.md` a 2026-10-05 brownfield practice trial
+on the iOS app starter left at its run's end. Its screen task's reducer runs a repeating timer from
+the moment the view appears, its contract reads no `-harness-scenario`, its engine takes a seed,
+and its reason-only rows excuse each interaction with a moving entity as random. The launch flow
+row raced the timer and ended `unverified`. `S` is the trial's clone and `SCRUB` a rename script
+outside this repository, since its pairs name the app:
+
+```sh
+python3 $SCRUB $S/.git/swift-harness/plans/spec/PLAN.md \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/clock-screen-1-PLAN.md
+```
+
+The script renames each app-specific type, accessibility id, label, noun and requirement id to a
+generic one (`EngineCore`, `TargetFeature`, `TargetView`, `target.*`, `req-motion`, `req-cut-target`,
+`req-hazard`), and keeps the `slice` gate tier's name. Task ids, writes, line numbers, the table's
+shape, and each brief's and reason's words for the timer, the clock, the tick, the seed, `random`
+and `moving` are as captured. The clone's `config.toml` differs from
+`price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
+`price-tracker-1-base-files.txt`, so the import test reads those 2.
+`grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
