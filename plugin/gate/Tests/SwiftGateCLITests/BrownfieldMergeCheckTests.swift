@@ -1129,13 +1129,16 @@ private final class MemoryProves: ProveReusing {
 
 extension BrownfieldMergeCheckTests {
   /// Reuse for 1 gate run of `tier` over the plan branch, every input but the head tree shared.
+  /// - Parameter treeHash: the head's tree; `nil` names a tree no other run shares.
   private static func proveReuse(
-    _ branch: SendMoneyPlanBranch, store: MemoryProves, runID: String, tier: CheckTier
+    _ branch: SendMoneyPlanBranch, store: MemoryProves, runID: String, tier: CheckTier,
+    treeHash: String? = nil
   ) -> BrownfieldProve.ProveReuse {
     let repository = branch.repository
     return BrownfieldProve.ProveReuse(
       inputs: GateReuse.Inputs(
-        tier: tier, treeHash: "head-\(runID)", mergeBase: branch.planBase, sourceHash: "bin1",
+        tier: tier, treeHash: treeHash ?? "head-\(runID)", mergeBase: branch.planBase,
+        sourceHash: "bin1",
         stateFiles: ["config": "c1"]),
       store: store, runID: runID, tier: tier,
       renames: { since in
@@ -1245,5 +1248,121 @@ extension BrownfieldMergeCheckTests {
       clone, tier: .merge, areas: config.areas, changed: changed, runner: broken)
     #expect(!broken.requests.contains { clone.inScratch($0) && $0.step == .build })
     #expect(Self.gating(parts).contains("area.build-failed Packages/AppFeature"))
+  }
+}
+
+extension SendMoneyPlanBranch {
+  /// A last task cut from the plan branch's tip that edits the UI test and the view, merged with
+  /// `--no-ff`, so its merge gate proves from the tip before it while final proves from the plan
+  /// base. With `otherUITest`, a commit on the plan branch first adds a second UI test that the
+  /// last task leaves alone.
+  func lastMerge(otherUITest: Bool = false) async throws -> String {
+    try await repository.git("checkout", "-q", "main")
+    if otherUITest {
+      try repository.write(
+        "UITests/SendFlowUITests.swift",
+        "import XCTest\n\nfinal class SendFlowUITests: XCTestCase {\n"
+          + "  func testSend() { XCTAssertTrue(true) }\n}\n")
+      _ = try await repository.commit("another UI test")
+    }
+    try await repository.git("checkout", "-q", "-b", "last-task")
+    let uiTest = repository.root.appending(path: Self.uiTest)
+    try repository.write(
+      Self.uiTest, try String(contentsOf: uiTest, encoding: .utf8) + "\nfinal class More {}\n")
+    try repository.write(Self.view, "struct AppView { var title = \"Sent\" }\n")
+    _ = try await repository.commit("last task")
+    try await repository.git("checkout", "-q", "main")
+    try await repository.git("merge", "-q", "--no-ff", "-m", "merge last task", "last-task")
+    return try await repository.git("rev-parse", "HEAD")
+  }
+
+  func tree(_ revision: String) async throws -> String {
+    try await repository.git("rev-parse", "\(revision)^{tree}")
+  }
+}
+
+extension BrownfieldMergeCheckTests {
+  @Test(
+    "as in a trial whose last merge gate proved the launch UI test in 85 s from the merge's first parent and whose final proved it again in 77 s from the plan base on the same head tree, final takes the merge's proof with no reverted run, names the merge run and keeps the merge's proof base — catches final re-proving a head its last merge just proved"
+  )
+  func finalTakesTheLastMergesProveAtTheSameHead() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+    let head = try await branch.lastMerge()
+    let tree = try await branch.tree(head)
+    let store = MemoryProves()
+
+    let merge = try await Self.sendMoneyRun(
+      clone, branch, tier: .merge, at: head,
+      proveReuse: Self.proveReuse(
+        branch, store: store, runID: "merge-run", tier: .merge, treeHash: tree))
+    #expect(merge.scratchRuns > 0)
+    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
+    #expect(proved.allSatisfy { $0.proofBase == branch.secondMerge })
+
+    let context = GateRun.Context(runID: "final-run", directory: clone.base)
+    let final = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: head,
+      proveReuse: Self.proveReuse(
+        branch, store: store, runID: "final-run", tier: .final, treeHash: tree),
+      context: context)
+
+    #expect(final.scratchRuns == 0, "final ran no reverted run")
+    #expect(final.proofs == proved)
+    #expect(Self.verdict(final.parts) == .green)
+    let reused = final.parts.findings.filter {
+      $0.ruleID == GateReuse.ruleID && $0.message.contains("merge-run")
+        && $0.message.contains("same head tree")
+    }
+    #expect(reused.count == 1, "\(final.parts.findings.map(\.message))")
+    let step = try #require(context.steps.steps.first { $0.step == .prove })
+    #expect(step.derivedData == .reused)
+  }
+
+  @Test(
+    "final proves again when its head tree differs from the merge's, or when it measures a changed UI test the merge didn't run though the head tree is the merge's — catches a head credit standing in for different code or for a test no gate proved"
+  )
+  func finalProvesAgainWhenTheHeadOrItsTestsDiffer() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+    let head = try await branch.lastMerge()
+    let store = MemoryProves()
+    _ = try await Self.sendMoneyRun(
+      clone, branch, tier: .merge, at: head,
+      proveReuse: Self.proveReuse(
+        branch, store: store, runID: "merge-run", tier: .merge,
+        treeHash: try await branch.tree(head)))
+
+    let repository = branch.repository
+    try await repository.git("checkout", "-q", "main")
+    try repository.write(SendMoneyPlanBranch.view, "struct AppView { var title = \"Done\" }\n")
+    let later = try await repository.commit("edit the view")
+    let afterEdit = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: later,
+      proveReuse: Self.proveReuse(
+        branch, store: store, runID: "final-1", tier: .final,
+        treeHash: try await branch.tree(later)))
+    #expect(afterEdit.scratchRuns > 0, "another head tree is other code under test")
+
+    let other = try Clone()
+    defer { try? FileManager.default.removeItem(at: other.base) }
+    let otherBranch = try await SendMoneyPlanBranch(root: other.root)
+    let otherHead = try await otherBranch.lastMerge(otherUITest: true)
+    let otherTree = try await otherBranch.tree(otherHead)
+    let otherStore = MemoryProves()
+    let otherMerge = try await Self.sendMoneyRun(
+      other, otherBranch, tier: .merge, at: otherHead,
+      proveReuse: Self.proveReuse(
+        otherBranch, store: otherStore, runID: "merge-run", tier: .merge, treeHash: otherTree))
+    #expect(otherMerge.scratchRuns > 0)
+    let otherFinal = try await Self.sendMoneyRun(
+      other, otherBranch, tier: .final, at: otherHead,
+      proveReuse: Self.proveReuse(
+        otherBranch, store: otherStore, runID: "final-2", tier: .final, treeHash: otherTree))
+    #expect(otherFinal.scratchRuns > 0, "final's changed tests hold one the merge didn't run")
+    #expect(otherFinal.proofs.contains { $0.test.contains("SendFlowUITests") })
   }
 }
