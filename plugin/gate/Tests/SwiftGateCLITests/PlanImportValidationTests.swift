@@ -469,4 +469,78 @@ struct PlanImportValidationTests {
     let table = try ValidationTableJSON.decode(Data(contentsOf: ios.validationFile))
     #expect(table.rows.last?.layer == .flow)
   }
+
+  /// The third send-money trial's plan as its first import read it, with `req-existing-tests`
+  /// on the views task, and its reason-only row as `reason` leaves it.
+  private static func sendMoney3Refused(reason: String) throws -> String {
+    var text = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-3-PLAN.md"), encoding: .utf8)
+    text = try replacing(
+      "- Covers: req-account-fake, req-existing-tests\n- Writes: Packages/APIClient/Package.swift",
+      with: "- Covers: req-account-fake\n- Writes: Packages/APIClient/Package.swift", in: text)
+    text = try replacing(
+      ", req-send-failure\n- Writes: Packages/AppFeature/Sources/AppUI/SendMoneyView.swift",
+      with: ", req-send-failure, req-existing-tests\n"
+        + "- Writes: Packages/AppFeature/Sources/AppUI/SendMoneyView.swift",
+      in: text)
+    return try replacing(
+      "| req-existing-tests | | | | | the final gate runs every area's whole suite, APIClient "
+        + "and LogClient included |",
+      with: "| req-existing-tests | | | | | \(reason) |", in: text)
+  }
+
+  @Test(
+    "the send-money-3 plan with req-existing-tests on its views task and a gate: reason naming the final gate imports, and with the trial's untagged reason fails screen-without-flow — catches the import pushing an existing-tests requirement off the task it belongs to"
+  )
+  func sendMoney3GateReasonImports() async throws {
+    let untagged = try Self.sendMoney3Refused(
+      reason: "the final gate runs every area's whole suite, APIClient and LogClient included")
+    let clone = try await ValidationClone(plan: untagged, config: "send-money-2-config.toml")
+    defer { clone.remove() }
+
+    let refused = await clone.run()
+    #expect(refused.status == .invalid, "\(refused.message)")
+    #expect(
+      refused.message.contains("\(PlanLintValidation.screenWithoutFlowRuleID): req-existing-tests"),
+      "\(refused.message)")
+
+    try clone.write(
+      plan: try Self.sendMoney3Refused(
+        reason: "gate: the final gate runs every area's whole suite, APIClient and LogClient "
+          + "included"))
+    let imported = await clone.run()
+    #expect(imported.status == .imported, "\(imported.message)")
+  }
+
+  @Test(
+    "a re-import over the send-money-3 ledger, whose contract is done covering req-existing-tests, is refused naming the contract and the id it drops, and leaves ledger.json as it was, while re-importing the plan with that coverage kept is accepted — catches coverage rewritten on a task whose work already merged"
+  )
+  func reimportRefusesDoneTaskCoverage() async throws {
+    let captured = try replacing(
+      "| req-existing-tests | | | | | the final gate runs every area's whole suite, APIClient "
+        + "and LogClient included |",
+      with: "| req-existing-tests | | | | | gate: the final gate runs every area's whole suite |",
+      in: try String(
+        contentsOf: ValidationClone.trial.appending(path: "send-money-3-PLAN.md"),
+        encoding: .utf8))
+    let clone = try await ValidationClone(plan: captured, config: "send-money-2-config.toml")
+    defer { clone.remove() }
+    let ledgerFile = clone.planDirectory.appending(path: "ledger.json")
+    let ledger = try Data(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-3-ledger.json"))
+    try ledger.write(to: ledgerFile)
+
+    try clone.write(
+      plan: try Self.sendMoney3Refused(reason: "gate: the final gate runs every area's whole suite"))
+    let moved = await clone.run()
+
+    #expect(moved.status == .invalid, "\(moved.message)")
+    #expect(moved.message.contains("`send-money-contract`"), "\(moved.message)")
+    #expect(moved.message.contains("req-existing-tests"), "\(moved.message)")
+    #expect(try Data(contentsOf: ledgerFile) == ledger)
+
+    try clone.write(plan: captured)
+    let unchanged = await clone.run()
+    #expect(unchanged.status == .imported, "\(unchanged.message)")
+  }
 }

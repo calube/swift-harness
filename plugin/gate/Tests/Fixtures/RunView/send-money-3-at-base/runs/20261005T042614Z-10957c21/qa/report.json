@@ -1,0 +1,270 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : "/TRIAL/repo-spec-spec-validation/.harness/qa/spec/at-base-run.json",
+  "commit" : "351f678ea8f2c4f21b41a92b0600a4903ae8f0f6",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "10 of 11 rows verified (1 reason-only): 0 pass, 10 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "checks read from .harness/qa/spec/ before qa adopt: only the 10 rows `spec-validation` writes ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 1,
+  "rows" : [
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/01-req-account-fake.flow/steps.json",
+        "qa/01-req-account-fake.flow/batch.json",
+        "qa/01-req-account-fake.flow/flow.json",
+        "qa/01-req-account-fake.flow/sim/steps.ndjson",
+        "qa/01-req-account-fake.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 171890,
+      "requirement" : "req-account-fake",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+        "qa/02-req-contact-search.flow/steps.json",
+        "qa/02-req-contact-search.flow/batch.json",
+        "qa/02-req-contact-search.flow/flow.json",
+        "qa/02-req-contact-search.flow/sim/steps.ndjson",
+        "qa/02-req-contact-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.search\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 16844,
+      "requirement" : "req-contact-search",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+        "qa/03-req-contact-select.flow/steps.json",
+        "qa/03-req-contact-select.flow/batch.json",
+        "qa/03-req-contact-select.flow/flow.json",
+        "qa/03-req-contact-select.flow/sim/steps.ndjson",
+        "qa/03-req-contact-select.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.search\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 19650,
+      "requirement" : "req-contact-select",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/amount-entry.flow.json",
+      "evidence" : [
+        "qa/04-req-keypad-entry.flow/steps.json",
+        "qa/04-req-keypad-entry.flow/batch.json",
+        "qa/04-req-keypad-entry.flow/flow.json",
+        "qa/04-req-keypad-entry.flow/sim/steps.ndjson",
+        "qa/04-req-keypad-entry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.row\" label=\"Chloe Kim\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 16406,
+      "requirement" : "req-keypad-entry",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/amount-entry.flow.json",
+      "evidence" : [
+        "qa/05-req-amount-format.flow/steps.json",
+        "qa/05-req-amount-format.flow/batch.json",
+        "qa/05-req-amount-format.flow/flow.json",
+        "qa/05-req-amount-format.flow/sim/steps.ndjson",
+        "qa/05-req-amount-format.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.row\" label=\"Chloe Kim\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 20722,
+      "requirement" : "req-amount-format",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/amount-entry.flow.json",
+      "evidence" : [
+        "qa/06-req-continue-rule.flow/steps.json",
+        "qa/06-req-continue-rule.flow/batch.json",
+        "qa/06-req-continue-rule.flow/flow.json",
+        "qa/06-req-continue-rule.flow/sim/steps.ndjson",
+        "qa/06-req-continue-rule.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.row\" label=\"Chloe Kim\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 20756,
+      "requirement" : "req-continue-rule",
+      "result" : "red",
+      "row" : 6,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/07-req-decimal-money.flow/steps.json",
+        "qa/07-req-decimal-money.flow/batch.json",
+        "qa/07-req-decimal-money.flow/flow.json",
+        "qa/07-req-decimal-money.flow/sim/steps.ndjson",
+        "qa/07-req-decimal-money.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row7 recorded no step: run sim snap at each checked point",
+      "ms" : 17488,
+      "requirement" : "req-decimal-money",
+      "result" : "red",
+      "row" : 7,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/08-req-confirm-screen.flow/steps.json",
+        "qa/08-req-confirm-screen.flow/batch.json",
+        "qa/08-req-confirm-screen.flow/flow.json",
+        "qa/08-req-confirm-screen.flow/sim/steps.ndjson",
+        "qa/08-req-confirm-screen.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row8 recorded no step: run sim snap at each checked point",
+      "ms" : 18189,
+      "requirement" : "req-confirm-screen",
+      "result" : "red",
+      "row" : 8,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/09-req-send-success.flow/steps.json",
+        "qa/09-req-send-success.flow/batch.json",
+        "qa/09-req-send-success.flow/flow.json",
+        "qa/09-req-send-success.flow/sim/steps.ndjson",
+        "qa/09-req-send-success.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row9 recorded no step: run sim snap at each checked point",
+      "ms" : 16707,
+      "requirement" : "req-send-success",
+      "result" : "red",
+      "row" : 9,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/10-req-send-failure.flow/steps.json",
+        "qa/10-req-send-failure.flow/batch.json",
+        "qa/10-req-send-failure.flow/flow.json",
+        "qa/10-req-send-failure.flow/sim/steps.ndjson",
+        "qa/10-req-send-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"; sim verify RED: sim.no-steps: run 20261005T042614Z-10957c21-row10 recorded no step: run sim snap at each checked point",
+      "ms" : 14814,
+      "requirement" : "req-send-failure",
+      "result" : "red",
+      "row" : 10,
+      "runsAfter" : [
+        "amount-input",
+        "send-flow",
+        "send-views"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T042614Z-10957c21",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

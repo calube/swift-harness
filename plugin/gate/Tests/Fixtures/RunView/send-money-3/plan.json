@@ -1,0 +1,131 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "amount-input" : {
+        "acceptance" : [
+          "Swift Testing tests in `AmountInputTests.swift` for \"007\"→\"7\", a third decimal digit, a second point, delete back to empty, \"1234.5\"→\"$1,234.5\", canSend at 0, at 0.01, at the balance, and at the balance + 0.01; they fail on the stubs first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the reducers and views"
+        ],
+        "scope" : [
+          "`AmountInput.press(_:)`: digits, 1 decimal point, delete; reject a third fraction digit and a second point; \"0\" then \"0\" stays \"0\", \"0\" then \"7\" becomes \"7\"; \".\" on empty becomes \"0.\"; cap the whole-dollar part at 7 digits",
+          "`AmountInput.display`: \"$\" + grouped whole dollars (en_US) + \".\" and the typed fraction when a point was typed",
+          "`BalanceRules.canSend`: amount > 0 and amount <= balance"
+        ],
+        "title" : "Implement the keypad entry, its display and the send rule on Decimal.",
+        "why" : "spec section 2, \"At most 2 digits after the decimal point, and no leading zeros\", \"formatted as currency as the user types\", \"Continue is enabled only for an amount above $0.00 and no more than the current balance\", \"Use a decimal type for money\"."
+      },
+      "send-flow" : {
+        "acceptance" : [
+          "TestStore tests in `SendMoneyFeatureTests.swift`: load, search filter, contact push, continue blocked when `canContinue` is false (state built with a preset input text), send success updating balance and activity, send failure keeping the balance and showing the error, retry; they fail on the stubs first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "keypad rules beyond calling `press`, and the views"
+        ],
+        "scope" : [
+          "`SendMoneyFeature`: `.task` loads balance and contacts from `accountClient`; `filteredContacts` is a case-insensitive substring match on name; `.contactTapped` pushes `.amount` with the loaded balance; the amount element's `.continueTapped` pushes `.confirm` only when `canContinue`; the confirm element's `.delegate(.sent(payment))` lowers `balance` by `payment.amount`, inserts the payment at index 0 of `activity` and empties `path`",
+          "`AmountFeature`: `.keyTapped` calls `state.input.press`",
+          "`ConfirmFeature`: `.sendTapped`/`.retryTapped` set `isSending`, clear `errorMessage`, call `accountClient.send`; success sends `.delegate(.sent)`; failure sets `errorMessage` to \"Couldn't send. Try again.\" and logs through `logClient`"
+        ],
+        "title" : "Implement the three reducers: loading, search, navigation, sending, success and failure.",
+        "why" : "spec sections 1 and 3: \"Typing filters by name\", \"Tapping a contact moves to the amount screen\", \"Send calls the client\", \"On success, the balance drops by the amount\", \"On failure, the balance doesn't change\"."
+      },
+      "send-money-contract" : {
+        "acceptance" : [
+          "every touched area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any flow behaviour or view"
+        ],
+        "scope" : [
+          "`AccountClient` target with `Contact`, `Payment`, `AccountError`, the in-memory fake",
+          "stubs of `AmountInput`, `BalanceRules`, `SendMoneyFeature`, `AmountFeature`, `ConfirmFeature`; `HarnessScenario`; `AccessibilityID`"
+        ],
+        "title" : "Declare the AccountClient fake, the flow's state and actions, the identifiers and the scenario seam, with no flow behaviour.",
+        "why" : "every requirement crosses AppCore, AppUI and the app target, so all tasks build against 1 declared shape."
+      },
+      "send-views" : {
+        "acceptance" : [
+          "the app builds for testing and every AppFeature package test still passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "reducer logic and keypad rules"
+        ],
+        "scope" : [
+          "`SendMoneyView`: NavigationStack over `path`; balance Text (`AccessibilityID.balance`, `balance?.usd ?? \"—\"`), a search TextField (`AccessibilityID.search`) bound to `searchText`, a Button per `filteredContacts` (`AccessibilityID.contactRow`, label the name), activity rows (`AccessibilityID.activityRow`, `.accessibilityLabel(\"<name>, <amount.usd>\")`); `.task` sends `.task`",
+          "`AmountView`: `input.display` Text (`AccessibilityID.amountDisplay`), a 4-row keypad 1-9, \".\", 0, delete with the keypad identifiers, Continue (`AccessibilityID.amountContinue`) disabled unless `canContinue`",
+          "`ConfirmView`: contact name (`AccessibilityID.confirmContact`), `amount.usd` (`AccessibilityID.confirmAmount`), Send (`AccessibilityID.confirmSend`, label \"Send\"), `errorMessage` Text (`AccessibilityID.confirmError`) and \"Try again\" (`AccessibilityID.confirmRetry`) when set",
+          "App root store becomes `SendMoneyFeature`; remove `AppFeature.swift`, `AppView.swift` and `AppFeatureTests.swift`",
+          "rewrite `LaunchFlowUITests` to assert the balance and search field exist after launch"
+        ],
+        "title" : "Replace the posts screen with the send-money screens and point the app at the new root.",
+        "why" : "spec \"Replace that screen with the flow below\": contact list, keypad, confirmation and activity are screens."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the flow checks against the contract's identifiers, and record why each fails now.",
+        "why" : "every user-visible requirement needs a check that fails before its tasks merge and passes after."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-account-fake",
+        "title" : "The account sits behind an AccountClient interface whose in-memory fake starts at $250.00, holds 8 contacts and has a send that can be made to fail"
+      },
+      {
+        "id" : "req-contact-search",
+        "title" : "Typing in the contact search filters the contact list by name"
+      },
+      {
+        "id" : "req-contact-select",
+        "title" : "Tapping a contact opens the amount screen for that contact"
+      },
+      {
+        "id" : "req-keypad-entry",
+        "title" : "The keypad enters dollars with digits, 1 decimal point and delete, rejecting a third decimal digit, a second decimal point and leading zeros (\"007\" shows as \"7\")"
+      },
+      {
+        "id" : "req-amount-format",
+        "title" : "The amount shows formatted as currency while the user types"
+      },
+      {
+        "id" : "req-continue-rule",
+        "title" : "Continue is enabled only for an amount above $0.00 and no more than the balance"
+      },
+      {
+        "id" : "req-decimal-money",
+        "title" : "Money is held as Decimal, never a floating-point type, so $0.10 + $0.20 debits exactly $0.30"
+      },
+      {
+        "id" : "req-confirm-screen",
+        "title" : "The confirmation screen shows the contact and the amount, and Send calls the client"
+      },
+      {
+        "id" : "req-send-success",
+        "title" : "A successful send lowers the balance by the amount and puts the payment at the top of the first screen's activity list"
+      },
+      {
+        "id" : "req-send-failure",
+        "title" : "A failed send leaves the balance unchanged and shows an error with a way to try again"
+      },
+      {
+        "id" : "req-existing-tests",
+        "title" : "The existing APIClient and LogClient tests keep passing"
+      }
+    ]
+  },
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}
