@@ -701,6 +701,7 @@ extension ContextPack {
       contentsOf: try workerTail(
         claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
         moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    if let deferred = deferredSlice(inputs.deferred) { slices.append(deferred) }
     return ContextPack(role: .worker, slices: slices)
   }
 
@@ -967,6 +968,7 @@ extension ContextPack {
       contentsOf: try workerTail(
         claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
         moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    if let deferred = deferredSlice(inputs.deferred) { slices.append(deferred) }
     return ContextPack(role: .worker, slices: slices)
   }
 

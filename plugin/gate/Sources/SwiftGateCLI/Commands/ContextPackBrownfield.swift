@@ -87,6 +87,7 @@ extension ContextPackRun {
     }
 
     var dependencyNotes: [DependencyReturnNotes] = []
+    var deferred: [DeferredFinding] = []
     if let runID = o.buildRun {
       guard RunID.isValid(runID) else {
         return .failure(GatherFailure("--build-run `\(runID)` is not a valid run id"))
@@ -99,6 +100,10 @@ extension ContextPackRun {
         case .failure: DependencyReturnNotes(taskID: dep, notes: nil)
         }
       }
+      deferred = DeferredFinding.owned(
+        by: task,
+        in: ContextPackTaskReturn.deferrals(
+          buildRun: runID, planDirectory: planDirectory, ledger: ledger))
     }
 
     let inputs = BrownfieldWorkerInputs(
@@ -107,7 +112,7 @@ extension ContextPackRun {
       areas: config.areas,
       standards: ContextSource(
         label: "harness \(WorkerPackSources.standardsPath)", rawText: standardsText),
-      dependencyNotes: dependencyNotes,
+      dependencyNotes: dependencyNotes, deferred: deferred,
       layout: ConfigLoader.commonDirectory(enclosing: root).map {
         BrownfieldStateLayout(commonDir: $0, gitDir: $0)
       })

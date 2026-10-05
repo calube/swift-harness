@@ -23,7 +23,16 @@ public struct DeferredFinding: Sendable, Equatable, Encodable {
 
   /// Each deferral line in `task`'s return `notes`, in order.
   public static func parse(notes: String, task: String) -> [DeferredFinding] {
-    []
+    notes.split(whereSeparator: \.isNewline).compactMap { raw in
+      let line = raw.trimmingCharacters(in: .whitespaces)
+      guard line.hasPrefix(linePrefix) else { return nil }
+      let rest = line.dropFirst(linePrefix.count)
+      guard let colon = rest.firstIndex(of: ":") else { return nil }
+      let sibling = rest[..<colon].trimmingCharacters(in: .whitespaces)
+      let finding = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+      guard !sibling.isEmpty, !finding.isEmpty else { return nil }
+      return DeferredFinding(task: task, sibling: sibling, finding: finding)
+    }
   }
 
   /// The deferrals a worker of `task` must pick up: each one deferred to it, and each between 2
@@ -31,6 +40,12 @@ public struct DeferredFinding: Sendable, Equatable, Encodable {
   public static func owned(by task: LedgerTask, in deferrals: [DeferredFinding])
     -> [DeferredFinding]
   {
-    []
+    deferrals.filter {
+      $0.task != task.id
+        && ($0.sibling == task.id || (task.deps.contains($0.task) && task.deps.contains($0.sibling)))
+    }
   }
+
+  /// How a worker pack quotes it.
+  public var packLine: String { "\(task) deferred to \(sibling): \(finding)" }
 }

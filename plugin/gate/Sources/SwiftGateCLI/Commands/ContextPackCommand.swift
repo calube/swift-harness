@@ -874,6 +874,7 @@ enum ContextPackRun {
     }
 
     var dependencyNotes: [DependencyReturnNotes] = []
+    var deferred: [DeferredFinding] = []
     if let runID = o.buildRun {
       guard RunID.isValid(runID) else {
         return .failure(GatherFailure("--build-run `\(runID)` is not a valid run id"))
@@ -886,6 +887,12 @@ enum ContextPackRun {
         case .failure: return DependencyReturnNotes(taskID: dep, notes: nil)
         }
       }
+      deferred = DeferredFinding.owned(
+        by: task,
+        in: ContextPackTaskReturn.deferrals(
+          buildRun: runID,
+          planDirectory: ContextPackFiles.resolve(ledgerPath, root: root).deletingLastPathComponent(),
+          ledger: ledgerData))
     }
 
     if case .invalid(let validation)? = configLoadError(root: root),
@@ -960,7 +967,7 @@ enum ContextPackRun {
             WorkerInputs(
               task: task, design: design, designSource: designSource, claims: claims,
               citedClaimIDs: o.claimID, standards: standards, moduleKindAnchors: anchors,
-              dependencyNotes: dependencyNotes)),
+              dependencyNotes: dependencyNotes, deferred: deferred)),
           notes, o.key ?? taskID
         ))
     case .specPage(let specPage):
@@ -970,7 +977,8 @@ enum ContextPackRun {
             SpecPageWorkerInputs(
               task: task, specPage: specPage, claims: claims, citedClaimIDs: o.claimID,
               standards: standards, moduleKindAnchors: anchors,
-              touchedModules: resolution.moduleNames, dependencyNotes: dependencyNotes)),
+              touchedModules: resolution.moduleNames, dependencyNotes: dependencyNotes,
+              deferred: deferred)),
           notes, o.key ?? taskID
         ))
     }

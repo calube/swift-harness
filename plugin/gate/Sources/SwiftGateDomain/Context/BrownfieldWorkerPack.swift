@@ -110,7 +110,17 @@ extension ContextPack {
         ContextPackSlice(
           sourceLabel: "Notes from the tasks this one depends on", anchor: nil, lines: noteLines))
     }
+    if let deferred = deferredSlice(inputs.deferred) { slices.append(deferred) }
     return ContextPack(role: .worker, slices: slices)
+  }
+
+  /// The deferrals a task owns, each a test its worker writes; `nil` when it owns none.
+  static func deferredSlice(_ deferred: [DeferredFinding]) -> ContextPackSlice? {
+    guard !deferred.isEmpty else { return nil }
+    return ContextPackSlice(
+      sourceLabel: "\(DeferredFinding.packHeading): each is a verified review finding whose "
+        + "test waited on code your branch now holds; write that test in your write set",
+      anchor: nil, lines: deferred.map(\.packLine))
   }
 
   /// The areas holding `writeSet`, in config order: each entry belongs to the area with the

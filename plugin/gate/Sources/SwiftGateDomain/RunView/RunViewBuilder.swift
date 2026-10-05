@@ -63,6 +63,7 @@ public enum RunViewBuilder {
             events: events, parent: runSpan?.id, baselines: input.warmupBaselines)),
       gates: gates.gates,
       halts: halts(events, ledger: ledgerEvents),
+      deferred: deferrals(tasks, returns: input.join?.returns ?? [:], damage: &damage),
       damage: damage, unwritten: unwritten)
     view = RunViewEmittedEvents.fold(events, into: view)
     RunViewValidationFold.fold(
@@ -221,6 +222,29 @@ public enum RunViewBuilder {
 
   /// Each string cut to ``RunView/maxBriefBytes``; one the payload guard rejects drops out as a
   /// damage row naming the task and field, so 1 bad line can't fail the report.
+  /// Each stored return's deferral lines, in ledger order; a finding the payload guard refuses is
+  /// a damage line instead.
+  private static func deferrals(
+    _ tasks: [LedgerTask], returns: [String: TaskReturn], damage: inout [RunView.Damage]
+  ) -> [RunView.Deferral] {
+    let status = Dictionary(tasks.map { ($0.id, $0.status) }) { first, _ in first }
+    let order = tasks.map(\.id) + returns.keys.filter { status[$0] == nil }.sorted()
+    return order.flatMap { id -> [RunView.Deferral] in
+      guard let notes = returns[id]?.notes else { return [] }
+      return DeferredFinding.parse(notes: notes, task: id).compactMap { deferral in
+        let finding = RunViewText.cut(deferral.finding, toBytes: RunView.maxBriefBytes)
+        if let reason = EventPayloadGuard.rejection(inJSON: finding) {
+          damage.append(
+            RunView.Damage(source: "return of \(id)", reason: "deferred finding: \(reason.rawValue)"))
+          return nil
+        }
+        return RunView.Deferral(
+          task: id, sibling: deferral.sibling, siblingStatus: status[deferral.sibling],
+          finding: finding)
+      }
+    }
+  }
+
   private static func guarded(_ brief: RunView.Brief, task: String, damage: inout [RunView.Damage])
     -> RunView.Brief
   {
