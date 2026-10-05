@@ -58,10 +58,10 @@ public struct WorktreePool: Sendable {
   }
 
   /// Checks `branch` out new from `base` in the first free slot, or in a new slot when none is
-  /// free, and records it there.
-  public func checkOut(branch: String, from base: String, workspace: any GitWorkspace)
-    async throws(GitWorkspaceError) -> Checkout
-  {
+  /// free, and records it there. `builds` is `false` for a task that builds no area.
+  public func checkOut(
+    branch: String, from base: String, builds: Bool = true, workspace: any GitWorkspace
+  ) async throws(GitWorkspaceError) -> Checkout {
     try await locked { () async throws(GitWorkspaceError) -> Checkout in
       var state = try state()
       if let held = state.path(holding: branch) {
