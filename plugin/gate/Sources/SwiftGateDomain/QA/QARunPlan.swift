@@ -24,9 +24,13 @@ public struct QARunPlan: Sendable, Equatable {
   public static let layerOrder: [ValidationLayer] = [.acceptance, .flow, .state]
 
   public let entries: [Entry]
+  /// Each task's ledger status once the build has ended, when no later merge can make a row
+  /// ready; `nil` while tasks can still merge, so a row with an unmerged task reads `waiting`.
+  public let ended: [String: TaskStatus]?
 
-  public init(entries: [Entry]) {
+  public init(entries: [Entry], ended: [String: TaskStatus]? = nil) {
     self.entries = entries
+    self.ended = ended
   }
 
   /// - Parameters:
@@ -34,9 +38,11 @@ public struct QARunPlan: Sendable, Equatable {
   ///     base does, since there no row's tasks have merged by definition.
   ///   - after: when set, only the rows whose `runsAfter` names this task, which counts as
   ///     merged: the caller runs this straight after merging it.
-  public static func make(table: ValidationTable, merged: Set<String>?, after: String?)
-    -> QARunPlan
-  {
+  ///   - ended: each task's ledger status when the build has ended; see ``ended``.
+  public static func make(
+    table: ValidationTable, merged: Set<String>?, after: String?,
+    ended: [String: TaskStatus]? = nil
+  ) -> QARunPlan {
     let numbered = table.rows.enumerated().map { (row: $0.offset + 1, validation: $0.element) }
     let layered = layerOrder.flatMap { layer in
       numbered
@@ -50,7 +56,7 @@ public struct QARunPlan: Sendable, Equatable {
           return Entry(row: candidate.row, validation: candidate.validation, waitingOn: unmerged)
         }
     }
-    return QARunPlan(entries: statesAfterTheirFlows(layered))
+    return QARunPlan(entries: statesAfterTheirFlows(layered), ended: ended)
   }
 
   /// Moves each requirement's state rows to just after its last flow row: a state check reads

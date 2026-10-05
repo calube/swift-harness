@@ -11,12 +11,16 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var red: Int
     public var unverified: Int
     public var waiting: Int
+    public var abandoned: Int
 
-    public init(pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0) {
+    public init(
+      pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0, abandoned: Int = 0
+    ) {
       self.pass = pass
       self.red = red
       self.unverified = unverified
       self.waiting = waiting
+      self.abandoned = abandoned
     }
   }
 
@@ -306,6 +310,7 @@ enum RunViewValidationFold {
       case .red: counts.red += 1
       case .unverified: counts.unverified += 1
       case .waiting: counts.waiting += 1
+      case .abandoned: counts.abandoned += 1
       }
     }
     view.validation = RunViewValidation(plan: plan, counts: counts, rows: rows, keptFlows: kept)
@@ -475,7 +480,7 @@ enum RunViewValidationFold {
     switch check.result {
     case .pass: outcome = .ok
     case .red: outcome = .red
-    case .unverified, .waiting: return nil
+    case .unverified, .waiting, .abandoned: return nil
     }
     let how = check.exitStatus.map { " with exit \($0)" } ?? ""
     return RunView.Span(
