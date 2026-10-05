@@ -124,8 +124,7 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 **P12. A fixture that hangs on purpose ends by itself.**
 - **Do:** give any script or source a test writes out that loops or waits on purpose its own bound: a `Date` or `DispatchTime` deadline, `timeout <n>`, `alarm(`, or an exit in the loop.
 - **Tell:** a string literal in a test holding a constant-true loop (`while true`, `while :`, `while True:`, `for (;;)`, `repeat … while true`) with no `break`, `return` or `exit` in its body, or `sleep infinity`, `RunLoop…run()`, `dispatchMain()` or `pause()`, and no deadline anywhere in the literal.
-- **Tell, in a test's own body:** a `while` or `repeat` loop that awaits, with no comparison, deadline or attempt count in its condition and no `break`, `return` or `throw` in its body, such as `while !started.value { await Task.yield() }`.
-- **Enforced by:** `testlint` `test.hang-without-deadline` and `test.unbounded-wait` · **Source:** incident: prove and mutate run tests against reverted code, and the orphan test's `while true {}` mutant spun on after every such run until it gained a 90 s deadline. A brownfield trial's detail test spun on a flag the reverted reducer never set, and held its merge gate for 17 minutes.
+- **Enforced by:** `testlint` `test.hang-without-deadline`, `test.unbounded-wait` · **Source:** incident: prove and mutate run tests against reverted code, and the orphan test's `while true {}` mutant spun after every such run until it gained a 90 s deadline.
 
 ## 4. Pyramid enforcement
 
