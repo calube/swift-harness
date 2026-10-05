@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -240,5 +241,82 @@ struct RunCheckoutCommandTests {
 
     #expect(report.status == .blocked, "\(report.message)")
     #expect(FileManager.default.fileExists(atPath: scenario.taskWorktree))
+  }
+}
+
+/// Processes a test scripts: each runs while it has a start time; terminating one ends it unless
+/// it ignores the signal.
+final class ScriptedRunProcesses: GateProcesses {
+  private let table: Mutex<[Int32: Double]>
+  private let stubborn: Set<Int32>
+  private let ended = Mutex<[Int32]>([])
+
+  init(_ table: [Int32: Double], ignoring stubborn: Set<Int32> = []) {
+    self.table = Mutex(table)
+    self.stubborn = stubborn
+  }
+
+  var terminated: [Int32] { ended.withLock { $0 } }
+
+  func startTime(of pid: Int32) -> Double? { table.withLock { $0[pid] } }
+
+  func terminate(_ pid: Int32) async {
+    ended.withLock { $0.append(pid) }
+    guard !stubborn.contains(pid) else { return }
+    _ = table.withLock { $0.removeValue(forKey: pid) }
+  }
+}
+
+extension RunCheckoutCommandTests {
+  @Test(
+    "remove first stops a qa run still live in the checkout, keeps the run's record and names it stopped — catches a slot deleted under a live qa run, which then writes its record into a folder nobody keeps"
+  )
+  func removeStopsALiveQARun() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let runID = try await Self.gateIn(scenario)
+    let directory = try TestTemporaryDirectory.make("running-runs")
+    defer { TestTemporaryDirectory.remove(directory) }
+    let processes = ScriptedRunProcesses([51_000: 100])
+    let registry = RunningGateRegistry(directory: directory, processes: processes)
+    _ = try #require(
+      registry.register(
+        pid: 51_000, toplevel: scenario.checkout, kind: RunningGateRegistry.qaRunKind,
+        now: Date(timeIntervalSince1970: 1_791_190_000)))
+
+    let report = await RunCheckoutRun.remove(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
+      runner: scenario.runner, running: registry)
+
+    #expect(report.status == .removed, "\(report.message)")
+    #expect(processes.terminated == [51_000])
+    #expect(report.stoppedRuns?.count == 1)
+    #expect(report.stoppedRuns?.first?.hasPrefix("qa in ") == true, "\(report.stoppedRuns ?? [])")
+    #expect(report.keptRuns == [runID])
+    #expect(!FileManager.default.fileExists(atPath: scenario.checkout))
+  }
+
+  @Test(
+    "remove refuses, leaving the checkout in place, when a qa run live in it won't stop — catches a tree deleted under a run that goes on writing into it"
+  )
+  func removeRefusesWhenARunWontStop() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let directory = try TestTemporaryDirectory.make("running-runs")
+    defer { TestTemporaryDirectory.remove(directory) }
+    let processes = ScriptedRunProcesses([51_001: 100], ignoring: [51_001])
+    let registry = RunningGateRegistry(directory: directory, processes: processes)
+    _ = try #require(
+      registry.register(
+        pid: 51_001, toplevel: scenario.checkout, kind: RunningGateRegistry.qaRunKind,
+        now: Date(timeIntervalSince1970: 1_791_190_000)))
+
+    let report = await RunCheckoutRun.remove(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
+      runner: scenario.runner, running: registry)
+
+    #expect(report.verdict == .blocked, "\(report.message)")
+    #expect(report.message.contains("51001"), "\(report.message)")
+    #expect(FileManager.default.fileExists(atPath: scenario.checkout))
   }
 }

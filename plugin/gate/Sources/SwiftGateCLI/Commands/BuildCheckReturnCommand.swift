@@ -118,7 +118,10 @@ enum BuildCheckReturnRun {
     }
     return TaskHaltAdvice.advise(
       outcome: taskReturn.outcome, verdict: verdict, rules: rules, startedAt: startedAt, now: now,
-      noNewStartsAt: noNewStartsAt, cutoffAt: cutoffAt)
+      noNewStartsAt: noNewStartsAt, cutoffAt: cutoffAt,
+      unconfirmedFix: TaskHaltAdvice.isUnconfirmedFix(
+        fix: fix, outcome: taskReturn.outcome, commits: taskReturn.commits,
+        gateVerdict: taskReturn.gate?.verdict))
   }
 
   /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.

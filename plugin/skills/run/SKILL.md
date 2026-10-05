@@ -326,7 +326,12 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
      merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is
-     never one of these halts: the next bullet decides it by rule.
+     never one of these halts: the next bullet decides it by rule. Never halt, block or abandon a
+     task on time grounds, such as a retry or a check that seems not to fit: before `cutoffAt`,
+     time is `build cutoff`'s to price from measured costs, and `build halt` refuses a `budget`
+     halt before it. A fixer's unconfirmed fix, `haltAdvice.answer` `verify`, is checked as
+     [the build loop's fixer return](../build/references/event-loop.md#conflict-or-red-main) says:
+     its gate, `check-return --fix` and its before-merge `qa run`, run by you, never a halt.
    - **The time box replaces the build skill's cutoff timer and its halt.** The cutoff is a
      check at every step of the loop. `build next` reports the box in `timeBox`, and
      `"$SG" run clock <slug> --json` reports its `phase`. Read `run clock` at each completion
@@ -344,7 +349,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `final` gates, using fixed estimates only before any is recorded; before any `final`, it
      prices `final` by the area steps it can't take from the merge gates' passes, and charges a task's
      before-merge `qa run` unless a GREEN one covers its tip. It lands a task whenever that fits
-     before the box ends. Its JSON decides every task, and you follow it as written:
+     before the box ends. Its JSON decides every task, and you follow it as written. Its `steps`
+     give each task's `next` commands in order: run them as written, with `<base>` and `<out>` as
+     above and `<gate run>` the `runID` its gate printed.
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
         already set it `abandoned`, with the reason the report quotes. Then discard its
         worktrees: `"$SG" worktree remove <slug> <task> --abandoned --session <session> --json`
@@ -357,7 +364,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         A conflict, a `flows-red` refusal, a RED `merge` gate or one `build gate-wait` reads as
         `overrun` gets no fixer at the cutoff: `build merge --undo` when the merge landed, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
-        `worktree remove … --abandoned` as item 1 says.
+        `worktree remove … --abandoned` as item 1 says. A BLOCKED merge gate, such as a prove the
+        time left couldn't hold, is run again with the same `next` commands and never undone:
+        `build merge --undo` refuses a task in `finish` whose newest merge gate isn't RED. Never
+        undo or abandon a task in `finish` for any other reason.
      3. Start nothing else, and go to step 8.
 
      `build cutoff` records the cutoff as `budget` halts it answers itself, so never run
@@ -388,8 +398,11 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `run_in_background: true`, then watched in the foreground with
      `"$SG" build gate-wait <slug> --tier merge --output <out>/merge-<task>.json --session <session> --json`
      until it reads. A `worker-returned` means a task's Workflow ended: check its return, then
-     watch again. An `overrun` is a RED merge gate: undo it, then merge the next task in `readyToMerge`
-     before its fixer returns. At the cutoff it gets no fixer, as a RED merge gate doesn't.
+     watch again. An `overrun` is a RED merge gate: undo it, then merge the next task in
+     `readyToMerge` before its fixer returns. A BLOCKED one runs again, as the build loop's table
+     says; while the time left can't hold it, go on with other work, and after the cutoff
+     `build cutoff`'s `next` commands run it again. At the cutoff it gets no fixer, as a RED merge
+     gate doesn't.
    - Stop at its step 4; this skill's step 8 replaces it.
    - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
      each task's diff `low`, `medium` or `high`, and paths in `[brownfield] sensitive` are always
@@ -437,7 +450,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    --final` and its id: `build finish` refuses, naming that run and its verdict. It records the
    verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
-6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
+6. `"$SG" run checkout remove <slug> --session <session> --json`. It stops any gate or `qa run`
+   still live in a tree it removes, refusing when one won't stop, then keeps the checkout's gate
    reports in the user's checkout, then removes every task and fix worktree the run left, merged
    or not, keeping their branches, and `<plan-branch>` holds every commit.
 

@@ -147,6 +147,9 @@ public struct QASetupStep: Sendable, Equatable, Codable {
     case tree
     /// Waiting for the device: a held one borrowed, or a new clone leased and booted.
     case device
+    /// Queued behind another borrower of the build run's device. Written once as the wait starts,
+    /// at 0 ms, and again with its length once it ends.
+    case deviceWait = "device-wait"
     /// Building the app for the simulator.
     case build
     /// Installing the app on the device and opening it.

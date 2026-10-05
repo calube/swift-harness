@@ -73,7 +73,7 @@ struct QARunBuildEndTests {
   }
 
   @Test(
-    "before the final gate, rows whose task hasn't merged read waiting and the run stays GREEN — catches a merge-time run gated on rows whose code isn't in yet"
+    "before the final gate, rows whose task hasn't merged read waiting and never gate the run, which only the rows due to run and unverified leave BLOCKED — catches a merge-time run gated on rows whose code isn't in yet"
   )
   func waitingDuringMerges() async throws {
     let repo = try await Self.repo { !Self.isSettingMerge($0) && !Self.isFinalGate($0) }
@@ -84,6 +84,8 @@ struct QARunBuildEndTests {
     let settingRows = report.rows.filter { $0.runsAfter == [Self.setting] }
     #expect(settingRows.map(\.result) == [.waiting, .waiting, .waiting])
     #expect(!report.settled)
-    #expect(report.verdict == .green, "\(report.message)")
+    let unrun = report.rows.contains { $0.result == .unverified }
+    #expect(report.verdict == (unrun ? .blocked : .green), "\(report.message)")
+    #expect(!report.findings.contains { $0.severity.failsGate })
   }
 }

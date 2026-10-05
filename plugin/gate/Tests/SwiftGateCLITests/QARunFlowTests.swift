@@ -461,8 +461,10 @@ struct QARunFlowTests {
 struct FixedDeviceLender: QADeviceLending {
   let hold: QAFlowDeviceHold
 
-  func borrow(plan: String) async -> BorrowedDevice? {
-    BorrowedDevice(hold: hold, lease: nil)
+  func borrow(
+    plan: String, until deadline: QARunDeadline?, waiting: @escaping @Sendable () -> Void
+  ) async -> QADeviceLoan {
+    .borrowed(BorrowedDevice(hold: hold, lease: nil), waitedMilliseconds: nil)
   }
 }
 

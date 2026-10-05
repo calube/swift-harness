@@ -25,7 +25,8 @@ public struct SimulatorClones: Sendable {
   public typealias NoteSink = @Sendable (Finding) -> Void
 
   private let simctl: any Simctl
-  private let lock: any CountingLock
+  /// `nil` for a build run's device, which takes no `sim` slot.
+  private let lock: (any CountingLock)?
   private let config: SimulatorConfig
   private let ownerPID: Int32
   private let isAlive: @Sendable (Int32) -> Bool
@@ -39,7 +40,7 @@ public struct SimulatorClones: Sendable {
   /// - Parameter sweepLeases: run before each orphan sweep; `nil` leaves leases alone.
   /// - Parameter notes: receives the base lookup's note; `nil` drops it.
   public init(
-    simctl: any Simctl, lock: any CountingLock, config: SimulatorConfig,
+    simctl: any Simctl, lock: (any CountingLock)?, config: SimulatorConfig,
     ownerPID: Int32 = getpid(),
     isAlive: @escaping @Sendable (Int32) -> Bool = SimulatorClones.processIsAlive,
     makeToken: @escaping @Sendable () -> String = SimulatorClones.randomToken,
@@ -59,16 +60,29 @@ public struct SimulatorClones: Sendable {
   }
 
   /// The production wiring: `xcrun simctl` and the machine-wide `sim` lock.
+  /// - Parameter holding: the `sim hold` run id the clone is for; a build run's hold takes no
+  ///   slot (``slotLock(holding:capacity:directory:)``).
   public static func live(
-    config: SimulatorConfig, runner: any ProcessRunner, releaseClaims: ClaimRelease? = nil,
-    sweepLeases: LeaseSweep? = nil
+    config: SimulatorConfig, runner: any ProcessRunner, holding runID: String? = nil,
+    releaseClaims: ClaimRelease? = nil, sweepLeases: LeaseSweep? = nil
   ) -> SimulatorClones {
     SimulatorClones(
       simctl: LiveSimctl(
         runner: runner,
         timeouts: LiveSimctl.Timeouts(quick: .seconds(config.simctlTimeoutSeconds))),
-      lock: FileCountingLock(name: "sim", capacity: config.maxConcurrent), config: config,
+      lock: slotLock(holding: runID, capacity: config.maxConcurrent), config: config,
       releaseClaims: releaseClaims, sweepLeases: sweepLeases)
+  }
+
+  /// The `sim` slot a clone for `runID` takes.
+  public static func slotLock(
+    holding runID: String?, capacity: Int,
+    directory: URL = FileCountingLock.defaultDirectory()
+  ) -> (any CountingLock)? {
+    // 1 per build run, so already bounded: it must not fill the slots its own qa runs and gates
+    // need for their clones.
+    if let runID, BuildRunDevice.isHoldRunID(runID) { return nil }
+    return FileCountingLock(directory: directory, name: "sim", capacity: capacity)
   }
 
   public static let randomToken: @Sendable () -> String = {
@@ -103,13 +117,13 @@ public struct SimulatorClones: Sendable {
   public func withClone<T: Sendable>(
     _ body: @Sendable (SimulatorDevice) async throws -> T
   ) async throws -> T {
-    let lease: LockLease
+    let lease: LockLease?
     do {
-      lease = try await lock.acquire(timeout: lockTimeout)
+      lease = try await lock?.acquire(timeout: lockTimeout)
     } catch {
       throw SimulatorCloneError.lock(error)
     }
-    defer { lease.release() }
+    defer { lease?.release() }
 
     let clone = try await makeClone()
     let result: Result<T, any Error>

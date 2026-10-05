@@ -40,9 +40,42 @@ struct RunDeviceRig {
   }
 
   func remove() { TestTemporaryDirectory.remove(root) }
+
+  /// A wait that ends only when its task is cancelled: a bound that never runs out first.
+  static func never() async throws {
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
+    await withTaskCancellationHandler {
+      for await _ in stream {}
+    } onCancel: {
+      continuation.finish()
+    }
+    throw CancellationError()
+  }
 }
 
-@Suite("a gate's xcodebuild test borrows the build run's idle device before leasing a clone")
+/// Hands out ``FakeDevices/device`` after running `wait`, a device that took time to come.
+struct SlowLeases: TestDeviceLeasing {
+  let wait: @Sendable () async -> Void
+
+  func devices(for destination: XcodeTestDestination) async
+    -> Result<any SimulatorDeviceProvider, TestDeviceLeaseError>
+  {
+    .success(Provider(wait: wait))
+  }
+
+  struct Provider: SimulatorDeviceProvider {
+    let wait: @Sendable () async -> Void
+
+    func withDevice<T: Sendable>(_ body: @Sendable (SimulatorDevice) async throws -> T)
+      async throws -> T
+    {
+      await wait()
+      return try await body(FakeDevices.device)
+    }
+  }
+}
+
+@Suite("a gate's xcodebuild test borrows the build run's device before leasing a clone")
 struct RunDeviceTestLeasesTests {
   @Test(
     "a gate's test step runs on the build run's idle booted device, `-destination 'id=<device>'`, and leases no clone, so it takes no sim slot — catches 2 build runs' held devices starving every gate's test clone"
@@ -69,9 +102,40 @@ struct RunDeviceTestLeasesTests {
   }
 
   @Test(
-    "while a qa run borrows the build run's device, a gate's test step leases its own clone — catches a gate's tests and a qa row's app on 1 device at once"
+    "while a qa run borrows the build run's device, a gate's test step waits for it and runs on it once the qa run lets go, leasing no clone — catches a gate that queues for a sim slot while its own run's device comes free"
   )
-  func busyRunDeviceFallsBackToAClone() async throws {
+  func busyRunDeviceIsWaitedFor() async throws {
+    let rig = try RunDeviceRig()
+    defer { rig.remove() }
+    let qaRun = try #require(
+      await BuildRunDevice.borrow(buildRunID: RunDeviceRig.buildRun, lockDirectory: rig.locks))
+    defer { qaRun.release() }
+    let base = LeasedDeviceAreaRunnerTests.replaying([.passed])
+    let clones = FakeTestDeviceLeases()
+    // The qa run lets go once the step's bound starts running, while the gate waits.
+    let clock = SimHoldClock(
+      now: { .zero },
+      sleep: { _ in
+        qaRun.release()
+        try await RunDeviceRig.never()
+      })
+
+    let outcome = await LeasedDeviceAreaRunner(
+      base: base, leases: rig.leases(base: clones), clock: clock
+    ).run(
+      LeasedDeviceAreaRunnerTests.request(
+        .test, try LeasedDeviceAreaRunnerTests.trialCommand("test")))
+
+    #expect(outcome == .passed)
+    #expect(clones.entered == 0)
+    let command = try #require(base.requests.first?.command)
+    #expect(command.contains("-destination 'id=RUN-DEVICE'"), "\(command)")
+  }
+
+  @Test(
+    "a run device still borrowed when the test step's bound runs out fails the step as timed out, naming the wait, with no command run and no clone leased — catches a gate hung 811 s on a device wait its step bound never covered"
+  )
+  func deviceWaitEndsAtTheStepBound() async throws {
     let rig = try RunDeviceRig()
     defer { rig.remove() }
     let qaRun = try #require(
@@ -80,14 +144,65 @@ struct RunDeviceTestLeasesTests {
     let base = LeasedDeviceAreaRunnerTests.replaying([.passed])
     let clones = FakeTestDeviceLeases()
 
-    _ = await LeasedDeviceAreaRunner(base: base, leases: rig.leases(base: clones))
+    let outcome = await LeasedDeviceAreaRunner(
+      base: base, leases: rig.leases(base: clones), clock: VirtualHoldClock().clock
+    ).run(
+      LeasedDeviceAreaRunnerTests.request(
+        .test, try LeasedDeviceAreaRunnerTests.trialCommand("test")))
+
+    guard case .timedOut(let tail) = outcome else {
+      Issue.record("expected the step to time out waiting for a device, got \(outcome)")
+      return
+    }
+    #expect(tail.contains("600 s"), "\(tail)")
+    #expect(tail.contains("device"), "\(tail)")
+    #expect(base.requests.isEmpty)
+    #expect(clones.entered == 0)
+  }
+
+  @Test(
+    "a warmed test step whose run device is still borrowed at its bound times out too, and the area's release returns — catches a warmed lease that waits on after its step gave up and holds the gate open"
+  )
+  func warmedDeviceWaitEndsAtTheStepBound() async throws {
+    let rig = try RunDeviceRig()
+    defer { rig.remove() }
+    let qaRun = try #require(
+      await BuildRunDevice.borrow(buildRunID: RunDeviceRig.buildRun, lockDirectory: rig.locks))
+    defer { qaRun.release() }
+    let base = LeasedDeviceAreaRunnerTests.replaying([.passed])
+    let clones = FakeTestDeviceLeases()
+    let command = try LeasedDeviceAreaRunnerTests.trialCommand("test")
+
+    let warmed = await LeasedDeviceAreaRunner(
+      base: base, leases: rig.leases(base: clones), clock: VirtualHoldClock().clock
+    ).warmed(for: [command])
+    let outcome = await warmed.run(LeasedDeviceAreaRunnerTests.request(.test, command))
+    await warmed.release()
+
+    guard case .timedOut = outcome else {
+      Issue.record("expected the warmed step to time out waiting for a device, got \(outcome)")
+      return
+    }
+    #expect(base.requests.isEmpty)
+    #expect(clones.entered == 0)
+  }
+
+  @Test(
+    "the time a test step waits for its device comes off the bound its command runs under — catches a step that waits 200 s for a device and then gets its full 600 s again"
+  )
+  func waitComesOffTheBound() async throws {
+    let wall = VirtualHoldClock()
+    let clock = SimHoldClock(now: wall.clock.now, sleep: { _ in try await RunDeviceRig.never() })
+    let slow = SlowLeases { try? await wall.clock.sleep(.seconds(200)) }
+    let base = LeasedDeviceAreaRunnerTests.replaying([.passed])
+
+    let outcome = await LeasedDeviceAreaRunner(base: base, leases: slow, clock: clock)
       .run(
         LeasedDeviceAreaRunnerTests.request(
           .test, try LeasedDeviceAreaRunnerTests.trialCommand("test")))
 
-    #expect(clones.entered == 1)
-    let command = try #require(base.requests.first?.command)
-    #expect(command.contains("-destination 'id=\(FakeDevices.device.udid)'"), "\(command)")
+    #expect(outcome == .passed)
+    #expect(base.requests.first?.deadline == .seconds(400))
   }
 
   @Test(
