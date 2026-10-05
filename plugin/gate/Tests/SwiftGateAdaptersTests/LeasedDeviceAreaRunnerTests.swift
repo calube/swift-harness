@@ -132,6 +132,32 @@ struct LeasedDeviceAreaRunnerTests {
     #expect(failed == compile)
     #expect(real.requests.count == 1)
   }
+
+  @Test(
+    "a warmed runner has asked for the test clone before the build runs, runs the test on that clone without leasing again, and gives it back at release — catches a gate's test step paying the clone's boot after the build instead of during it"
+  )
+  func warmedRunnerLeasesBeforeTheBuild() async throws {
+    let leases = FakeTestDeviceLeases()
+    let askedAtBuild = Mutex<[Int]>([])
+    let base = FakeAreaCommandRunner { request in
+      if request.step == .build { askedAtBuild.withLock { $0.append(leases.destinations.count) } }
+      return .passed
+    }
+    let test = try Self.trialCommand("test")
+
+    let warmed = await LeasedDeviceAreaRunner(base: base, leases: leases).warmed(for: [test])
+    _ = await warmed.run(Self.request(.build, try Self.trialCommand("build")))
+    let outcome = await warmed.run(Self.request(.test, test))
+
+    #expect(askedAtBuild.withLock { $0 } == [1])
+    #expect(outcome == .passed)
+    let command = try #require(base.requests.last?.command)
+    #expect(command.contains("-destination 'id=\(FakeDevices.device.udid)'"), "\(command)")
+    #expect(leases.destinations.count == 1)
+    #expect(leases.left == 0)
+    await warmed.release()
+    #expect((leases.entered, leases.left) == (1, 1))
+  }
 }
 
 @Suite("a leased device held across a run's test commands")
@@ -157,6 +183,25 @@ struct SimulatorDeviceHoldTests {
     _ = await hold.device()
     await hold.release()
     #expect((leases.entered, leases.left) == (2, 2))
+  }
+
+  @Test(
+    "2 asks made at once share 1 leased device — catches a test step and the warm-up that started its lease each booting a clone"
+  )
+  func concurrentAsksShareOneLease() async throws {
+    let leases = FakeTestDeviceLeases()
+    let provider = try await leases.devices(for: XcodeTestDestination(device: "iPhone 17", os: nil))
+      .get()
+    let hold = SimulatorDeviceHold(provider: provider)
+
+    async let first = hold.device()
+    async let second = hold.device()
+    let devices = await [first, second]
+
+    #expect(try devices.map { try $0.get() } == [FakeDevices.device, FakeDevices.device])
+    #expect(leases.entered == 1)
+    await hold.release()
+    #expect((leases.entered, leases.left) == (1, 1))
   }
 
   @Test(

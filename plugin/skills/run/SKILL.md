@@ -180,16 +180,21 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
-- A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
-  when an acceptance UI test also checks it, so `qa run` records its journey and proves it red
-  first. A
-  task writes a screen when a `Writes` path inside the area's root has a folder or file named
-  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
-  `.storyboard` or `.xib`; the contract's stubs don't count. A requirement no flow can check opens
-  its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
+- A requirement whose task writes a screen or a feature of an `xcode` area has at least 1 `flow`
+  row, even when an acceptance UI test also checks it, so `qa run` records its journey and proves
+  it red first. A screen is a `Writes` path inside the area's root with a folder or file named
+  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or a
+  `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
+  `…Reducer` or `…ViewModel`. The contract's stubs don't count. A requirement no flow can check
+  opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
   `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
   least 1 `flow` row. The import fails naming each requirement and area that breaks this.
+- A screen fed by a dependency client, a `…Client` module such as `APIClient`, runs its flows
+  against a fake of that client chosen by the `-harness-scenario <name>` launch argument, never
+  the live service; `network:` excuses none of its journeys. The contract adds that seam when the
+  app has none, and a task or the contract gives the fake 1 scenario per journey: loading, error,
+  retry and refresh are flow rows. The reference's "Network-fed screens" has the shape.
 - A task whose own check exercises another task's work depends on that task: an acceptance row's
   `Writer` on every other `Runs after` task, a task on any task whose files its `Acceptance`
   names, and a UI test's writer on every task whose behaviour the test shows, such as a fake's

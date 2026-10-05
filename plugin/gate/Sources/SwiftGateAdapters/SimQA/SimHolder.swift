@@ -35,7 +35,10 @@ public struct SimHoldOutcome: Sendable, Equatable {
 
 /// What `swiftgate sim hold` does: own one simulator from the shared `sim` cap for a QA run that
 /// spans many commands, publish it as a lease, and give it back when the lease is removed, the
-/// lease's `agent-device` session ends, or the session timeout passes.
+/// lease's `agent-device` session ends, the owner process exits, or the session timeout passes.
+///
+/// A hold with an owner is 1 `qa run`'s device, which each flow row borrows in turn under a lease
+/// of its own naming the same device and holder.
 ///
 /// The device comes from `devices` (production: ``SimulatorClones`` with this process's PID as
 /// owner), so the slot is the same one T2 and T3 queue on, and a holder that dies without cleaning
@@ -46,23 +49,32 @@ public struct SimHolder: Sendable {
   private let agentDevice: any AgentDevice
   private let worktree: String
   private let holderPID: Int32
+  private let owner: Int32?
+  private let isAlive: @Sendable (Int32) -> Bool
   private let timeout: Duration
   private let pollInterval: Duration
   private let sessionCheckInterval: Duration
   private let clock: SimHoldClock
   private let log: @Sendable (String) -> Void
 
+  /// - Parameters:
+  ///   - owner: the process the hold lasts no longer than; `nil` for a hold with no owner.
+  ///   - isAlive: whether `owner` still runs.
   public init(
     devices: any SimulatorDeviceProvider, leases: SimLeaseStore, agentDevice: any AgentDevice,
-    worktree: String, holderPID: Int32, timeout: Duration,
-    pollInterval: Duration = .seconds(1), sessionCheckInterval: Duration = .seconds(15),
-    clock: SimHoldClock = .continuous(), log: @escaping @Sendable (String) -> Void = { _ in }
+    worktree: String, holderPID: Int32, owner: Int32? = nil,
+    isAlive: @escaping @Sendable (Int32) -> Bool = SimulatorClones.processIsAlive,
+    timeout: Duration, pollInterval: Duration = .seconds(1),
+    sessionCheckInterval: Duration = .seconds(15), clock: SimHoldClock = .continuous(),
+    log: @escaping @Sendable (String) -> Void = { _ in }
   ) {
     self.devices = devices
     self.leases = leases
     self.agentDevice = agentDevice
     self.worktree = worktree
     self.holderPID = holderPID
+    self.owner = owner
+    self.isAlive = isAlive
     self.timeout = timeout
     self.pollInterval = pollInterval
     self.sessionCheckInterval = sessionCheckInterval
@@ -122,7 +134,8 @@ public struct SimHolder: Sendable {
         liveSessions = await sessionNames(target: AgentDeviceTarget(udid: udid, session: session))
       }
       if let end = SimHoldWatch.end(
-        lease: lease, liveSessions: liveSessions, elapsed: now - start, timeout: timeout)
+        lease: lease, liveSessions: liveSessions, owner: owner.map { ($0, isAlive($0)) },
+        elapsed: now - start, timeout: timeout)
       {
         return end
       }

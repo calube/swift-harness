@@ -16,6 +16,11 @@ struct SimHoldCommand: AsyncParsableCommand {
   @Option(name: .customLong("run"), help: "The run id the lease is written under.")
   var runID: String
 
+  @Option(
+    name: .customLong("owner-pid"),
+    help: "Give the device back once this process exits: a qa run holding 1 device for its rows.")
+  var ownerPID: Int32?
+
   func validate() throws {
     guard SimLease.isValidRunID(runID) else {
       throw ValidationError(
@@ -49,7 +54,7 @@ struct SimHoldCommand: AsyncParsableCommand {
         sweepLeases: { await Self.sweepDeadHolders(SimDown.live(runner: runner)) }),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
-      holderPID: getpid(), timeout: .seconds(target.sessionTimeoutMinutes * 60),
+      holderPID: getpid(), owner: ownerPID, timeout: .seconds(timeoutMinutes(target) * 60),
       log: Self.log)
     do {
       _ = try await holder.hold(runID: runID)
@@ -60,6 +65,12 @@ struct SimHoldCommand: AsyncParsableCommand {
       Self.log("sim hold: \(error.message)")
       throw ExitCode(Verdict.blocked.exitCode)
     }
+  }
+
+  /// A hold with an owner lasts while its owner runs, which a `qa run` over many flow rows may
+  /// take longer than 1 session's timeout to finish, so its timeout is only the longest allowed.
+  func timeoutMinutes(_ target: SimTarget) -> Int {
+    ownerPID == nil ? target.sessionTimeoutMinutes : QAConfig.sessionTimeoutMinutesRange.upperBound
   }
 
   /// Frees what killed holders left before taking a device, logging each run and problem.
