@@ -1,0 +1,3672 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 12 (wait): wait timed out for selector: id=\"Downloads.confirmLargeDownloads\"",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muuhd3st-8e004213",
+    "logPath": "/Users/caleb/.agent-device/sessions/swiftgate-20261004T235239Z-4acebe48-row2/requests/01be6ac8aa44743d.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-20261004T235239Z-4acebe48-row2",
+      "requestId": "01be6ac8aa44743d"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 10000,
+      "readableCaptures": 13,
+      "captures": 14,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 412,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 712,
+          "durationMs": 472,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1486,
+          "durationMs": 465,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2253,
+          "durationMs": 471,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3025,
+          "durationMs": 469,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3795,
+          "durationMs": 459,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4555,
+          "durationMs": 469,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 5325,
+          "durationMs": 471,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 6097,
+          "durationMs": 473,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 6872,
+          "durationMs": 472,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 7645,
+          "durationMs": 466,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 8413,
+          "durationMs": 457,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 9171,
+          "durationMs": 469,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 9940,
+          "durationMs": 62,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 10002,
+      "step": 12,
+      "command": "wait",
+      "positionals": [
+        "id=\"Downloads.confirmLargeDownloads\"",
+        "10000"
+      ],
+      "executed": 11,
+      "total": 20,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 468,
+            "selector": "role=button label=\"Settings\""
+          },
+          "durationMs": 469
+        },
+        {
+          "step": 2,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Application",
+                "role": "UIApplication",
+                "label": "Aidoku",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "application"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "hide",
+                "identifier": "eye.slash",
+                "rect": {
+                  "x": 143.66666666666666,
+                  "y": 70,
+                  "width": 19,
+                  "height": 14
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e2",
+                "kind": "image",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 2,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Incognito Mode",
+                "rect": {
+                  "x": 170.66666666666666,
+                  "y": 70,
+                  "width": 87.99999999999997,
+                  "height": 14.333333333333329
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e3",
+                "kind": "text",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "UINavigationBar",
+                "identifier": "Library",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 166
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 4,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "_UIButtonBarButton",
+                "label": "Updates",
+                "rect": {
+                  "x": 290,
+                  "y": 66,
+                  "width": 36,
+                  "height": 36
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e5",
+                "kind": "button"
+              },
+              {
+                "index": 5,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "_UIButtonBarButton",
+                "label": "More",
+                "rect": {
+                  "x": 346,
+                  "y": 66,
+                  "width": 36,
+                  "height": 36
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e6",
+                "kind": "button"
+              },
+              {
+                "index": 6,
+                "parentIndex": 3,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Library",
+                "rect": {
+                  "x": 15.999999999999993,
+                  "y": 119.66666666666667,
+                  "width": 111.66666666666666,
+                  "height": 40.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e7",
+                "kind": "text"
+              },
+              {
+                "index": 7,
+                "parentIndex": 3,
+                "type": "SearchField",
+                "role": "UISearchBarTextField",
+                "label": "Find in Library",
+                "value": "Find in Library",
+                "placeholder": "Find in Library",
+                "rect": {
+                  "x": 16,
+                  "y": 169,
+                  "width": 370,
+                  "height": 44
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e8",
+                "kind": "search"
+              },
+              {
+                "index": 8,
+                "parentIndex": 7,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 28,
+                  "y": 181,
+                  "width": 20.66666666666667,
+                  "height": 19.333333333333343
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e9",
+                "kind": "image"
+              },
+              {
+                "index": 9,
+                "parentIndex": 0,
+                "type": "CollectionView",
+                "role": "UICollectionView",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e10",
+                "kind": "collection"
+              },
+              {
+                "index": 10,
+                "parentIndex": 9,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e11",
+                "kind": "other"
+              },
+              {
+                "index": 11,
+                "parentIndex": 9,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e12",
+                "kind": "other"
+              },
+              {
+                "index": 12,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 167,
+                  "y": 374.33333333333337,
+                  "width": 68,
+                  "height": 59
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e13",
+                "kind": "image"
+              },
+              {
+                "index": 13,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Library Empty",
+                "rect": {
+                  "x": 129.33333333333334,
+                  "y": 449,
+                  "width": 143.66666666666666,
+                  "height": 26.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e14",
+                "kind": "text"
+              },
+              {
+                "index": 14,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Add content from the browse tab.",
+                "rect": {
+                  "x": 79.33333333333333,
+                  "y": 479.3333333333333,
+                  "width": 243.33333333333337,
+                  "height": 19.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e15",
+                "kind": "text"
+              },
+              {
+                "index": 15,
+                "parentIndex": 0,
+                "type": "TabBar",
+                "role": "UITabBar",
+                "label": "Tab Bar",
+                "rect": {
+                  "x": 0,
+                  "y": 791,
+                  "width": 402,
+                  "height": 83
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e16",
+                "kind": "tab-bar"
+              },
+              {
+                "index": 16,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Library",
+                "rect": {
+                  "x": 25,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "selected": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e17",
+                "kind": "button"
+              },
+              {
+                "index": 17,
+                "parentIndex": 16,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 46,
+                  "y": 800,
+                  "width": 33.33333333333334,
+                  "height": 29.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e18",
+                "kind": "image"
+              },
+              {
+                "index": 18,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Browse",
+                "rect": {
+                  "x": 93.66666666666667,
+                  "y": 795,
+                  "width": 76.00000000000001,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e19",
+                "kind": "button"
+              },
+              {
+                "index": 19,
+                "parentIndex": 18,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "globe.fill",
+                "identifier": "globe.fill",
+                "rect": {
+                  "x": 117.66666666666667,
+                  "y": 801.3333333333334,
+                  "width": 27.33333333333333,
+                  "height": 27
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e20",
+                "kind": "image"
+              },
+              {
+                "index": 20,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "History",
+                "rect": {
+                  "x": 162.33333333333334,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e21",
+                "kind": "button"
+              },
+              {
+                "index": 21,
+                "parentIndex": 20,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "clock",
+                "identifier": "clock.fill",
+                "rect": {
+                  "x": 186.33333333333334,
+                  "y": 801.3333333333334,
+                  "width": 27.333333333333343,
+                  "height": 27.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e22",
+                "kind": "image"
+              },
+              {
+                "index": 22,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Settings",
+                "rect": {
+                  "x": 231,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e23",
+                "kind": "button"
+              },
+              {
+                "index": 23,
+                "parentIndex": 22,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "settings",
+                "identifier": "gear",
+                "rect": {
+                  "x": 255,
+                  "y": 800.3333333333334,
+                  "width": 29,
+                  "height": 29
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e24",
+                "kind": "image"
+              },
+              {
+                "index": 24,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Search",
+                "rect": {
+                  "x": 319,
+                  "y": 791,
+                  "width": 62,
+                  "height": 62
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e25",
+                "kind": "button"
+              },
+              {
+                "index": 25,
+                "parentIndex": 24,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 336,
+                  "y": 808.6666666666666,
+                  "width": 28,
+                  "height": 26.66666666666663
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e26",
+                "kind": "image"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": true,
+              "visibleNodeCount": 26,
+              "totalNodeCount": 26,
+              "reasons": [
+                "scroll-hidden-below"
+              ]
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 2,
+                "p50Ms": 438,
+                "p95Ms": 467,
+                "maxMs": 467,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 2
+                }
+              }
+            },
+            "appName": "app.aidoku.Aidoku",
+            "appBundleId": "app.aidoku.Aidoku",
+            "refsGeneration": 901027
+          },
+          "durationMs": 441
+        },
+        {
+          "step": 3,
+          "command": "screenshot",
+          "ok": true,
+          "data": {
+            "path": "/Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
+            "message": "Saved screenshot: /Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
+            "width": 402,
+            "height": 874,
+            "logicalWidth": 402,
+            "logicalHeight": 874,
+            "pixelDensity": 1
+          },
+          "durationMs": 538
+        },
+        {
+          "step": 4,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Application",
+                "role": "UIApplication",
+                "label": "Aidoku",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "application"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "hide",
+                "identifier": "eye.slash",
+                "rect": {
+                  "x": 143.66666666666666,
+                  "y": 70,
+                  "width": 19,
+                  "height": 14
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e2",
+                "kind": "image",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 2,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Incognito Mode",
+                "rect": {
+                  "x": 170.66666666666666,
+                  "y": 70,
+                  "width": 87.99999999999997,
+                  "height": 14.333333333333329
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e3",
+                "kind": "text",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "UINavigationBar",
+                "identifier": "Library",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 166
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 4,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "_UIButtonBarButton",
+                "label": "Updates",
+                "rect": {
+                  "x": 290,
+                  "y": 66,
+                  "width": 36,
+                  "height": 36
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e5",
+                "kind": "button"
+              },
+              {
+                "index": 5,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "_UIButtonBarButton",
+                "label": "More",
+                "rect": {
+                  "x": 346,
+                  "y": 66,
+                  "width": 36,
+                  "height": 36
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e6",
+                "kind": "button"
+              },
+              {
+                "index": 6,
+                "parentIndex": 3,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Library",
+                "rect": {
+                  "x": 15.999999999999993,
+                  "y": 119.66666666666667,
+                  "width": 111.66666666666666,
+                  "height": 40.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e7",
+                "kind": "text"
+              },
+              {
+                "index": 7,
+                "parentIndex": 3,
+                "type": "SearchField",
+                "role": "UISearchBarTextField",
+                "label": "Find in Library",
+                "value": "Find in Library",
+                "placeholder": "Find in Library",
+                "rect": {
+                  "x": 16,
+                  "y": 169,
+                  "width": 370,
+                  "height": 44
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e8",
+                "kind": "search"
+              },
+              {
+                "index": 8,
+                "parentIndex": 7,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 28,
+                  "y": 181,
+                  "width": 20.66666666666667,
+                  "height": 19.333333333333343
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e9",
+                "kind": "image"
+              },
+              {
+                "index": 9,
+                "parentIndex": 0,
+                "type": "CollectionView",
+                "role": "UICollectionView",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e10",
+                "kind": "collection"
+              },
+              {
+                "index": 10,
+                "parentIndex": 9,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e11",
+                "kind": "other"
+              },
+              {
+                "index": 11,
+                "parentIndex": 9,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e12",
+                "kind": "other"
+              },
+              {
+                "index": 12,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 167,
+                  "y": 374.33333333333337,
+                  "width": 68,
+                  "height": 59
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e13",
+                "kind": "image"
+              },
+              {
+                "index": 13,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Library Empty",
+                "rect": {
+                  "x": 129.33333333333334,
+                  "y": 449,
+                  "width": 143.66666666666666,
+                  "height": 26.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e14",
+                "kind": "text"
+              },
+              {
+                "index": 14,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Add content from the browse tab.",
+                "rect": {
+                  "x": 79.33333333333333,
+                  "y": 479.3333333333333,
+                  "width": 243.33333333333337,
+                  "height": 19.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e15",
+                "kind": "text"
+              },
+              {
+                "index": 15,
+                "parentIndex": 0,
+                "type": "TabBar",
+                "role": "UITabBar",
+                "label": "Tab Bar",
+                "rect": {
+                  "x": 0,
+                  "y": 791,
+                  "width": 402,
+                  "height": 83
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e16",
+                "kind": "tab-bar"
+              },
+              {
+                "index": 16,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Library",
+                "rect": {
+                  "x": 25,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "selected": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e17",
+                "kind": "button"
+              },
+              {
+                "index": 17,
+                "parentIndex": 16,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 46,
+                  "y": 800,
+                  "width": 33.33333333333334,
+                  "height": 29.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e18",
+                "kind": "image"
+              },
+              {
+                "index": 18,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Browse",
+                "rect": {
+                  "x": 93.66666666666667,
+                  "y": 795,
+                  "width": 76.00000000000001,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e19",
+                "kind": "button"
+              },
+              {
+                "index": 19,
+                "parentIndex": 18,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "globe.fill",
+                "identifier": "globe.fill",
+                "rect": {
+                  "x": 117.66666666666667,
+                  "y": 801.3333333333334,
+                  "width": 27.33333333333333,
+                  "height": 27
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e20",
+                "kind": "image"
+              },
+              {
+                "index": 20,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "History",
+                "rect": {
+                  "x": 162.33333333333334,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e21",
+                "kind": "button"
+              },
+              {
+                "index": 21,
+                "parentIndex": 20,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "clock",
+                "identifier": "clock.fill",
+                "rect": {
+                  "x": 186.33333333333334,
+                  "y": 801.3333333333334,
+                  "width": 27.333333333333343,
+                  "height": 27.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e22",
+                "kind": "image"
+              },
+              {
+                "index": 22,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Settings",
+                "rect": {
+                  "x": 231,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e23",
+                "kind": "button"
+              },
+              {
+                "index": 23,
+                "parentIndex": 22,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "settings",
+                "identifier": "gear",
+                "rect": {
+                  "x": 255,
+                  "y": 800.3333333333334,
+                  "width": 29,
+                  "height": 29
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e24",
+                "kind": "image"
+              },
+              {
+                "index": 24,
+                "parentIndex": 15,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Search",
+                "rect": {
+                  "x": 319,
+                  "y": 791,
+                  "width": 62,
+                  "height": 62
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e25",
+                "kind": "button"
+              },
+              {
+                "index": 25,
+                "parentIndex": 24,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 336,
+                  "y": 808.6666666666666,
+                  "width": 28,
+                  "height": 26.66666666666663
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e26",
+                "kind": "image"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": true,
+              "visibleNodeCount": 26,
+              "totalNodeCount": 26,
+              "reasons": [
+                "scroll-hidden-below"
+              ]
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 3,
+                "p50Ms": 438,
+                "p95Ms": 467,
+                "maxMs": 467,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 3
+                }
+              }
+            },
+            "appName": "app.aidoku.Aidoku",
+            "appBundleId": "app.aidoku.Aidoku",
+            "refsGeneration": 901028
+          },
+          "durationMs": 431
+        },
+        {
+          "step": 5,
+          "command": "press",
+          "ok": true,
+          "data": {
+            "x": 269,
+            "y": 822,
+            "message": "Tapped role=button label=\"Settings\" (269, 822)",
+            "runnerMainThreadBusy": false,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "targetKind": "selector",
+            "selector": "role=button label=\"Settings\"",
+            "selectorChain": [
+              "role=\"button\" label=\"Settings\"",
+              "label=\"Settings\""
+            ],
+            "refLabel": "Settings",
+            "settle": {
+              "settled": true,
+              "waitedMs": 2038,
+              "captures": 3,
+              "quietMs": 500,
+              "timeoutMs": 10000,
+              "diff": {
+                "summary": {
+                  "additions": 18,
+                  "removals": 11,
+                  "unchanged": 8
+                },
+                "lines": [
+                  {
+                    "kind": "removed",
+                    "text": "@e4 [navigation-bar] \"Library\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e5 [button] \"Updates\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e6 [button] \"More\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e7 [text] \"Library\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e8 [search] \"Find in Library\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e9 [image] \"Search\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e4 [navigation-bar] \"Settings\"",
+                    "ref": "e4"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e5 [text] \"Settings\"",
+                    "ref": "e5"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e6 [search] \"Search\"",
+                    "ref": "e6"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e11 [image] \"Bookshelf\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e12 [text] \"Library Empty\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e13 [text] \"Add content from the browse tab.\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e8 [image] \"AdditionalDimmingOverlay\"",
+                    "ref": "e8"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e9 [cell] \"Incognito Mode\"",
+                    "ref": "e9"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e10 [text] \"Pauses reading history when enabled\"",
+                    "ref": "e10"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e11 [switch] \"0\"",
+                    "ref": "e11"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e12 [switch] \"0\"",
+                    "ref": "e12"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e13 [cell] \"Appearance\"",
+                    "ref": "e13"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e14 [cell] \"Library\"",
+                    "ref": "e14"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e15 [cell] \"Reader\"",
+                    "ref": "e15"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e16 [cell] \"Dictionaries\"",
+                    "ref": "e16"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e17 [cell] \"Tracking\"",
+                    "ref": "e17"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e18 [cell] \"iCloud Sync\"",
+                    "ref": "e18"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e19 [cell] \"Advanced\"",
+                    "ref": "e19"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e20 [cell] \"About\"",
+                    "ref": "e20"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e15 [button] \"Library\" [selected]"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e22 [button] \"Library\"",
+                    "ref": "e22"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e18 [button] \"Settings\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e25 [button] \"Settings\" [selected]",
+                    "ref": "e25"
+                  }
+                ]
+              },
+              "refsGeneration": 901033
+            },
+            "resolution": {
+              "source": "runtime",
+              "phase": "pre-action",
+              "kind": "unique"
+            }
+          },
+          "durationMs": 3373
+        },
+        {
+          "step": 6,
+          "command": "scroll",
+          "ok": true,
+          "data": {
+            "direction": "down",
+            "until": "label=\"Downloads\"",
+            "passes": 1,
+            "x1": 201,
+            "y1": 721,
+            "x2": 201,
+            "y2": 153,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "amount": 0.65,
+            "pixels": 568,
+            "durationMs": 400,
+            "message": "Scrolled down 1 pass until label=\"Downloads\" was visible",
+            "settle": {
+              "settled": true,
+              "waitedMs": 4392,
+              "captures": 2,
+              "quietMs": 500,
+              "timeoutMs": 10000,
+              "diff": {
+                "summary": {
+                  "additions": 9,
+                  "removals": 8,
+                  "unchanged": 18
+                },
+                "lines": [
+                  {
+                    "kind": "added",
+                    "text": "@e2 [window] \"hide\"",
+                    "ref": "e2"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e3 [other] \"hide\"",
+                    "ref": "e3"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e6 [other] \"Tab Bar\"",
+                    "ref": "e6"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e7 [other] \"Settings\"",
+                    "ref": "e7"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e5 [text] \"Settings\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e6 [search] \"Search\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e8 [image] \"AdditionalDimmingOverlay\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e9 [cell] \"Incognito Mode\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e10 [text] \"Pauses reading history when enabled\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e11 [switch] \"0\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e12 [switch] \"0\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e13 [cell] \"Appearance\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e17 [cell] \"Insights\"",
+                    "ref": "e17"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e18 [cell] \"Source Lists\"",
+                    "ref": "e18"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e19 [cell] \"Backups\"",
+                    "ref": "e19"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e20 [cell] \"Downloads\"",
+                    "ref": "e20"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e22 [other] \"Library\"",
+                    "ref": "e22"
+                  }
+                ]
+              },
+              "refsGeneration": 901036
+            }
+          },
+          "durationMs": 5901
+        },
+        {
+          "step": 7,
+          "command": "press",
+          "ok": true,
+          "data": {
+            "x": 201,
+            "y": 742,
+            "message": "Tapped label=\"Downloads\" (201, 742)",
+            "runnerMainThreadBusy": false,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "targetKind": "selector",
+            "selector": "label=\"Downloads\"",
+            "selectorChain": [
+              "role=\"cell\" label=\"Downloads\"",
+              "label=\"Downloads\""
+            ],
+            "refLabel": "Downloads",
+            "settle": {
+              "settled": true,
+              "waitedMs": 2462,
+              "captures": 4,
+              "quietMs": 500,
+              "timeoutMs": 10000,
+              "diff": {
+                "summary": {
+                  "additions": 23,
+                  "removals": 13,
+                  "unchanged": 10
+                },
+                "lines": [
+                  {
+                    "kind": "removed",
+                    "text": "@e4 [navigation-bar] \"Settings\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e5 [text] \"Settings\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e4 [navigation-bar] \"Downloads\"",
+                    "ref": "e4"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e5 [button] \"Settings\"",
+                    "ref": "e5"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e6 [text] \"Downloads\"",
+                    "ref": "e6"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e7 [cell] \"Library\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e8 [cell] \"Reader\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e9 [cell] \"Dictionaries\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e10 [cell] \"Tracking\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e11 [cell] \"iCloud Sync\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e12 [cell] \"Advanced\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e13 [cell] \"About\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e14 [cell] \"Insights\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e15 [cell] \"Source Lists\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e16 [cell] \"Backups\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e17 [cell] \"Downloads\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e8 [cell] \"Total Downloads\"",
+                    "ref": "e8"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e9 [text] \"Zero KB\"",
+                    "ref": "e9"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e10 [text] \"0 series\"",
+                    "ref": "e10"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e11 [text] \"0 chapters\"",
+                    "ref": "e11"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e12 [cell] \"Settings\"",
+                    "ref": "e12"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e13 [cell] \"Only Download on Wi-Fi\"",
+                    "ref": "e13"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e14 [switch] \"0\"",
+                    "ref": "e14"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e15 [switch] \"0\"",
+                    "ref": "e15"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e16 [cell] \"Delete Download After Reading\"",
+                    "ref": "e16"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e17 [switch] \"0\"",
+                    "ref": "e17"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e18 [switch] \"0\"",
+                    "ref": "e18"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e19 [cell] \"Compress Downloads\"",
+                    "ref": "e19"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e20 [switch] \"1\"",
+                    "ref": "e20"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e21 [switch] \"1\"",
+                    "ref": "e21"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e22 [cell] \"Parallel Downloads\"",
+                    "ref": "e22"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e23 [switch] \"1\"",
+                    "ref": "e23"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e24 [switch] \"1\"",
+                    "ref": "e24"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e25 [cell] \"Background Downloading\"",
+                    "ref": "e25"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e26 [switch] \"1\"",
+                    "ref": "e26"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e27 [switch] \"1\"",
+                    "ref": "e27"
+                  }
+                ]
+              },
+              "refsGeneration": 901042
+            },
+            "resolution": "[Circular]"
+          },
+          "durationMs": 3464
+        },
+        {
+          "step": 8,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 420,
+            "selector": "label=\"Compress Downloads\""
+          },
+          "durationMs": 422
+        },
+        {
+          "step": 9,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Application",
+                "role": "UIApplication",
+                "label": "Aidoku",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "application"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "hide",
+                "identifier": "eye.slash",
+                "rect": {
+                  "x": 143.66666666666666,
+                  "y": 70,
+                  "width": 19,
+                  "height": 14
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e2",
+                "kind": "image",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 2,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Incognito Mode",
+                "rect": {
+                  "x": 170.66666666666666,
+                  "y": 70,
+                  "width": 87.99999999999997,
+                  "height": 14.333333333333329
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e3",
+                "kind": "text",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "SwiftUI.UIKitNavigationBar",
+                "subrole": "UINavigationBar",
+                "identifier": "Downloads",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 4,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "UIAccessibilityBackButtonElement",
+                "subrole": "UIAccessibilityElement",
+                "label": "Settings",
+                "identifier": "BackButton",
+                "rect": {
+                  "x": 16,
+                  "y": 62,
+                  "width": 44,
+                  "height": 44
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e5",
+                "kind": "button"
+              },
+              {
+                "index": 5,
+                "parentIndex": 3,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Downloads",
+                "rect": {
+                  "x": 156.66666666666666,
+                  "y": 73.66666666666666,
+                  "width": 88.33333333333334,
+                  "height": 20.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e6",
+                "kind": "text"
+              },
+              {
+                "index": 6,
+                "parentIndex": 0,
+                "type": "CollectionView",
+                "role": "SwiftUI.UpdateCoalescingCollectionView",
+                "subrole": "UICollectionView",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e7",
+                "kind": "collection"
+              },
+              {
+                "index": 7,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 151,
+                  "width": 370,
+                  "height": 84.33333333333331
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e8",
+                "kind": "cell"
+              },
+              {
+                "index": 8,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Total Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 170,
+                  "width": 131.33333333333331,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e9",
+                "kind": "text"
+              },
+              {
+                "index": 9,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Zero KB",
+                "rect": {
+                  "x": 306.6666666666667,
+                  "y": 170,
+                  "width": 63.333333333333314,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e10",
+                "kind": "text"
+              },
+              {
+                "index": 10,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "0 series",
+                "rect": {
+                  "x": 32,
+                  "y": 198.33333333333331,
+                  "width": 54.33333333333333,
+                  "height": 18
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e11",
+                "kind": "text"
+              },
+              {
+                "index": 11,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "0 chapters",
+                "rect": {
+                  "x": 296.6666666666667,
+                  "y": 198.33333333333331,
+                  "width": 73.33333333333331,
+                  "height": 18
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e12",
+                "kind": "text"
+              },
+              {
+                "index": 12,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewHeaderFooter",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 252.66666666666666,
+                  "width": 370,
+                  "height": 40.33333333333334
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e13",
+                "kind": "cell"
+              },
+              {
+                "index": 13,
+                "parentIndex": 12,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Settings",
+                "rect": {
+                  "x": 16,
+                  "y": 252.66666666666666,
+                  "width": 370,
+                  "height": 40.33333333333334
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e14",
+                "kind": "text"
+              },
+              {
+                "index": 14,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 293.33333333333337,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e15",
+                "kind": "cell"
+              },
+              {
+                "index": 15,
+                "parentIndex": 14,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Only Download on Wi-Fi",
+                "rect": {
+                  "x": 32,
+                  "y": 312.1666666666667,
+                  "width": 183.33333333333331,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e16",
+                "kind": "text"
+              },
+              {
+                "index": 16,
+                "parentIndex": 14,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 308.33333333333337,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e17",
+                "kind": "switch"
+              },
+              {
+                "index": 17,
+                "parentIndex": 16,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 308.33333333333337,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e18",
+                "kind": "switch"
+              },
+              {
+                "index": 18,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 351.33333333333337,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e19",
+                "kind": "cell"
+              },
+              {
+                "index": 19,
+                "parentIndex": 18,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Delete Download After Reading",
+                "rect": {
+                  "x": 32,
+                  "y": 370.1666666666667,
+                  "width": 237.66666666666663,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e20",
+                "kind": "text"
+              },
+              {
+                "index": 20,
+                "parentIndex": 18,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 366.33333333333337,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e21",
+                "kind": "switch"
+              },
+              {
+                "index": 21,
+                "parentIndex": 20,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 366.33333333333337,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e22",
+                "kind": "switch"
+              },
+              {
+                "index": 22,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 409,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e23",
+                "kind": "cell"
+              },
+              {
+                "index": 23,
+                "parentIndex": 22,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Compress Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 427.8333333333333,
+                  "width": 166.33333333333331,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e24",
+                "kind": "text"
+              },
+              {
+                "index": 24,
+                "parentIndex": 22,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 424,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e25",
+                "kind": "switch"
+              },
+              {
+                "index": 25,
+                "parentIndex": 24,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 424,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e26",
+                "kind": "switch"
+              },
+              {
+                "index": 26,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 467.3333333333333,
+                  "width": 370,
+                  "height": 57.99999999999994
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e27",
+                "kind": "cell"
+              },
+              {
+                "index": 27,
+                "parentIndex": 26,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Parallel Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 486.16666666666663,
+                  "width": 143.66666666666666,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e28",
+                "kind": "text"
+              },
+              {
+                "index": 28,
+                "parentIndex": 26,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 482.3333333333333,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e29",
+                "kind": "switch"
+              },
+              {
+                "index": 29,
+                "parentIndex": 28,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 482.3333333333333,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e30",
+                "kind": "switch"
+              },
+              {
+                "index": 30,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 525.3333333333333,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e31",
+                "kind": "cell"
+              },
+              {
+                "index": 31,
+                "parentIndex": 30,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Background Downloading",
+                "rect": {
+                  "x": 32,
+                  "y": 544.1666666666666,
+                  "width": 195,
+                  "height": 20.333333333333258
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e32",
+                "kind": "text"
+              },
+              {
+                "index": 32,
+                "parentIndex": 30,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 540.3333333333333,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e33",
+                "kind": "switch"
+              },
+              {
+                "index": 33,
+                "parentIndex": 32,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 540.3333333333333,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e34",
+                "kind": "switch"
+              },
+              {
+                "index": 34,
+                "parentIndex": 6,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e35",
+                "kind": "other"
+              },
+              {
+                "index": 35,
+                "parentIndex": 6,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e36",
+                "kind": "other"
+              },
+              {
+                "index": 36,
+                "parentIndex": 0,
+                "type": "TabBar",
+                "role": "UITabBar",
+                "label": "Tab Bar",
+                "rect": {
+                  "x": 0,
+                  "y": 791,
+                  "width": 402,
+                  "height": 83
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e37",
+                "kind": "tab-bar"
+              },
+              {
+                "index": 37,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Library",
+                "rect": {
+                  "x": 25,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e38",
+                "kind": "button"
+              },
+              {
+                "index": 38,
+                "parentIndex": 37,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 46,
+                  "y": 800,
+                  "width": 33.33333333333334,
+                  "height": 29.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e39",
+                "kind": "image"
+              },
+              {
+                "index": 39,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Browse",
+                "rect": {
+                  "x": 93.66666666666667,
+                  "y": 795,
+                  "width": 76.00000000000001,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e40",
+                "kind": "button"
+              },
+              {
+                "index": 40,
+                "parentIndex": 39,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "globe.fill",
+                "identifier": "globe.fill",
+                "rect": {
+                  "x": 117.66666666666667,
+                  "y": 801.3333333333334,
+                  "width": 27.33333333333333,
+                  "height": 27
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e41",
+                "kind": "image"
+              },
+              {
+                "index": 41,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "History",
+                "rect": {
+                  "x": 162.33333333333334,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e42",
+                "kind": "button"
+              },
+              {
+                "index": 42,
+                "parentIndex": 41,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "clock",
+                "identifier": "clock.fill",
+                "rect": {
+                  "x": 186.33333333333334,
+                  "y": 801.3333333333334,
+                  "width": 27.333333333333343,
+                  "height": 27.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e43",
+                "kind": "image"
+              },
+              {
+                "index": 43,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Settings",
+                "rect": {
+                  "x": 231,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "selected": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e44",
+                "kind": "button"
+              },
+              {
+                "index": 44,
+                "parentIndex": 43,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "settings",
+                "identifier": "gear",
+                "rect": {
+                  "x": 255,
+                  "y": 800.3333333333334,
+                  "width": 29,
+                  "height": 29
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e45",
+                "kind": "image"
+              },
+              {
+                "index": 45,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Search",
+                "rect": {
+                  "x": 319,
+                  "y": 791,
+                  "width": 62,
+                  "height": 62
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e46",
+                "kind": "button"
+              },
+              {
+                "index": 46,
+                "parentIndex": 45,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 336,
+                  "y": 808.6666666666666,
+                  "width": 28,
+                  "height": 26.66666666666663
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e47",
+                "kind": "image"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": true,
+              "visibleNodeCount": 47,
+              "totalNodeCount": 47,
+              "reasons": [
+                "scroll-hidden-below"
+              ]
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 25,
+                "p50Ms": 419,
+                "p95Ms": 514,
+                "maxMs": 530,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 25
+                }
+              }
+            },
+            "appName": "app.aidoku.Aidoku",
+            "appBundleId": "app.aidoku.Aidoku",
+            "refsGeneration": 901045
+          },
+          "durationMs": 412
+        },
+        {
+          "step": 10,
+          "command": "screenshot",
+          "ok": true,
+          "data": {
+            "path": "/Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
+            "message": "Saved screenshot: /Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
+            "width": 402,
+            "height": 874,
+            "logicalWidth": 402,
+            "logicalHeight": 874,
+            "pixelDensity": 1
+          },
+          "durationMs": 390
+        },
+        {
+          "step": 11,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Application",
+                "role": "UIApplication",
+                "label": "Aidoku",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "application"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "hide",
+                "identifier": "eye.slash",
+                "rect": {
+                  "x": 143.66666666666666,
+                  "y": 70,
+                  "width": 19,
+                  "height": 14
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e2",
+                "kind": "image",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 2,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Incognito Mode",
+                "rect": {
+                  "x": 170.66666666666666,
+                  "y": 70,
+                  "width": 87.99999999999997,
+                  "height": 14.333333333333329
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": false,
+                "ref": "e3",
+                "kind": "text",
+                "interactionBlocked": "covered",
+                "presentationHints": [
+                  "covered"
+                ]
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "SwiftUI.UIKitNavigationBar",
+                "subrole": "UINavigationBar",
+                "identifier": "Downloads",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 4,
+                "parentIndex": 3,
+                "type": "Button",
+                "role": "UIAccessibilityBackButtonElement",
+                "subrole": "UIAccessibilityElement",
+                "label": "Settings",
+                "identifier": "BackButton",
+                "rect": {
+                  "x": 16,
+                  "y": 62,
+                  "width": 44,
+                  "height": 44
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e5",
+                "kind": "button"
+              },
+              {
+                "index": 5,
+                "parentIndex": 3,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Downloads",
+                "rect": {
+                  "x": 156.66666666666666,
+                  "y": 73.66666666666666,
+                  "width": 88.33333333333334,
+                  "height": 20.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e6",
+                "kind": "text"
+              },
+              {
+                "index": 6,
+                "parentIndex": 0,
+                "type": "CollectionView",
+                "role": "SwiftUI.UpdateCoalescingCollectionView",
+                "subrole": "UICollectionView",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e7",
+                "kind": "collection"
+              },
+              {
+                "index": 7,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 151,
+                  "width": 370,
+                  "height": 84.33333333333331
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e8",
+                "kind": "cell"
+              },
+              {
+                "index": 8,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Total Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 170,
+                  "width": 131.33333333333331,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e9",
+                "kind": "text"
+              },
+              {
+                "index": 9,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Zero KB",
+                "rect": {
+                  "x": 306.6666666666667,
+                  "y": 170,
+                  "width": 63.333333333333314,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e10",
+                "kind": "text"
+              },
+              {
+                "index": 10,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "0 series",
+                "rect": {
+                  "x": 32,
+                  "y": 198.33333333333331,
+                  "width": 54.33333333333333,
+                  "height": 18
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e11",
+                "kind": "text"
+              },
+              {
+                "index": 11,
+                "parentIndex": 7,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "0 chapters",
+                "rect": {
+                  "x": 296.6666666666667,
+                  "y": 198.33333333333331,
+                  "width": 73.33333333333331,
+                  "height": 18
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e12",
+                "kind": "text"
+              },
+              {
+                "index": 12,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewHeaderFooter",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 252.66666666666666,
+                  "width": 370,
+                  "height": 40.33333333333334
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e13",
+                "kind": "cell"
+              },
+              {
+                "index": 13,
+                "parentIndex": 12,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Settings",
+                "rect": {
+                  "x": 16,
+                  "y": 252.66666666666666,
+                  "width": 370,
+                  "height": 40.33333333333334
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e14",
+                "kind": "text"
+              },
+              {
+                "index": 14,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 293.33333333333337,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e15",
+                "kind": "cell"
+              },
+              {
+                "index": 15,
+                "parentIndex": 14,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Only Download on Wi-Fi",
+                "rect": {
+                  "x": 32,
+                  "y": 312.1666666666667,
+                  "width": 183.33333333333331,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e16",
+                "kind": "text"
+              },
+              {
+                "index": 16,
+                "parentIndex": 14,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 308.33333333333337,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e17",
+                "kind": "switch"
+              },
+              {
+                "index": 17,
+                "parentIndex": 16,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 308.33333333333337,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e18",
+                "kind": "switch"
+              },
+              {
+                "index": 18,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 351.33333333333337,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e19",
+                "kind": "cell"
+              },
+              {
+                "index": 19,
+                "parentIndex": 18,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Delete Download After Reading",
+                "rect": {
+                  "x": 32,
+                  "y": 370.1666666666667,
+                  "width": 237.66666666666663,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e20",
+                "kind": "text"
+              },
+              {
+                "index": 20,
+                "parentIndex": 18,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 366.33333333333337,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e21",
+                "kind": "switch"
+              },
+              {
+                "index": 21,
+                "parentIndex": 20,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "0",
+                "rect": {
+                  "x": 309,
+                  "y": 366.33333333333337,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e22",
+                "kind": "switch"
+              },
+              {
+                "index": 22,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 409,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e23",
+                "kind": "cell"
+              },
+              {
+                "index": 23,
+                "parentIndex": 22,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Compress Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 427.8333333333333,
+                  "width": 166.33333333333331,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e24",
+                "kind": "text"
+              },
+              {
+                "index": 24,
+                "parentIndex": 22,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 424,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e25",
+                "kind": "switch"
+              },
+              {
+                "index": 25,
+                "parentIndex": 24,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 424,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e26",
+                "kind": "switch"
+              },
+              {
+                "index": 26,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 467.3333333333333,
+                  "width": 370,
+                  "height": 57.99999999999994
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e27",
+                "kind": "cell"
+              },
+              {
+                "index": 27,
+                "parentIndex": 26,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Parallel Downloads",
+                "rect": {
+                  "x": 32,
+                  "y": 486.16666666666663,
+                  "width": 143.66666666666666,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e28",
+                "kind": "text"
+              },
+              {
+                "index": 28,
+                "parentIndex": 26,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 482.3333333333333,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e29",
+                "kind": "switch"
+              },
+              {
+                "index": 29,
+                "parentIndex": 28,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 482.3333333333333,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e30",
+                "kind": "switch"
+              },
+              {
+                "index": 30,
+                "parentIndex": 6,
+                "type": "Cell",
+                "role": "SwiftUI.ListCollectionViewCell",
+                "subrole": "UICollectionViewListCell",
+                "rect": {
+                  "x": 16,
+                  "y": 525.3333333333333,
+                  "width": 370,
+                  "height": 58
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e31",
+                "kind": "cell"
+              },
+              {
+                "index": 31,
+                "parentIndex": 30,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "Background Downloading",
+                "rect": {
+                  "x": 32,
+                  "y": 544.1666666666666,
+                  "width": 195,
+                  "height": 20.333333333333258
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e32",
+                "kind": "text"
+              },
+              {
+                "index": 32,
+                "parentIndex": 30,
+                "type": "Switch",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 540.3333333333333,
+                  "width": 61,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e33",
+                "kind": "switch"
+              },
+              {
+                "index": 33,
+                "parentIndex": 32,
+                "type": "Switch",
+                "role": "UISwitch",
+                "value": "1",
+                "rect": {
+                  "x": 309,
+                  "y": 540.3333333333333,
+                  "width": 63,
+                  "height": 28
+                },
+                "enabled": true,
+                "depth": 4,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e34",
+                "kind": "switch"
+              },
+              {
+                "index": 34,
+                "parentIndex": 6,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e35",
+                "kind": "other"
+              },
+              {
+                "index": 35,
+                "parentIndex": 6,
+                "type": "Other",
+                "role": "_UIScrollViewScrollIndicator",
+                "label": "Vertical scroll bar, 1 page",
+                "value": "0%",
+                "rect": {
+                  "x": 369,
+                  "y": 116,
+                  "width": 30,
+                  "height": 675
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e36",
+                "kind": "other"
+              },
+              {
+                "index": 36,
+                "parentIndex": 0,
+                "type": "TabBar",
+                "role": "UITabBar",
+                "label": "Tab Bar",
+                "rect": {
+                  "x": 0,
+                  "y": 791,
+                  "width": 402,
+                  "height": 83
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e37",
+                "kind": "tab-bar"
+              },
+              {
+                "index": 37,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Library",
+                "rect": {
+                  "x": 25,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e38",
+                "kind": "button"
+              },
+              {
+                "index": 38,
+                "parentIndex": 37,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Bookshelf",
+                "identifier": "books.vertical.fill",
+                "rect": {
+                  "x": 46,
+                  "y": 800,
+                  "width": 33.33333333333334,
+                  "height": 29.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e39",
+                "kind": "image"
+              },
+              {
+                "index": 39,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Browse",
+                "rect": {
+                  "x": 93.66666666666667,
+                  "y": 795,
+                  "width": 76.00000000000001,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e40",
+                "kind": "button"
+              },
+              {
+                "index": 40,
+                "parentIndex": 39,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "globe.fill",
+                "identifier": "globe.fill",
+                "rect": {
+                  "x": 117.66666666666667,
+                  "y": 801.3333333333334,
+                  "width": 27.33333333333333,
+                  "height": 27
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e41",
+                "kind": "image"
+              },
+              {
+                "index": 41,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "History",
+                "rect": {
+                  "x": 162.33333333333334,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e42",
+                "kind": "button"
+              },
+              {
+                "index": 42,
+                "parentIndex": 41,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "clock",
+                "identifier": "clock.fill",
+                "rect": {
+                  "x": 186.33333333333334,
+                  "y": 801.3333333333334,
+                  "width": 27.333333333333343,
+                  "height": 27.33333333333337
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e43",
+                "kind": "image"
+              },
+              {
+                "index": 43,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Settings",
+                "rect": {
+                  "x": 231,
+                  "y": 795,
+                  "width": 76,
+                  "height": 54
+                },
+                "enabled": true,
+                "selected": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e44",
+                "kind": "button"
+              },
+              {
+                "index": 44,
+                "parentIndex": 43,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "settings",
+                "identifier": "gear",
+                "rect": {
+                  "x": 255,
+                  "y": 800.3333333333334,
+                  "width": 29,
+                  "height": 29
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e45",
+                "kind": "image"
+              },
+              {
+                "index": 45,
+                "parentIndex": 36,
+                "type": "Button",
+                "role": "_UITabButton",
+                "label": "Search",
+                "rect": {
+                  "x": 319,
+                  "y": 791,
+                  "width": 62,
+                  "height": 62
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e46",
+                "kind": "button"
+              },
+              {
+                "index": 46,
+                "parentIndex": 45,
+                "type": "Image",
+                "role": "UIImageView",
+                "label": "Search",
+                "identifier": "magnifyingglass",
+                "rect": {
+                  "x": 336,
+                  "y": 808.6666666666666,
+                  "width": 28,
+                  "height": 26.66666666666663
+                },
+                "enabled": true,
+                "depth": 3,
+                "pid": 59457,
+                "hittable": true,
+                "ref": "e47",
+                "kind": "image"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": true,
+              "visibleNodeCount": 47,
+              "totalNodeCount": 47,
+              "reasons": [
+                "scroll-hidden-below"
+              ]
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 26,
+                "p50Ms": 419,
+                "p95Ms": 514,
+                "maxMs": 530,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 26
+                }
+              }
+            },
+            "appName": "app.aidoku.Aidoku",
+            "appBundleId": "app.aidoku.Aidoku",
+            "refsGeneration": 901046
+          },
+          "durationMs": 435
+        }
+      ]
+    }
+  }
+}

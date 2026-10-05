@@ -1,0 +1,2 @@
+{"elapsedMs":1447,"label":"after step 1: wait role=button label=\"Settings\"","n":1,"screenshot":"steps\/001.png","settled":true,"tree":"steps\/001.tree.json"}
+{"elapsedMs":1239,"label":"after step 5: wait label=\"Compress Downloads\"","n":2,"screenshot":"steps\/002.png","settled":true,"tree":"steps\/002.tree.json"}

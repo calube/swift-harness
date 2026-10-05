@@ -1,0 +1,96 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "121d27b644b4d50b19b835d195df9e7622e4a297",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "1 of 4 rows verified: 1 pass, 0 red, 0 unverified, 3 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "test: AidokuTests/LargeDownloadConfirmationTests",
+      "evidence" : [
+        "qa/04-req-download-check.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 31637,
+      "requirement" : "req-download-check",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "confirm-downloads-check"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-toggle.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on confirm-downloads-setting",
+      "ms" : 0,
+      "requirement" : "req-setting-toggle",
+      "result" : "waiting",
+      "row" : 1,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+        "confirm-downloads-setting"
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on confirm-downloads-setting",
+      "ms" : 0,
+      "requirement" : "req-stored-value",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+        "confirm-downloads-setting"
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.state.sh",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "state",
+      "message" : "waiting on confirm-downloads-setting",
+      "ms" : 0,
+      "requirement" : "req-stored-value",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+        "confirm-downloads-setting"
+      ]
+    }
+  ],
+  "runID" : "20261005T002359Z-7b81c6a7",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}
+
