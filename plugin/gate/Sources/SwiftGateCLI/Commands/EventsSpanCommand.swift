@@ -10,9 +10,11 @@ enum SpanRun {
 
   /// - Parameters:
   ///   - enabled: `.swiftgate.toml`'s `[telemetry] enabled`; `false` records nothing.
+  ///   - endParent: the outcome to end `parent` with first when it is still open, so a stage
+  ///     whose predecessor returned without its own end needs no second command.
   static func start(
     log: SpanLog, enabled: Bool, phase: String, buildRun: String, task: String?, role: String?,
-    parent: String?
+    parent: String?, endParent: String? = nil
   ) -> Output {
     let command = "events span start"
     guard let phaseValue = SpanPhase(rawValue: phase) else {
@@ -75,7 +77,7 @@ enum SpanRun {
   /// checkout in `index` under the new span's id.
   static func start(
     in directory: String, phase: String, buildRun: String, task: String?, role: String?,
-    parent: String?, index: SpanStoreIndex = SpanStoreIndex()
+    parent: String?, endParent: String? = nil, index: SpanStoreIndex = SpanStoreIndex()
   ) async -> Output {
     switch await BuildHaltRun.store(command: "events span start", directory: directory) {
     case .refused(let output): return output
@@ -171,11 +173,16 @@ struct EventsSpanStartCommand: AsyncParsableCommand {
   @Option(help: "The enclosing span's id.")
   var parent: String?
 
+  @Option(
+    name: .customLong("end-parent"),
+    help: "With --parent, end that span first with this outcome when it is still open.")
+  var endParent: String?
+
   func run() async throws {
     try BuildHaltRun.finish(
       await SpanRun.start(
         in: FileManager.default.currentDirectoryPath, phase: phase, buildRun: buildRun,
-        task: task, role: role, parent: parent))
+        task: task, role: role, parent: parent, endParent: endParent))
   }
 }
 
