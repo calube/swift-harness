@@ -19,5 +19,6 @@ into a committed file.
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Which controls `sim verify`'s accessibility rules judge, in an owned repository or a brownfield clone | [`simulator-qa-audit.md`](simulator-qa-audit.md) |
 | Seeing a build run as 1 page (`swiftgate report --html`, `swiftgate view`), or emitting a span with `swiftgate events span` | [`run-viewer.md`](run-viewer.md) |
+| Knowing when a saved report is final, or what a live page polls and calls not written yet | [`run-viewer-live.md`](run-viewer-live.md) |
 
 Your repository's `docs/index.md` routes its own docs (designs, plans, ADRs); this page doesn't.

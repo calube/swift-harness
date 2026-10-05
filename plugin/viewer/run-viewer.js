@@ -49,6 +49,9 @@
     const state = $("state");
     state.textContent = r.state;
     state.className = "chip " + ({ done: "ok", running: "info", halted: "bad" }[r.state] || "plain");
+    const snapshot = M.snapshotText(r);
+    $("snapshot").textContent = snapshot || "";
+    $("snapshot").hidden = !snapshot;
     const box = M.timeBoxText(r);
     $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].concat(box ? [esc(box)] : []).map((x) => `<span>${x}</span>`).join("");
     const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
@@ -118,7 +121,7 @@
       const label = `step ${st.n}${st.label != null ? " " + st.label : ""}, ${st.ok ? "passed" : "failed"}, ${(st.offsetMs / 1000).toFixed(1)} s`;
       const attrs = `class="tl-tick ${st.ok ? "ok" : "bad"}" data-span="${esc(s.id)}" data-n="${st.n}" style="left:${pct(at)}%" title="${esc(label)}" aria-label="${esc(label)}"`;
       return f.video != null
-        ? `<a ${attrs} href="${esc(M.evidenceHref(f.run, f.video, st.offsetMs))}" target="_blank" rel="noopener"></a>`
+        ? `<a ${attrs} href="${esc(M.evidenceHref(f.run, f.video, st.offsetMs, view.evidenceBase))}" target="_blank" rel="noopener"></a>`
         : `<span ${attrs} role="img"></span>`;
     }).join("");
   }
@@ -352,6 +355,10 @@
 
   // spec mapping
   function renderSpec() {
+    if (!view.spec.length) {
+      $("spec-table").innerHTML = `<tbody><tr><td class="sub">No spec page: the plan names no requirements${(view.unwritten || []).length ? ", or they aren't written yet (see the footer)" : ""}.</td></tr></tbody>`;
+      return;
+    }
     $("spec-table").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
       view.spec.map((q) => {
         const ts = q.tasks.map((id) => taskBy[id]).filter(Boolean);
@@ -735,7 +742,8 @@
   function renderFooter() {
     const damage = (view ? view.damage : []).concat(pageDamage);
     $("foot").innerHTML = `<span>RunView schema ${view ? esc(view.schemaVersion) : "none"}</span><span>damage: ${damage.length ? damage.length : "none"}</span><span>plan text, ids, counts, times and repo-relative paths; no source or transcripts</span>` +
-      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
+      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("") +
+      ((view && view.unwritten) || []).map((d) => `<span class="unwritten-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
   }
 
   // Optional modules (board, graph) render into their own hidden panel. One that throws is shown
@@ -800,7 +808,7 @@
     const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
     const cards = M.workers(view, now, stallMin == null ? Infinity : stallMin);
     const runHalts = M.openHalts(view).filter((h) => h.task == null);
-    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run names no stall_min</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
+    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run's run.json didn't read</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
       runHalts.map((h) => `<span class="chip bad">run halted: ${esc(h.reason)}</span>`).join("");
     $("now-cards").innerHTML = cards.length ? cards.map((w) => `<div class="now-card${w.halted ? " halted" : w.stalled ? " stalled" : ""}" role="listitem" data-task="${esc(w.task)}">
         <div class="now-top"><b class="mono">${esc(w.task)}</b>${w.halted ? `<span class="chip bad" title="${esc(w.halt.reason)}">halted</span>` : ""}${w.stalled ? `<span class="chip warn">stalled</span>` : ""}</div>

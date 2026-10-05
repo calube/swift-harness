@@ -493,7 +493,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       case .transition(let transition) where transition.from == .inProgress:
         ended[transition.task] = transition.to
         if !order.contains(transition.task) { order.append(transition.task) }
-      case .transition, .undo, .gate, .returnCheck:
+      case .transition, .undo, .gate, .returnCheck, .finish:
         continue
       }
     }

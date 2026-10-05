@@ -122,7 +122,7 @@ enum RunViewSpans {
         span.outcome = .red
         spans.append(span)
         open = nil
-      case .transition, .returnCheck: continue
+      case .transition, .returnCheck, .finish: continue
       }
     }
     if let open { spans.append(open) }
@@ -294,6 +294,7 @@ extension BuildEvent {
     case .undo(let undo): undo.at
     case .gate(let gate): gate.at
     case .returnCheck(let check): check.at
+    case .finish(let finish): finish.at
     }
   }
 }
