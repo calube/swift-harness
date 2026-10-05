@@ -225,8 +225,15 @@ The warm-up (§11.2) measures each area's warm test time before planning, so `PL
 up front.
 
 Worktrees share each ecosystem's package and build caches, and a per-area DerivedData seed. The warm-up fills them
-at the base tree, so a worker's first build is incremental; the contract commit still recompiles its dependents.
-Each area's cold cost is the warm-up's first run, and a `gate.step` measures it again on a cold store.
+at the base tree; the contract commit still recompiles its dependents. Each area's cold cost is the warm-up's first
+run, and a `gate.step` measures it again on a cold store.
+
+`xcodebuild` area commands pass `-derivedDataPath`: the warm-up and the main checkout build in the seed, and each
+linked worktree in its own folder under its git dir, which `git worktree remove` deletes. Before a worktree's
+first run, the runner clones the seed's `SourcePackages` into that folder with `cp -c` and points SwiftPM's
+`workspace-state.json` at the copy. Build products and module caches aren't cloned. They name the seed's absolute
+paths, so another checkout recompiles every file anyway, and its build database deletes the seed's products as
+stale. Prove and baseline scratch trees keep Xcode's default DerivedData.
 
 ## 10. Baseline
 

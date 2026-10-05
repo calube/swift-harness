@@ -7,7 +7,8 @@ import Testing
 struct XcodeDerivedDataTests {
   private static let common = URL(filePath: "/clone/.git", directoryHint: .isDirectory)
   private static let linked = BrownfieldStateLayout(
-    commonDir: common, gitDir: URL(filePath: "/clone/.git/worktrees/task", directoryHint: .isDirectory))
+    commonDir: common,
+    gitDir: URL(filePath: "/clone/.git/worktrees/task", directoryHint: .isDirectory))
   private static let main = BrownfieldStateLayout(commonDir: common, gitDir: common)
   private static let seed = "/clone/.git/swift-harness/caches/derived-data/Aidoku"
   private static let own = "/clone/.git/worktrees/task/swift-harness/derived-data/areas/Aidoku"

@@ -10,7 +10,9 @@ struct DerivedDataSeedingTests {
   /// `workspace-state.json` is the captured one, beside build products and a module cache.
   private struct Rig {
     let base: URL
-    var seed: String { base.appending(path: "caches/derived-data/Aidoku").path(percentEncoded: false) }
+    var seed: String {
+      base.appending(path: "caches/derived-data/Aidoku").path(percentEncoded: false)
+    }
     var destination: String {
       base.appending(path: "worktrees/task/swift-harness/derived-data/areas/Aidoku")
         .path(percentEncoded: false)

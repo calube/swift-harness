@@ -11,14 +11,34 @@ public enum XcodeDerivedData {
   /// The seed in the main checkout; `<git-dir>/swift-harness/derived-data/areas/<area>` in a
   /// linked worktree. Absolute.
   public static func path(area: String, layout: BrownfieldStateLayout) -> String {
-    AreaCacheEnvironment.derivedDataSeed(area: area, layout: layout)
+    if layout.gitDir.standardizedFileURL.path == layout.commonDir.standardizedFileURL.path {
+      return AreaCacheEnvironment.derivedDataSeed(area: area, layout: layout)
+    }
+    return layout.worktreeRoot.appending(
+      path: "derived-data/areas/\(area)", directoryHint: .notDirectory
+    ).path(percentEncoded: false)
   }
 
   /// `command` with `-derivedDataPath <derivedDataPath>` after each `xcodebuild`; unchanged when
   /// it runs no `xcodebuild`, already names a DerivedData, or spells `xcodebuild` in a way the
   /// insertion can't place.
   public static func command(_ command: String, derivedDataPath: String) -> String {
-    command
+    let builds = ShellSyntax.simpleCommands(in: command).filter { $0.name == "xcodebuild" }
+    let namesItsOwn = builds.contains { build in
+      build.arguments.contains { $0 == option || $0.hasPrefix(option + "=") }
+    }
+    // Matched in the parsed words, then inserted in the text as written; a count that differs
+    // means an `xcodebuild` spelled through a path or quoting the text can't place.
+    let bare = command.ranges(ofBareWord: "xcodebuild")
+    guard !builds.isEmpty, !namesItsOwn, bare.count == builds.count else { return command }
+    let insertion = " \(option) \(AreaCommandExpansion.shellQuoted(derivedDataPath))"
+    var rewritten = ""
+    var rest = command.startIndex
+    for range in bare {
+      rewritten += command[rest..<range.upperBound] + insertion
+      rest = range.upperBound
+    }
+    return rewritten + command[rest...]
   }
 
   /// `request` building in ``path(area:layout:)``, seeded from the area's seed when that is a
@@ -26,6 +46,14 @@ public enum XcodeDerivedData {
   public static func request(_ request: AreaCommandRequest, layout: BrownfieldStateLayout)
     -> AreaCommandRequest
   {
-    request
+    let path = path(area: request.area, layout: layout)
+    let command = command(request.command, derivedDataPath: path)
+    guard command != request.command else { return request }
+    let seed = AreaCacheEnvironment.derivedDataSeed(area: request.area, layout: layout)
+    return AreaCommandRequest(
+      area: request.area, step: request.step, command: command,
+      workingDirectory: request.workingDirectory, deadline: request.deadline,
+      environment: request.environment, junitPath: request.junitPath,
+      derivedDataSeed: path == seed ? nil : DerivedDataSeedCopy(seed: seed, destination: path))
   }
 }

@@ -298,7 +298,8 @@ enum BrownfieldMergeCheck {
           dependencies: dependencies)
       else { continue }
       let (outcome, milliseconds) = await GateRun.timed {
-        await dependencies.runner.run(prepared.request)
+        await dependencies.runner.run(
+          XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
       }
       var lintFindings: [Finding] = []
       var lintUnread = false
