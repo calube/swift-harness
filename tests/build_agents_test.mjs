@@ -387,7 +387,7 @@ export function repairEvidenceProblems(text) {
   const sentences = sentencesOf(text)
   const problems = []
   if (!sentences.some(s => /\bframes?\b/.test(s) && /\bagainst the requirement\b/.test(s))) problems.push('the repair worker never holds the red frames against the requirement')
-  if (!/`no repair: <requirement>: app defect: /.test(text.replace(/\s+/g, ' '))) problems.push('no `no repair: … app defect` line for a screen that breaks the requirement')
+  if (!/no repair: <requirement>: app defect: /.test(text.replace(/\s+/g, ' '))) problems.push('no `no repair: … app defect` line for a screen that breaks the requirement')
   if (!sentences.some(s => /\bstarting state\b/.test(s) && /\bcorrect\b/.test(s) && /\bthen moved\b/.test(s))) problems.push('a clock contract gap never needs frames showing the starting state correct and then moved')
   return problems
 }
