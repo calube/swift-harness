@@ -105,10 +105,7 @@ enum BrownfieldRunReportRun {
         discover: discover(layout: layout), build: build,
         ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) },
         validation: files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName)
-          ? QAFiles.newestWholeRun(
-            plan: slug,
-            runsDirectory: RunStore(worktreeRoot: root).state.url(
-              RunLayout.runsDirectory, directoryHint: .isDirectory)) : nil,
+          ? newestWholeRun(slug: slug, root: root, commonDir: layout.commonDir) : nil,
         setAside: read(layout.committedConfigSetAside.path) {
           try CommittedConfigSetAside.decode(Data($0.utf8))
         }))
@@ -146,6 +143,25 @@ enum BrownfieldRunReportRun {
 
   /// The base is `base` when given, else where the plan branch left the checked-out `HEAD`,
   /// which the run never moves.
+  /// The newest `qa run` over every row, from this checkout's runs, else from the clone's kept
+  /// runs, where `run checkout remove` keeps the plan checkout's.
+  private static func newestWholeRun(slug: String, root: URL, commonDir: URL)
+    -> RunReportInput<QAReport>
+  {
+    let own = QAFiles.newestWholeRun(
+      plan: slug,
+      runsDirectory: RunStore(worktreeRoot: root).state.url(
+        RunLayout.runsDirectory, directoryHint: .isDirectory))
+    guard case .missing = own, let kept = StateRootResolver.keptRuns(commonDir: commonDir) else {
+      return own
+    }
+    let read = QAFiles.newestWholeRun(
+      plan: slug,
+      runsDirectory: kept.url(RunLayout.runsDirectory, directoryHint: .isDirectory))
+    guard case .read = read else { return own }
+    return read
+  }
+
   private static func baseline(
     layout: BrownfieldStateLayout, base: String?, branchExists: Bool, branch: String,
     git: LiveGit, runner: any ProcessRunner, root: URL

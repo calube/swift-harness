@@ -107,19 +107,19 @@ enum ReportRun {
       return blocked("`\(buildRun)` is not a build run id")
     }
     let state = StateRootResolver.resolve(worktree: root)
+    let reader = RunViewReader(
+      commonDirectory: commonDirectory, stateRoot: state,
+      profile: BuildPresetCatalog.profile(root: root))
     let input: RunViewInput
     do {
-      input = try RunViewReader(
-        commonDirectory: commonDirectory, stateRoot: state,
-        profile: BuildPresetCatalog.profile(root: root)
-      ).read(buildRun: buildRun)
+      input = try reader.read(buildRun: buildRun)
     } catch {
       return blocked("\(error)")
     }
     guard input.join != nil else { return blocked("no plan holds build run `\(buildRun)`") }
     var view = RunViewBuilder.build(input)
     if view.run.state != .done { view.run.snapshotAt = now }
-    let runs = state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let runs = reader.runRoots.map { $0.url(RunLayout.runsDirectory, directoryHint: .isDirectory) }
     let linked = view.validation?.linkedFiles ?? []
     if format == .html {
       view.evidenceBase = RunReportFolder.evidenceBase

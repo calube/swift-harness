@@ -27,19 +27,23 @@ public struct RunReportFolder: Sendable {
 
   /// Each linked file, `<run id>/<run-relative path>`, that `runs` doesn't hold: the report can't
   /// copy it, so its link would break.
-  public static func missing(_ linked: Set<String>, under runs: URL) -> [String] {
-    linked.filter { !FileManager.default.fileExists(atPath: runs.appending(path: $0).path) }
-      .sorted()
+  public static func missing(_ linked: Set<String>, under runs: [URL]) -> [String] {
+    linked.filter { source($0, in: runs) == nil }.sorted()
+  }
+
+  /// `relative` under the first of `runs` that holds it; `nil` when none does.
+  public static func source(_ relative: String, in runs: [URL]) -> URL? {
+    runs.lazy.map { $0.appending(path: relative) }
+      .first { FileManager.default.fileExists(atPath: $0.path) }
   }
 
   /// Copies each linked file that `runs` holds, then writes the view and the page. Every file
   /// goes to a temporary name beside it and is renamed into place, so a reader never sees half a
   /// file. A copy already there at the same size is kept.
-  public func write(page: Data, view: Data, linked: Set<String>, from runs: URL) throws(Failure) {
+  public func write(page: Data, view: Data, linked: Set<String>, from runs: [URL]) throws(Failure) {
     try makeDirectory(directory)
     for relative in linked.sorted() {
-      let source = runs.appending(path: relative)
-      guard FileManager.default.fileExists(atPath: source.path) else { continue }
+      guard let source = Self.source(relative, in: runs) else { continue }
       let target = directory.appending(path: Self.evidenceBase + relative)
       if let have = size(target), have == size(source) { continue }
       try makeDirectory(target.deletingLastPathComponent())

@@ -85,7 +85,9 @@ public enum RunViewBuilder {
   static func endOfRun(_ events: [BuildEvent], record: BuildRunRecord?) -> Date? {
     switch events.last {
     case .finish(let finish): finish.at
-    case .gate(let gate) where gate.stage == .final && gate.verdict == .green: gate.at
+    case .gate(let gate)
+    where gate.stage == .final && gate.verdict == .green && record?.endsAtFinish != true:
+      gate.at
     default: nil
     }
   }

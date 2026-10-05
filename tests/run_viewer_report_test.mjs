@@ -388,7 +388,7 @@ const tests = {
     assert.deepEqual(ticks.sort(), flowRows.flatMap((r) => r.flow.steps.map((st) => `qa:${qaRun}:${r.row} ${st.n}`)).sort())
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
-  async 'the report of a run with an at-base, an after and a final qa run shows each row\'s every run newest first, the at-base reds with their flow steps and saved output beside the final waiting rows, with 0 console errors — catches a page that shows only the last qa run'() {
+  async 'the report of a run with an at-base, an after and a last qa run shows each row\'s every run newest first, the at-base reds with their flow steps and saved output beside the last run\'s waiting rows, with 0 console errors — catches a page that shows only the last qa run'() {
     const HISTORY = `(() => {
       document.querySelector('[role=tab][data-tab="validation"]').click()
       const row = (n) => document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="' + n + '"]')
@@ -405,11 +405,11 @@ const tests = {
     const rendered = await renderReport(RUNS.history, async (page) => ({ history: await page.evaluate(HISTORY), why: await page.evaluate(AT_BASE_WHY) }))
     const { view, acted: { history, why } } = rendered
     assert.equal(rendered.errors.length, 0, JSON.stringify(rendered.errors))
-    const AT_BASE = '20261004T235239Z-4acebe48', AFTER = '20261005T000035Z-78e50883', FINAL = '20261005T002359Z-7b81c6a7'
+    const AT_BASE = '20261004T235239Z-4acebe48', AFTER = '20261005T000035Z-78e50883', LAST = '20261005T002359Z-7b81c6a7'
     assert.deepEqual(view.validation.rows.map((r) => r.history.length), [2, 2, 2, 3])
     assert.deepEqual(history.rows, ['waiting', 'waiting', 'waiting', 'pass'])
-    assert.deepEqual(history.attempts[0], [`final:waiting:${FINAL}`, `at-base:red:${AT_BASE}`])
-    assert.deepEqual(history.attempts[3], [`final:pass:${FINAL}`, `after:pass:${AFTER}`, `at-base:red:${AT_BASE}`])
+    assert.deepEqual(history.attempts[0], [`run:waiting:${LAST}`, `at-base:red:${AT_BASE}`])
+    assert.deepEqual(history.attempts[3], [`run:pass:${LAST}`, `after:pass:${AFTER}`, `at-base:red:${AT_BASE}`])
     assert.deepEqual(history.steps, ['1:true', '2:true', '3:true', '4:true', '5:true', '6:false'])
     assert.match(history.text, /after confirm-downloads-check/)
     assert.equal(why.title, 'Why it failed')

@@ -60,7 +60,10 @@ public enum StateRootResolver {
   /// the common dir's state root, whichever root a committed config in a checkout would pick.
   /// `nil` when `commonDir` holds no `config.toml`.
   public static func keptRuns(commonDir: URL) -> StateRoot? {
-    nil
+    let common = commonDir.standardizedFileURL
+    guard FileManager.default.fileExists(atPath: common.appending(path: commonConfigFile).path)
+    else { return nil }
+    return .gitDir(common)
   }
 
   /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no

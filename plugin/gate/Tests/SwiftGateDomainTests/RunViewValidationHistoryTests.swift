@@ -4,13 +4,13 @@ import SwiftGateTestSupport
 import Testing
 
 /// The third Aidoku trial's `qa run` sequence: `--at-base`, where every row read red and the 2 flow
-/// rows drove their device, then `--after confirm-downloads-check`, then the final run, where the
-/// flow and state rows read `waiting`.
+/// rows drove their device, then `--after confirm-downloads-check`, then a last `qa run` over every
+/// row, where the flow and state rows read `waiting`.
 private enum Aidoku {
   static let buildRun = "20261004T234410Z-daacb3fb"
   static let atBase = "20261004T235239Z-4acebe48"
   static let after = "20261005T000035Z-78e50883"
-  static let final = "20261005T002359Z-7b81c6a7"
+  static let last = "20261005T002359Z-7b81c6a7"
 
   static func events() throws -> [HarnessEvent] {
     try HarnessEventJSON.decode(try Fixture.data("RunView/aidoku-validation-3/events/qa.jsonl"))
@@ -19,7 +19,7 @@ private enum Aidoku {
 
   static func qaRuns() throws -> [String: RunViewQARun] {
     var runs: [String: RunViewQARun] = [:]
-    for id in [atBase, after, final] {
+    for id in [atBase, after, last] {
       let directory = "RunView/aidoku-validation-3/runs/\(id)"
       let report = try QAReportJSON.decode(try Fixture.data("\(directory)/qa/report.json"))
       var outputs: [String: String] = [:]
@@ -42,18 +42,18 @@ private enum Aidoku {
 @Suite("run view validation: every qa run of a row")
 struct RunViewValidationHistoryTests {
   @Test(
-    "each row lists every qa run's check of it, newest first, with its stage, so the at-base reds stay visible beside the final waiting rows — catches a page that shows only the last qa run"
+    "each row lists every qa run's check of it, newest first, with its stage, so the at-base reds stay visible beside the last run's waiting rows — catches a page that shows only the last qa run"
   )
   func rowsKeepEveryRun() throws {
     let validation = try #require(try Aidoku.view().validation)
     #expect(validation.rows.map(\.row) == [1, 2, 3, 4])
     #expect(validation.rows.map(\.result) == [.waiting, .waiting, .waiting, .pass])
-    #expect(validation.rows.allSatisfy { $0.qaRun == Aidoku.final && !$0.atBase })
+    #expect(validation.rows.allSatisfy { $0.qaRun == Aidoku.last && !$0.atBase })
     #expect(validation.counts == RunViewValidation.Counts(pass: 1, waiting: 3))
 
     let toggle = validation.rows[0]
-    #expect(toggle.history.map(\.qaRun) == [Aidoku.final, Aidoku.atBase])
-    #expect(toggle.history.map(\.stage) == [.final, .atBase])
+    #expect(toggle.history.map(\.qaRun) == [Aidoku.last, Aidoku.atBase])
+    #expect(toggle.history.map(\.stage) == [.run, .atBase])
     #expect(toggle.history.map(\.result) == [.waiting, .red])
     try #require(toggle.history.count == 2)
     let base = toggle.history[1]
@@ -69,8 +69,8 @@ struct RunViewValidationHistoryTests {
     #expect(state.history[1].output.contains { $0.contains("does not exist") })
 
     let acceptance = validation.rows[3]
-    #expect(acceptance.history.map(\.qaRun) == [Aidoku.final, Aidoku.after, Aidoku.atBase])
-    #expect(acceptance.history.map(\.stage) == [.final, .after, .atBase])
+    #expect(acceptance.history.map(\.qaRun) == [Aidoku.last, Aidoku.after, Aidoku.atBase])
+    #expect(acceptance.history.map(\.stage) == [.run, .after, .atBase])
     try #require(acceptance.history.count == 3)
     #expect(acceptance.history[1].after == "confirm-downloads-check")
     #expect(acceptance.history.map(\.result) == [.pass, .pass, .red])
@@ -118,7 +118,7 @@ struct RunViewValidationHistoryTests {
     #expect(copies.count == 1)
     let validation = try #require(try Aidoku.view(events + copies).validation)
     let history = validation.rows[3].history
-    #expect(history.map(\.qaRun) == [Aidoku.final, Aidoku.after, reusing, Aidoku.atBase])
+    #expect(history.map(\.qaRun) == [Aidoku.last, Aidoku.after, reusing, Aidoku.atBase])
     #expect(history.map(\.reusedFrom) == [nil, nil, Aidoku.atBase, nil])
     try #require(history.count == 4)
     #expect(history[2].stage == .atBase)

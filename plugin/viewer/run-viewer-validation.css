@@ -20,6 +20,11 @@
 .qa-mark.ok { color: var(--ok); }
 .qa-mark.bad { color: var(--bad); }
 .qa-links { font-size: 12px; }
+.qa-history { flex-basis: 100%; margin: 0; padding: 0 0 0 4px; list-style: none; display: grid; gap: 2px; font-size: 12px; }
+.qa-attempt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; padding: 2px 0; border-top: 1px dashed var(--line); }
+.qa-attempt[aria-current="true"] .qa-stage { font-weight: 600; }
+.qa-attempt .mono { overflow-wrap: anywhere; min-width: 0; }
+.qa-count[data-result="atBase"] b { color: var(--muted); }
 .qa-kept-group { display: grid; gap: 4px; }
 .qa-kept-group h4 { margin: 4px 0 0; font-size: 12px; }
 .pop-validation { margin-top: 8px; }

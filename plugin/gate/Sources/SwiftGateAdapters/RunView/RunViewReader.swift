@@ -108,7 +108,7 @@ public struct RunViewReader: RunViewReading {
         qaWindow: qaWindow)
     }
     let checkouts =
-      [(stateRoot, nil as URL?)]
+      runRoots.map { ($0, nil as URL?) }
       + worktrees.map {
         (StateRootResolver.resolve(worktree: $0), $0)
       }
@@ -143,6 +143,16 @@ public struct RunViewReader: RunViewReading {
     }
   }
 
+  /// Where this checkout's run directories are read from: its state root, then the clone's kept
+  /// runs when they sit elsewhere, where `run checkout remove` keeps the plan checkout's gate and
+  /// `qa run` directories.
+  public var runRoots: [StateRoot] {
+    guard let kept = StateRootResolver.keptRuns(commonDir: commonDirectory),
+      kept.directory.standardizedFileURL != stateRoot.directory.standardizedFileURL
+    else { return [stateRoot] }
+    return [stateRoot, kept]
+  }
+
   /// The plan's first build run after `buildRun`; `nil` when there is none.
   private func nextBuildRun(plan: String, after buildRun: String) throws -> String? {
     let directory = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan).directory
@@ -151,8 +161,8 @@ public struct RunViewReader: RunViewReading {
   }
 
   /// Each kept `qa run`'s `qa/report.json` and its red rows' saved output, the `.txt` files a
-  /// check's command, script or lint printed to, from the first checkout
-  /// whose state holds the run: the main checkout's, then each live task worktree's. A report
+  /// check's command, script or lint printed to, from the first checkout whose state holds the
+  /// run: the main checkout's, the clone's kept runs, then each live task worktree's. A report
   /// that is missing or doesn't read, and an evidence path that leaves the run directory or
   /// doesn't read, are damage.
   private func qaRuns(
@@ -280,9 +290,9 @@ public struct RunViewReader: RunViewReading {
   }
 
   /// The `report.json` of each kept gate run that wasn't GREEN, from the first checkout whose
-  /// state holds it: the main checkout's, then each live task worktree's. A report that exists
-  /// and doesn't read is damage. One no checkout holds, as in a removed worktree, is absent, and
-  /// the run's failure says so through its `nil` report.
+  /// state holds it: the main checkout's, the clone's kept runs, then each live task worktree's.
+  /// A report that exists and doesn't read is damage. One no checkout holds, as in a removed
+  /// worktree, is absent, and the run's failure says so through its `nil` report.
   private func gateReports(
     of events: [HarnessEvent], in checkouts: [(state: StateRoot, worktree: URL?)],
     damage: inout [RunView.Damage]
@@ -454,12 +464,15 @@ public struct RunViewReader: RunViewReading {
       stateRoot.url(RunLayout.eventsDirectory),
       as: stateRoot.displayPath(RunLayout.eventsDirectory), into: &files)
     // `qa run` appends its events before it writes its report, so the report moves the view too.
-    let runs =
-      (try? FileManager.default.contentsOfDirectory(
-        atPath: stateRoot.url(RunLayout.runsDirectory).path)) ?? []
-    for runID in runs where RunID.isValid(runID) && runID >= buildRun {
-      let path = RunLayout.runDirectory(for: runID) + QAReport.directory + "/" + QAReport.fileName
-      Self.stamp(stateRoot.url(path), as: stateRoot.displayPath(path), into: &files)
+    for root in runRoots {
+      let runs =
+        (try? FileManager.default.contentsOfDirectory(
+          atPath: root.url(RunLayout.runsDirectory).path)) ?? []
+      for runID in runs where RunID.isValid(runID) && runID >= buildRun {
+        let path =
+          RunLayout.runDirectory(for: runID) + QAReport.directory + "/" + QAReport.fileName
+        Self.stamp(root.url(path), as: root.displayPath(path), into: &files)
+      }
     }
     // The final report's page and view, so a live page learns its link once they're written.
     for name in [RunReportFolder.pageName, RunReportFolder.viewName] {
