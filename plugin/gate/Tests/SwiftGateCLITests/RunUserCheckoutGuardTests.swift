@@ -106,6 +106,31 @@ struct RunUserCheckoutGuardTests {
   }
 
   @Test(
+    "the trial's heredoc written on a later line than its cd into a plan slot and a relative cd under it is not denied guard.run-user-checkout, and the same command cd'ing into the user's checkout is — catches the guard resolving a relative write against the session's starting directory"
+  )
+  func capturedHeredocAfterRelativeCd() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let captured = try JSONDecoder().decode(
+      CapturedBash.self, from: Fixture.data("Hooks/relative-heredoc-after-cd-bash.json"))
+    try #require(captured.cwd == "/CLONE")
+    try #require(captured.command.hasPrefix("cd /CLONE-spec.slot-6 && "))
+
+    func decision(_ directory: String) async throws -> String? {
+      try await scenario.orchestratorDecision(
+        fixture: "Hooks/pre-tool-use-bash-allowed.json", cwd: scenario.userRoot,
+        input: [
+          "command": captured.command.replacingOccurrences(
+            of: "/CLONE-spec.slot-6", with: directory)
+        ])
+    }
+
+    let slot = try await decision(scenario.checkout)
+    #expect(slot.map { !$0.hasPrefix("deny") } ?? true, "\(slot ?? "nil")")
+    #expect(try await decision(scenario.userRoot) == Self.denied)
+  }
+
+  @Test(
     "a session that holds no plan's lock writes the user's checkout of a brownfield clone as it likes — catches the guard stopping a person's own edits outside a run"
   )
   func noLockNoGuard() async throws {
