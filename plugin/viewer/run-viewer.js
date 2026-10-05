@@ -808,7 +808,7 @@
     const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
     const cards = M.workers(view, now, stallMin == null ? Infinity : stallMin);
     const runHalts = M.openHalts(view).filter((h) => h.task == null);
-    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run names no stall_min</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
+    $("now-note").innerHTML = (stallMin == null ? `<span class="sub">stall watch off: the run's run.json didn't read</span>` : `<span class="sub">stalled after ${plural(stallMin, "minute")} quiet</span>`) +
       runHalts.map((h) => `<span class="chip bad">run halted: ${esc(h.reason)}</span>`).join("");
     $("now-cards").innerHTML = cards.length ? cards.map((w) => `<div class="now-card${w.halted ? " halted" : w.stalled ? " stalled" : ""}" role="listitem" data-task="${esc(w.task)}">
         <div class="now-top"><b class="mono">${esc(w.task)}</b>${w.halted ? `<span class="chip bad" title="${esc(w.halt.reason)}">halted</span>` : ""}${w.stalled ? `<span class="chip warn">stalled</span>` : ""}</div>

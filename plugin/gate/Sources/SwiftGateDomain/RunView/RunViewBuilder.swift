@@ -49,7 +49,7 @@ public enum RunViewBuilder {
       run: RunView.Run(
         id: input.buildRun, plan: input.join?.plan, preset: input.join?.record?.presetName,
         startedAt: startedAt, endedAt: runEnd, state: state,
-        stallMin: input.join?.record?.preset.stallMin,
+        stallMin: input.join?.record?.preset.effectiveStallMin,
         timeBox: input.join?.record?.timeBox.map(timeBox)),
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,

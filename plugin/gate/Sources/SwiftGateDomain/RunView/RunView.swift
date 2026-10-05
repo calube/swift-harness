@@ -36,7 +36,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var startedAt: Date?
     public var endedAt: Date?
     public var state: RunState
-    /// Minutes a worker may go quiet before the page flags it; `nil` when the preset doesn't say.
+    /// Minutes a worker may go quiet before the page flags it, as the stall watch counts them;
+    /// `nil` when `run.json` didn't read.
     public var stallMin: Int?
     /// A `swiftgate run`'s time box; `nil` for a run without one.
     public var timeBox: TimeBox?

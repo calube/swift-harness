@@ -229,7 +229,9 @@ struct BuildLoopCommandTests {
     let object = try #require(
       try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
     #expect(
-      Set(object.keys) == ["runId", "phase", "toStart", "running", "refused", "required"])
+      Set(object.keys) == [
+        "runId", "phase", "toStart", "running", "refused", "required", "stallMin",
+      ])
     #expect(object["phase"] as? String == "cutoff")
   }
 
