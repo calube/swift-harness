@@ -328,7 +328,9 @@ const tests = {
     assert.equal(tab.shown, true, 'the Validation tab draws nothing')
     assert.deepEqual(tab.rows.slice().sort(), view.validation.rows.map((r) => r.row + ':' + r.result).sort())
     assert.deepEqual(tab.rows, ['1:pass', '4:waiting', '2:red', '3:unverified', '5:unverified'])
-    assert.deepEqual(tab.strip, view.validation.counts)
+    const { abandoned, ...shown } = view.validation.counts
+    assert.equal(abandoned, 0)
+    assert.deepEqual(tab.strip, shown, 'the strip shows abandoned only above 0')
     assert.deepEqual(rendered.tabs.badges.validation, { red: 1, unverified: 2, waiting: 1 })
     assert.ok(tab.damage.some((line) => /qa run 20261004T185049Z-a14503a3 row 1: check: absolute-path/.test(line)), JSON.stringify(tab.damage))
     assert.equal(tab.media, 0)
