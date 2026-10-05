@@ -304,7 +304,9 @@ struct BuildMergeTests {
       try runs.record(
         RunReport(
           runID: runID, durationMilliseconds: 1000,
-          tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1000, testCounts: nil)],
+          tiers: [
+            TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1000, testCounts: nil)
+          ],
           findings: []),
         finishedAt: MergeScenario.at, command: "check ready", headCommit: head)
     }
@@ -336,7 +338,8 @@ struct BuildMergeTests {
     try RunStore(worktreeRoot: scenario.checkout).record(
       RunReport(
         runID: runID, durationMilliseconds: 1000,
-        tiers: [TierResult(tier: .t1, verdict: .red, durationMilliseconds: 1000, testCounts: nil)], findings: []),
+        tiers: [TierResult(tier: .t1, verdict: .red, durationMilliseconds: 1000, testCounts: nil)],
+        findings: []),
       finishedAt: MergeScenario.at, command: "check ready", headCommit: merged.postCommit)
     try await scenario.run.append(
       .gate(

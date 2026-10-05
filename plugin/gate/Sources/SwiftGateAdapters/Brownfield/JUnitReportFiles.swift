@@ -41,6 +41,14 @@ public enum JUnitReportFiles {
   /// The report files ``read(at:)`` reads that exist, as absolute paths in the order it reads
   /// them: `junitPath` itself when a command made it a directory of reports.
   public static func files(at junitPath: String) -> [String] {
-    []
+    let files = FileManager.default
+    var isDirectory: ObjCBool = false
+    guard files.fileExists(atPath: junitPath, isDirectory: &isDirectory), isDirectory.boolValue
+    else {
+      return ([junitPath] + JUnitReports.companionPaths(of: junitPath)).filter {
+        files.fileExists(atPath: $0)
+      }
+    }
+    return [junitPath]
   }
 }

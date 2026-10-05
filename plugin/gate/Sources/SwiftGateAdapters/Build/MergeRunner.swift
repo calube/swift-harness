@@ -395,6 +395,7 @@ public struct BuildMerge: Sendable {
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
       try await checkFixIsFree(command, context)
       let main = context.names.mainCheckout
+      let gate = await recordMergeGate(context, at: lastMerge.postCommit, log: log)
       try await step(command, context, "resetting \(main)") {
         () async throws(GitWorkspaceError) in
         try await merger.resetHard(to: lastMerge.preCommit, in: main)
@@ -417,11 +418,52 @@ public struct BuildMerge: Sendable {
       return report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
+        gateRunId: gate.runID,
         message: "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to "
-          + "\(lastMerge.preCommit). \(detail)")
+          + "\(lastMerge.preCommit).\(gate.note) \(detail)")
     } catch {
       return error.report
     }
+  }
+
+  /// Appends the newest `check --tier` run that started on the main checkout at `commit`, the
+  /// merge gate that sent this undo, as the task's merge gate, unless the log already holds it.
+  /// A gate that can't be found or recorded never stops the undo; the note says why.
+  private func recordMergeGate(_ context: Context, at commit: String, log: BuildEventLog) async
+    -> (runID: String?, note: String)
+  {
+    let runs = RunStore(
+      worktreeRoot: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory))
+    let records: [RunHistoryRecord]
+    do throws(RunStoreError) {
+      records = try runs.readHistory().records
+    } catch {
+      return (nil, " Its merge gate wasn't recorded: reading the run history: \(error).")
+    }
+    guard
+      let record = records.last(where: {
+        $0.headCommit == commit && TaskReturnEvidence.GateRun.tier(ofCommand: $0.command) != nil
+      }),
+      let tier = TaskReturnEvidence.GateRun.tier(ofCommand: record.command)
+    else { return (nil, "") }
+    let recorded = log.events.contains {
+      if case .gate(let gate) = $0 { return gate.runID == record.runID }
+      return false
+    }
+    guard !recorded else { return (nil, "") }
+    do throws(BuildRunStoreError) {
+      try await context.run.append(
+        .gate(
+          .init(
+            stage: .merge(task: task), tier: tier, verdict: record.verdict, runID: record.runID,
+            at: clock.now())))
+    } catch {
+      return (nil, " Its merge gate \(record.runID) wasn't recorded: \(error).")
+    }
+    return (
+      record.runID,
+      " Recorded its merge gate \(record.runID), \(tier.rawValue) \(record.verdict.rawValue)."
+    )
   }
 
   private func resolve(_ command: String) async throws(Stop) -> Context {
@@ -642,7 +684,7 @@ public struct BuildMerge: Sendable {
     _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ verdict: Verdict,
     reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
     pre: String? = nil, post: String? = nil,
-    conflicted: [String]? = nil, message: String
+    conflicted: [String]? = nil, gateRunId: String? = nil, message: String
   ) -> BuildMergeReport {
     let cut = status == .conflicted || status == .undone
     return BuildMergeReport(
@@ -650,6 +692,7 @@ public struct BuildMerge: Sendable {
       runId: context.run.runID, branch: context.branch,
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? context.fix.path : nil,
-      fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted, message: message)
+      fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted,
+      gateRunId: gateRunId, message: message)
   }
 }
