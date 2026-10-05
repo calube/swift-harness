@@ -957,15 +957,16 @@ function swiftStoredFields(source, typeName) {
 }
 
 // The validation table's shape and the rule ids `plan-lint` can report, as the gate declares them.
-// The screen, app and fakeable-obstacle rules need the repository's app areas and client modules,
-// so they count only once `plan-lint` passes them.
+// The screen, app, fakeable-obstacle, clock and seedable-obstacle rules need the repository's app
+// areas and client modules, so they count only once `plan-lint` passes them.
 function validationContract() {
   const table = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/ValidationTable.swift'), 'utf8')
   const lint = readFileSync(join(root, 'gate/Sources/SwiftGateDomain/Plan/PlanLintValidation.swift'), 'utf8')
   const command = readFileSync(join(root, 'gate/Sources/SwiftGateCLI/Commands/PlanLintCommand.swift'), 'utf8')
   const appAreaRules = [
     /screenWithoutFlowRuleID = "([^"]+)"/, /appWithoutFlowRuleID = "([^"]+)"/,
-    /obstacleFakeableRuleID = "([^"]+)"/,
+    /obstacleFakeableRuleID = "([^"]+)"/, /clockUnheldRuleID = "([^"]+)"/,
+    /obstacleSeedableRuleID = "([^"]+)"/,
   ]
     .map(pattern => pattern.exec(lint)?.[1])
   const lintCall = (command.split('PlanLintValidation.findings(')[1] ?? '').split(/\n\s*\}/)[0]
