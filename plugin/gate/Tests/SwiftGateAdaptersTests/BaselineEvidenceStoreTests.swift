@@ -31,13 +31,13 @@ struct BaselineEvidenceStoreTests {
   /// A rerun whose command writes a result bundle into the scratch tree.
   private static func query(_ clone: Clone, headEvidence: [String] = []) -> BaselineQuery {
     BaselineQuery(
-      key: key, head: .failed(exit: 65, tail: "head tail", junit: nil),
-      request: { scratch in
-        AreaCommandRequest(
-          area: key.area, step: key.step, command: key.command,
-          workingDirectory: scratch.path, deadline: .seconds(60), environment: [:],
-          junitPath: nil, resultBundlePath: scratch.appending(path: "app.test.xcresult").path)
-      }, headEvidence: headEvidence)
+      key: key, head: .failed(exit: 65, tail: "head tail", junit: nil), headEvidence: headEvidence
+    ) { scratch in
+      AreaCommandRequest(
+        area: key.area, step: key.step, command: key.command,
+        workingDirectory: scratch.path, deadline: .seconds(60), environment: [:],
+        junitPath: nil, resultBundlePath: scratch.appending(path: "app.test.xcresult").path)
+    }
   }
 
   /// Fails every request as a test runner that couldn't launch, after writing its bundle.
@@ -85,7 +85,7 @@ struct BaselineEvidenceStoreTests {
     for lookup in [first, second] {
       let summary = try #require(
         lookup.notes.first { $0.message.contains("also fail at the merge base") })
-      #expect(summary.message.contains(folder.path(percentEncoded: false)))
+      #expect(summary.message.contains(folder.path))
       #expect(summary.message.contains(head[0]))
       #expect(lookup.verdict.absorbed == [BaselineFailure(key: Self.key, test: nil)])
     }

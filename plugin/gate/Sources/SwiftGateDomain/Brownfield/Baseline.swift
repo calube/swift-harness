@@ -144,7 +144,7 @@ public struct BaselineFile: Sendable, Equatable {
           key: BaselineStepKey(
             area: record.area, step: record.step, command: record.command,
             selection: record.selection),
-          result: result))
+          result: result, evidence: record.evidence))
     }
     return BaselineFile(tree: tree, records: records)
   }
@@ -162,7 +162,8 @@ public struct BaselineFile: Sendable, Equatable {
           }
         return StoredRecord(
           area: record.key.area, step: record.key.step, command: record.key.command,
-          selection: record.key.selection, result: result, tests: tests)
+          selection: record.key.selection, result: result, tests: tests,
+          evidence: record.evidence)
       })
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
@@ -197,6 +198,7 @@ public struct BaselineFile: Sendable, Equatable {
     let selection: [String]
     let result: StoredResult
     let tests: [String]?
+    let evidence: String?
   }
 
   private struct StoredFile: Codable {
@@ -241,12 +243,31 @@ public struct BaselineVerdict: Sendable, Equatable {
       "\(failure.key.area) \(failure.key.step.rawValue)"
         + (failure.test.map { ": \($0)" } ?? " (the whole step)")
     }
+    var kept: [String] = []
+    var seen = Set<BaselineStepKey>()
+    for failure in absorbed where seen.insert(failure.key).inserted {
+      if let line = Self.kept(failure.key, evidence[failure.key]) { kept.append(line) }
+    }
     return try? Finding(
       ruleID: BrownfieldRuleID.baselineSummary.rawValue, severity: .nit, file: file, line: nil,
       message:
         "\(absorbed.count) failure(s) also fail at the merge base, so they don't gate: "
-        + listed.joined(separator: "; "),
+        + listed.joined(separator: "; ")
+        + (kept.isEmpty ? "" : ". Kept: " + kept.joined(separator: "; ")),
       failureScenario: nil)
+  }
+
+  /// `<area> <step>` with where its head and merge base runs were kept; `nil` when neither was.
+  static func kept(_ key: BaselineStepKey, _ evidence: BaselineEvidence?) -> String? {
+    guard let evidence, !(evidence.head.isEmpty && evidence.base.isEmpty) else { return nil }
+    var parts: [String] = []
+    if !evidence.head.isEmpty {
+      parts.append("at the head in " + evidence.head.joined(separator: ", "))
+    }
+    if !evidence.base.isEmpty {
+      parts.append("at the merge base in " + evidence.base.joined(separator: ", "))
+    }
+    return "\(key.area) \(key.step.rawValue) " + parts.joined(separator: ", ")
   }
 }
 
@@ -255,7 +276,20 @@ extension BaselineVerdict {
   public func unattributedFindings(
     file: String, evidence: [BaselineStepKey: BaselineEvidence] = [:]
   ) -> [Finding] {
-    []
+    unattributed.compactMap { failure in
+      let key = failure.key
+      let kept = Self.kept(key, evidence[key]).map { " Kept: \($0)." } ?? " No run was kept."
+      return try? Finding(
+        ruleID: BrownfieldRuleID.baselineWholeStep.rawValue, severity: .major, file: file,
+        line: nil,
+        message:
+          "\(key.area) \(key.step.rawValue) fails as the whole step at the head and at the merge "
+          + "base, with no test id to tell which tests fail (`\(key.command)`), so final can't "
+          + "call it green: a new failure would hide behind the old one.\(kept)",
+        failureScenario:
+          "A test the plan broke fails beside the merge base's failure, and the step is excused "
+          + "whole, so the plan lands with it failing.")
+    }
   }
 
   /// 1 non-gating `area.step-dropped` per step whose tool isn't installed.
@@ -300,6 +334,7 @@ public enum Baseline {
     var absorbed: [BaselineFailure] = []
     var remaining: [BaselineFailure] = []
     var notInstalled: [BaselineStepKey] = []
+    var unattributed: [BaselineFailure] = []
     for key in head.keys.sorted(by: Self.order) {
       if head[key] == .notInstalled {
         // A whole-step failure recorded before not-installed was its own answer reads the same.
@@ -311,15 +346,20 @@ public enum Baseline {
         continue
       }
       let known = Set(base[key].map { failures(of: key, $0) } ?? [])
+      let testStep = [AreaStep.test, .testFiles, .e2e].contains(key.step)
       for failure in failures(of: key, head[key] ?? .passed) {
-        if known.contains(failure) {
+        if known.contains(failure), attributingTests, testStep, failure.test == nil {
+          unattributed.append(failure)
+        } else if known.contains(failure) {
           absorbed.append(failure)
         } else {
           remaining.append(failure)
         }
       }
     }
-    return BaselineVerdict(absorbed: absorbed, remaining: remaining, notInstalled: notInstalled)
+    return BaselineVerdict(
+      absorbed: absorbed, remaining: remaining, notInstalled: notInstalled,
+      unattributed: unattributed)
   }
 
   private static func order(_ lhs: BaselineStepKey, _ rhs: BaselineStepKey) -> Bool {

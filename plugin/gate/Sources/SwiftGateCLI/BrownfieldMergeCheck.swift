@@ -135,6 +135,7 @@ enum BrownfieldMergeCheck {
     let step: AreaStep
     let template: String
     let selection: [String]
+    let request: AreaCommandRequest
     let outcome: AreaCommandOutcome
     /// Lint output whose failure the parser could place on no line: it goes to the baseline
     /// like a test failure, as `area.lint-failed`.
@@ -196,10 +197,15 @@ enum BrownfieldMergeCheck {
       } catch {
         return blocked("can't read the tree of the merge base \(mergeBase): \(error)")
       }
+      // The merge base's rerun of a step writes its reports where the head's run did.
+      let evidence = context.directory.appending(path: "baseline-evidence")
       let queries = failing.map { run in
         let key = BaselineStepKey(
           area: run.area.name, step: run.step, command: run.template, selection: run.selection)
-        return BaselineQuery(key: key, head: run.outcome) { scratch in
+        let headEvidence = StepEvidence.keep(
+          run.outcome, of: run.request, named: "\(run.area.name).\(run.step.rawValue)",
+          in: evidence)
+        return BaselineQuery(key: key, head: run.outcome, headEvidence: headEvidence) { scratch in
           // The failing step was prepared from this area, so preparing it again can't be `nil`.
           prepare(
             run.area, step: run.step, repositoryRoot: scratch.path(percentEncoded: false),
@@ -212,14 +218,15 @@ enum BrownfieldMergeCheck {
       }
       let (lookup, milliseconds) = await GateRun.timed {
         await dependencies.baseline.lookupOrRerun(
-          queries, base: BaselineBase(commit: mergeBase, tree: tree))
+          queries, base: BaselineBase(commit: mergeBase, tree: tree),
+          attributingTests: tier == .final)
       }
       let remaining = lookup.verdict.remaining
       outcome.baselineCount = lookup.verdict.baselineCount
       context.steps.record(
-        .baseline, tier: nil, milliseconds: milliseconds, verdict: remaining.isEmpty ? .green : .red
-      )
-      outcome.findings += lookup.notes
+        .baseline, tier: nil, milliseconds: milliseconds,
+        verdict: remaining.isEmpty && lookup.unattributed.isEmpty ? .green : .red)
+      outcome.findings += lookup.notes + lookup.unattributed
       for failure in remaining {
         guard
           let run = failing.first(where: {
@@ -316,7 +323,8 @@ enum BrownfieldMergeCheck {
         verdict: outcome == .passed ? .green : .red, area: area.name)
       runs.append(
         StepRun(
-          area: area, step: step, template: template, selection: selection, outcome: outcome,
+          area: area, step: step, template: template, selection: selection,
+          request: prepared.request, outcome: outcome,
           lintFindings: lintFindings, lintUnread: lintUnread))
     }
     return (findings, runs)

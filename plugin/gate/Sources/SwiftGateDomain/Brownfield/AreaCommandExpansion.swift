@@ -103,7 +103,21 @@ public enum AreaCommandExpansion {
   /// `command` with `-resultBundlePath` added, so the runner can read which tests failed; `nil`
   /// when it isn't 1 `xcodebuild` run of tests, or already names its own bundle.
   public static func requestingResultBundle(_ command: String, at path: String) -> String? {
-    nil
+    guard !["&&", "||", ";", "|", "`", "$(", "\n"].contains(where: command.contains),
+      !command.contains("-resultBundlePath")
+    else { return nil }
+    let words = command.split(separator: " ").map(String.init)
+    guard let tool = words.firstIndex(where: { !isAssignment($0) }),
+      words[tool] == "xcodebuild" || words[tool].hasSuffix("/xcodebuild"),
+      words[(tool + 1)...].contains(where: { $0 == "test" || $0 == "test-without-building" })
+    else { return nil }
+    return command + " -resultBundlePath " + shellQuoted(path)
+  }
+
+  /// `NAME=value`, a variable the shell sets for the command after it.
+  private static func isAssignment(_ word: String) -> Bool {
+    guard let equals = word.firstIndex(of: "="), equals != word.startIndex else { return false }
+    return word[..<equals].allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
   }
 
   /// `nil` when `area` has no command for `step`.
@@ -120,10 +134,20 @@ public enum AreaCommandExpansion {
       template, files: files.map { relative(components($0), to: areaComponents) }, tests: tests,
       junitPath: junitPath)
     let root = ([repositoryRoot] + areaComponents).joined(separator: "/")
+    var command = expanded.command
+    var bundle: String?
+    if area.kind == .xcode, [.test, .testFiles, .e2e].contains(step) {
+      let path = resultBundlePath(junitPath: junitPath)
+      if let requesting = requestingResultBundle(command, at: path) {
+        command = requesting
+        bundle = path
+      }
+    }
     return PreparedAreaCommand(
       request: AreaCommandRequest(
-        area: area.name, step: step, command: expanded.command, workingDirectory: root,
-        deadline: deadline, environment: environment, junitPath: expanded.junitPath),
+        area: area.name, step: step, command: command, workingDirectory: root,
+        deadline: deadline, environment: environment, junitPath: expanded.junitPath,
+        resultBundlePath: bundle),
       runsWhole: expanded.runsWhole)
   }
 

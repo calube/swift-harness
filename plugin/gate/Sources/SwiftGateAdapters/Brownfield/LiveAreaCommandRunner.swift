@@ -14,6 +14,8 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
 
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
     if let junitPath = request.junitPath { JUnitReportFiles.clear(at: junitPath) }
+    // `xcodebuild` refuses a result bundle path that already exists.
+    if let bundle = request.resultBundlePath { try? FileManager.default.removeItem(atPath: bundle) }
     let invocation = ProcessInvocation(
       executable: "/bin/sh", arguments: ["-c", "exec 2>&1\n" + request.command],
       environmentOverlay: request.environment.mapValues { $0 },
@@ -46,7 +48,12 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
       case .exited(let status): .exited(status)
       case .signaled(let signal): .signaled(signal)
       }
-    let junit = request.junitPath.flatMap(JUnitReportFiles.read(at:))
+    var junit = request.junitPath.flatMap(JUnitReportFiles.read(at:))
+    if junit == nil, end != .exited(0), let bundle = request.resultBundlePath,
+      let tests = try? await LiveXcresultReader(runner: processRunner).read(bundlePath: bundle)
+    {
+      junit = XcresultTestReport.junit(fromTests: tests.testResults)
+    }
     return AreaOutcomeReading.outcome(end: end, output: output.stdout.text, junit: junit)
   }
 }
