@@ -110,22 +110,36 @@ extension ShellSyntax {
   /// compound, joined by `&&` or `||`, in a pipeline, or naming the variable as a word
   /// (`read NAME`, `unset NAME`, `for NAME in`) leaves it unknown.
   ///
+  /// A function definition (`name() { … }` or `function name { … }`) moves nothing where it
+  /// stands, so the shell stays where it was; its body's commands have no entry, since they run
+  /// wherever the function is called.
+  ///
   /// From the first command a static reading can't follow on, the map has no entry: any other
   /// compound command, a subshell, a command sent to the background, or a `cd` to any other
-  /// variable, a glob, `~` or `-`, behind `!` or through a wrapper like `env`. A line that defines
-  /// a function or runs `eval`, `source` or `trap` at top level has no entries at all, and neither
-  /// has a command no path reaches.
+  /// variable, a glob, `~` or `-`, behind `!` or through a wrapper like `env`. A line that runs
+  /// `eval`, `source` or `trap` at top level, defines a function in any other form, or calls a
+  /// function whose body may move or end the shell (or, while it defines one, calls a command
+  /// named by an expansion) has no entries at all, and neither has a command no path reaches.
   static func possibleDirectories(
     _ commands: [ParsedCommand], directoryExists: (String) -> Bool
   ) -> [Int: [ShellDirectory]] {
     let top = commands.indices.filter { commands[$0].isTopLevel }
-    let opaque = top.contains { index in
-      let entry = commands[index]
+    let definitions = functionDefinitions(top, commands)
+    let defined = definitions.reduce(into: Set<Int>()) { positions, definition in
+      positions.formUnion(definition.header...definition.closer)
+    }
+    let opaque = top.indices.contains { position in
+      guard !defined.contains(position) else { return false }
+      let entry = commands[top[position]]
       let name = unwrapped(entry).name
       return name.map(opaqueCommands.contains) == true
         || zip(entry.links, entry.links.dropFirst()).contains { $0 == (.open, .close) }
     }
-    guard !opaque else { return [:] }
+    guard !opaque, !callsMovingFunction(top, commands, definitions, outside: defined) else {
+      return [:]
+    }
+    let closers = Dictionary(
+      definitions.map { ($0.header, $0.closer) }, uniquingKeysWith: { first, _ in first })
 
     var possible: [Int: [ShellDirectory]] = [:]
     var variables: [String: String] = [:]
@@ -161,8 +175,14 @@ extension ShellSyntax {
         continue
       }
       var end = position + 1
-      while end < top.count, joining(commands[top[end]].links) == .pipe { end += 1 }
-      let pipeline = top[position..<end].map { commands[$0] }
+      let closer = closers[position]
+      if let closer {
+        end = closer + 1
+      } else {
+        while end < top.count, joining(commands[top[end]].links) == .pipe { end += 1 }
+      }
+      // A function definition runs nothing, so it stands for no pipeline.
+      let pipeline = closer == nil ? top[position..<end].map { commands[$0] } : []
       guard
         pipeline.allSatisfy({ entry in
           entry.words.first.map(compoundWords.contains) != true
@@ -170,7 +190,9 @@ extension ShellSyntax {
       else { break }
       let after: (succeeded: [ShellDirectory], failed: [ShellDirectory])
       var madeAfter = made
-      if pipeline.count > 1 {
+      if pipeline.isEmpty {
+        after = (runs, [])
+      } else if pipeline.count > 1 {
         after = (runs, runs)
       } else if let operands = madeDirectories(pipeline[0], variables: variables) {
         for operand in operands {
@@ -203,7 +225,7 @@ extension ShellSyntax {
       } else {
         after = (runs, runs)
       }
-      if !runs.isEmpty {
+      if !runs.isEmpty, !pipeline.isEmpty {
         for index in top[position..<end] { possible[index] = runs }
       }
       if pipeline.count == 1, link == .sequence, let assigned = assignments(pipeline[0]) {
@@ -245,6 +267,138 @@ extension ShellSyntax {
     possibleDirectories(commands, directoryExists: directoryExists).compactMapValues {
       guard $0.count == 1, case .path(let path) = $0[0], path.hasPrefix("/") else { return nil }
       return path
+    }
+  }
+
+  /// A function definition at top level, by position in `top`.
+  private struct FunctionDefinition {
+    let name: String
+    /// The command that names the function.
+    let header: Int
+    /// The command that opens the body: the `{` after `name()`, or `header` itself for
+    /// `function name { …`.
+    let brace: Int
+    /// The `}` that closes the body.
+    let closer: Int
+  }
+
+  /// Every `name() { … }`, `name () { … }`, `function name { … }` and `function name() { … }` at
+  /// top level whose body closes with a lone `}` that nothing redirects, pipes or sends to the
+  /// background. A definition in any other form is not one of them.
+  private static func functionDefinitions(_ top: [Int], _ commands: [ParsedCommand])
+    -> [FunctionDefinition]
+  {
+    var definitions: [FunctionDefinition] = []
+    var position = 0
+    while position < top.count {
+      let words = commands[top[position]].words
+      let next = position + 1 < top.count ? commands[top[position + 1]] : nil
+      // Whether `next` is the `{` that opens a body after `()` or, with `parenthesized` false,
+      // after a newline.
+      let opensBody = { (parenthesized: Bool) -> Bool in
+        guard let next, next.words.first == "{" else { return false }
+        let prefix: [ShellLink] = parenthesized ? [.open, .close] : [.sequence]
+        return next.links.starts(with: prefix)
+          && next.links.dropFirst(prefix.count).allSatisfy { $0 == .sequence }
+      }
+      var found: (name: String, brace: Int)?
+      if words.count == 1, isFunctionName(words[0]), opensBody(true) {
+        found = (words[0], position + 1)
+      } else if words.first == "function", words.count >= 2, isFunctionName(words[1]) {
+        if words.count >= 3, words[2] == "{" {
+          found = (words[1], position)
+        } else if words.count == 2, opensBody(true) || opensBody(false) {
+          found = (words[1], position + 1)
+        }
+      }
+      if let found, commands[top[position]].command.redirectTargets.isEmpty,
+        let closer = bodyCloser(top, brace: found.brace, commands)
+      {
+        definitions.append(
+          FunctionDefinition(name: found.name, header: position, brace: found.brace, closer: closer)
+        )
+        position = closer + 1
+      } else {
+        position += 1
+      }
+    }
+    return definitions
+  }
+
+  /// The position in `top` of the lone `}` that closes the function body opening at `brace`.
+  private static func bodyCloser(_ top: [Int], brace: Int, _ commands: [ParsedCommand]) -> Int? {
+    var depth = 0
+    for current in brace..<top.count {
+      for word in bodyWords(commands[top[current]], isBrace: current == brace)
+        .prefix(while: compoundWords.contains)
+      {
+        if compoundOpeners.contains(word) { depth += 1 }
+        if compoundClosers.contains(word) { depth -= 1 }
+      }
+      guard depth <= 0, current > brace else { continue }
+      let entry = commands[top[current]]
+      let after = current + 1 < top.count ? commands[top[current + 1]].links : []
+      guard depth == 0, entry.words == ["}"], entry.command.redirectTargets.isEmpty,
+        !after.contains(where: { $0 == .pipe || $0 == .background })
+      else { return nil }
+      return current
+    }
+    return nil
+  }
+
+  /// A body command's words, from the `{` on for the command that opens the body.
+  private static func bodyWords(_ entry: ParsedCommand, isBrace: Bool) -> ArraySlice<String> {
+    guard isBrace, let open = entry.words.firstIndex(of: "{") else { return entry.words[...] }
+    return entry.words[open...]
+  }
+
+  private static func isFunctionName(_ word: String) -> Bool {
+    !word.isEmpty && !compoundWords.contains(word)
+      && word.allSatisfy {
+        $0 == "_" || $0 == "-" || $0 == "." || $0 == ":"
+          || ($0.isASCII && ($0.isLetter || $0.isNumber))
+      }
+  }
+
+  /// Whether the line's shell calls a function whose body may move or end it: one with a
+  /// directory command, `exit`, `eval`-like command, nested definition, command named by an
+  /// expansion, or call to such a function. A call is a top-level command at a position in `top`
+  /// outside `defined`, by the function's name or, once any function moves, by an expansion; a
+  /// call in a command substitution runs in a subshell and moves nothing.
+  private static func callsMovingFunction(
+    _ top: [Int], _ commands: [ParsedCommand], _ definitions: [FunctionDefinition],
+    outside defined: Set<Int>
+  ) -> Bool {
+    guard !definitions.isEmpty else { return false }
+    let name = { (entry: ParsedCommand, isBrace: Bool) -> String? in
+      normalize(
+        Array(bodyWords(entry, isBrace: isBrace).drop { compoundWords.contains($0) || $0 == "!" })
+      )
+      .name
+    }
+    let isExpansion = { (name: String) in name.contains("$") || name.contains("`") }
+    var moving: Set<String> = []
+    while true {
+      let before = moving.count
+      for definition in definitions where !moving.contains(definition.name) {
+        let moves = (definition.brace...definition.closer).contains { position in
+          let entry = commands[top[position]]
+          guard let called = name(entry, position == definition.brace) else { return false }
+          return directoryCommands.contains(called) || opaqueCommands.contains(called)
+            || called == "exit" || isExpansion(called) || moving.contains(called)
+            || (position != definition.brace
+              && zip(entry.links, entry.links.dropFirst()).contains { $0 == (.open, .close) })
+        }
+        if moves { moving.insert(definition.name) }
+      }
+      if moving.count == before { break }
+    }
+    guard !moving.isEmpty else { return false }
+    return top.indices.contains { position in
+      guard !defined.contains(position), let called = name(commands[top[position]], false) else {
+        return false
+      }
+      return moving.contains(called) || isExpansion(called)
     }
   }
 

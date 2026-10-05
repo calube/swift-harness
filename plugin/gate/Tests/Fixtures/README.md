@@ -5254,6 +5254,59 @@ PY
 
 `grep -aEi '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a heredoc after a shell function definition
+
+`Hooks/function-definition-after-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied
+in a later 2026-10-05 brownfield practice trial: from the clone's checkout it `cd`'d into a
+validation slot, made and `cd`'d into a relative `.harness/qa/spec`, defined a shell function
+whose body moves nothing, and on later lines wrote flow files there with heredocs that call the
+function. The function definition made the guard stop following the `cd`s, so it named the first
+write in the user's checkout. The clone becomes `/CLONE`, the harness checkout `/HARNESS`, the
+bundle id `com.example.App`, each launch scenario `scenario-N` in order of first use, an element
+id prefix `app.cell`, and the flow files after `launch.flow.json` `flow-2` to `flow-6` in order. Each
+heredoc body keeps only its `$(OPEN …)` line between `[` and `]`: the other lines are app content
+and name no write. With `T` the trial's run folder, whose `run.jsonl` is the orchestrator's
+stream-json output:
+
+```sh
+python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/function-definition-after-cd-bash.json <<'PY'
+import json,sys,re
+flows={}; scenarios={}
+def flow(m):
+    if m.group(1)=='launch': return m.group(0)
+    flows.setdefault(m.group(1),'flow-%d'%(len(flows)+2))
+    return flows[m.group(1)]+'.flow.json'
+def scenario(m):
+    scenarios.setdefault(m.group(1),'scenario-%d'%(len(scenarios)+1))
+    return '"-harness-scenario", "%s"'%scenarios[m.group(1)]
+def body(m):
+    kept=[l for l in m.group(2).split('\n') if l.startswith('  $(OPEN ')]
+    return m.group(1)+'\n'.join(['[']+kept+[']'])+'\nEOF\n'
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
+    c=re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-[^/]+','/HARNESS',c)
+    c=re.sub(r'com\.example\.[A-Za-z]+','com.example.App',c)
+    c=re.sub(r'(id=\\+")[A-Za-z]+\.[A-Za-z]+\.%d',r'\1app.cell.%d',c)
+    c=re.sub(r'(<<EOF\n)(.*?)\nEOF\n',body,c,flags=re.S)
+    c=re.sub(r'"-harness-scenario", "([^"]+)"',scenario,c)
+    return re.sub(r'(?<![\w/*-])([a-z-]+)\.flow\.json',flow,c)
+cwd=None; denied={}
+lines=[json.loads(l) for l in open(sys.argv[1])]
+for d in lines:
+    if d.get('type')=='system' and d.get('subtype')=='init' and cwd is None: cwd=d['cwd']
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_result' and str(b.get('content')).startswith('PreToolUse:Bash hook error: swiftgate guard.run-user-checkout'):
+            denied[b['tool_use_id']]=b['content']
+for d in lines:
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_use' and b.get('id') in denied:
+            json.dump({"cwd":scrub(cwd),"command":scrub(b['input']['command']),
+                       "denial":scrub(denied[b['id']])},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -aEi '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## qa lint: a flow that waits for a state the fake ends on its own
 
 `QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
