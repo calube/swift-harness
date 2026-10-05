@@ -1,0 +1,139 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "commit" : "bce654ab78aff08e9341095597f8bb04bd80dfbc",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "5 of 5 rows verified: 0 pass, 5 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "checks read from .harness/qa/spec/ before qa adopt: only the 5 rows `spec-validation` writes ran"
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "qa/launch-empty-board.flow.json",
+      "evidence" : [
+        "qa/01-req-launch-empty-board.flow/steps.json",
+        "qa/01-req-launch-empty-board.flow/batch.json",
+        "qa/01-req-launch-empty-board.flow/flow.json",
+        "qa/01-req-launch-empty-board.flow/sim/steps.ndjson",
+        "qa/01-req-launch-empty-board.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 130986,
+      "requirement" : "req-launch-empty-board",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/alternate-turns.flow.json",
+      "evidence" : [
+        "qa/02-req-alternate-turns.flow/steps.json",
+        "qa/02-req-alternate-turns.flow/batch.json",
+        "qa/02-req-alternate-turns.flow/flow.json",
+        "qa/02-req-alternate-turns.flow/sim/steps.ndjson",
+        "qa/02-req-alternate-turns.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 40438,
+      "requirement" : "req-alternate-turns",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/win-lines.flow.json",
+      "evidence" : [
+        "qa/03-req-win-lines.flow/steps.json",
+        "qa/03-req-win-lines.flow/batch.json",
+        "qa/03-req-win-lines.flow/flow.json",
+        "qa/03-req-win-lines.flow/sim/steps.ndjson",
+        "qa/03-req-win-lines.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\"; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 39966,
+      "requirement" : "req-win-lines",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/draw.flow.json",
+      "evidence" : [
+        "qa/04-req-draw.flow/steps.json",
+        "qa/04-req-draw.flow/batch.json",
+        "qa/04-req-draw.flow/flow.json",
+        "qa/04-req-draw.flow/sim/steps.ndjson",
+        "qa/04-req-draw.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 39776,
+      "requirement" : "req-draw",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/new-game.flow.json",
+      "evidence" : [
+        "qa/05-req-new-game.flow/steps.json",
+        "qa/05-req-new-game.flow/batch.json",
+        "qa/05-req-new-game.flow/flow.json",
+        "qa/05-req-new-game.flow/sim/steps.ndjson",
+        "qa/05-req-new-game.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 57583,
+      "requirement" : "req-new-game",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T014356Z-f0377466",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

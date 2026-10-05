@@ -49,11 +49,11 @@ output, flow, and the prepared at-base run a reused check took its result from.
 
 ## Evidence and privacy
 
-The page names evidence by its path relative to its run's directory and never embeds it: the page holds no
-image or video. A report links `runs/<run id>/<path>` in its own folder, where `report` copies each video
-and contact sheet a flow links, an earlier run's included, so its links outlive the run stores. A linked
-file its run directory lacks is a footer line. A live page links `../runs/<run id>/<path>`, and its server answers each file a flow links
-and 404s any other. Every string passes the payload guard. A check, reason, step label,
+Each row lists its evidence by path and never embeds it: the page holds no image or video. A report links
+`runs/<run id>/<path>` in its own folder, where `report` copies each file the view links, videos and sheets
+first, up to 256 MB, so its links work wherever the folder goes. A result bundle stays behind for its
+`.tests.json` summary. A file it can't copy is a footer line, named without a link. A live page links
+`../runs/<run id>/<path>`, and its server answers each linked file and 404s any other. Every string passes the payload guard. A check, reason, step label,
 test name or path the guard rejects, or a path that leaves its run directory, drops out as a footer
 line naming the `qa run` and row, or the gate run and kept flow. Output lines lose machine paths and stay
 1 line each. A missing or undecodable report, and an evidence path that leaves its run directory, are

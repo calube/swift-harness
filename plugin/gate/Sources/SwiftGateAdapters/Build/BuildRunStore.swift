@@ -173,6 +173,30 @@ public struct BuildRunStore: Sendable {
     try writeAtEnd(line)
   }
 
+  /// Appends `event` unless an event already in the log matches `held`, reading the log and
+  /// writing under the same lock, so 2 racing callers record it once. Returns whether it appended.
+  @discardableResult
+  public func append(_ event: BuildEvent, unless held: @Sendable (BuildEvent) -> Bool)
+    async throws(BuildRunStoreError) -> Bool
+  {
+    let line: Data
+    do {
+      line = try BuildEventJSON.encodeLine(event)
+    } catch {
+      throw .io(operation: "encode", path: layout.eventsFile, reason: String(describing: error))
+    }
+    let lease: LockLease
+    do {
+      lease = try await lock.acquire(timeout: timeout)
+    } catch {
+      throw .lock(error)
+    }
+    defer { lease.release() }
+    guard !(try events().events.contains(where: held)) else { return false }
+    try writeAtEnd(line)
+    return true
+  }
+
   private func writeAtEnd(_ line: Data) throws(BuildRunStoreError) {
     let path = layout.eventsFile
     let fd = Darwin.open(path, O_RDWR | O_CREAT | O_CLOEXEC, 0o644)

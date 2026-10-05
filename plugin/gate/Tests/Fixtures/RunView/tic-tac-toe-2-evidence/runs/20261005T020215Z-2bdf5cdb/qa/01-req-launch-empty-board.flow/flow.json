@@ -1,0 +1,79 @@
+{
+  "sheet" : "qa/01-req-launch-empty-board.flow/sheet.png",
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait selector id=\"game.status\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.0\" \"Empty\"",
+      "n" : 2,
+      "offsetMs" : 1888,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.1\" \"Empty\"",
+      "n" : 3,
+      "offsetMs" : 3144,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.2\" \"Empty\"",
+      "n" : 4,
+      "offsetMs" : 5354,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.3\" \"Empty\"",
+      "n" : 5,
+      "offsetMs" : 7307,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.4\" \"Empty\"",
+      "n" : 6,
+      "offsetMs" : 10137,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.5\" \"Empty\"",
+      "n" : 7,
+      "offsetMs" : 11445,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.6\" \"Empty\"",
+      "n" : 8,
+      "offsetMs" : 12823,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.7\" \"Empty\"",
+      "n" : 9,
+      "offsetMs" : 14419,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.cell.8\" \"Empty\"",
+      "n" : 10,
+      "offsetMs" : 15804,
+      "ok" : true
+    },
+    {
+      "label" : "is text id=\"game.status\" \"X's turn\"",
+      "n" : 11,
+      "offsetMs" : 17203,
+      "ok" : true
+    },
+    {
+      "label" : "snapshot",
+      "n" : 12,
+      "offsetMs" : 18559,
+      "ok" : true
+    }
+  ],
+  "video" : "qa/01-req-launch-empty-board.flow/video.mp4"
+}

@@ -304,8 +304,8 @@ final class ViewRun: Sendable {
     }
   }
 
-  /// A video or contact sheet the view's flows link, from the reader's run directories; any
-  /// other path is 404, so the page can't reach a file no flow names.
+  /// A video, contact sheet or evidence file the view links, from the reader's run directories;
+  /// any other path, or a folder, is 404, so the page can't reach a file the view doesn't name.
   private func runFile(_ encoded: Substring) -> LocalHTTPResponse {
     let missing = LocalHTTPResponse.text(404, "view: no such file")
     guard let relative = String(encoded).removingPercentEncoding, let buildRun,
@@ -318,6 +318,8 @@ final class ViewRun: Sendable {
       switch (relative as NSString).pathExtension {
       case "mp4": "video/mp4"
       case "png": "image/png"
+      case "json": "application/json"
+      case "txt", "log", "ndjson": "text/plain; charset=utf-8"
       default: "application/octet-stream"
       }
     return LocalHTTPResponse(status: 200, contentType: type, body: body)
