@@ -265,7 +265,7 @@ is a red gate, and the fixer gets only the new findings.
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 1 with `review-blocked-unanswered` | the return is `review-blocked`: halt the task as [Task halts](#task-halts) says. Only the person's **merge as is** lets it merge |
 | `build merge` exits 1 with `flows-unchecked` or `flows-red` | run [before each merge](#before-each-merge)'s `qa run`, or send its red rows to the fixer in the fix worktree `flows-red` cut |
-| `build merge` exits 1 with `flows-pending` | check the returns it names as their notices arrive, then run the combined `qa run`; with no notice by the time it names, merge again |
+| `build merge` exits 0 with `status: deferred`, `reason: flows-pending` | not a halt: check the returns it names as their notices arrive, then run the combined `qa run`; with no notice by its `waitUntil`, merge again |
 | `build merge --fix` exits 1 with `fix-carries-unmerged` | merge the tasks it names first, then the fix |
 | `build merge` exits 2 | halt |
 
@@ -297,9 +297,10 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   gate. `check-return --fix` rejects any other run as `build-return.stale-gate`;
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
   or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
-  passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`, its `--json`
-  sent to `.harness/tmp/qa-<task>.json` and read by its `summary`, never piped through `head` or
-  `tail` (`guard.qa-run-truncated`). Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
+  passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`, its JSON
+  written with `--output .harness/tmp/qa-<task>.json` and read by its `summary`, never piped
+  through `head` or `tail` (`guard.qa-run-truncated`) nor wrapped in `timeout`
+  (`guard.qa-run-timeout`): `--deadline` bounds it. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
   (`guard.fixer-gate-cap`);
 - that after 2 red `qa run`s of the same flow row it stops and returns `gate-red` with that row's
   evidence: its requirement, the failing step and its message, and both run ids. It writes them
@@ -396,10 +397,12 @@ repeats the run in seconds when its merge makes the same tree. A task with a fix
 longer waiting: its rows run again before its fix merges.
 
 While another task such a row waits on has passed its worker's gate at its branch tip and its
-return isn't checked yet, `build merge` refuses `flows-pending`: that return is minutes away, and
-merging first would run the row twice. Check the return when its notice arrives, then run the
-combined `qa run` the message names. The refusal lapses 5 minutes after that gate, or at
-`noNewStartsAt`, whichever is first; merge again then if no notice came.
+return isn't checked yet, `build merge` defers: it exits 0 with `status: deferred`, `reason:
+flows-pending`, `action: wait` and a `waitUntil` time, since that return is minutes away and
+merging first would run the row twice. It is a wait, never a halt or a `gate-red`. Check the return
+when its notice arrives, then run the combined `qa run` the message names. The wait lapses 5
+minutes after that gate, or at `noNewStartsAt`, whichever is first: `waitUntil`. Merge again then
+if no notice came.
 
 - RED over several tasks: a red row refuses only the tasks its `Runs after` names. Pick the one
   that owns the red behaviour: the one whose write set holds the screen, state or code each red
@@ -409,7 +412,12 @@ combined `qa run` the message names. The refusal lapses 5 minutes after that gat
   halt and fixer follow as below. The fixer reruns the same run with that task first and `--fix`.
   Then merge the other tasks: with the owner set aside, they merge on the rows they own.
   `build merge --fix` refuses `fix-carries-unmerged` until each task its fix branch took in has
-  merged on its own.
+  merged on its own, or was abandoned: then the fix lands that task too, names it in `carried`,
+  marks it `done`, and needs a GREEN run over both first.
+- A red row whose screen belongs to a task already merged: the fixer of the task the row is
+  pinned on may edit that merged task's write set too, since its rows ran red after it. Name the
+  merged task and the screen's files in the fixer's prompt. `check-return --fix` takes those
+  edits as inside the write set; never rewrite a fixer's notes to get a return through.
 - GREEN: merge. Rows that read `unverified` or `waiting` go in the report with their messages.
   A branch that conflicts with `main` runs no row and names the files: merge, and the conflict
   goes to the fixer as any conflict does.

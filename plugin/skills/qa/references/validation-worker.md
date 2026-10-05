@@ -8,7 +8,9 @@ those checks wait for.
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Work only in your own worktree, from its toplevel.
 
 Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash tool's `timeout` at
-600000, never a shorter one, and never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
+600000, never a shorter one, never with `run_in_background` or a shell `&`, and never inside
+`timeout`, which kills a run with no report (`guard.qa-run-timeout`): `qa run --deadline <seconds>`
+bounds the device wait and the rows instead. A call cut at the 120 s default goes on in
 the background while you wait on it, and every merge your rows name waits on you. If 1 does,
 `qa run` printed `run <id> started; its report will be written to <path>` first: wait for that
 file, in Bash or Monitor, never for a process by name, which the hook denies. Never search
@@ -82,11 +84,11 @@ lint finding isn't ready: fix it and run it again before you return.
   worktree's toplevel proves them all, in the foreground with the Bash `timeout` at 600000:
 
   ```bash
-  "$SG" qa run --plan <plan> --at-base --prepared-by <your task id> --json
+  "$SG" qa run --plan <plan> --at-base --prepared-by <your task id> --output .harness/tmp/qa-at-base.json
   ```
 
-  Never pipe it through `head`, `tail` or a filter, and never send it to a file outside your
-  worktree: read the whole JSON it prints. Its last member, `summary`, is 1 line naming the
+  Never pipe it through `head`, `tail` or a filter, never redirect `--json` with `2>&1`, and
+  never send it to a file outside your worktree: read the whole JSON `--output` wrote. Its last member, `summary`, is 1 line naming the
   verdict, the run id and its `report.json`, which holds the same JSON. A finished run on the same
   commit is never run again: read its report there, or the `at-base-run.json` beside your checks.
 
@@ -140,7 +142,7 @@ fixer's `flow row:` line, both red run ids and their evidence paths. The worktre
   the step it failed at there before, in the foreground with the Bash `timeout` at 600000:
 
   ```bash
-  "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json
+  "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --output .harness/tmp/qa-repair.json
   ```
 
   A red there on a step you added, or a flow file the tool refuses, isn't ready: fix it and run

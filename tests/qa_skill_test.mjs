@@ -308,7 +308,7 @@ export function repairModeProblems(worker) {
   const part = section(worker, 'Repair mode').replace(/\s+/g, ' ')
   if (!part) return ['no `## Repair mode` section']
   const problems = []
-  if (!part.includes('"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json')) {
+  if (!part.includes('"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --output .harness/tmp/qa-repair.json')) {
     problems.push('no `qa run --at-base --prepared-by <writer> --requirement <requirement>` red run')
   }
   if (!/\bonly\b[^.]*requirement's (check )?files/.test(part)) problems.push('never limits the rewrite to the requirement\'s files')
@@ -504,7 +504,7 @@ const tests = {
   },
 
   'the repair mode check names a missing run, scope, assertion rule, gestures doc, red reason and each return line — catches a check that passes anything'() {
-    const good = `\n## Repair mode\n\nChange only the requirement's files. Keep every \`wait\` and \`is\` step. Read simulator-qa-flow-gestures.md. The red must fail on a \`wait\` or \`is\` step: \`"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json\`. Return \`repaired: <requirement> <path>: red: <message> (qa run <run id>)\` or \`no repair: <requirement>: <why>\`.\n`
+    const good = `\n## Repair mode\n\nChange only the requirement's files. Keep every \`wait\` and \`is\` step. Read simulator-qa-flow-gestures.md. The red must fail on a \`wait\` or \`is\` step: \`"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --output .harness/tmp/qa-repair.json\`. Return \`repaired: <requirement> <path>: red: <message> (qa run <run id>)\` or \`no repair: <requirement>: <why>\`.\n`
     assert.deepEqual(repairModeProblems(good), [])
     assert.deepEqual(repairModeProblems(good.replace('## Repair mode', '## Other')), ['no `## Repair mode` section'])
     assert.match(repairModeProblems(good.replace(' --requirement <requirement>', '')).join('\n'), /--requirement/)
