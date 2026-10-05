@@ -68,7 +68,9 @@ public struct AreaCommandBounds: Sendable {
 
   /// A test step in the checkout runs on the build its `build` step just made, so it gets
   /// ``warmMultiple`` warm runs. Anything in a scratch tree or an unbuilt checkout, and a build,
-  /// starts cold: it gets the area's cold cost on top. `e2e`, which no warm-up times, and an unmeasured area get
+  /// starts cold: it gets the area's cold cost on top. A scratch tree whose build is already
+  /// there keeps that bound but is measured against the warm test, so the box refuses it only
+  /// when even a warm run can't fit. `e2e`, which no warm-up times, and an unmeasured area get
   /// ``fallback``. Then the box caps it: any other tier's step at the run's cutoff, and a `final`
   /// step or one already inside the final reserve at the box's end.
   public func bound(area: String, step: AreaStep, tree: AreaCommandTree, now: Date)
@@ -109,7 +111,9 @@ public struct AreaCommandBounds: Sendable {
       case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, .test),
         (.unbuiltCheckout, .testFiles):
         .milliseconds(warm)
-      case (.scratch, _), (.builtScratch, _): .milliseconds(record.coldMilliseconds)
+      case (.scratch, _): .milliseconds(record.coldMilliseconds)
+      // Its build compiles only what differs from the build already there.
+      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(warm)
       default: nil
       }
     guard Duration.milliseconds(milliseconds) > Self.floor else {

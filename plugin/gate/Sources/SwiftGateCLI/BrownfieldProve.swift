@@ -69,7 +69,11 @@ enum BrownfieldProve {
   static func pricedTree(
     _ tree: AreaCommandTree, area: String, areas: [BrownfieldArea], layout: BrownfieldStateLayout
   ) -> AreaCommandTree {
-    tree
+    guard tree == .scratch, let owner = areas.first(where: { $0.name == area }) else { return tree }
+    let directories = ScratchTreeBuild.buildDirectories(area: owner, layout: layout)
+    let built =
+      !directories.isEmpty && directories.allSatisfy { FileManager.default.fileExists(atPath: $0) }
+    return built ? .builtScratch : tree
   }
 
   /// Whether the scratch-tree build directories of `areas` already hold a build; `none` when no
