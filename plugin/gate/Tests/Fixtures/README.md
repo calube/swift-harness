@@ -3385,3 +3385,49 @@ SWIFTGATE_HOOK_RECORD_DIR=<dir> claude -p "Use the Agent tool exactly once, with
 It shows the Agent tool's `tool_input` carries `subagent_type` and `run_in_background`.
 `grep -rniE '/Users|/private|/var/folders|caleb' Hooks/trial-* Hooks/pre-tool-use-agent-* BrownfieldTrial/trial-*`
 matched nothing.
+
+## Brownfield trials: Bash calls that hung on a bare ls
+
+Two practice brownfield trials (2026-10-05) each had a subagent Bash call run until the tool's
+120s timeout with no output: a validation worker's `python3 - <<'EOF'` script followed by a bare
+`ls`, and a worker's `ls -la` before a `python3` heredoc. In the trial user's shell `ls` is an
+alias for `eza --icons`, which reads paths from stdin when it gets no path operand, and the Bash
+tool's stdin never closes. `Hooks/practice-trials-bare-ls-bash.json` holds both calls with their
+tool results. `P` is the Claude Code projects folder holding the trial transcripts. From the
+repository root:
+
+```sh
+P=<projects folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+P, F = os.environ["P"], os.environ["F"]
+calls = [
+    ("<tic-tac-toe-2 trial project>/<session>/subagents/agent-a9f3bfd905ad90faa.jsonl", "toolu_019gsjbiLMXxcAY4QuEGJW7G"),
+    ("<send-money-1 trial project>/<session>/subagents/agent-a098769d3111f8dd7.jsonl", "toolu_01BtYog4QCkUg8pdPNy8aPNp"),
+]
+scrubs = [
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec-[^/\s]+", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;]|$)", "/CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/]+", "/HARNESS"),
+    (r"/private/tmp/claude-\d+/[^\s]+/tasks/", "/TASKS/"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+out = []
+for path, use in calls:
+    command = result = None
+    for line in open(f"{P}/{path}"):
+        entry = json.loads(line)
+        for block in (entry.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict): continue
+            if block.get("id") == use: command = block["input"]["command"]
+            if block.get("tool_use_id") == use: result = block["content"]
+    out.append({"command": scrub(command), "result": scrub(result)})
+open(f"{F}/Hooks/practice-trials-bare-ls-bash.json", "w").write(
+    json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+Each call's backgrounded output file held only `[killed]`. `grep -niE
+'/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
