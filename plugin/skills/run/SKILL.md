@@ -354,9 +354,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      build while time remains: before `cutoffAt`, send the row back to the repair worker with the
      refusal's messages, which say what would pass, and adopt again. A `no repair:` return goes
      to `build no-repair`, as [the build loop's no repair](../build/references/event-loop.md#no-repair)
-     says: take its `action` as the answer. It amends the contract while there's time, or merges
-     the task with that row unverified when its gate and other rows are GREEN, and never stops
-     the build. Add 1 assumption naming the row and the action.
+     says: take its `action` as the answer. It amends the contract while there's time, sends an
+     app defect the frames show back to the fixer while a fix round fits, or merges the task with
+     that row unverified when its gate and other rows are GREEN, and never stops the build. Add 1 assumption naming the row and the action.
    - Where it halts and asks, decide yourself: take the option it marks recommended, never stop
      the build before `cutoffAt` over 1 task, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt

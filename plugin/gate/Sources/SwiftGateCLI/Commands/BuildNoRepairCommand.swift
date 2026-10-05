@@ -78,7 +78,11 @@ enum BuildNoRepairRun {
       noRepair, run: report.rows,
       runSeconds: report.rows.reduce(0) { $0 + $1.milliseconds } / 1000,
       fixGate: returned.gate?.verdict, now: now, noNewStartsAt: record.noNewStartsAt,
-      cutoffAt: record.cutoffAt)
+      cutoffAt: record.cutoffAt,
+      fixRound: TaskHaltAdvice.FixRound.measured(
+        task: task, gateRunID: returned.gate?.runID,
+        gateMilliseconds: MeasuredFinalGateReader.milliseconds(worktree: root),
+        reports: reports))
     let (cause, name): (BuildEvent.RowsUnverified.Cause, String?) =
       switch noRepair.cause {
       case .contractGap(let name): (.contractGap, name)
@@ -130,7 +134,9 @@ struct BuildNoRepairCommand: AsyncParsableCommand {
       + "red in, and prints `amend-contract` (a contract gap with time for another round before "
       + "no new starts), `merge-unverified` (the fixer's gate GREEN and every other row passed: "
       + "recorded, so `build merge --fix` takes the run red on those rows alone and the final "
-      + "`qa run` reports them unverified) or `continue` (the task stays blocked). It never "
+      + "`qa run` reports them unverified), `fix-again` (an `app defect:` the red run's frames "
+      + "show, with 1 more measured fix round before the cutoff: relaunch the fixer) or "
+      + "`continue` (the task stays blocked). It never "
       + "answers stop the build. Exits 0, 1 when --session doesn't hold the plan's lock, and 2 "
       + "when an input doesn't read.")
 

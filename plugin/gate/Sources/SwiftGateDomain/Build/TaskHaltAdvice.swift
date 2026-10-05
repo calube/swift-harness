@@ -3,7 +3,8 @@ import Foundation
 /// The answer a task halt recommends, which a no-input run takes as its own. A mechanical
 /// finding, such as a gate to run again, a missing reason or a formatting fix, gets a retry while
 /// the box still holds one; only a design conflict, or a retry the box can't hold, goes on
-/// without the task. A fixer's committed fix that no gate checked is verified by the caller
+/// without the task. Past no new starts a fixer's task, already started, still gets 1 more fix
+/// round when its measured gate and qa run end before the cutoff. A fixer's committed fix that no gate checked is verified by the caller
 /// before the cutoff, not halted.
 public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
   public enum Answer: String, Sendable, Equatable, Encodable {
@@ -64,8 +65,22 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
           } ?? ""))
     }
     if let noNewStartsAt, now >= noNewStartsAt {
+      let stopped = "\(found): no new starts since \(stamp(noNewStartsAt))"
+      guard let fixRound, let cutoffAt else {
+        return TaskHaltAdvice(answer: .continue, why: stopped)
+      }
+      let spare = Int(cutoffAt.timeIntervalSince(now)) - fixRound.seconds
+      guard spare >= 0 else {
+        return TaskHaltAdvice(
+          answer: .continue,
+          why: "\(stopped), and 1 more fix round (\(fixRound.described)) would end after the "
+            + "cutoff at \(stamp(cutoffAt))")
+      }
       return TaskHaltAdvice(
-        answer: .continue, why: "\(found): no new starts since \(stamp(noNewStartsAt))")
+        answer: .retry,
+        why: "\(found): relaunch its fixer for 1 more fix round, which starts no task, so no new "
+          + "starts since \(stamp(noNewStartsAt)) doesn't stop it: \(fixRound.described) ends "
+          + "\(spare) s before the cutoff at \(stamp(cutoffAt))" + fixRound.waiting)
     }
     let took = startedAt.map { max(0, Int(now.timeIntervalSince($0).rounded())) }
     if let cutoffAt, let took, now.addingTimeInterval(TimeInterval(took)) > cutoffAt {
@@ -108,13 +123,41 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
 
     public var seconds: Int { gateSeconds + qaSeconds }
 
+    /// `136 s: its 17 s gate and its 119 s before-merge qa run, as this run measured them`.
+    var described: String {
+      "\(seconds) s: its \(gateSeconds) s gate and its \(qaSeconds) s before-merge qa run, as "
+        + "this run measured them"
+    }
+
+    /// `; 6 flow rows run after it, and none passes until it merges`, or nothing.
+    var waiting: String {
+      guard flowRows > 0 else { return "" }
+      return "; \(flowRows) flow row\(flowRows == 1 ? "" : "s") run\(flowRows == 1 ? "s" : "") "
+        + "after it, and none passes until it merges"
+    }
+
     /// The round as this run measured it: the gate run `gateRunID` names, read from
     /// `gateMilliseconds` by run id, and the before-merge `reports` that took `task`, each the
     /// sum of its rows' times. `nil` when no gate run of that id was measured.
     public static func measured(
       task: String, gateRunID: String?, gateMilliseconds: [String: Int], reports: [QAReport]
     ) -> FixRound? {
-      nil
+      guard let gateRunID, let gate = gateMilliseconds[gateRunID] else { return nil }
+      let took = reports.filter { report in
+        report.trialMerge != nil
+          && (report.after == task
+            || (report.trialMerge?.alongside.contains { $0.task == task } ?? false))
+      }
+      let qa = took.map { $0.rows.reduce(0) { $0 + max(0, $1.milliseconds) } }.max() ?? 0
+      let newest = took.max { ($0.runID ?? "") < ($1.runID ?? "") }
+      let flowRows =
+        newest?.rows.filter { $0.layer == .flow && $0.runsAfter.contains(task) }.count ?? 0
+      return FixRound(
+        gateSeconds: wholeSeconds(gate), qaSeconds: wholeSeconds(qa), flowRows: flowRows)
+    }
+
+    private static func wholeSeconds(_ milliseconds: Int) -> Int {
+      (max(0, milliseconds) + 999) / 1000
     }
   }
 
