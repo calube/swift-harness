@@ -22,6 +22,17 @@ final class FakeFlowSimulator: QAFlowSimulating {
   let leases: SimLeaseStore
   let history: URL
   private let recorded = Mutex<[String]>([])
+  private let holdsAsked = Mutex<[QAFlowDeviceHold?]>([])
+  private let releases = Mutex<[Release]>([])
+
+  /// 1 `down` of the `qa run`'s shared hold: the tree it named, whether that tree was still
+  /// there, and how many row calls came before it.
+  struct Release: Equatable {
+    let hold: QAFlowDeviceHold
+    let worktree: String
+    let treeExisted: Bool
+    let after: Int
+  }
 
   /// - Parameter agentDevice: the device, in place of 1 that answers every batch with `batch`.
   init(
@@ -39,10 +50,15 @@ final class FakeFlowSimulator: QAFlowSimulating {
     history = scratch.appending(path: "history.jsonl")
   }
 
+  /// The row calls; the shared hold's release is in ``holdReleases``.
   var calls: [String] { recorded.withLock { $0 } }
+  /// The hold each `up` asked to borrow, in order.
+  var holds: [QAFlowDeviceHold?] { holdsAsked.withLock { $0 } }
+  var holdReleases: [Release] { releases.withLock { $0 } }
 
   func up(_ request: QAFlowSimulatorRequest) async -> Result<SimUpStarted, SimUpFailure> {
     recorded.withLock { $0.append("up \(request.runID)") }
+    holdsAsked.withLock { $0.append(request.hold) }
     if let upFailure { return .failure(upFailure) }
     do {
       try FileManager.default.createDirectory(
@@ -79,6 +95,14 @@ final class FakeFlowSimulator: QAFlowSimulating {
   }
 
   func down(_ request: QAFlowSimulatorRequest) async -> Result<SimDowned, SimDownFailure> {
+    if let hold = request.hold, hold.runID == request.runID {
+      let release = Release(
+        hold: hold, worktree: request.worktree.path,
+        treeExisted: FileManager.default.fileExists(atPath: request.worktree.path),
+        after: calls.count)
+      releases.withLock { $0.append(release) }
+      return .success(SimDowned(outcome: .released(runID: request.runID, udid: "LEASED-UDID")))
+    }
     let seen = marker.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
     recorded.withLock { $0.append(seen ? "down after state" : "down") }
     return .success(SimDowned(outcome: .released(runID: request.runID, udid: "LEASED-UDID")))
@@ -308,6 +332,59 @@ struct QARunFlowTests {
     #expect(state.message.contains("qa/count.flow.json"), "\(state.message)")
     #expect(!FileManager.default.fileExists(atPath: Self.marker(repo).path))
     #expect(simulator.calls.isEmpty)
+  }
+
+  /// 2 flow rows for 2 requirements, each driving SampleApp's counter flow.
+  static func twoFlows(_ repo: QARepo) throws {
+    try repo.plan(
+      [
+        validationRow("req-count", .flow, "qa/count.flow.json", after: ["count-ui"]),
+        validationRow("req-again", .flow, "qa/again.flow.json", after: ["count-ui"]),
+      ], tasks: ["count-ui": .done])
+    for name in ["count.flow.json", "again.flow.json"] {
+      try repo.qaFile(name, try Fixture.text("QA/counter.flow.json"))
+    }
+  }
+
+  @Test(
+    "a qa run's flow rows all borrow 1 hold, which is given back once, after the last row's sim verify — catches a simulator cloned and booted for every flow row"
+  )
+  func flowRowsShareOneHold() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.twoFlows(repo)
+    let simulator = try await Self.simulator(repo, batch: "pass")
+
+    let report = await Self.run(repo, simulator)
+
+    #expect(report.rows.map(\.result) == [.pass, .pass], "\(report.rows.map(\.message))")
+    let hold = try #require(simulator.holds.first ?? nil)
+    #expect(simulator.holds == [hold, hold])
+    #expect(hold.runID.hasPrefix(try #require(report.runID)))
+    #expect(
+      simulator.holdReleases
+        == [
+          FakeFlowSimulator.Release(
+            hold: hold, worktree: repo.root.path, treeExisted: true, after: 6)
+        ])
+  }
+
+  @Test(
+    "at the merge base the rows' hold is given back in the scratch tree it was taken in, while that tree still exists — catches a holder left running in a deleted tree"
+  )
+  func atBaseHoldGoesBackInItsTree() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.twoFlows(repo)
+    let simulator = try await Self.simulator(repo, batch: "pass")
+
+    _ = await Self.run(repo, simulator, atBase: true)
+
+    let release = try #require(simulator.holdReleases.first)
+    #expect(simulator.holdReleases.count == 1)
+    #expect(release.worktree != repo.root.path)
+    #expect(release.treeExisted)
+    #expect(release.after == 6)
   }
 
   @Test(

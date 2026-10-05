@@ -101,4 +101,19 @@ struct SimLeaseTests {
       SimHoldWatch.end(lease: Self.lease, liveSessions: [], elapsed: .zero, timeout: timeout)
         == nil, "a session not yet recorded can't be gone")
   }
+
+  @Test(
+    "a hold with an owner ends once the owner exits, and not while it lives — catches a qa run's device held on for the session timeout after the run was killed"
+  )
+  func ownerEndsTheHold() {
+    let timeout = Duration.seconds(60)
+    #expect(
+      SimHoldWatch.end(
+        lease: Self.lease, liveSessions: nil, owner: (pid: 4242, alive: false), elapsed: .zero,
+        timeout: timeout) == .ownerGone(pid: 4242))
+    #expect(
+      SimHoldWatch.end(
+        lease: Self.lease, liveSessions: nil, owner: (pid: 4242, alive: true), elapsed: .zero,
+        timeout: timeout) == nil)
+  }
 }
