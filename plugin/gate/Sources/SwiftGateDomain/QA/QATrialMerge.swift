@@ -64,35 +64,19 @@ public struct QATrialMerge: Sendable, Equatable, Codable {
   }
 }
 
-/// A running task whose return is on its way: its worker's own gate passed at its branch's tip on
-/// a clean tree with no check of its return recorded since, or its checked return went back to
-/// work and no gate has passed since.
-public struct QAPendingReturn: Sendable, Equatable {
-  public let task: String
-  /// The gate run that passed at the tip; `nil` for a checked return sent back to work.
-  public let gateRunID: String?
-  /// When that gate run finished, or when the checked return went back to work.
-  public let gatedAt: Date
-
-  public init(task: String, gateRunID: String?, gatedAt: Date) {
-    self.task = task
-    self.gateRunID = gateRunID
-    self.gatedAt = gatedAt
-  }
-}
-
 /// Whether `build merge` may land a task, going by the validation rows that run after it: those its
 /// merge makes ready, those it waits on with tasks whose checked returns wait to merge too, and the
 /// `qa run --before-merge` reports that took its branch.
 public enum QAMergeReadiness: Sendable, Equatable {
-  /// No row runs after this task with every other task it waits on merged, or waiting to merge.
+  /// No row its merge makes ready runs after this task, and no run is RED in a row it waits on
+  /// with tasks waiting to merge.
   case notNeeded
   /// Each of the task's rows passed in the newest report that covers it; the newest of those.
   case checked(runID: String)
-  /// The newest covering trial merge conflicted, so no row could run: the merge itself
-  /// conflicts and goes to the fixer.
+  /// The newest trial merge covering a row the merge makes ready conflicted, so no row could
+  /// run: the merge itself conflicts and goes to the fixer.
   case conflicts(runID: String, files: [String])
-  /// Some row of the task has no covering report that ran it, or only a BLOCKED one.
+  /// Some row the merge makes ready has no covering report that ran it, or only a BLOCKED one.
   case unchecked(rows: [Int])
   /// Some row of the task is RED in the newest report that covers it; the newest such report.
   case red(runID: String, rows: [QARow])
@@ -101,24 +85,38 @@ public enum QAMergeReadiness: Sendable, Equatable {
   ///   - merged: the tasks merged so far; `task` counts as merged.
   ///   - reports: the plan's `qa run` reports, in any order.
   ///   - waiting: the other tasks whose checked return waits to merge, each at its branch's tip.
-  ///     A row whose every unmerged task is here runs on 1 trial merge of all their branches,
-  ///     before the first of them lands.
+  ///     A row over them needs no run before this merge lands, but a run that took all their
+  ///     branches and is RED in it refuses the merge.
+  ///   - carried: the other tasks' unmerged branches `branch` holds, each at its tip, which land
+  ///     with it: a row over them needs a run that took them, as a row this merge makes ready.
+  ///   - landing: the tree merging `branch` at `tip` into `base` makes; `nil` when it conflicts
+  ///     or wasn't read.
+  ///   - trees: the tree each report's trial merge made, by run id.
   ///
   /// A report covers a row when its trial merge, on `base`, took `branch` at `tip` and each task
-  /// the row still waits on at the tip in `waiting`, in any order and whatever else it took. Only
-  /// the task's own rows count: a row red that runs after other tasks alone blames them, not it.
+  /// the row still waits on at the tip in `waiting` or `carried`, in any order and whatever else
+  /// it took; or when its trial merge made `landing`, the very tree this merge lands. Only the
+  /// task's own rows count: a row red that runs after other tasks alone blames them, not it.
   public static func of(
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String,
-    waiting: [QATrialMerge.Branch] = []
+    waiting: [QATrialMerge.Branch] = [], carried: [QATrialMerge.Branch] = [],
+    landing: String? = nil, trees: [String: String] = [:]
   ) -> QAMergeReadiness {
-    let others = waiting.filter { $0.task != task }
+    let others = (carried + waiting).filter { $0.task != task }
     let held = Set(alongside(table: table, merged: merged, task: task, waiting: others))
     let entries = QARunPlan.make(table: table, merged: merged, after: task).entries
       .filter { held.isSuperset(of: $0.waitingOn) }
     guard !entries.isEmpty else { return .notNeeded }
+    let landsWith = Set(carried.map(\.task))
+    // A row needs a run before this merge only when every task it waits on lands with it.
+    func required(_ entry: QARunPlan.Entry) -> Bool { landsWith.isSuperset(of: entry.waitingOn) }
     let own = QATrialMerge.Branch(task: task, branch: branch, tip: tip)
-    let ran = reports.filter { $0.plan == plan && $0.trialMerge?.base == base }
+    func sameTree(_ report: QAReport) -> Bool {
+      guard let landing, let runID = report.runID else { return false }
+      return trees[runID] == landing
+    }
+    let ran = reports.filter { $0.plan == plan && ($0.trialMerge?.base == base || sameTree($0)) }
       .sorted { ($0.runID ?? "") > ($1.runID ?? "") }
     func taken(_ report: QAReport) -> [QATrialMerge.Branch] {
       guard let after = report.after, let merge = report.trialMerge else { return [] }
@@ -126,13 +124,16 @@ public enum QAMergeReadiness: Sendable, Equatable {
         + merge.alongside
     }
     func covers(_ report: QAReport, _ entry: QARunPlan.Entry) -> Bool {
+      if sameTree(report) { return true }
       let branches = taken(report)
       return branches.contains(own)
         && entry.waitingOn.allSatisfy { waiter in
           others.contains { $0.task == waiter && branches.contains($0) }
         }
     }
-    let covering = ran.filter { report in entries.contains { covers(report, $0) } }
+    let covering = ran.filter { report in
+      entries.contains { required($0) && covers(report, $0) }
+    }
     if let newest = covering.first, let runID = newest.runID,
       let conflicts = newest.trialMerge?.conflicts, !conflicts.isEmpty
     {
@@ -145,13 +146,14 @@ public enum QAMergeReadiness: Sendable, Equatable {
       guard let report = ran.first(where: { $0.verdict != .blocked && covers($0, entry) }),
         let row = report.rows.first(where: { $0.row == entry.row })
       else {
-        unchecked.append(entry.row)
+        if required(entry) { unchecked.append(entry.row) }
         continue
       }
       switch row.result {
       case .red: red.append((report, row))
       case .pass: passed.append(report)
-      case .unverified, .waiting, .abandoned: unchecked.append(entry.row)
+      case .unverified, .waiting, .abandoned:
+        if required(entry) { unchecked.append(entry.row) }
       }
     }
     if let newest = red.map(\.report).max(by: { ($0.runID ?? "") < ($1.runID ?? "") }),
@@ -159,38 +161,9 @@ public enum QAMergeReadiness: Sendable, Equatable {
     {
       return .red(runID: runID, rows: red.map(\.row))
     }
-    guard unchecked.isEmpty,
-      let runID = passed.compactMap(\.runID).max()
-    else { return .unchecked(rows: unchecked) }
+    guard unchecked.isEmpty else { return .unchecked(rows: unchecked) }
+    guard let runID = passed.compactMap(\.runID).max() else { return .notNeeded }
     return .checked(runID: runID)
-  }
-
-  /// How long after its gate passed a pending return holds back another task's merge: the
-  /// review, verification and check that follow a worker's GREEN gate.
-  public static let returnWait: TimeInterval = 300
-
-  /// The pending returns `task`'s merge waits for: those a row naming `task` waits on whose
-  /// every other unmerged task is in `waiting` or pending, while `now` is within
-  /// ``returnWait`` of the gate passing and before `noNewStartsAt`. Merging before them would
-  /// run that row on a trial merge without them, and again on theirs.
-  public static func awaited(
-    table: ValidationTable, merged: Set<String>, task: String,
-    waiting: [QATrialMerge.Branch], pending: [QAPendingReturn], now: Date,
-    noNewStartsAt: Date? = nil
-  ) -> [QAPendingReturn] {
-    if let noNewStartsAt, now >= noNewStartsAt { return [] }
-    let coming = pending.filter {
-      $0.task != task && !merged.contains($0.task)
-        && now < $0.gatedAt.addingTimeInterval(returnWait)
-    }
-    let comingTasks = Set(coming.map(\.task))
-    let expected = Set(waiting.map(\.task)).union(comingTasks).subtracting([task])
-    let awaited = Set(
-      QARunPlan.make(table: table, merged: merged, after: task).entries
-        .filter { !$0.waitingOn.isEmpty && expected.isSuperset(of: $0.waitingOn) }
-        .flatMap(\.waitingOn)
-    ).intersection(comingTasks)
-    return coming.filter { awaited.contains($0.task) }
   }
 
   /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming

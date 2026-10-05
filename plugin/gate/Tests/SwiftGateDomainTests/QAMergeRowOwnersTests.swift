@@ -42,15 +42,6 @@ struct QAMergeRowOwnersTests {
       .merged(per: try events(beforeMergeOf: task))
   }
 
-  /// When the build run merged `task`.
-  static func mergedAt(_ task: String) throws -> Date {
-    try #require(
-      try log().events.compactMap { event -> Date? in
-        guard case .merge(let merge) = event, merge.task == task else { return nil }
-        return merge.at
-      }.first)
-  }
-
   /// The commit each task's GREEN return check named.
   static func checkedTip(_ task: String) throws -> String {
     try #require(
@@ -109,64 +100,5 @@ struct QAMergeRowOwnersTests {
     #expect(
       try Self.readiness(Self.fake, reports: reports)
         == .checked(runID: try #require(reports[1].runID)))
-  }
-
-  /// Each of the other 2 tasks' gate runs that passed at the tip its return check named, as the
-  /// worker's slot recorded it.
-  static func pending() throws -> [QAPendingReturn] {
-    let events = try HarnessEventJSON.decode(
-      Fixture.data("\(directory)/send-money-5-gate-runs.jsonl")
-    ).events
-    return try [screens, fake].map { task in
-      let tip = try checkedTip(task)
-      let gate = try #require(
-        events.last {
-          guard case .gateRun(let run) = $0.payload else { return false }
-          return $0.head == tip && run.verdict == .green
-        })
-      return QAPendingReturn(
-        task: task, gateRunID: try #require(gate.runID), gatedAt: gate.time)
-    }
-  }
-
-  @Test(
-    "the keypad task's merge, while the other 2 tasks its send rows wait on have gates GREEN at their tips and no checked return, waits for both, and not once 300 s have passed since the later gate or the box has stopped new starts — catches a task merged alone a minute before its rows could run on 1 trial merge"
-  )
-  func mergeWaitsForReturnsOnTheirWay() throws {
-    let pending = try Self.pending()
-    let at = try Self.mergedAt(Self.keypad)
-    let merged = try Self.merged(beforeMergeOf: Self.keypad)
-    func awaited(now: Date, noNewStartsAt: Date? = nil) throws -> [String] {
-      QAMergeReadiness.awaited(
-        table: try Self.table(), merged: merged, task: Self.keypad, waiting: [],
-        pending: pending, now: now, noNewStartsAt: noNewStartsAt
-      ).map(\.task)
-    }
-    let latest = try #require(pending.map(\.gatedAt).max())
-
-    #expect(try awaited(now: at) == [Self.screens, Self.fake])
-    #expect(try awaited(now: latest.addingTimeInterval(QAMergeReadiness.returnWait + 1)) == [])
-    #expect(try awaited(now: at, noNewStartsAt: at.addingTimeInterval(-1)) == [])
-  }
-
-  @Test(
-    "the keypad task's merge doesn't wait for the fake task's return while the screens task still works, but the screens task's merge, after the keypad task's, waits for it — catches a merge held for a return that can't complete its rows"
-  )
-  func waitsOnlyWhenEveryOtherTaskIsComing() throws {
-    let pending = try Self.pending()
-    let at = try Self.mergedAt(Self.keypad)
-    let merged = try Self.merged(beforeMergeOf: Self.keypad)
-    let fakeOnly = pending.filter { $0.task == Self.fake }
-
-    #expect(
-      QAMergeReadiness.awaited(
-        table: try Self.table(), merged: merged, task: Self.keypad, waiting: [],
-        pending: fakeOnly, now: at
-      ) == [])
-    #expect(
-      QAMergeReadiness.awaited(
-        table: try Self.table(), merged: merged.union([Self.keypad]), task: Self.screens,
-        waiting: [], pending: fakeOnly, now: at
-      ).map(\.task) == [Self.fake])
   }
 }
