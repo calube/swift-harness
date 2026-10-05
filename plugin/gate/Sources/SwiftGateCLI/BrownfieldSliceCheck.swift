@@ -349,9 +349,14 @@ enum BrownfieldSliceCheck {
       times: WarmupTimesFile(tree: "", areas: records), box: dependencies.box, tier: .slice,
       fallback: dependencies.deadline)
     let now = dependencies.now
+    let areas = dependencies.config.areas
+    let layout = dependencies.layout
     let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
       area, step, tree in
-      bounds.bound(area: area, step: step, tree: tree, now: now())
+      bounds.bound(
+        area: area, step: step,
+        tree: BrownfieldProve.pricedTree(tree, area: area, areas: areas, layout: layout),
+        now: now())
     }
     var copy = dependencies
     copy.bound = bound

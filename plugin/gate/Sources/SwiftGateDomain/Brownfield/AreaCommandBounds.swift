@@ -6,6 +6,9 @@ public enum AreaCommandTree: Sendable, Equatable {
   case checkout
   /// A fresh scratch tree (prove, a baseline rerun), whose build starts cold.
   case scratch
+  /// A scratch tree whose build directories already hold a build: the worktree's prove
+  /// DerivedData, or the area's shared SwiftPM scratch path.
+  case builtScratch
   /// The gate's own checkout before any build of the area there, or with a build the harness
   /// can't see: a `test-only` run, or a `slice` test step whose command builds what it runs.
   case unbuiltCheckout
@@ -88,7 +91,9 @@ public struct AreaCommandBounds: Sendable {
     let warmText = "\(Self.warmMultiple) × \(area)'s \(Self.seconds(warm)) s warm test"
     let cold: Bool
     switch (tree, step) {
-    case (.scratch, _), (.checkout, .build), (.checkout, .generate), (.checkout, .lint): cold = true
+    case (.scratch, _), (.builtScratch, _), (.checkout, .build), (.checkout, .generate),
+      (.checkout, .lint):
+      cold = true
     case (.checkout, .test), (.checkout, .testFiles), (.checkout, .e2e): cold = false
     case (.unbuiltCheckout, _): cold = true
     }
@@ -104,7 +109,7 @@ public struct AreaCommandBounds: Sendable {
       case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, .test),
         (.unbuiltCheckout, .testFiles):
         .milliseconds(warm)
-      case (.scratch, _): .milliseconds(record.coldMilliseconds)
+      case (.scratch, _), (.builtScratch, _): .milliseconds(record.coldMilliseconds)
       default: nil
       }
     guard Duration.milliseconds(milliseconds) > Self.floor else {

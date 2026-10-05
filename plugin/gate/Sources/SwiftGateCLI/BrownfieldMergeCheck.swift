@@ -114,9 +114,13 @@ enum BrownfieldMergeCheck {
         layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
       let bounds = AreaCommandBounds(times: times, box: box, tier: tier, fallback: liveDeadline)
       // Each bound is taken as its command starts, so the box's time left is current.
+      let areas = config.areas
       let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
         area, step, tree in
-        bounds.bound(area: area, step: step, tree: tree, now: Date())
+        bounds.bound(
+          area: area, step: step,
+          tree: BrownfieldProve.pricedTree(tree, area: area, areas: areas, layout: layout),
+          now: Date())
       }
       let prove = BrownfieldProve.Dependencies(
         git: unbounded.git, scratch: unbounded.scratch, runner: runner, deadline: liveDeadline,

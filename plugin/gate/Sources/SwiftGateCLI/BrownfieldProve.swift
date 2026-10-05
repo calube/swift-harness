@@ -64,6 +64,14 @@ enum BrownfieldProve {
     }
   }
 
+  /// `tree` as a bound prices it for `area`: a scratch tree whose build directories already hold a
+  /// build is ``AreaCommandTree/builtScratch``. Read as each command starts.
+  static func pricedTree(
+    _ tree: AreaCommandTree, area: String, areas: [BrownfieldArea], layout: BrownfieldStateLayout
+  ) -> AreaCommandTree {
+    tree
+  }
+
   /// Whether the scratch-tree build directories of `areas` already hold a build; `none` when no
   /// area's kind has 1 the harness places.
   static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
