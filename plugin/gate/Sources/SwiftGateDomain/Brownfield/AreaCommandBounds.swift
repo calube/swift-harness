@@ -6,6 +6,9 @@ public enum AreaCommandTree: Sendable, Equatable {
   case checkout
   /// A fresh scratch tree (prove, a baseline rerun), whose build starts cold.
   case scratch
+  /// The gate's own checkout before any build of the area there, or with a build the harness
+  /// can't see: a `test-only` run, or a `slice` test step whose command builds what it runs.
+  case unbuiltCheckout
 }
 
 /// How long 1 area command may run before the gate kills its process tree, and why.
@@ -87,6 +90,7 @@ public struct AreaCommandBounds: Sendable {
     switch (tree, step) {
     case (.scratch, _), (.checkout, .build), (.checkout, .generate), (.checkout, .lint): cold = true
     case (.checkout, .test), (.checkout, .testFiles), (.checkout, .e2e): cold = false
+    case (.unbuiltCheckout, _): cold = false
     }
     let milliseconds = cold ? record.coldMilliseconds + warmRuns : warmRuns
     let reason =
@@ -96,7 +100,7 @@ public struct AreaCommandBounds: Sendable {
     // A build needs no test run, so only test steps and scratch runs can be measured against.
     let expected: Duration? =
       switch (tree, step) {
-      case (.checkout, .test), (.checkout, .testFiles): .milliseconds(warm)
+      case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, _): .milliseconds(warm)
       case (.scratch, _): .milliseconds(record.coldMilliseconds)
       default: nil
       }

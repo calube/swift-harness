@@ -39,6 +39,17 @@ enum BrownfieldProve {
       self.bound = bound
     }
 
+    /// The same dependencies, with each scratch-tree command held to `bound`.
+    func bounded(
+      by bound: @escaping @Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound
+    ) -> Dependencies {
+      var copy = Dependencies(
+        git: git, scratch: scratch, runner: runner, readFile: readFile, deadline: deadline,
+        layout: layout, bound: bound)
+      copy.testCounts = testCounts
+      return copy
+    }
+
     /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.
     static func live(
       root: URL, layout: BrownfieldStateLayout, runner: any AreaCommandRunning, deadline: Duration

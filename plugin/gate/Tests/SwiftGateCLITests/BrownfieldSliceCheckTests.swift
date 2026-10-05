@@ -90,8 +90,10 @@ struct BrownfieldSliceCheckTests {
         git: git, scratch: scratch, runner: runner,
         readFile: { known[clone.relative($0)] }, deadline: .seconds(5), layout: clone.layout),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      warmTestMilliseconds: { area, tree in
-        tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]
+      warmup: { area, tree in
+        (tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]).map {
+          WarmupAreaRecord(coldMilliseconds: 0, testMilliseconds: $0, steps: [.test: .passed])
+        }
       },
       history: { _ in history },
       changedBetween: { from, _ in changedSince[from] ?? [] },

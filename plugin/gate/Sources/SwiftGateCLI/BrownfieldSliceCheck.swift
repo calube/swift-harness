@@ -25,9 +25,8 @@ enum BrownfieldSliceCheck {
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline and warm-up files' name.
     let tree: @Sendable (_ commit: String) async throws -> String
-    /// The area's warm test time at the base tree `tree`, in milliseconds; `nil` when no warm-up
-    /// measured it.
-    let warmTestMilliseconds: @Sendable (_ area: BrownfieldArea, _ tree: String) async -> Int?
+    /// What the warm-up at the base tree `tree` measured of the area; `nil` when none did.
+    let warmup: @Sendable (_ area: BrownfieldArea, _ tree: String) async -> WarmupAreaRecord?
     /// `commit`'s first-parent history with each tree, `commit` first, at most
     /// ``WarmReuse/historyDepth`` entries.
     let history: @Sendable (_ commit: String) async throws -> [CommitTree]
@@ -40,6 +39,10 @@ enum BrownfieldSliceCheck {
     let deadline: Duration
     /// Reads each test step's totals for the run's `report.json`.
     var testCounts = AreaTestCountReader()
+    /// The running `swiftgate run`'s box, which caps each command's bound; `nil` outside one.
+    var box: RunTimeBox? = nil
+    /// The clock each bound is taken on as its command starts.
+    var now: @Sendable () -> Date = { Date() }
 
     /// A selected test run that fits the budget warm still gets room on a cold store.
     static let liveDeadline: Duration = .seconds(600)
@@ -54,9 +57,8 @@ enum BrownfieldSliceCheck {
         prove: BrownfieldProve.Dependencies.live(
           root: root, layout: merge.layout, runner: merge.runner, deadline: liveDeadline),
         trackedTree: merge.trackedTree, tree: merge.tree,
-        warmTestMilliseconds: { [layout = merge.layout] area, tree in
-          WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]?
-            .warmTestMilliseconds
+        warmup: { [layout = merge.layout] area, tree in
+          WarmupTimesStore(layout: layout).load(tree: tree).file.areas[area.name]
         },
         history: { commit in try await firstParentHistory(of: commit, root: root) },
         changedBetween: { [git = merge.git] from, to in
@@ -301,7 +303,8 @@ enum BrownfieldSliceCheck {
     let resolution = await WarmReuse.resolve(
       touched, mergeBase: change.mergeBase, history: history,
       owner: { BrownfieldMergeCheck.owner(of: $0, in: areas)?.name },
-      warmTest: dependencies.warmTestMilliseconds, changed: dependencies.changedBetween)
+      warmTest: { await dependencies.warmup($0, $1)?.warmTestMilliseconds },
+      changed: dependencies.changedBetween)
     return (resolution.times, notes + resolution.notes.flatMap { note($0) })
   }
 

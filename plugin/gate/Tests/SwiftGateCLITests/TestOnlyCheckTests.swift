@@ -64,7 +64,8 @@ struct TestOnlyCheckTests {
         dependencies: TestOnlyCheck.Dependencies(
           areas: areas, layout: layout, trackedTree: TrackedTreeSnapshot(files: [:]),
           runner: runner, xcresults: FakeXcresultReader(scenario: xcresults),
-          deadline: .seconds(5)))
+          bound: { _, _ in AreaCommandBound(duration: .seconds(5), reason: "the flat 5 s") },
+          changedTests: { _ in .success([]) }))
     }
   }
 

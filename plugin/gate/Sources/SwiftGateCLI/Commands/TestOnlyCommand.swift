@@ -13,16 +13,26 @@ enum TestOnlyCheck {
     let trackedTree: TrackedTreeSnapshot
     let runner: any AreaCommandRunning
     let xcresults: any XcresultReader
-    /// Per command run.
-    let deadline: Duration
+    /// The area's bound for its test command run in `tree`, taken as the command starts.
+    let bound: @Sendable (_ area: String, _ tree: AreaCommandTree) -> AreaCommandBound
+    /// The area's test files the change adds or edits, with their added lines; a failure names
+    /// why git couldn't say.
+    let changedTests:
+      @Sendable (_ area: BrownfieldArea) async -> Result<
+        [ChangedTestFile], BrownfieldCheckSetupError
+      >
 
     /// The clone's config and state, and `/bin/sh` commands.
     static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
       let merge = try await BrownfieldMergeCheck.Dependencies.live(root: root)
+      let deadline = BrownfieldMergeCheck.Dependencies.liveDeadline
       return Dependencies(
         areas: merge.config.areas, layout: merge.layout, trackedTree: merge.trackedTree,
         runner: merge.runner, xcresults: LiveXcresultReader(runner: LiveProcessRunner()),
-        deadline: BrownfieldMergeCheck.Dependencies.liveDeadline)
+        bound: { _, _ in
+          AreaCommandBound(duration: deadline, reason: "the flat \(deadline.components.seconds) s")
+        },
+        changedTests: { _ in .success([]) })
     }
   }
 
@@ -50,7 +60,8 @@ enum TestOnlyCheck {
     let directory = resolved.root == "." ? root : root.appending(path: resolved.root)
     let request = AreaCommandRequest(
       area: owner.name, step: .testFiles, command: resolved.command,
-      workingDirectory: directory.path(percentEncoded: false), deadline: dependencies.deadline,
+      workingDirectory: directory.path(percentEncoded: false),
+      deadline: dependencies.bound(owner.name, .checkout).duration,
       environment: AreaCacheEnvironment.make(
         area: owner, layout: dependencies.layout, tree: dependencies.trackedTree
       ).variables,
