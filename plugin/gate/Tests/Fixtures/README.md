@@ -4792,3 +4792,23 @@ cp $R/sim/steps/*.tree.json $D/sim/steps/
 The return is the build-task workflow's own result, before the orchestrator patched its file with
 `sed`. `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/pos-checkout-1-*` matched
 nothing.
+
+## Brownfield trial: a final that refused a step its merge had just passed
+
+A brownfield trial (2026-10-05) ran a merge gate that passed the app area's UI test in 17 s, then
+a `final` on the same tree, merge base and binary that refused that test as unable to fit 105 s
+left against the warm-up's 191 s. `final-reuse-warmup.json` is the warm-up times file at the base
+tree, `final-reuse-clock.json` the run's launch clock with its spec paths cut to `/trial/repo/`,
+and `final-reuse-gate-events.jsonl` the merge gate's then the final's `gate.jsonl` lines. The app
+area's scheme name is replaced with `App` throughout. From the trial clone's state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/warmup/d2d38143ef2b5e7988dceae910f0f2521ea38531.json $F/final-reuse-warmup.json
+sed -E 's#"/[^"]*/repo/#"/trial/repo/#' $S/plans/spec/clock.json > $F/final-reuse-clock.json
+cat $S/runs/20261005T131251Z-f1671a0d/events/gate.jsonl \
+  $S/runs/20261005T133605Z-0e040ff3/events/gate.jsonl > $F/final-reuse-gate-events.jsonl
+sed -i '' 's/<the app scheme>/App/g' $F/final-reuse-*
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/final-reuse-*` matched nothing.
