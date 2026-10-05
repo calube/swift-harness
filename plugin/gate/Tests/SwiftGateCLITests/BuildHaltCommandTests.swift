@@ -175,6 +175,48 @@ struct BuildHaltCommandTests {
   }
 
   @Test(
+    "every --reason the build loop's halt table and the plugin's prompts name parses, and a halting return outcome the table lists parses as that row's reason — catches the review-blocked halt refused with exit 64"
+  )
+  func everyDocumentedReasonParses() async throws {
+    let plugin = URL(filePath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let loop = try String(
+      contentsOf: plugin.appending(path: "skills/build/references/event-loop.md"),
+      encoding: .utf8)
+    let section = try #require(loop.components(separatedBy: "## Recording halts").last)
+    let table = section.split(separator: "\n").drop { !$0.hasPrefix("| Halt |") }
+      .prefix { $0.hasPrefix("|") }.dropFirst(2)
+    func ticked(_ text: Substring) -> [String] {
+      text.split(separator: "`", omittingEmptySubsequences: false).enumerated()
+        .filter { $0.offset % 2 == 1 }.map { String($0.element) }
+    }
+    var expected: [(spelled: String, reason: String)] = []
+    for line in table {
+      let cells = line.split(separator: "|", omittingEmptySubsequences: false)
+      let reasons = ticked(cells[3])
+      for reason in reasons { expected.append((reason, reason)) }
+      let outcomes = ticked(cells[1]).filter { TaskReturn.Outcome(rawValue: $0) != nil }
+      for outcome in outcomes { expected.append((outcome, try #require(reasons.first))) }
+    }
+    #expect(expected.contains { $0.spelled == "review-blocked" && $0.reason == "question" })
+    let prompts = ["skills/build/SKILL.md", "skills/run/SKILL.md", "agents/build-fixer.md"]
+    for path in prompts + ["skills/build/references/event-loop.md"] {
+      let text = try String(contentsOf: plugin.appending(path: path), encoding: .utf8)
+      for match in text.matches(of: /build halt[^`\n]*--reason ([a-z-]+)/) {
+        expected.append((String(match.output.1), String(match.output.1)))
+      }
+    }
+    for (spelled, reason) in expected {
+      let parsed = try await SwiftGate.asyncParseAsRoot([
+        "build", "halt", "--run", Self.buildRun, "--task", "t", "--reason", spelled,
+      ])
+      let command = try #require(parsed as? BuildHaltCommand, "\(spelled)")
+      #expect(command.reason.rawValue == reason, "\(spelled)")
+    }
+  }
+
+  @Test(
     "an unknown --reason or --answer fails parsing and names every allowed value — catches a free-text reason reaching the store"
   )
   func unknownReasonOrAnswerNamesTheAllowedValues() async throws {
