@@ -136,9 +136,10 @@ Close the explore phase, when you opened one: `"$SG" events span end <span> --ou
 ## 4. Fix the commands before planning ends
 
 The warm-up started when discovery finished and runs every area's `generate`, `build` and `test`
-at `<base>`, in parallel, to the end. It also runs each `swiftpm` area's `build` in `<checkout>`,
-which `swiftgate run` checked out at launch, so your first builds there start warm; SwiftPM makes
-a build of yours there wait for its build of that package. It waits for nothing and you don't wait for it either; read
+at `<base>`, in parallel, to the end. Every checkout builds a `swiftpm` area in the 1 scratch path
+the warm-up fills. Then it runs each `xcode` area's `build` in `<checkout>`, which `swiftgate run`
+checked out at launch. After that it adds the plan's worktree slots up to `max_parallel` and builds
+there too, so the first builds in each start warm; a build of yours there waits for its build. It waits for nothing and you don't wait for it either; read
 what it has recorded so far with `"$SG" events list --kind warmup.run`. Each event names an
 `area`, a `step`, its `ms`, `cache` and `outcome` (`passed`, `failed`, `dropped`,
 `not-installed`).
