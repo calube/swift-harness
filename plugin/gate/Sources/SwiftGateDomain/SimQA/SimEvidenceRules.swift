@@ -104,8 +104,7 @@ public enum SimEvidenceRules {
   public static func judge(
     _ evidence: SimEvidence, checkoutHead: String?, audit: SimAuditScope
   ) -> (findings: [SimEvidenceFinding], notes: [SimVerifyNote]) {
-    var untargeted = 0
-    var navigated = 0
+    var controls = SimAuditControls()
     var findings: [SimEvidenceFinding] = []
     if evidence.steps.isEmpty {
       findings.append(
@@ -122,19 +121,22 @@ public enum SimEvidenceRules {
             + "\(checkoutHead): run sim up again on this commit"))
     }
     for step in evidence.steps {
-      findings += stepFindings(
-        step, files: evidence.files, audit: audit, untargeted: &untargeted,
-        navigated: &navigated)
+      findings += stepFindings(step, files: evidence.files, audit: audit, controls: &controls)
     }
+    // A control the run's steps show again and again is 1 control to fix, counted once.
+    let navigated = controls.navigated.subtracting(controls.untargeted)
     return (
       findings + SimExitRule.findings(evidence),
-      audit.note(untargeted: untargeted, navigated: navigated).map { [$0] } ?? []
+      [
+        audit.note(untargeted: controls.untargeted.count, navigated: navigated.count),
+        SimAuditScope.tapTargetNote(controls.smallTargets),
+      ].compactMap { $0 }
     )
   }
 
   private static func stepFindings(
     _ step: SimStep, files: [String: SimEvidenceFile], audit: SimAuditScope,
-    untargeted: inout Int, navigated: inout Int
+    controls: inout SimAuditControls
   ) -> [SimEvidenceFinding] {
     let name = "step \(SimStep.stem(step.n)) \"\(step.label)\""
     func missing(_ path: String, _ why: String) -> SimEvidenceFinding {
@@ -207,10 +209,8 @@ public enum SimEvidenceRules {
             + "content room above the bar, such as a bottom `.contentMargins` or "
             + "`.safeAreaPadding`, or scroll the element into view before the check"))
     }
-    let audited = SimAccessibilityRules.audit(tree, step: step, scope: audit)
-    untargeted += audited.untargeted
-    navigated += audited.navigated
-    findings += audited.findings
+    findings += SimAccessibilityRules.audit(tree, step: step, scope: audit).findings
+    controls.merge(SimAccessibilityRules.controls(tree, step: step, scope: audit))
     return findings
   }
 }

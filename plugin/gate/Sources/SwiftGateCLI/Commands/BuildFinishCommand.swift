@@ -181,14 +181,21 @@ enum BuildFinishRun {
     guard let root else {
       return .failure(ValidationRefusal(message: "no checkout to read the qa runs of; \(rerun)"))
     }
-    let runs = RunStore(worktreeRoot: root).state.url(
-      RunLayout.runsDirectory, directoryHint: .isDirectory)
-    guard case .read(let newest) = QAFiles.newestWholeRun(plan: slug, runsDirectory: runs),
+    // The plan checkout keeps its runs until `run checkout remove` copies them out, so a finish
+    // from the user's checkout reads every checkout's store.
+    let stores = QARunHistory.runsDirectories(sharing: root)
+    let found = stores.compactMap { runs -> QAReport? in
+      guard case .read(let report) = QAFiles.newestWholeRun(plan: slug, runsDirectory: runs)
+      else { return nil }
+      return report
+    }
+    guard let newest = found.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }),
       let runID = newest.runID
     else {
       return .failure(
         ValidationRefusal(
-          message: "\(slug) has a validation table but no qa run over every row; \(rerun)"))
+          message: "\(slug) has a validation table but no qa run over every row in "
+            + stores.map(\.path).joined(separator: ", ") + "; \(rerun)"))
     }
     let read = "the newest qa run, \(runID), is \(newest.verdict.rawValue): \(newest.message)"
     guard newest.final else {

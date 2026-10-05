@@ -214,7 +214,17 @@ public struct LiveGit: Git, DiffReading {
   }
 
   public func commits(from base: String, to tip: String) async throws(GitError) -> [String] {
-    []
+    try Self.validate(ref: base)
+    try Self.validate(ref: tip)
+    // `log.showSignature` would print signature text between the ids.
+    let output = try await run([
+      "-c", "log.showSignature=false", "log", "--reverse", "--format=%H", "\(base)..\(tip)", "--",
+    ])
+    let ids = output.split(separator: "\n").map(String.init)
+    if let bad = ids.first(where: { !Self.isObjectID($0) }) {
+      throw .unparseableOutput(command: "log", detail: "not a commit id: \(bad)")
+    }
+    return ids
   }
 
   private static func isObjectID(_ text: String) -> Bool {

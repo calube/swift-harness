@@ -38,7 +38,39 @@ public enum SimAccessibilityRules {
   public static func controls(_ tree: SimTree, step: SimStep, scope: SimAuditScope)
     -> SimAuditControls
   {
-    SimAuditControls()
+    var found = SimAuditControls()
+    let interactive = tree.elements.filter(\.isInteractive)
+    let selectors: [SimSelector]
+    let pressed: [SimSelector]
+    switch scope {
+    case .everyControl:
+      return found
+    case .unaudited:
+      for element in interactive where !findings(element, step: step).isEmpty {
+        found.untargeted.insert(SimControl(element))
+      }
+      return found
+    case .targeted(let named, let pressing):
+      selectors = named
+      pressed = pressing
+    }
+    let minimum = SimAuditScope.minimumTapTarget
+    for element in interactive {
+      if let frame = element.frame, frame.width < minimum || frame.height < minimum,
+        pressed.contains(where: { $0.matches(element) })
+      {
+        found.smallTargets[SimControl(element)] = found.smallTargets[SimControl(element)] ?? frame
+      }
+      guard !findings(element, step: step).isEmpty,
+        !selectors.contains(where: { $0.namesIdentifier(element) })
+      else { continue }
+      if selectors.contains(where: { $0.matches(element) }) {
+        found.navigated.insert(SimControl(element))
+      } else {
+        found.untargeted.insert(SimControl(element))
+      }
+    }
+    return found
   }
 
   private static func findings(_ element: SimElement, step: SimStep) -> [SimEvidenceFinding] {
@@ -71,16 +103,20 @@ public enum SimAccessibilityRules {
 }
 
 /// 1 control as the audit counts it: the same role, identifier and label in any step is 1 control,
-/// wherever a scroll or a removed row moved it.
+/// wherever a scroll or a removed row moved it. A control with neither is told apart by its frame.
 public struct SimControl: Sendable, Hashable {
   public let role: SimElementRole
   public let identifier: String?
   public let label: String?
+  /// Where it was drawn, kept only for a control with neither identifier nor label, which
+  /// nothing else tells apart from its siblings.
+  public let frame: SimFrame?
 
   public init(_ element: SimElement) {
     role = element.role
     identifier = element.identifier
     label = element.label
+    frame = element.identifier == nil && element.label == nil ? element.frame : nil
   }
 
   /// How a note names it: its identifier, else its label, after its role.

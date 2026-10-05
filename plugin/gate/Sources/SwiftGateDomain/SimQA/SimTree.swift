@@ -75,7 +75,7 @@ public struct SimElement: Sendable, Equatable {
 }
 
 /// A node's `rect`: its origin and size in points.
-public struct SimFrame: Sendable, Equatable {
+public struct SimFrame: Sendable, Hashable {
   public let x: Double
   public let y: Double
   public let width: Double

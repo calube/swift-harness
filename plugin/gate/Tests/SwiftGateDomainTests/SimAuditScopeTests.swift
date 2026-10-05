@@ -66,7 +66,7 @@ struct SimAuditScopeTests {
   }
 
   @Test(
-    "a brownfield flow touching only an accessible control is GREEN while 183 other findings stand, with 1 nit naming that count — catches inherited controls gating the change"
+    "a brownfield flow touching only an accessible control is GREEN while 183 other findings stand, with 1 nit counting their 27 controls, each once — catches inherited controls gating the change"
   )
   func untouchedControlsBecomeOneNit() throws {
     let report = try Self.judged(try Self.targeted([#"id=\"BackButton\""#]))
@@ -74,11 +74,11 @@ struct SimAuditScopeTests {
     #expect(report.verdict == .green)
     #expect(report.notes.count == 1)
     #expect(report.notes.first?.rule == SimAuditScope.untargetedRuleID)
-    #expect(report.notes.first?.message.hasPrefix("183 ") == true, "\(report.notes)")
+    #expect(report.notes.first?.message.hasPrefix("27 controls ") == true, "\(report.notes)")
   }
 
   @Test(
-    "a brownfield flow touching only the new switch is RED on its missing label alone, 1 finding per step that shows it, and the other 179 become the nit — catches a targeted control let off"
+    "a brownfield flow touching only the new switch is RED on its missing label alone, 1 finding per step that shows it, and the other 26 controls become the nit — catches a targeted control let off"
   )
   func newSwitchKeepsItsOwnFinding() throws {
     let report = try Self.judged(try Self.targeted([#"id=\"\#(Self.newSwitch)\""#]))
@@ -86,25 +86,25 @@ struct SimAuditScopeTests {
     #expect(report.findings.map(\.step) == [2, 3, 4, 5])
     #expect(report.findings.allSatisfy { $0.message.contains("Switch \(Self.newSwitch)") })
     #expect(report.verdict == .red)
-    #expect(report.notes.first?.message.hasPrefix("179 ") == true, "\(report.notes)")
+    #expect(report.notes.first?.message.hasPrefix("26 controls ") == true, "\(report.notes)")
   }
 
   @Test(
-    "a control the flow only navigates through doesn't gate: role=button label=\"Settings\" reaches the tab bar's Settings button, missing an identifier in every step, and its 5 findings join the nit, counted apart — catches existing UI gating the change"
+    "a control the flow only navigates through doesn't gate: role=button label=\"Settings\" reaches the tab bar's Settings button, missing an identifier in every step, joins the nit as 1 control counted apart — catches existing UI gating the change"
   )
   func navigatedControlJoinsTheNit() throws {
     let report = try Self.judged(try Self.targeted([#"role=button label=\"Settings\""#]))
     #expect(report.findings.isEmpty, "\(report.findings.map(\.message))")
     #expect(report.verdict == .green)
     #expect(report.notes.map(\.rule) == [SimAuditScope.untargetedRuleID])
-    #expect(report.notes.first?.message.hasPrefix("183 ") == true, "\(report.notes)")
+    #expect(report.notes.first?.message.hasPrefix("27 controls ") == true, "\(report.notes)")
     #expect(
-      report.notes.first?.message.contains("5 on controls the flow only navigates through")
-        == true, "\(report.notes)")
+      report.notes.first?.message.contains("(1 the flow only navigates through)") == true,
+      "\(report.notes)")
   }
 
   @Test(
-    "the trial's own flow file gates only the new switch it names by id: its 4 missing labels, while the Settings tab button it presses gates nothing and its 5 findings join the nit — catches row 1 RED on the tab bar"
+    "the trial's own flow file gates only the new switch it names by id: its 4 missing labels, while the Settings tab button it presses gates nothing and joins the nit as 1 control — catches row 1 RED on the tab bar"
   )
   func trialFlowFileGatesOnlyItsContract() throws {
     let steps = try FlowSteps.parse(try Self.file("flow.json"))
@@ -124,10 +124,10 @@ struct SimAuditScopeTests {
     #expect(report.findings.map(\.rule) == Array(repeating: .a11yLabel, count: 4))
     #expect(report.findings.allSatisfy { $0.message.contains("Switch \(Self.newSwitch)") })
     #expect(report.verdict == .red)
-    #expect(report.notes.first?.message.hasPrefix("179 ") == true, "\(report.notes)")
+    #expect(report.notes.first?.message.hasPrefix("26 controls ") == true, "\(report.notes)")
     #expect(
-      report.notes.first?.message.contains("5 on controls the flow only navigates through")
-        == true, "\(report.notes)")
+      report.notes.first?.message.contains("(1 the flow only navigates through)") == true,
+      "\(report.notes)")
   }
 
   @Test(
@@ -167,7 +167,7 @@ struct SimAuditScopeTests {
     #expect(report.notes.count == 1)
     #expect(report.notes.first?.rule == SimAuditScope.untargetedRuleID)
     #expect(report.notes.first?.message.contains(SimAuditScope.noFlowReason) == true)
-    #expect(report.notes.first?.message.contains("183") == true, "\(report.notes)")
+    #expect(report.notes.first?.message.contains("27 controls") == true, "\(report.notes)")
   }
 
   @Test(
@@ -192,7 +192,7 @@ struct SimAuditScopeTests {
     let notes = try #require(json["notes"] as? [[String: Any]])
     #expect(notes.first?["rule"] as? String == SimAuditScope.untargetedRuleID)
     #expect(json["verdict"] as? String == "GREEN")
-    #expect(report.text.contains("\(SimAuditScope.untargetedRuleID): 183 "), "\(report.text)")
+    #expect(report.text.contains("\(SimAuditScope.untargetedRuleID): 27 controls "), "\(report.text)")
     let history = try report.runReport(durationMilliseconds: 10)
     #expect(history.findings.map(\.ruleID) == [SimAuditScope.untargetedRuleID])
     #expect(history.findings.map(\.severity) == [.nit])

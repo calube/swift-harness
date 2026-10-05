@@ -898,6 +898,22 @@ public enum TaskReturnCommitRefill {
     _ taskReturn: TaskReturn, states: [String: TaskReturnEvidence.CommitState],
     branchCommits: [String], range: String
   ) -> TaskReturn? {
-    nil
+    guard !branchCommits.isEmpty else { return nil }
+    let unresolved = taskReturn.commits.filter { (states[$0] ?? .missing) == .missing }
+    let why: String
+    if !unresolved.isEmpty {
+      let named = unresolved.joined(separator: ", ")
+      why = "\(named) \(unresolved.count == 1 ? "doesn't" : "don't") resolve to a commit"
+    } else if taskReturn.commits.isEmpty, taskReturn.outcome == .readyToMerge {
+      why = "the return listed none"
+    } else {
+      return nil
+    }
+    let note = "commits: \(why); filled from git log \(range)"
+    return TaskReturn(
+      task: taskReturn.task, outcome: taskReturn.outcome, commits: branchCommits,
+      gate: taskReturn.gate, review: taskReturn.review, testsAdded: taskReturn.testsAdded,
+      notes: [taskReturn.notes, note].filter { !$0.isEmpty }.joined(separator: "\n"),
+      designConflict: taskReturn.designConflict, surfaceCommit: taskReturn.surfaceCommit)
   }
 }

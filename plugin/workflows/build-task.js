@@ -544,9 +544,24 @@ const gateRunLines = () => {
   ].join('\n')
 }
 
+// A worker's first lines: the hook refuses a bare `ls`, a raw `swift build` or `swift test` in a
+// brownfield clone, and a write to the user's checkout, and each refusal costs the worker a turn.
+const workerTopLines = () =>
+  [
+    `Your worktree is ${A.worktree}. Run every command there and give every file you read or write by its absolute path under it: ` +
+      "a write outside it, as to the user's checkout, is refused.",
+    `Never run a bare \`ls\`: here it waits on stdin and hangs. Name the folder, as in \`ls ${A.worktree}\`.`,
+    ...(A.profile === 'brownfield'
+      ? [
+          `Run 1 test with \`${SG} test-only --area <area> <Target>/<Class>\`, <area> as the run's config names it; ` +
+            'never a raw `swift build` or `swift test`, which the hook refuses.',
+        ]
+      : []),
+  ].join('\n')
+
 function workerPrompt(fix, parent) {
   const span = spanLines(fix ? 'fix' : 'worker', 'build-worker', parent, SPAN_END_RULES.worker)
-  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${brief()}\n${gateRunLines()}${deadlineLines()}\n\n${span}`
+  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${workerTopLines()}\n${brief()}\n${gateRunLines()}${deadlineLines()}\n\n${span}`
   if (!fix) return base
   return (
     `${base}\n\nThis is the fix pass, the only one: an earlier attempt worked in this same worktree and branch. ` +
