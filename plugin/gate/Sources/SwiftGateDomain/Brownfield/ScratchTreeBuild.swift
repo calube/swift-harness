@@ -4,11 +4,12 @@ import Foundation
 /// Each scratch tree has a fresh path, so a build left to its tool's default starts cold: an
 /// `xcodebuild` in Xcode's global DerivedData keyed by that path, which nothing reuses, and a
 /// `swift` build in a new `.build`. An `xcodebuild` builds in the worktree's prove DerivedData,
-/// seeded from the area's seed. A `swift build` or `swift test` builds in 1 scratch path per area
-/// that every tree of the clone shares, checkouts and the warm-up included: its fetched and built
-/// dependencies keep their paths from 1 tree to the next, so only the area's own modules compile
-/// again. SwiftPM locks a scratch path while it builds, so 2 gates building the same area take
-/// turns.
+/// seeded from the area's seed. A `swift build` or `swift test` builds in a scratch path per
+/// worktree and area that every scratch tree of that worktree shares, which the warm-up builds in
+/// each slot: its fetched and built dependencies keep their paths from 1 tree to the next, so only
+/// the area's own modules compile again. SwiftPM locks a scratch path while it builds, so gates in
+/// 2 slots sharing 1 path took turns; a clone of a built scratch path can't stand in for 1, since
+/// its precompiled headers name the path they were built in.
 public enum ScratchTreeBuild {
   public static let swiftPMOption = "--scratch-path"
 
@@ -22,7 +23,10 @@ public enum ScratchTreeBuild {
   /// gates in 2 slots never take turns on 1 scratch path, and it lasts as long as the slot; in the
   /// main checkout, the area's shared scratch path. Absolute.
   public static func proveScratchPath(area: String, layout: BrownfieldStateLayout) -> String {
-    swiftPMScratchPath(area: area, layout: layout)
+    if layout.gitDir.standardizedFileURL.path == layout.commonDir.standardizedFileURL.path {
+      return swiftPMScratchPath(area: area, layout: layout)
+    }
+    return XcodeDerivedData.provePath(area: area, layout: layout)
   }
 
   /// `command` with `--scratch-path <scratchPath>` after each `swift build` and `swift test`;
@@ -63,9 +67,17 @@ public enum ScratchTreeBuild {
   ) -> AreaCommandRequest {
     switch kind {
     case .xcode:
-      return XcodeDerivedData.proveRequest(request, layout: layout)
+      let placed = XcodeDerivedData.proveRequest(request, layout: layout)
+      guard let waits, let seed = placed.derivedDataSeed else { return placed }
+      return AreaCommandRequest(
+        area: placed.area, step: placed.step, command: placed.command,
+        workingDirectory: placed.workingDirectory, deadline: placed.deadline,
+        environment: placed.environment, junitPath: placed.junitPath,
+        resultBundlePath: placed.resultBundlePath, derivedDataSeed: seed,
+        buildLock: BuildDirectoryLock(directory: seed.destination, waits: waits))
     case .swiftpm:
-      return swiftPMRequest(request, layout: layout)
+      return swiftPMRequest(
+        request, scratchPath: proveScratchPath(area: request.area, layout: layout), waits: waits)
     default:
       return request
     }
@@ -76,15 +88,25 @@ public enum ScratchTreeBuild {
   public static func swiftPMRequest(_ request: AreaCommandRequest, layout: BrownfieldStateLayout)
     -> AreaCommandRequest
   {
-    let command = swiftPMCommand(
-      request.command, scratchPath: swiftPMScratchPath(area: request.area, layout: layout))
+    swiftPMRequest(
+      request, scratchPath: swiftPMScratchPath(area: request.area, layout: layout), waits: nil)
+  }
+
+  /// `request` with each `swift build` and `swift test` building in `scratchPath`, taking its turn
+  /// there when `waits` is given; unchanged when ``swiftPMCommand(_:scratchPath:)`` leaves its
+  /// command as is.
+  public static func swiftPMRequest(
+    _ request: AreaCommandRequest, scratchPath: String, waits: BuildLockWaits?
+  ) -> AreaCommandRequest {
+    let command = swiftPMCommand(request.command, scratchPath: scratchPath)
     guard command != request.command else { return request }
     return AreaCommandRequest(
       area: request.area, step: request.step, command: command,
       workingDirectory: request.workingDirectory, deadline: request.deadline,
       environment: request.environment, junitPath: request.junitPath,
       resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed,
-      buildLock: request.buildLock)
+      buildLock: waits.map { BuildDirectoryLock(directory: scratchPath, waits: $0) }
+        ?? request.buildLock)
   }
 
   /// The build directories a scratch tree's command for `area` builds into, for a step to label
@@ -95,7 +117,7 @@ public enum ScratchTreeBuild {
   {
     switch area.kind {
     case .xcode: ["\(XcodeDerivedData.provePath(area: area.name, layout: layout))/Build"]
-    case .swiftpm: [swiftPMScratchPath(area: area.name, layout: layout)]
+    case .swiftpm: [proveScratchPath(area: area.name, layout: layout)]
     default: []
     }
   }

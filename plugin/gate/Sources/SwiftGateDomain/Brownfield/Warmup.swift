@@ -312,7 +312,20 @@ public enum Warmup {
     area: BrownfieldArea, checkout: String, layout: BrownfieldStateLayout,
     tree: TrackedTreeSnapshot, deadline: Duration
   ) -> AreaCommandRequest? {
-    nil
+    let linked =
+      layout.gitDir.standardizedFileURL.path != layout.commonDir.standardizedFileURL.path
+    guard area.kind == .swiftpm, linked,
+      let prepared = AreaCommandExpansion.prepare(
+        area: area, step: .build, repositoryRoot: checkout, files: [], tests: [],
+        junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
+        deadline: deadline,
+        environment: AreaCacheEnvironment.make(area: area, layout: layout, tree: tree).variables)
+    else { return nil }
+    // Taken in turn with a gate's prove there, should a task take the slot before it ends.
+    return ScratchTreeBuild.swiftPMRequest(
+      prepared.request,
+      scratchPath: ScratchTreeBuild.proveScratchPath(area: area.name, layout: layout),
+      waits: BuildLockWaits())
   }
 
   /// `area`'s build in `checkout`, a checkout the run builds in: the plan branch's or a task

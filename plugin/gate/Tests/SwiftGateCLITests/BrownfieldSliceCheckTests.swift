@@ -958,7 +958,7 @@ extension BrownfieldSliceCheckTests {
 
 extension BrownfieldSliceCheckTests {
   @Test(
-    "the send-money trial's slice builds its scratch trees in the clone's caches: the baseline rerun's xcodebuild in the worktree's prove DerivedData, its swift build and prove's swift test in the area's shared scratch path, and each step says whether that was warm — catches a RED slice's baseline writing 1.3 GB into Xcode's global DerivedData and every swiftpm prove compiling cold while labelled none",
+    "the send-money trial's slice builds its scratch trees in the clone's caches: the baseline rerun's xcodebuild in the worktree's prove DerivedData, its swift build and prove's swift test in the worktree's prove scratch path for the area, and each step says whether that was warm and prove how long its runs waited for that path — catches a RED slice's baseline writing 1.3 GB into Xcode's global DerivedData, every swiftpm prove compiling cold while labelled none, and the send-money trial's proves taking turns on 1 shared scratch path with no step showing the wait",
     arguments: [false, true])
   func scratchTreesBuildInTheClonesCaches(warm: Bool) async throws {
     let clone = try Clone()
@@ -966,7 +966,8 @@ extension BrownfieldSliceCheckTests {
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
     let areas = config.areas.filter { ["InterviewStarter", "AppFeature"].contains($0.name) }
-    let shared = ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout)
+    let shared = ScratchTreeBuild.proveScratchPath(area: "AppFeature", layout: clone.layout)
+    #expect(shared != ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout))
     let prove = XcodeDerivedData.provePath(area: "InterviewStarter", layout: clone.layout)
     if warm {
       for directory in [shared, prove + "/Build"] {
@@ -975,8 +976,10 @@ extension BrownfieldSliceCheckTests {
       }
     }
     // Both areas fail at the head and at the base, so the baseline reruns each in a scratch tree.
+    // Each run that takes its turn in a build directory waited 250 ms for it.
     let runner = FakeAreaCommandRunner { request in
-      switch request.step {
+      request.buildLock?.waits.add(milliseconds: 250)
+      return switch request.step {
       case .build: .failed(exit: 65, tail: "BUILD FAILED", junit: nil)
       case .testFiles: .failed(exit: 1, tail: "1 failed", junit: nil)
       default: .passed
@@ -1016,5 +1019,9 @@ extension BrownfieldSliceCheckTests {
     let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
     #expect(labels.contains("AppFeature prove \(label)"), "\(labels)")
     #expect(labels.contains("- baseline \(label)"), "\(labels)")
+    let proved = feature.filter { $0.buildLock != nil }
+    #expect(!proved.isEmpty, "prove's reverted runs take their turn")
+    #expect(
+      context.steps.steps.first { $0.step == .prove }?.lockWaitMilliseconds == 250 * proved.count)
   }
 }

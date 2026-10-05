@@ -158,6 +158,7 @@ public struct QARunPlan: Sendable, Equatable {
       }
       if validation.layer == .flow { flows[validation.requirement, default: []].append(row) }
       rows.append(row)
+      await rowEnded(row)
     }
     return rows
   }

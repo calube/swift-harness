@@ -25,7 +25,8 @@ final class GateStepCollector: Sendable {
     let timing = GateStepTiming(
       step: step, tier: tier, milliseconds: milliseconds, verdict: verdict,
       derivedData: derivedData, area: area,
-      startMs: max(0, (elapsed?() ?? GateRun.milliseconds(.now - start)) - milliseconds))
+      startMs: max(0, (elapsed?() ?? GateRun.milliseconds(.now - start)) - milliseconds),
+      lockWaitMilliseconds: lockWaitMilliseconds)
     timings.withLock { $0.append(timing) }
   }
 

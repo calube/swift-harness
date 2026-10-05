@@ -209,6 +209,7 @@ enum BrownfieldProve {
       (layout ?? dependencies.layout).map { Self.derivedData(plans.map(\.area), layout: $0) }
       ?? .none
     let ran: AreaRun
+    let waits = BuildLockWaits()
     do throws(ScratchWorktreeError) {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
         var total = AreaRun()
@@ -216,7 +217,8 @@ enum BrownfieldProve {
           total =
             total
             + (await execute(
-              plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies))
+              plan, in: toplevel, junitDirectory, proofBase: mergeBase, waits: waits,
+              dependencies))
         }
         return total
       }
@@ -229,7 +231,7 @@ enum BrownfieldProve {
         with: note(
           "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
             + "reverted")),
-      derivedData: built)
+      derivedData: built, lockWaitMilliseconds: waits.milliseconds)
   }
 
   /// How 1 area's changed tests run.
@@ -318,7 +320,7 @@ enum BrownfieldProve {
 
   private static func execute(
     _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, proofBase: String,
-    _ dependencies: Dependencies
+    waits: BuildLockWaits, _ dependencies: Dependencies
   ) async -> AreaRun {
     let area = plan.area
     let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
@@ -350,7 +352,9 @@ enum BrownfieldProve {
         area: area.name, step: step, command: command, workingDirectory: directory.path,
         deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
       let placed =
-        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+        dependencies.layout.map {
+          ScratchTreeBuild.request(request, kind: area.kind, layout: $0, waits: waits)
+        }
         ?? request
       let outcome = await dependencies.runner.run(placed)
       return (outcome, await dependencies.testCounts.counts(of: placed)?.tests)

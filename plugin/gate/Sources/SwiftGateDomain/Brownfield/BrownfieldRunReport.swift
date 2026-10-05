@@ -269,16 +269,17 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
       reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
       validation: validation, validationNote: validationNote,
-      committedConfig: Self.committedConfig(inputs.setAside))
+      committedConfig: Self.committedConfig(inputs.setAside, atPlanTip: inputs.setAsideAtPlanTip))
   }
 
-  private static func committedConfig(_ input: RunReportInput<CommittedConfigSetAside>?)
-    -> Section<String>?
-  {
+  private static func committedConfig(
+    _ input: RunReportInput<CommittedConfigSetAside>?, atPlanTip: CommittedConfigSetAside.AtPlanTip
+  ) -> Section<String>? {
     guard let input else { return nil }
     switch input {
     case .missing: return nil
-    case .read(let record): return Section(items: [record.reportLine], note: nil)
+    case .read(let record):
+      return Section(items: [record.reportLine(atPlanTip: atPlanTip)], note: nil)
     case .unreadable: return Section(items: [], note: describe(input, what: "the set-aside record"))
     }
   }

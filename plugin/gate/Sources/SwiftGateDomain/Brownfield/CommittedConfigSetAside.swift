@@ -48,13 +48,19 @@ public struct CommittedConfigSetAside: Codable, Sendable, Equatable {
 
   /// The report's line for it, saying whether the plan branch left the file as it was set aside.
   public func reportLine(atPlanTip tip: AtPlanTip) -> String {
-    reportLine
-  }
-
-  /// The report's line for it.
-  public var reportLine: String {
-    "\(file)" + (blob.map { " (blob \($0))" } ?? "") + " set aside for this clone at "
-      + setAsideAt.formatted(.iso8601) + ": every command ran the brownfield profile, and the "
-      + "file is unchanged in the tree"
+    let head =
+      "\(file)" + (blob.map { " (blob \($0))" } ?? "") + " set aside for this clone at "
+      + setAsideAt.formatted(.iso8601) + ": every command ran the brownfield profile, and "
+    switch tip {
+    case .blob(let tip) where tip == blob:
+      return head + "the plan branch leaves the file unchanged"
+    case .blob(let tip):
+      return head + "the plan branch changes the file (blob \(tip) at its head), so merging it "
+        + "changes the committed config"
+    case .absent:
+      return head + "the plan branch deletes the file, so merging it deletes the committed config"
+    case .unknown:
+      return head + "whether the plan branch changes the file couldn't be read"
+    }
   }
 }

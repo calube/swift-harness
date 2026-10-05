@@ -6,7 +6,8 @@ import Synchronization
 
 /// `swiftgate warmup [--areas a,b] [--seed-checkout <path>] [--plan <slug>]`: runs every area's
 /// generate, build and test at the base tree in parallel, filling the caches, the warm-up times
-/// and the baseline; then builds each Xcode area in the plan checkout and in the plan's slots.
+/// and the baseline; then builds each Xcode area in the plan checkout and in the plan's slots, and
+/// each SwiftPM area there into the checkout's own prove scratch path.
 struct WarmupCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "warmup",
@@ -154,8 +155,9 @@ struct WarmupCommand: AsyncParsableCommand {
     var notes: [String] = []
   }
 
-  /// Each xcode area's build in `checkout`, then in each slot `slots` adds, those all at once:
-  /// the plan checkout takes the contract's build before any task takes a slot.
+  /// Each xcode area's build in `checkout`, and each swiftpm area's into its prove scratch path,
+  /// then the same in each slot `slots` adds, those all at once: the plan checkout takes the
+  /// contract's build before any task takes a slot.
   private static func seed(
     areas: [BrownfieldArea], checkout: URL?,
     slots: @Sendable () async -> (paths: [String], notes: [String]), tree: TrackedTreeSnapshot,
@@ -182,8 +184,9 @@ struct WarmupCommand: AsyncParsableCommand {
     return checkouts
   }
 
-  /// Every ``Warmup/seedRequest(area:checkout:layout:tree:deadline:)`` in `paths`, all at once,
-  /// in checkout and then config order.
+  /// Every ``Warmup/seedRequest(area:checkout:layout:tree:deadline:)`` and
+  /// ``Warmup/proveSeedRequest(area:checkout:layout:tree:deadline:)`` in `paths`, all at once, in
+  /// checkout and then config order.
   private static func build(
     areas: [BrownfieldArea], in paths: [String], tree: TrackedTreeSnapshot, deadline: Duration,
     process: any ProcessRunner, runner: any AreaCommandRunning
@@ -201,8 +204,10 @@ struct WarmupCommand: AsyncParsableCommand {
         continue
       }
       requests += areas.compactMap { area in
-        Warmup.seedRequest(
-          area: area, checkout: path, layout: layout, tree: tree, deadline: deadline
+        (Warmup.seedRequest(
+          area: area, checkout: path, layout: layout, tree: tree, deadline: deadline)
+          ?? Warmup.proveSeedRequest(
+            area: area, checkout: path, layout: layout, tree: tree, deadline: deadline)
         ).map { (path, $0) }
       }
     }
@@ -227,14 +232,14 @@ struct WarmupCommand: AsyncParsableCommand {
   }
 
   /// Adds `plan`'s slots up to the preset's `max_parallel` at `revision`; none without a plan,
-  /// a preset, or an area a slot's own build would warm.
+  /// a preset, or an xcode or swiftpm area a slot's own build would warm.
   private static func prepareSlots(
     plan: String?, config: BrownfieldConfig, areas: [BrownfieldArea],
     layout: BrownfieldStateLayout, revision: String, process: any ProcessRunner
   ) async -> (paths: [String], notes: [String]) {
     guard let plan,
       let count = config.buildPresets[BrownfieldConfigSchema.profileName]?.maxParallel,
-      areas.contains(where: { $0.kind == .xcode })
+      areas.contains(where: { $0.kind == .xcode || $0.kind == .swiftpm })
     else { return ([], []) }
     let common = layout.commonDir.path(percentEncoded: false)
     let pool = WorktreePool(commonDirectory: common, plan: plan)

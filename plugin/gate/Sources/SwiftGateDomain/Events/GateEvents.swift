@@ -239,7 +239,7 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
     self.derivedData = timing.derivedData
     self.area = timing.area
     self.startMs = timing.startMs
-    self.lockWaitMs = nil
+    self.lockWaitMs = timing.lockWaitMilliseconds
   }
 
   private enum CodingKeys: String, CodingKey {
