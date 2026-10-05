@@ -1,0 +1,109 @@
+{
+  "after" : "send-flow",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "3665a70f1fa456b57e956c3256fec07ff219550a",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-contact-search, flow) `qa/contact-search.flow.json`: reused from qa run 20261005T075910Z-5adba385 by account-fake at 23f9a9115acf: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\". Current surface: Home, Send to, Alice Johnson, Ben Carter.",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "3 of 8 rows verified (5 reason-only): 2 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "qa run 20261005T075910Z-5adba385 ran on the same merged tree ef6107abdb22",
+    "3 rows (1, 2, 3) reused from qa run 20261005T075910Z-5adba385 by account-fake: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 5,
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T075910Z-5adba385 by account-fake at 23f9a9115acf: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\". Current surface: Home, Send to, Alice Johnson, Ben Carter.",
+      "ms" : 0,
+      "requirement" : "req-contact-search",
+      "result" : "red",
+      "reusedFrom" : "20261005T075910Z-5adba385",
+      "row" : 1,
+      "runsAfter" : [
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T075910Z-5adba385 by account-fake at 23f9a9115acf: batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 72 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-send-success",
+      "result" : "pass",
+      "reusedFrom" : "20261005T075910Z-5adba385",
+      "row" : 2,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T075910Z-5adba385 by account-fake at 23f9a9115acf: batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 48 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-send-failure",
+      "result" : "pass",
+      "reusedFrom" : "20261005T075910Z-5adba385",
+      "row" : 3,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T080143Z-67376484",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/account-fake",
+        "task" : "account-fake",
+        "tip" : "200112c4f2b39230858c0737da0f936eb03aedd5"
+      }
+    ],
+    "base" : "650cea4126d41541987839408ccd0bba7ea9d892",
+    "branch" : "spec/send-flow",
+    "conflicts" : [
+
+    ],
+    "tip" : "a09da6e99afc5d579e25de57158f5569e9051249"
+  },
+  "verdict" : "RED"
+}

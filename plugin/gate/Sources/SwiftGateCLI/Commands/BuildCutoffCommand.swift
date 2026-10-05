@@ -117,7 +117,7 @@ enum BuildCutoffRun {
             tasks.append(
               CutoffTask(
                 id: task.id, stage: .gating,
-                beforeMergeQASeconds: await beforeMergeQASeconds(
+                qa: await beforeMergeQA(
                   task.id, slug: slug, plan: plan, ledger: ledger, log: log,
                   reports: history.beforeMergeReports, git: git)))
           } else {
@@ -190,7 +190,9 @@ enum BuildCutoffRun {
             if case .returnCheck(let check) = newest { fix = check.fix }
             return CutoffRule.step(
               for: decision, stage: task?.stage ?? .working, fix: fix,
-              beforeMergeQASeconds: task?.beforeMergeQASeconds ?? 0,
+              // An owed run with no measured time still gets its step.
+              beforeMergeQASeconds: task.map { $0.owesQA ? max($0.beforeMergeQASeconds, 1) : 0 }
+                ?? 0,
               mergeGate: record.preset.mergeGate, slug: slug, session: session ?? "<session>")
           }),
         holder: nil,
@@ -200,27 +202,27 @@ enum BuildCutoffRun {
     }
   }
 
-  /// What `task`'s `qa run --before-merge` still costs: 0 when its merge makes no row ready, or
-  /// when a GREEN or conflicted run covers the branch it merges (its fixer's, when its newest
-  /// checked return is the fixer's) at its tip on the plan branch's head. Otherwise the newest
-  /// such run's rows, whatever tip it ran, in whole seconds rounded up, or 0 with none recorded.
-  private static func beforeMergeQASeconds(
+  /// Where `task`'s `qa run --before-merge` stands, for the branch it merges (its fixer's, when
+  /// its newest checked return is the fixer's) at its tip on the plan branch's head. A plan with
+  /// no readable table needs no run.
+  private static func beforeMergeQA(
     _ task: String, slug: String, plan: PlanStateLayout.Plan, ledger: Ledger, log: BuildEventLog,
     reports: [QAReport], git: any Git
-  ) async -> Int {
+  ) async -> CutoffQA {
     guard
       let data = FileManager.default.contents(
         atPath: plan.directory + "/" + ValidationTable.fileName),
       let table = try? ValidationTableJSON.decode(data)
-    else { return 0 }
-    let fix =
+    else { return .notNeeded }
+    let latest =
       log.events.last { event in
         if case .returnCheck(let check) = event { return check.task == task }
         return false
-      }.map { event in
-        if case .returnCheck(let check) = event { return check.fix }
-        return false
-      } ?? false
+      }.flatMap { event -> BuildEvent.ReturnCheck? in
+        if case .returnCheck(let check) = event { return check }
+        return nil
+      }
+    let fix = latest?.fix ?? false
     var branch = "\(slug)/\(fix ? "fix-\(task)" : task)"
     var tip: String?
     var base: String?
@@ -233,19 +235,11 @@ enum BuildCutoffRun {
       tip = try? await git.revision("refs/heads/\(names.branch)")
       base = try? await git.revision("refs/heads/\(names.baseBranch)")
     }
-    let own = reports.filter { $0.after == task }
     let merged = LedgerProgress(tasks: ledger.tasks.map { .init(id: $0.id, status: $0.status) })
       .merged(per: log)
-    switch QAMergeReadiness.of(
-      table: table, merged: merged, plan: slug, task: task, reports: own, branch: branch,
-      tip: tip ?? "", base: base ?? "")
-    {
-    case .notNeeded, .checked, .conflicts:
-      return 0
-    case .unchecked, .red:
-      guard let newest = own.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }) else { return 0 }
-      return (newest.rows.reduce(0) { $0 + $1.milliseconds } + 999) / 1000
-    }
+    return CutoffQA.of(
+      table: table, merged: merged, plan: slug, task: task, reports: reports, branch: branch,
+      tip: tip ?? "", base: base ?? "", latestCheck: latest)
   }
 
   /// Whether the run holds a checked `ready-to-merge` return for `task`.

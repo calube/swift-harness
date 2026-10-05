@@ -15,14 +15,7 @@ public enum GateOutputGuard {
     var piped = false
     for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
       let simple = parsed.command
-      if simple.name == nil {
-        for assignment in simple.assignments {
-          let parts = assignment.split(separator: "=", maxSplits: 1).map(String.init)
-          if parts.count == 2, ShellSyntax.basename(parts[1]) == program {
-            programs.insert(parts[0])
-          }
-        }
-      }
+      programs.formUnion(programVariables(simple))
       let isGate = simple.name.map { isProgram($0, variables: programs) } ?? false
       piped = isGate || (piped && parsed.links == [.pipe])
       if isGate {
@@ -58,9 +51,18 @@ public enum GateOutputGuard {
     return nil
   }
 
+  /// The variables an assignment-only command sets to a `swiftgate` path.
+  static func programVariables(_ simple: SimpleCommand) -> [String] {
+    guard simple.name == nil else { return [] }
+    return simple.assignments.compactMap { assignment in
+      let parts = assignment.split(separator: "=", maxSplits: 1).map(String.init)
+      return parts.count == 2 && ShellSyntax.basename(parts[1]) == program ? parts[0] : nil
+    }
+  }
+
   /// Whether a command name, as the shell may write it, runs `swiftgate`: its basename, or
   /// `$NAME`/`${NAME}` for a variable in `variables`.
-  private static func isProgram(_ name: String, variables: Set<String>) -> Bool {
+  static func isProgram(_ name: String, variables: Set<String>) -> Bool {
     if name == program { return true }
     guard name.hasPrefix("$") else { return false }
     var variable = name.dropFirst()

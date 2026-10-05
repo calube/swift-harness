@@ -1,0 +1,123 @@
+{
+  "after" : "account-fake",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "23f9a9115acf31283294074f524894c379e8f319",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-contact-search, flow) `qa/contact-search.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\". Current surface: Home, Send to, Alice Johnson, Ben Carter.",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "3 of 8 rows verified (5 reason-only): 2 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 5,
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+        "qa/01-req-contact-search.flow/steps.json",
+        "qa/01-req-contact-search.flow/batch.json",
+        "qa/01-req-contact-search.flow/flow.json",
+        "qa/01-req-contact-search.flow/video.mp4",
+        "qa/01-req-contact-search.flow/sheet.png",
+        "qa/01-req-contact-search.flow/sim/steps.ndjson",
+        "qa/01-req-contact-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\". Current surface: Home, Send to, Alice Johnson, Ben Carter.",
+      "ms" : 44384,
+      "requirement" : "req-contact-search",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/02-req-send-success.flow/steps.json",
+        "qa/02-req-send-success.flow/batch.json",
+        "qa/02-req-send-success.flow/flow.json",
+        "qa/02-req-send-success.flow/video.mp4",
+        "qa/02-req-send-success.flow/sheet.png",
+        "qa/02-req-send-success.flow/sim/steps.ndjson",
+        "qa/02-req-send-success.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 72 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 41255,
+      "requirement" : "req-send-success",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/03-req-send-failure.flow/steps.json",
+        "qa/03-req-send-failure.flow/batch.json",
+        "qa/03-req-send-failure.flow/flow.json",
+        "qa/03-req-send-failure.flow/video.mp4",
+        "qa/03-req-send-failure.flow/sheet.png",
+        "qa/03-req-send-failure.flow/sim/steps.ndjson",
+        "qa/03-req-send-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 48 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 41601,
+      "requirement" : "req-send-failure",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T075910Z-5adba385",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/send-flow",
+        "task" : "send-flow",
+        "tip" : "a09da6e99afc5d579e25de57158f5569e9051249"
+      }
+    ],
+    "base" : "650cea4126d41541987839408ccd0bba7ea9d892",
+    "branch" : "spec/account-fake",
+    "conflicts" : [
+
+    ],
+    "tip" : "200112c4f2b39230858c0737da0f936eb03aedd5"
+  },
+  "verdict" : "RED"
+}

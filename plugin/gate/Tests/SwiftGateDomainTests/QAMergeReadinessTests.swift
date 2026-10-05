@@ -61,7 +61,7 @@ struct QAMergeReadinessTests {
   }
 
   @Test(
-    "the trial's red rows, run on the branch merged into the plan branch, are a red readiness naming those rows — catches the a11y-label and missing-activity reds found only after main moved"
+    "the trial's red rows, run on the branch merged into the plan branch, are a red readiness naming the search row its merge makes ready, and not the activity row still waiting on the fake's merge — catches the a11y-label red found only after main moved"
   )
   func redRunRefuses() throws {
     let red = try Self.report()
@@ -73,7 +73,7 @@ struct QAMergeReadinessTests {
       return
     }
     #expect(runID == red.runID)
-    #expect(rows.map(\.row) == [1, 2])
+    #expect(rows.map(\.row) == [1])
   }
 
   @Test(
