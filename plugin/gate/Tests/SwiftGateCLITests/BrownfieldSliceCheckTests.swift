@@ -612,6 +612,13 @@ final class RecordedStrings: Sendable {
 }
 
 extension BrownfieldSliceCheckTests {
+  /// Whether `request` runs in the scratch tree. An area rooted at `.` runs prove in the scratch
+  /// tree's own directory, with no trailing slash for ``Clone/inScratch(_:)`` to match.
+  private static func inScratchTree(_ request: AreaCommandRequest, _ clone: Clone) -> Bool {
+    URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
+      .path(percentEncoded: false).hasPrefix(clone.scratch.path(percentEncoded: false))
+  }
+
   @Test(
     "the trial's xcode area builds and tests at the head in the worktree's own DerivedData seeded from the area's seed, and prove's scratch tree doesn't — catches a task worktree's first slice compiling cold in Xcode's path-keyed default, or a scratch tree overwriting the worktree's build",
     arguments: [45_700, 10_000])
@@ -637,12 +644,7 @@ extension BrownfieldSliceCheckTests {
 
     let own = XcodeDerivedData.path(area: "Aidoku", layout: clone.layout)
     let seed = AreaCacheEnvironment.derivedDataSeed(area: "Aidoku", layout: clone.layout)
-    // The area's root is `.`, so prove runs in the scratch tree's own directory, with no trailing
-    // slash for ``Clone/inScratch(_:)`` to match.
-    let inScratch: (AreaCommandRequest) -> Bool = { request in
-      URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
-        .path(percentEncoded: false).hasPrefix(clone.scratch.path(percentEncoded: false))
-    }
+    let inScratch = { (request: AreaCommandRequest) in Self.inScratchTree(request, clone) }
     let head = runner.requests.filter { !inScratch($0) && $0.step != .lint }
     #expect(!head.isEmpty)
     for request in head {
