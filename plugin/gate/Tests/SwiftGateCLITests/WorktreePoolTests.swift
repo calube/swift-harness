@@ -124,6 +124,41 @@ struct WorktreePoolTests {
   }
 
   @Test(
+    "prepare adds free slots detached at the base up to the count and no more, and the first 2 tasks take slots 1 and 2 as reused with what was built there kept — catches every first slice in a slot building cold because no slot existed before its task, 149-184 s per Xcode build in the send-money trial"
+  )
+  func preparedSlotsAreTakenWarm() async throws {
+    let scenario = try await poolScenario()
+    defer { scenario.remove() }
+    let base = try await scenario.git("rev-parse", "HEAD", in: scenario.checkout)
+
+    let added = try await scenario.pool.prepare(
+      count: 3, revision: base, workspace: scenario.workspace)
+    #expect(added == [try scenario.slot(1), try scenario.slot(2), try scenario.slot(3)])
+    for slot in added {
+      #expect(try await scenario.git("rev-parse", "HEAD", in: slot) == base)
+      #expect(try await scenario.git("branch", "--show-current", in: slot) == "")
+    }
+    #expect(try scenario.pool.state().slots.map(\.branch) == [nil, nil, nil])
+    #expect(
+      try await scenario.pool.prepare(count: 3, revision: base, workspace: scenario.workspace)
+        == [],
+      "a pool already holding the count adds none")
+
+    let derived = try await scenario.stateRoot(of: try scenario.slot(1))
+      .appending(path: "derived-data/areas/App/Build/marker")
+    try FileManager.default.createDirectory(
+      at: derived.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: derived)
+    let first = await scenario.create("t1")
+    let second = await scenario.create("t2")
+    #expect(first.worktree == (try scenario.slot(1)), "\(first.message)")
+    #expect(second.worktree == (try scenario.slot(2)), "\(second.message)")
+    #expect(first.reusedSlot == true)
+    #expect(second.reusedSlot == true)
+    #expect(FileManager.default.fileExists(atPath: derived.path))
+  }
+
+  @Test(
     "two tasks running at once get 2 slots, each with its own branch checked out — catches 2 workers committing in 1 worktree"
   )
   func concurrentTasksGetTheirOwnSlots() async throws {

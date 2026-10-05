@@ -175,6 +175,9 @@ private final class FakeWarmup: WarmupSpawning {
   private let seeds = Mutex<[(checkout: URL?, existed: Bool)]>([])
   /// Each spawn's seed checkout, and whether it was on disk when the warm-up started.
   var seedCheckouts: [(checkout: URL?, existed: Bool)] { seeds.withLock { $0 } }
+  private let planned = Mutex<[String?]>([])
+  /// Each spawn's plan, whose slots the warm-up adds and builds in.
+  var plans: [String?] { planned.withLock { $0 } }
   private let stopped = Mutex<[Int32]>([])
   var stops: [Int32] { stopped.withLock { $0 } }
 
@@ -190,6 +193,7 @@ private final class FakeWarmup: WarmupSpawning {
     calls.withLock { $0.append((directory, log, existed)) }
     let seeded = seedCheckout.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
     seeds.withLock { $0.append((seedCheckout, seeded)) }
+    planned.withLock { $0.append(plan) }
     steps.append("warmup")
     return 4242
   }
@@ -495,7 +499,7 @@ struct RunCommandTests {
   }
 
   @Test(
-    "run checks the plan branch out beside the clone before the warm-up starts and hands that checkout to the warm-up, so the run's first builds there start warm — catches the warm-up warming only the user's checkout"
+    "run checks the plan branch out beside the clone before the warm-up starts and hands that checkout and the plan to the warm-up, so the run's first builds there start warm — catches the warm-up warming only the user's checkout"
   )
   func warmupSeedsThePlanCheckout() async throws {
     let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
@@ -513,6 +517,7 @@ struct RunCommandTests {
     #expect(prepared.checkout == expected)
     #expect(warmup.seedCheckouts.map { $0.checkout?.path } == [expected])
     #expect(warmup.seedCheckouts.map(\.existed) == [true])
+    #expect(warmup.plans == [prepared.slug])
     let output = try await clone.runner.run(
       ProcessInvocation(
         executable: "git", arguments: ["symbolic-ref", "--short", "HEAD"],

@@ -258,14 +258,16 @@ struct WarmupCommandTests {
   }
 }
 
-/// The warm-up of the second send-money trial's clone, whose 3 `swiftpm` areas warmed only the
-/// user's checkout while the contract's first build ran cold in the plan checkout.
-@Suite("swiftgate warmup --seed-checkout")
+/// The warm-up of the send-money trials' clone: 3 `swiftpm` areas and the `xcode` app, whose
+/// first build in the plan checkout and in each task slot ran cold.
+@Suite("swiftgate warmup --seed-checkout --plan")
 struct WarmupSeedCheckoutTests {
   static let packages = ["APIClient", "AppFeature", "LogClient"]
+  static let plan = "spec"
 
-  /// A clone holding the trial's package folders and its applied config.
-  private static func clone() async throws -> WarmupClone {
+  /// A clone holding the trial's package folders and its applied config, with the plan
+  /// branch's checkout beside it.
+  private static func clone() async throws -> (WarmupClone, checkout: URL) {
     let clone = try await WarmupClone(areas: nil)
     for package in packages {
       let directory = clone.root.appending(
@@ -279,36 +281,78 @@ struct WarmupSeedCheckoutTests {
     try FileManager.default.createDirectory(
       at: clone.layout.cloneRoot, withIntermediateDirectories: true)
     try Fixture.data("BrownfieldTrial/send-money-2-config.toml").write(to: clone.layout.config)
-    return clone
+    let checkout = URL(
+      filePath: clone.root.path(percentEncoded: false) + "-\(plan)", directoryHint: .isDirectory)
+    try await clone.git(
+      "worktree", "add", "-q", "-b", "swift-harness/\(plan)", checkout.path(percentEncoded: false))
+    return (clone, checkout)
+  }
+
+  /// `directory` is `root` or under it; the slots' paths extend the checkout's.
+  private static func inside(_ directory: String, _ root: String) -> Bool {
+    let root = root.hasSuffix("/") ? String(root.dropLast()) : root
+    return directory == root || directory.hasPrefix(root + "/")
+  }
+
+  /// The clone, its plan checkout and every slot beside it.
+  private static func remove(_ clone: WarmupClone, slots: [String]) {
+    for slot in slots { TestTemporaryDirectory.remove(URL(filePath: slot)) }
+    TestTemporaryDirectory.remove(
+      URL(filePath: clone.root.path(percentEncoded: false) + "-\(plan)"))
+    clone.remove()
   }
 
   @Test(
-    "each swiftpm area's build also runs in the plan checkout, and nothing else does, while the times and baseline come from the base tree's run alone — catches a contract's first swift build running cold in the checkout the run builds in"
+    "the warm-up adds the preset's 3 slots at the base and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, with no swift build in any checkout; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched"
   )
-  func buildsEachPackageInThePlanCheckout() async throws {
-    let clone = try await Self.clone()
-    defer { clone.remove() }
-    let checkout = clone.root.appending(path: "plan-checkout", directoryHint: .isDirectory)
+  func warmsThePlanCheckoutAndEachSlot() async throws {
+    let (clone, checkout) = try await Self.clone()
+    let names = (1...3).map {
+      try? TaskWorktree.slotPath(
+        commonDirectory: clone.layout.commonDir.path(percentEncoded: false), plan: Self.plan,
+        number: $0)
+    }
+    defer { Self.remove(clone, slots: names.compactMap { $0 }) }
     let runner = FakeAreaCommandRunner { _ in .passed }
 
     let outcome = try await WarmupCommand.warm(
-      directory: clone.root, areaNames: nil, seedCheckout: checkout,
+      directory: clone.root, areaNames: nil, seedCheckout: checkout, plan: Self.plan,
       dependencies: clone.dependencies(runner: runner))
 
-    let inCheckout = runner.requests.filter {
-      $0.workingDirectory.hasPrefix(checkout.path(percentEncoded: false))
+    let slots = try names.map { try #require($0) }
+    #expect(outcome.slots == slots)
+    let base = try await clone.git("rev-parse", "HEAD").trimmingCharacters(
+      in: .whitespacesAndNewlines)
+    let checkouts = [checkout.path(percentEncoded: false)] + slots
+    let seed = AreaCacheEnvironment.derivedDataSeed(area: "InterviewStarter", layout: clone.layout)
+    for path in checkouts {
+      let gitDir = try await clone.git("-C", path, "rev-parse", "--absolute-git-dir")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      let own = "\(gitDir)/swift-harness/derived-data/areas/InterviewStarter"
+      let inCheckout = runner.requests.filter { Self.inside($0.workingDirectory, path) }
+      #expect(inCheckout.count == 1, "\(path): \(inCheckout.map(\.command))")
+      let build = try #require(inCheckout.first)
+      #expect(build.area == "InterviewStarter" && build.step == .build)
+      #expect(build.command.hasPrefix("xcodebuild -derivedDataPath '\(own)' build "))
+      #expect(build.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: own))
     }
-    #expect(
-      Set(inCheckout.map(\.workingDirectory))
-        == Set(Self.packages.map { checkout.appending(path: "Packages/\($0)").path }),
-      "\(inCheckout.map(\.workingDirectory))")
-    #expect(inCheckout.allSatisfy { $0.step == .build && $0.command == "swift build" })
-    #expect(outcome.seeded.map(\.area).sorted() == Self.packages)
-    #expect(outcome.seeded.allSatisfy { $0.outcome == .passed })
+    for slot in slots {
+      #expect(
+        try await clone.git("-C", slot, "rev-parse", "HEAD").trimmingCharacters(
+          in: .whitespacesAndNewlines) == base)
+    }
+    #expect(outcome.seeded.map(\.checkout) == checkouts)
+    #expect(outcome.seeded.allSatisfy { $0.area == "InterviewStarter" && $0.outcome == .passed })
     let tree = try await clone.tree()
     let times = try WarmupTimesFile.decode(
       Data(contentsOf: clone.layout.warmup(tree: tree)), tree: tree)
     #expect(times.areas["APIClient"]?.steps == [.build: .passed, .test: .passed])
+    #expect(
+      runner.requests.filter {
+        Self.inside($0.workingDirectory, clone.root.path(percentEncoded: false))
+      }.count
+        == 2 * (Self.packages.count + 1),
+      "the base tree's build and test of each area, and nothing more")
   }
 }
 
