@@ -1,0 +1,9 @@
+$ qa/confirm-large-downloads-store.state.sh
+QA_PORT=64062
+exit: 1
+--- stdout ---
+FAIL: Downloads.confirmLargeDownloads not stored in app.aidoku.Aidoku defaults: 2026-10-04 18:57:20.922 defaults[62976:82245799] 
+The domain/default pair of (app.aidoku.Aidoku, Downloads.confirmLargeDownloads) does not exist
+
+--- stderr ---
+

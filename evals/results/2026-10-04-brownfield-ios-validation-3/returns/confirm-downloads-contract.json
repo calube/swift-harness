@@ -1,0 +1,19 @@
+{
+  "commits" : [
+    "dbfdd547c4a85066851022e72d8399bc7e171bab"
+  ],
+  "designConflict" : null,
+  "gate" : {
+    "runId" : "20261004T234253Z-93e21c49",
+    "tier" : "slice",
+    "verdict" : "GREEN"
+  },
+  "notes" : "The contract commit dbfdd547c4a85066851022e72d8399bc7e171bab landed on swift-harness/spec before the plan was imported; its slice gate, run 20261004T234253Z-93e21c49, was GREEN.",
+  "outcome" : "ready-to-merge",
+  "review" : null,
+  "surfaceCommit" : null,
+  "task" : "confirm-downloads-contract",
+  "testsAdded" : [
+
+  ]
+}

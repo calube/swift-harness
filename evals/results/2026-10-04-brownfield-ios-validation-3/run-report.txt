@@ -1,0 +1,52 @@
+run: INCOMPLETE, 1 task(s) not done: confirm-downloads-setting (abandoned)
+final: GREEN (gate run 20261005T002200Z-c58fdb53), gating only what merged
+validation: 1 of 4 rows verified (qa run 20261005T002359Z-7b81c6a7, GREEN)
+
+# Run report: spec
+
+## Unfinished tasks
+
+- confirm-downloads-setting: abandoned
+
+## Time box
+
+- 45 min, from [build.presets.brownfield]: launched 2026-10-04T23:41:05Z, starts stop 2026-10-05T00:13:05Z, cutoff 2026-10-05T00:21:05Z, ends 2026-10-05T00:26:05Z
+- confirm-downloads-setting didn't fit the box: abandoned, its merge gate (120 s) plus final and the report (180 s) doesn't fit in the 253 s left in the box
+
+## Assumptions
+
+- The key is `Downloads.confirmLargeDownloads`, following the `Downloads.*` keys in `DownloadsSettings`, and the accessibility identifier is that key, set on every settings toggle by `SettingView`, since the repository has no accessibility-id module.
+- "Readable label" means the localized title `CONFIRM_LARGE_DOWNLOADS` = "Confirm Large Downloads" in `en.lproj`; other languages fall back to English.
+- "One entry point" is a static function on a new `LargeDownloadConfirmation` enum in `Aidoku/Core/Downloads/`, taking `UserDefaults` as a parameter; the threshold is a strict `> 50`.
+- The spec's "1 test class" is written as a Swift Testing `struct`, the convention every file in `AidokuTests` follows; `-only-testing:AidokuTests/LargeDownloadConfirmationTests/<method>` runs it alone.
+- "A download from a manga's chapter list" is the multi-select Download button in `MangaView`'s edit toolbar; the single-chapter context-menu download asks for 1 chapter and never needs confirmation, and the Library screen's "Download All" menu sits outside a manga's chapter list, so it is unchanged.
+- `<n>` is the number of chapters that would be queued: the selection minus chapters already downloaded, downloading or queued.
+- The prompt is checked before the existing Wi-Fi-only check, so Cancel never reaches it and Download continues exactly as today.
+- req-prompt gets no flow row: driving it needs an installed source with more than 50 chapters and network access, which a clean simulator lacks; the decision's acceptance test and the prompt task's slice gate stand in.
+
+## Baseline failures
+
+- none
+
+## Build-only areas
+
+- Aidoku (xcode, root `.`; warm test 46 s, build-only; lint dropped: swiftlint not installed)
+
+## Dropped steps
+
+- Aidoku lint: its command's tool isn't installed (exit 127 at the base tree), so it checked nothing
+- Aidoku lint: swiftlint is not installed on this machine (exit 127 at head and base)
+
+## Review depth
+
+- confirm-downloads-prompt (merged): medium, as swiftgate judge diff-risk rated it
+- confirm-downloads-check (merged): low, as swiftgate judge diff-risk rated it
+- confirm-downloads-setting (merged): low, as swiftgate judge diff-risk rated it
+
+## Review fallbacks
+
+- none
+
+## Plan branch
+
+- swift-harness/spec at 121d27b644b4d50b19b835d195df9e7622e4a297 holds every commit of the run; merging it is your call

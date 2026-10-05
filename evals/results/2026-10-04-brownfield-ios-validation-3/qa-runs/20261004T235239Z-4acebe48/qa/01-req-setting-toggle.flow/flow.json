@@ -1,0 +1,41 @@
+{
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "wait role=button label=\"Settings\"",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "press role=button label=\"Settings\"",
+      "n" : 2,
+      "offsetMs" : 1896,
+      "ok" : true
+    },
+    {
+      "label" : "scroll",
+      "n" : 3,
+      "offsetMs" : 5377,
+      "ok" : true
+    },
+    {
+      "label" : "press label=\"Downloads\"",
+      "n" : 4,
+      "offsetMs" : 11021,
+      "ok" : true
+    },
+    {
+      "label" : "wait label=\"Compress Downloads\"",
+      "n" : 5,
+      "offsetMs" : 15009,
+      "ok" : true
+    },
+    {
+      "label" : "wait id=\"Downloads.confirmLargeDownloads\"",
+      "n" : 6,
+      "offsetMs" : 16700,
+      "ok" : false
+    }
+  ]
+}
