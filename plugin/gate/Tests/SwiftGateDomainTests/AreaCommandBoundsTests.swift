@@ -136,4 +136,24 @@ struct AreaCommandBoundsTests {
     #expect(late.duration == .seconds(300))
     #expect(!late.cannotFinish)
   }
+
+  @Test(
+    "price-tracker-3's AppFeature test step in a checkout with no build of it yet gets its 161.4 s cold cost plus 5 warm runs, not the 120 s floor of a warm one, and is measured against its warm test — catches a first test-only or slice run in a fresh worktree killed as a hang while it builds"
+  )
+  func unbuiltCheckoutAddsTheColdCost() throws {
+    let times = try WarmupTimesFile.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-warmup.json"),
+      tree: "f0bd7c247ed6a4afd220dfad6893cc719ca66bfa")
+    let bounds = AreaCommandBounds(times: times, box: nil, tier: .slice, fallback: .seconds(600))
+    let now = try Self.at("06:16:43")
+
+    let unbuilt = bounds.bound(
+      area: "AppFeature", step: .testFiles, tree: .unbuiltCheckout, now: now)
+    let warm = bounds.bound(area: "AppFeature", step: .testFiles, tree: .checkout, now: now)
+
+    #expect(unbuilt.duration == .milliseconds(161_442 + 5 * 11_349))
+    #expect(unbuilt.reason.contains("161.4 s cold"))
+    #expect(unbuilt.expected == .milliseconds(11_349))
+    #expect(warm.duration == AreaCommandBounds.floor)
+  }
 }
