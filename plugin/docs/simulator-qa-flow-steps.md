@@ -58,6 +58,13 @@ never gates, when a flow sees a selector appear and then go with only `wait`, `i
 `snapshot` or `screenshot` steps between, under a `-harness-scenario` whose name lacks the word
 `held`. Run such a flow under the contract's `held` scenario, whose call holds the state.
 
+## A state that changes on a clock
+
+After each `wait` or `is`, `qa run`'s captures take about 1 s before the next step, and far longer
+on a loaded machine: 1 screenshot has taken 11 s. A flow that reads a value the app changes on a
+timer races them. Launch it under a scenario that holds the clock until the first input. A red
+row's message says where the time before its failing step went.
+
 ## What `qa lint` refuses
 
 `qa.flow-kind-key` refuses a `wait` whose target key isn't the 1 its `kind` reads, a `wait` with no

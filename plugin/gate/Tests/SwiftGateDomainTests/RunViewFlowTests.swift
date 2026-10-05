@@ -66,6 +66,38 @@ private enum Captured {
 @Suite("run view flows")
 struct RunViewFlowTests {
   @Test(
+    "a flow row carries each step's capture time and its open's launch into the view's JSON, and a step qa run captured nothing after encodes no capture time — catches a Validation tab that can't show a slow capture or launch"
+  )
+  func flowRowsCarryCaptureAndLaunch() throws {
+    let launch = QAFlowLaunch(launchMs: 1404, settleMs: 820)
+    let events = Captured.changing(try Captured.events(), row: 1) { flow in
+      QAFlowEvent(
+        plan: flow.plan, row: flow.row, requirement: flow.requirement, atBase: flow.atBase,
+        record: QAFlowRecord(
+          source: flow.source,
+          steps: flow.steps.enumerated().map { index, step in
+            QAFlowStep(
+              n: step.n, label: step.label, offsetMs: step.offsetMs, ok: step.ok,
+              captureMs: index == 0 ? 11530 : nil)
+          }, video: flow.video, sheet: flow.sheet, launch: launch))
+    }
+
+    let validation = try #require(try Captured.view(events).validation)
+    let flow = try #require(validation.rows[0].flow)
+
+    #expect(flow.launch == launch)
+    #expect(flow.steps.map(\.captureMs) == [11530, nil, nil, nil])
+    let json = try #require(
+      try JSONSerialization.jsonObject(with: JSONEncoder().encode(flow)) as? [String: Any])
+    let steps = try #require(json["steps"] as? [[String: Any]])
+    #expect(steps[0]["captureMs"] as? Int == 11530)
+    #expect(steps[1]["captureMs"] == nil)
+    let encoded = try #require(json["launch"] as? [String: Any])
+    #expect(encoded["launchMs"] as? Int == 1404)
+    #expect(encoded["settleMs"] as? Int == 820)
+  }
+
+  @Test(
     "a flow row carries its qa.flow's steps, ok marks, offsets, video and sheet relative to its qa run, and a state row carries none — catches a flow row drawn without its steps"
   )
   func flowRowsCarrySteps() throws {

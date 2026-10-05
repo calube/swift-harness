@@ -161,7 +161,7 @@ struct QARunFlowTests {
   }
 
   @Test(
-    "the captured failing batch is red naming the failing step, its state row reads unverified and never runs, and sim down runs before sim verify — catches a state check run after a failed flow"
+    "the captured failing batch is red naming the failing step and where the time before it went, its state row reads unverified and never runs, and sim down runs before sim verify — catches a state check run after a failed flow"
   )
   func failingBatchStopsState() async throws {
     let repo = try await QARepo()
@@ -175,6 +175,10 @@ struct QARunFlowTests {
     #expect(flow.result == .red)
     #expect(flow.message.contains("step 3"), "\(flow.message)")
     #expect(flow.message.contains("is"), "\(flow.message)")
+    #expect(
+      flow.message.hasSuffix(
+        "; step 3 began 2.3 s into the batch: 1.1 s in captures qa run added, 1.1 s in the flow's other steps"
+      ), "\(flow.message)")
     let state = try #require(report.rows.first { $0.layer == .state })
     #expect(state.result == .unverified)
     #expect(!FileManager.default.fileExists(atPath: Self.marker(repo).path))

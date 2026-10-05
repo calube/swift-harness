@@ -2786,6 +2786,47 @@ The `sed` replaces the trial clone's parent folder in each `sim up` message with
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation`
 matched nothing.
 
+## qa run: a relaunching flow whose captures delayed its check
+
+`QA/capture-delay/` is a real `swiftgate qa run` over 2 flow rows on a copy of
+`evals/apps/interview-starter`, for the launch and capture times a flow record carries and the
+delay a red row names. Captured 2026-10-05 with `agent-device` 0.21.18 and Xcode 26.2, from a
+`swiftgate` debug build of the surface commit, on a clone the harness made under its `sim` lock,
+on a loaded machine. The plan and inputs follow `RunView/qa-flows/`: the ledger is
+`RunView/build-run-1/ledger.json`, and `validation.json`, `pass.flow.json` and `fail.flow.json` are
+hand-written inputs. `pass.flow.json` relaunches the app, waits for `id="app.status"` and checks it
+reads `100 posts available`; `fail.flow.json` is the same flow expecting `5 posts available`, made
+with `sed 's/"100 posts available"/"5 posts available"/'`. From `plugin/gate` after
+`swift build --product swiftgate`, with `<harness>` this checkout and `<inputs>` a folder holding
+the 3 input files:
+
+```sh
+SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
+T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/interview-starter/ $T/app/ && cd $T/app
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
+mkdir -p $P && cp $F/ledger.json $P/ledger.json
+cp $IN/validation.json $IN/status.flow.json $IN/wrong-status.flow.json $P/
+$SG qa run    # exit 1, RED: row 1 pass, row 2 red at step 3 `is`
+Q=.harness/runs/20261005T181211Z-e93fca7a/qa X=<fixtures>/QA/capture-delay
+SCRUB="s#/private$T#/SCRATCH#g; s#$T#/SCRATCH#g; s#$HOME#/HOME#g; s#<udid>#UDID#g"
+for r in 01:pass 02:fail; do d=$(echo $Q/${r%%:*}-*.flow); k=${r##*:}
+  sed -E "$SCRUB" $d/batch.json > $X/$k.batch.json; sed -E "$SCRUB" $d/steps.json > $X/$k.steps.json
+  sed -E "$SCRUB" $d/flow.json > $X/$k.flow-record.json; done
+sed -E "$SCRUB" $Q/report.json > $X/report.json
+```
+
+The inputs were saved as `status.flow.json` and `wrong-status.flow.json` and are kept here as
+`pass.flow.json` and `fail.flow.json`. The `sed` replaces the scratch folder, the home folder and
+the clone's UDID, and changes nothing else. In `fail.batch.json` the `open` reports
+`startup.durationMs` 1404 and `timing.postOpenSettleDurationMs` 820, the `wait` after it took
+493 ms, and the `screenshot` `qa run` added after the `wait` took 10532 ms, so the `is` ran 13650 ms
+into the batch. `fail.flow-record.json` and `report.json` are the record and report from before a
+flow record carried those times. `grep -rniE '/Users|/private|/var/folders|caleb' QA/capture-delay`
+matched nothing.
+
 ## qa run: a state row behind another requirement's red flow
 
 `QA/aidoku-validation-2/` holds what the iOS validation trial's second attempt on `Aidoku/Aidoku`
