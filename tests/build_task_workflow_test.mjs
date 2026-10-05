@@ -53,8 +53,11 @@ const placeholderReturn = () => {
   )
   return rest
 }
-// The only agents a task may spawn: the stages, each of which runs its own span calls.
+// The stages a task spawns. Only the worker and the fix pass run their own span calls; reviewers
+// and verifiers hold no Bash, and the span agent runs their span calls.
 const STAGE_AGENTS = [WORKER, VERIFIER, ...Object.keys(REVIEWERS)]
+// The plain agent that runs a batch of review or verify span commands, told apart by its label.
+const SPAN_AGENT_LABEL = /^span:/
 const BUILD_RUN = '20261003T101500Z-9a1b2c3d'
 // The plugin under test, which every launch names, and the shim inside it every stage runs.
 const PLUGIN_ROOT = '/plugins/swift-harness'
@@ -171,13 +174,16 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 // was sent, and a missing entry confirms every finding.
 // `diffRisk` is what the diff-risk agent returns (a function gets the prompt, an Error is thrown);
 // by default the command printed no level because the clone has no judge.
-// `swiftgate` is the fake `swiftgate events span` every stage agent runs its own span lines
-// against; a stage's return gets the `span` its start printed unless the scripted return sets one.
+// `swiftgate` is the fake `swiftgate events span` the worker runs its own span lines against, and
+// the span agent its listed commands; a worker's return gets the `span` its start printed unless
+// the scripted return sets one. `spanAgent(prompt, n)` replaces the n-th span agent's answer.
 const noJudge = { level: null, by: null, path: null, glob: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
 // What the diff-risk agent returns for a level the judge rated.
 const judged = level => ({ level, by: 'judge', path: null, glob: null, reason: null, exitStatus: 0 })
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge, commitLister = noLister } = {}) {
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge, commitLister = noLister, spanAgent = null } = {}) {
   const calls = []
+  // Each agent's start and answer, as `call:<label>` and `done:<label>`, in the order they happen.
+  const order = []
   let inFlight = 0
   let maxReviewersInFlight = 0
   const perReviewer = {}
@@ -214,6 +220,21 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   }
   const agent = async (prompt, opts) => {
     calls.push({ prompt, opts })
+    order.push(`call:${opts.label}`)
+    try {
+      return await answer(prompt, opts)
+    } finally {
+      order.push(`done:${opts.label}`)
+    }
+  }
+  let spanAgents = 0
+  const answer = async (prompt, opts) => {
+    if (opts.agentType === CLASSIFIER && SPAN_AGENT_LABEL.test(opts.label ?? '')) {
+      const n = ++spanAgents
+      await delay(1)
+      if (spanAgent) return spanAgent(prompt, n, swiftgate)
+      return swiftgate.batch(prompt)
+    }
     if (opts.agentType === CLASSIFIER && COMMIT_LISTER_LABEL.test(opts.label ?? '')) {
       assert.ok(!prompt.includes('events span'), 'the commit lister was handed a span call')
       if (commitLister instanceof Error) throw commitLister
@@ -226,6 +247,10 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       return typeof diffRisk === 'function' ? diffRisk(prompt) : structuredClone(diffRisk)
     }
     assert.ok(STAGE_AGENTS.includes(opts.agentType), `an agent that is not a stage ran: ${opts.agentType} (${opts.label})`)
+    if (opts.agentType !== WORKER) {
+      assert.ok(!prompt.includes('events span'), `${opts.label} was handed a span command, though it holds no Bash`)
+      return stage(prompt, opts)
+    }
     const span = swiftgate.open(prompt)
     return swiftgate.close(prompt, span, opts.agentType, await stage(prompt, opts))
   }
@@ -236,7 +261,8 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   const verifyCalls = calls.filter(c => c.opts.agentType === VERIFIER)
   const classifierCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && CLASSIFIER_LABEL.test(c.opts.label ?? ''))
   const listerCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && COMMIT_LISTER_LABEL.test(c.opts.label ?? ''))
-  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, listerCalls, maxReviewersInFlight, logs }
+  const spanCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && SPAN_AGENT_LABEL.test(c.opts.label ?? ''))
+  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, listerCalls, spanCalls, maxReviewersInFlight, logs, order }
 }
 
 // A stage prompt's 2 span lines: the start it runs first and the end it runs last, with
@@ -261,7 +287,7 @@ function stageOutcome(agentType, value) {
   return 'ok'
 }
 
-// A fake `swiftgate events span` that stage agents run their own span lines against. It answers
+// A fake `swiftgate events span` that workers and the span agent run their span commands against. It answers
 // each command as the real one would and records every start and end in call order. `exit(n,
 // command)` forces the n-th command's exit status; `off` answers every start as telemetry-off does.
 // `forgets(agentType, prompt)` makes that stage return without running its step 2.
@@ -313,9 +339,16 @@ function fakeSwiftgate({ exit = () => 0, off = false, forgets = () => false } = 
     if (span !== null && end) exec(end.replace('<span>', span).replace('<outcome>', stageOutcome(agentType, value)))
     return { ...value, span }
   }
+  // The span agent: runs each numbered command its prompt lists, in order, and reports each.
+  const batch = prompt => {
+    const marker = 'Commands:\n'
+    assert.ok(prompt.includes(marker), 'the span agent prompt lists no commands')
+    const listed = prompt.slice(prompt.indexOf(marker) + marker.length).split('\n').filter(line => /^\d+\. /.test(line))
+    return { results: listed.map(line => exec(line.replace(/^\d+\. /, ''))) }
+  }
   const starts = () => events.filter(e => e.kind === 'start')
   const endOf = id => events.find(e => e.kind === 'end' && e.id === id)
-  return { open, close, events, commands, starts, endOf }
+  return { open, close, batch, exec, events, commands, starts, endOf }
 }
 
 // Each start names the task and build run, its parent ended before it started, and it ended itself.
@@ -448,7 +481,7 @@ const tests = {
         for (const command of prompt.match(BARE_SWIFTGATE) ?? []) bare.push(`${opts.label}: ${command}`)
       }
     }
-    assert.deepEqual([...labels].sort(), ['build', 'diff-risk', 'fix', 'review', 'verify'])
+    assert.deepEqual([...labels].sort(), ['build', 'diff-risk', 'fix', 'review', 'span', 'verify'])
     assert.deepEqual(bare, [])
   },
 
@@ -464,15 +497,14 @@ const tests = {
     }
   },
 
-  async 'every worker, review, verify and fix prompt opens its own span first and closes it last — catches a stage prompt missing its span start or end'() {
+  async 'every worker and fix prompt opens its own span first and closes it last, and no review or verify prompt or schema holds a span — catches a reviewer handed a Bash step it no longer holds'() {
     const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
       reviews: { architecture: [{ findings: [finding()] }] },
     })
     const seen = new Set()
-    const stage = c => (c.opts.agentType === WORKER ? (c.opts.label.startsWith('fix:') ? 'fix' : 'worker') : c.opts.agentType === VERIFIER ? 'verify' : 'review')
-    for (const c of calls) {
-      const phase = stage(c)
+    for (const c of calls.filter(c => c.opts.agentType === WORKER)) {
+      const phase = c.opts.label.startsWith('fix:') ? 'fix' : 'worker'
       seen.add(phase)
       const { start, end } = spanLines(c.prompt)
       assert.ok(start, `${c.opts.label}: no span start line`)
@@ -482,66 +514,110 @@ const tests = {
       assert.equal(flagIn(words, '--phase'), phase, c.opts.label)
       assert.equal(flagIn(words, '--build-run'), BUILD_RUN, c.opts.label)
       assert.equal(flagIn(words, '--task'), 'catalog-list-reducer', c.opts.label)
-      assert.equal(flagIn(words, '--role'), phase === 'worker' || phase === 'fix' ? 'build-worker' : 'review', c.opts.label)
+      assert.equal(flagIn(words, '--role'), 'build-worker', c.opts.label)
       assert.equal(end, '/plugins/swift-harness/bin/swiftgate events span end <span> --outcome <outcome>', c.opts.label)
       assert.match(c.prompt, /return it as "span"/, `${c.opts.label}: never says to return the span id`)
       assert.match(c.prompt, /Empty output means telemetry is off[^.]*: either way return "span": null and skip step 2/, `${c.opts.label}: no telemetry-off rule`)
       assert.match(c.prompt, /If it fails, go on: your return stays the same/, `${c.opts.label}: a failed end may change the return`)
       const rule = /where <outcome> is ([^.]*)\./.exec(c.prompt)?.[1] ?? ''
-      if (phase === 'worker' || phase === 'fix') {
-        assert.match(rule, /`ok` when you return ready-to-merge, `red` when you return gate-red, and `abandoned` when you return design-conflict/, `${c.opts.label}: ${rule}`)
-      } else if (phase === 'verify') {
-        assert.match(rule, /`red` when you return any finding verified true at severity blocker or major, else `ok`/, `${c.opts.label}: ${rule}`)
-      } else assert.equal(rule, '`ok`', `${c.opts.label}: ${rule}`)
+      assert.match(rule, /`ok` when you return ready-to-merge, `red` when you return gate-red, and `abandoned` when you return design-conflict/, `${c.opts.label}: ${rule}`)
       assert.ok(c.opts.schema.required.includes('span'), `${c.opts.label}: the schema does not require "span"`)
     }
-    assert.deepEqual([...seen].sort(), ['fix', 'review', 'verify', 'worker'])
-  },
-
-  async 'a stage that follows another ends it from its own span start with --end-parent and the outcome that stage\'s rule gives, with no separate end line before it — catches send-money-7\'s and pos-checkout-1\'s reviewers chaining that end and their start into 1 call guard.reviewer-bash refuses'() {
-    const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
-      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
-      reviews: { architecture: [{ findings: [finding()] }] },
-    })
-    const followers = calls.filter(c => flagIn(commandWords(spanLines(c.prompt).start ?? ''), '--parent'))
-    assert.ok(followers.length >= 2, 'no stage prompt followed another')
-    for (const c of followers) {
-      assert.doesNotMatch(c.prompt, /^0\. /m, `${c.opts.label}: a separate end line before the start`)
-      const words = commandWords(spanLines(c.prompt).start)
-      assert.match(flagIn(words, '--end-parent') ?? '', /^(ok|red|abandoned)$/, `${c.opts.label}: ${spanLines(c.prompt).start}`)
-      assert.match(c.prompt, /also ends the stage before yours/, `${c.opts.label}: the start's end of the stage before is unexplained`)
+    assert.deepEqual([...seen].sort(), ['fix', 'worker'])
+    const reviewStages = calls.filter(c => c.opts.agentType === VERIFIER || REVIEWERS[c.opts.agentType])
+    assert.ok(reviewStages.some(c => c.opts.agentType === VERIFIER), 'no verifier ran')
+    for (const c of reviewStages) {
+      assert.ok(!c.prompt.includes('events span'), `${c.opts.label}: a span command in the prompt`)
+      assert.ok(!c.opts.schema.required.includes('span'), `${c.opts.label}: the schema requires "span"`)
+      assert.ok(!Object.prototype.hasOwnProperty.call(c.opts.schema.properties, 'span'), `${c.opts.label}: the schema takes "span"`)
     }
   },
 
-  async 'every stage prompt says each span command runs as its own Bash call, never joined with `;` or `&&` — catches send-money-7\'s reviewers chaining 2 span commands into 1 refused call'() {
+  async 'a span that follows another ends it from its own start with --end-parent and the outcome that stage gives, with no separate end line before it — catches the chained span end and start the reviewer-bash guard refused 9 times in 1 run'() {
+    const sg = fakeSwiftgate()
     const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
       workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
       reviews: { architecture: [{ findings: [finding()] }] },
+      swiftgate: sg,
     })
-    for (const c of calls) {
+    for (const c of calls.filter(c => c.opts.agentType === WORKER)) {
+      assert.doesNotMatch(c.prompt, /^0\. /m, `${c.opts.label}: a separate end line before the start`)
+    }
+    const followers = sg.commands.filter(c => c.includes(' span start ') && c.includes('--parent'))
+    const phases = followers.map(c => flagIn(commandWords(c), '--phase'))
+    for (const phase of ['review', 'verify', 'fix']) assert.ok(phases.includes(phase), `no ${phase} span followed another: ${phases}`)
+    for (const command of followers) {
+      assert.match(flagIn(commandWords(command), '--end-parent') ?? '', /^(ok|red|abandoned)$/, command)
+    }
+    const fix = calls.find(c => c.opts.label.startsWith('fix:'))
+    assert.match(fix.prompt, /also ends the stage before yours/, 'the fix pass start\'s end of the stage before is unexplained')
+    const verify = sg.starts().find(s => s.phase === 'verify')
+    assert.equal(sg.endOf(verify.id).outcome, 'red', 'the verify span that blocked ended other than red')
+    const fixStart = sg.starts().find(s => s.phase === 'fix')
+    assert.equal(fixStart.parent, verify.id)
+  },
+
+  async 'every worker and span agent prompt says each span command runs as its own Bash call — catches 2 span commands chained into 1 call'() {
+    const { calls, spanCalls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    for (const c of calls.filter(c => c.opts.agentType === WORKER)) {
       assert.match(c.prompt, /Run each of these commands as its own Bash call, exactly as written: never join 2 with `;` or `&&`, and add no `cd`, pipe or redirection\./, `${c.opts.label}: no 1-command-per-call rule`)
     }
+    assert.ok(spanCalls.length > 0, 'no span agent ran')
+    for (const c of spanCalls) {
+      assert.match(c.prompt, /Run each of these commands once, in order, each as its own Bash call, exactly as written; change nothing and run nothing else\./, `${c.opts.label}: no 1-command-per-call rule`)
+      assert.equal(c.opts.effort, 'low', c.opts.label)
+    }
   },
 
-  async 'a stage that returns without ending its span has it ended by the stage after it, with the outcome its own rule gives — catches send-money-4\'s review span left open after its reviewer returned findings'() {
-    // send-money-4's account-client review: the test-quality reviewer returned a minor finding and
-    // never ran its span end; its verifier ran next.
+  async 'a worker that returns without ending its span has it ended by the span after it, with the outcome its own rule gives — catches a stage span left open after its agent returned'() {
     const forgetful = [
-      { forgets: agentType => agentType === 'swift-harness:test-quality', args: brownfieldArgs(), diffRisk: judged('medium'), reviews: { 'test-quality': [{ findings: [finding({ severity: 'minor' })] }] }, workers: [brownfieldReturn()] },
-      { forgets: agentType => agentType === WORKER, args: baseArgs({ review: 'gate' }), workers: [red(), workerReturn()] },
-      { forgets: agentType => agentType === VERIFIER, args: baseArgs(), reviews: { architecture: [{ findings: [finding()] }] }, workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })] },
+      { args: baseArgs({ review: 'gate' }), workers: [red(), workerReturn()] },
+      { args: baseArgs(), reviews: { architecture: [{ findings: [finding()] }] }, workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })] },
+      { args: brownfieldArgs(), diffRisk: judged('medium'), reviews: { 'test-quality': [{ findings: [finding({ severity: 'minor' })] }] }, workers: [brownfieldReturn()] },
     ]
-    for (const { forgets, args, ...scripted } of forgetful) {
+    for (const { args, ...scripted } of forgetful) {
       let forgot = 0
-      const sg = fakeSwiftgate({ forgets: (agentType, prompt) => forgot === 0 && forgets(agentType, prompt) && ++forgot > 0 })
+      const sg = fakeSwiftgate({ forgets: agentType => forgot === 0 && agentType === WORKER && ++forgot > 0 })
       await run(args, { ...scripted, swiftgate: sg })
-      assert.equal(forgot, 1, 'no stage forgot its end')
+      assert.equal(forgot, 1, 'no worker forgot its end')
       assertSpanChain(sg, BUILD_RUN, args.task)
     }
     const sg = fakeSwiftgate({ forgets: agentType => agentType === WORKER })
     await run(baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()], swiftgate: sg })
     const worker = sg.starts().find(s => s.phase === 'worker')
     assert.equal(sg.endOf(worker.id)?.outcome, 'red', 'the gate-red worker ended other than red')
+  },
+
+  async 'review and verify spans start through a span agent beside their stage, and the task returns only once every span it opened has ended — catches a reviewer waiting on telemetry, or a review span left open at return'() {
+    const scenarios = [
+      [baseArgs(), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: { architecture: [{ findings: [finding()] }] } }],
+      [baseArgs(), { reviews: { 'test-quality': [{ findings: [finding({ severity: 'minor' })] }] } }],
+      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('high'), reviews: { architecture: [{ findings: [finding({ file: 'Core/src/search.rs', severity: 'minor' })] }] } }],
+    ]
+    for (const [args, behave] of scenarios) {
+      const sg = fakeSwiftgate()
+      const { order, spanCalls } = await run(args, { ...behave, swiftgate: sg })
+      assertSpanChain(sg, BUILD_RUN, args.task)
+      assert.ok(sg.starts().some(s => s.phase === 'review'), 'no review span')
+      assert.ok(sg.starts().some(s => s.phase === 'verify'), 'no verify span')
+      for (const c of spanCalls) {
+        assert.equal(c.opts.agentType, CLASSIFIER, c.opts.label)
+        assert.equal(c.opts.model, 'claude-sonnet-5-5', `${c.opts.label} runs on ${c.opts.model}`)
+      }
+      // Each review or verify stage is spawned before the span agent opening its span answers.
+      for (const [stage, opener] of [[/^call:review:/, 'done:span:review'], [/^call:verify:(.*)$/, null]]) {
+        for (const at of order.map((e, i) => [e, i]).filter(([e]) => stage.test(e)).map(([, i]) => i)) {
+          const label = opener ?? `done:span:verify:${order[at].replace(/^call:verify:/, '')}`
+          const answered = order.indexOf(label, order.lastIndexOf(label.replace(/^done:/, 'call:'), at))
+          assert.ok(answered === -1 || answered > at, `${order[at]} waited for ${label}: ${order.join(', ')}`)
+        }
+      }
+      const running = order.filter(e => e.startsWith('call:span:')).length - order.filter(e => e.startsWith('done:span:')).length
+      assert.equal(running, 0, `a span agent was still running at return: ${order.join(', ')}`)
+    }
   },
 
   async 'a task launched with the run\'s cutoff tells its worker and fix pass that deadline, and a malformed one throws before any agent — catches a worker in a timed run starting a gate the cutoff will cut off'() {
@@ -563,30 +639,28 @@ const tests = {
     }
   },
 
-  async 'no agent runs only for a span: every agent is a stage or the diff-risk classifier — catches a helper agent spent per span call'() {
+  async 'span agents run only for review and verify spans: 1 opens a round, 1 opens each verify, and at most 1 ends what a round leaves open — catches a span agent per command, or one for a worker'() {
     const scenarios = [
-      [baseArgs(), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: { architecture: [{ findings: [finding()] }] } }, 7],
-      [baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()] }, 2],
-      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('high') }, 4],
+      [baseArgs(), { workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })], reviews: { architecture: [{ findings: [finding()] }] } }, ['span:review', 'span:verify:architecture', 'span:end', 'span:review', 'span:end']],
+      [baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()] }, []],
+      [brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('high') }, ['span:review', 'span:end']],
     ]
     for (const [args, behave, expected] of scenarios) {
-      const { calls } = await run(args, behave)
-      for (const c of calls) {
-        assert.notEqual(c.opts.model, 'haiku', `a haiku agent ran: ${c.opts.label}`)
-        assert.ok(!/^span:/.test(c.opts.label ?? ''), `a span agent ran: ${c.opts.label}`)
-      }
-      assert.equal(calls.length, expected, calls.map(c => c.opts.label).join(', '))
+      const { calls, spanCalls } = await run(args, behave)
+      for (const c of calls) assert.notEqual(c.opts.model, 'haiku', `a haiku agent ran: ${c.opts.label}`)
+      assert.deepEqual(spanCalls.map(c => c.opts.label), expected)
+      for (const c of spanCalls) assert.ok(!/--phase (worker|fix)\b/.test(c.prompt), `${c.opts.label} ran a worker's span`)
     }
   },
 
   async 'a stage that returns a malformed span id is logged and never names it to a later stage — catches agent text run as a shell word'() {
-    const { result, reviewerCalls, logs } = await run(baseArgs(), { workers: [workerReturn({ span: 'x; rm -rf ~' })] })
+    const sg = fakeSwiftgate()
+    const { result, reviewerCalls, logs } = await run(baseArgs(), { workers: [workerReturn({ span: 'x; rm -rf ~' })], swiftgate: sg })
     assert.equal(result.outcome, 'ready-to-merge')
     assert.ok(!Object.prototype.hasOwnProperty.call(result, 'span'), 'the span key reached the TaskReturn')
-    for (const c of reviewerCalls) {
-      assert.ok(!c.prompt.includes('rm -rf'), 'the bad span id reached a review prompt')
-      assert.equal(flagIn(commandWords(spanLines(c.prompt).start), '--parent'), undefined)
-    }
+    for (const c of reviewerCalls) assert.ok(!c.prompt.includes('rm -rf'), 'the bad span id reached a review prompt')
+    assert.ok(!sg.commands.some(c => c.includes('rm -rf')), 'the bad span id reached a span command')
+    for (const review of sg.starts().filter(s => s.phase === 'review')) assert.equal(review.parent, undefined)
     assert.ok(logs.some(l => /span/.test(l) && /worker/.test(l) && l.includes('rm -rf')), `no log names the bad span id: ${logs.join(' | ')}`)
   },
 
@@ -600,7 +674,7 @@ const tests = {
       const sg = fakeSwiftgate({ exit })
       const failing = await run(baseArgs(), { ...behave(), swiftgate: sg })
       assert.deepEqual(failing.result, clean.result)
-      assert.equal(failing.calls.length, clean.calls.length, 'a failed span call spawned another agent')
+      assert.ok(failing.calls.length <= clean.calls.length, 'a failed span call spawned another agent')
       assert.ok(sg.commands.length > 0, 'no span call ran')
     }
     const startsFail = await run(baseArgs(), { ...behave(), swiftgate: fakeSwiftgate({ exit: (n, command) => (command.includes(' start ') ? 1 : 0) }) })
@@ -751,22 +825,18 @@ const tests = {
     assert.ok(runID.test('20261004T141801Z-79b9bebf') && !runID.test('r-green'), 'the schema leaves gate.runId unpatterned')
   },
 
-  async 'every stage schema patterns its span id as 16 lowercase hex, so the runtime makes a stage retry a quoted one — catches the 3 span ids the fifth memos trial lost to quotes'() {
+  async 'the worker schema patterns its span id as 16 lowercase hex, so the runtime makes a stage retry a quoted one — catches the 3 span ids the fifth memos trial lost to quotes'() {
     // The span id the store worker stage returned in the fifth memos trial, quotes and all.
     const quoted = '"44b7bfe58637a914"'
-    const { calls } = await run(baseArgs({ review: 'full' }), { reviews: { architecture: [{ findings: [finding({ severity: 'minor' })] }] } })
-    const schemas = new Map(calls.filter(c => STAGE_AGENTS.includes(c.opts.agentType)).map(c => [c.opts.agentType, c.opts.schema]))
-    assert.deepEqual([...schemas.keys()].sort(), [...STAGE_AGENTS].sort(), 'a stage never ran, so its schema went unchecked')
-    for (const [agentType, schema] of schemas) {
-      const span = schema.properties.span
-      assert.ok(span.pattern, `${agentType}'s span is unpatterned`)
-      const id = new RegExp(span.pattern)
-      assert.ok(id.test('44b7bfe58637a914'), `${agentType} refuses a real span id`)
-      for (const bad of [quoted, '44B7BFE58637A914', '44b7bfe58637a91', `${'44b7bfe58637a914'}0`]) {
-        assert.ok(!id.test(bad), `${agentType} takes ${bad} as a span id`)
-      }
-      assert.deepEqual(span.type, ['string', 'null'], `${agentType} no longer takes a null span`)
+    const { workerCalls } = await run(baseArgs({ review: 'gate' }))
+    const span = workerCalls[0].opts.schema.properties.span
+    assert.ok(span.pattern, "the worker's span is unpatterned")
+    const id = new RegExp(span.pattern)
+    assert.ok(id.test('44b7bfe58637a914'), 'the worker schema refuses a real span id')
+    for (const bad of [quoted, '44B7BFE58637A914', '44b7bfe58637a91', `${'44b7bfe58637a914'}0`]) {
+      assert.ok(!id.test(bad), `the worker schema takes ${bad} as a span id`)
     }
+    assert.deepEqual(span.type, ['string', 'null'], 'the worker schema no longer takes a null span')
   },
 
   async 'a redReason on a return that is not gate-red is unusable — catches a reason the workflow would silently drop'() {
@@ -1233,6 +1303,7 @@ const tests = {
         if (profile === 'brownfield') {
           assert.ok(top.includes(testOnly), `brownfield: no test-only --area line before the task:\n${top}`)
           assert.ok(top.includes('`swift build`') && top.includes('`swift test`'), `brownfield: raw swift build and test not ruled out:\n${top}`)
+          assert.ok(top.includes("exact `run 1 test` and, for a swiftpm area, `build only` lines; `\"$SG\"` there is " + SG), `brownfield: the pack's exact lines are not pointed to:\n${top}`)
         } else {
           assert.ok(!prompt.includes('test-only --area'), `owned: a test-only --area line in an owned prompt:\n${prompt}`)
         }
