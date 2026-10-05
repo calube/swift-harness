@@ -38,6 +38,8 @@ enum BrownfieldSliceCheck {
       @Sendable (_ candidate: AssertionCandidate, _ source: String) async -> AssertionJudgement
     /// Per command run.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
 
     /// A selected test run that fits the budget warm still gets room on a cold store.
     static let liveDeadline: Duration = .seconds(600)

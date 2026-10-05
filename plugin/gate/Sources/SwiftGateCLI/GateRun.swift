@@ -30,6 +30,8 @@ enum GateRun {
     var proofs = ProveResultCollector()
     /// T3 hands each kept flow's record here, for the run's `qa.flow` events.
     var flows = FlowRecordCollector()
+    /// Each brownfield area test step hands its totals here, for the run's `report.json`.
+    var areaTests = AreaTestCountCollector()
   }
 
   /// - Parameters:
@@ -223,6 +225,19 @@ final class TestResultCollector: Sendable {
   }
 
   var cases: [TestCaseResult] { results.withLock { $0 } }
+}
+
+/// The totals of 1 gate run's area test steps. Areas run on several tasks, so recording is locked,
+/// and they come back by area then step, whatever order the steps finished in.
+final class AreaTestCountCollector: Sendable {
+  private let counts = Mutex<[AreaTestCounts]>([])
+
+  init() {}
+
+  func record(_ counted: AreaTestCounts) {
+  }
+
+  var all: [AreaTestCounts] { counts.withLock { $0 } }
 }
 
 /// The kept flows 1 gate run's T3 recorded, in the order it handed them over.

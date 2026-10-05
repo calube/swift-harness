@@ -20,6 +20,8 @@ enum BrownfieldMergeCheck {
     let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
     /// Per command run.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
 
     /// An area command may run as long as the area's own tests take.
     static let liveDeadline: Duration = .seconds(3600)

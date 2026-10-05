@@ -209,6 +209,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The merge gate run `--undo` recorded in the build run's log for the commit it undid; `nil`
   /// when the log already held it or no `check` run started at that commit.
   public let gateRunId: String?
+  /// The branches `--undo` kept the work it took off `main` on, or an earlier fix branch it set
+  /// aside before cutting the new one, as `<plan>/fix-<task>-<n>`; `nil` when it kept none.
+  public let keptBranches: [String]?
   public let message: String
 
   public init(
@@ -216,7 +219,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     verdict: Verdict, holder: String? = nil, runId: String? = nil, branch: String? = nil,
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
-    conflictedFiles: [String]? = nil, gateRunId: String? = nil, message: String
+    conflictedFiles: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
+    message: String
   ) {
     self.command = command
     self.plan = plan
@@ -235,6 +239,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.fixBranch = fixBranch
     self.conflictedFiles = conflictedFiles
     self.gateRunId = gateRunId
+    self.keptBranches = keptBranches
     self.message = message
   }
 }
