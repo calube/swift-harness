@@ -257,9 +257,16 @@ public enum BuildEvent: Sendable, Equatable {
   /// `build finish` closed the run. A ledger event after it means the build resumed.
   public struct Finish: Sendable, Equatable {
     public let at: Date
+    /// The `qa run --final` whose verdict the finish read; `nil` for a plan with no validation
+    /// table.
+    public let qaRun: String?
+    /// That run's verdict.
+    public let validation: Verdict?
 
-    public init(at: Date) {
+    public init(at: Date, qaRun: String? = nil, validation: Verdict? = nil) {
       self.at = at
+      self.qaRun = qaRun
+      self.validation = validation
     }
   }
 
@@ -300,7 +307,7 @@ public enum BuildEvent: Sendable, Equatable {
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
-    case fix, commit, rules
+    case fix, commit, rules, qaRun, validation
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -349,7 +356,10 @@ extension BuildEvent: Codable {
           checkID: try container.decode(String.self, forKey: .checkID),
           rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at))
     case .finish:
-      self = .finish(Finish(at: at))
+      self = .finish(
+        Finish(
+          at: at, qaRun: try container.decodeIfPresent(String.self, forKey: .qaRun),
+          validation: try container.decodeIfPresent(Verdict.self, forKey: .validation)))
     }
   }
 
@@ -393,6 +403,8 @@ extension BuildEvent: Codable {
       try container.encode(check.rules, forKey: .rules)
       try container.encode(check.at, forKey: .at)
     case .finish(let finish):
+      try container.encodeIfPresent(finish.qaRun, forKey: .qaRun)
+      try container.encodeIfPresent(finish.validation, forKey: .validation)
       try container.encode(finish.at, forKey: .at)
     }
   }
@@ -443,6 +455,37 @@ public struct BuildEventLog: Sendable, Equatable {
       }
     }
     return tasks
+  }
+
+  /// Whether a `final` gate is recorded after the newest merge or undo: the build has ended, so
+  /// no later merge can make a validation row ready.
+  public var finalGated: Bool {
+    for event in events.reversed() {
+      switch event {
+      case .gate(let gate):
+        if case .final = gate.stage { return true }
+      case .merge, .undo: return false
+      case .transition, .returnCheck, .finish: continue
+      }
+    }
+    return false
+  }
+
+  /// How far `task`'s merge got: `nil` when it isn't on `main`, ``CutoffTaskStage/landed`` once a
+  /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
+  public func mergeStage(task: String) -> CutoffTaskStage? {
+    var stage: CutoffTaskStage?
+    for event in events {
+      switch event {
+      case .merge(let merge) where merge.task == task: stage = .merged
+      case .undo(let undo) where undo.task == task: stage = nil
+      case .gate(let gate):
+        guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
+        stage = gate.verdict == .green ? .landed : .merged
+      case .merge, .undo, .transition, .returnCheck, .finish: continue
+      }
+    }
+    return stage
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

@@ -82,7 +82,9 @@ worktree's own git dir.
 
 `swiftgate claude` starts `claude --settings <common>/swift-harness/settings.json`. `ConfigLoader` reads a
 committed `.swiftgate.toml` first and the common dir's `config.toml` next; both together fail
-`doctor.config-conflict`. `RunLayout` takes a state root, so the 80 literals resolve through 1 seam. The only
+`doctor.config-conflict`, unless `swiftgate run` set the committed file aside in
+`<common>/swift-harness/committed-config-set-aside.json`. Then every worktree runs the brownfield profile, the file
+stays in the tree unchanged, and the report names it. `RunLayout` takes a state root, so the 80 literals resolve through 1 seam. The only
 file the workflow puts in the tree is the `PLAN.md` symlink (§11.4), listed in `.git/info/exclude`.
 
 ## 5. Discover
@@ -335,7 +337,7 @@ A repository with a committed `.swiftgate.toml` keeps today's behavior. The exec
 | `merge_gate` | `merge` | yes |
 | `worker_model` | `claude-sonnet-5-5` | exact ids accepted |
 | `task_proof` | `prove` (prove without mutate) | yes |
-| `stall_min` | 2 | yes |
+| `stall_min` | unset, so 15: a first cold gate can build for 5 min | yes |
 
 A `--preset` from another profile fails and names the profile.
 
@@ -366,7 +368,7 @@ The user decided all 5 on 2026-10-03; see §17, decisions 9 to 13.
 | ledger page published as an Artifact | §1: no ledger page |
 | Sonnet alias resolved to an older model | §11.1, §13: models pinned by id; `agent.usage` records the resolved model |
 | stale manifest cache gave a false RED (both entries) | §5.1: cache key covers directory listings; TCA rules off by default |
-| stall watch fires after 15 min | §11.2: explorer deadlines; §13: `stall_min = 2` |
+| stall watch fires after 15 min | §11.2: explorer deadlines; §13: `stall_min` |
 | serial chain; surface first; UI coupled to reducer; 4-task chain | §11.3: contract commit, write sets from the target graph |
 | no way to run UI flows without `ready` | §9: `final` runs them without mutate |
 | validate without proof bases | §9: prove runs per task from its own merge base |

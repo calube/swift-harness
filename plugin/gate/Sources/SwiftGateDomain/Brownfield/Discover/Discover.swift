@@ -11,13 +11,15 @@ public enum Discover {
   /// `[build.presets.brownfield]` for a clone discovered for the first time (design §13). A
   /// design conflict answers `amend`: the run widens the task's write set in `PLAN.md` and
   /// retries it, where `block` would stop a run no one is watching. The budget is the run's
-  /// time box; ``TimeBoxLimits`` says where its minutes come from.
+  /// time box; ``TimeBoxLimits`` says where its minutes come from. `stall_min` stays unset, so
+  /// the stall watch waits ``BuildPreset/defaultStallMin``: a run's first cold gate can build for
+  /// 5 minutes with no event in between.
   public static let brownfieldPreset = BuildPreset(
     designTier: .none, maxParallel: 3, review: .classified, taskGate: .tier(.slice),
     mergeGate: .merge, workerModel: .claudeSonnet55,
     timeBudgetMin: TimeBoxLimits.defaultBudgetMin,
     stopStartsBeforeMin: TimeBoxLimits.defaultStopStartsBeforeMin, onDesignConflict: .amend,
-    taskProof: .prove, stallMin: 2)
+    taskProof: .prove)
 
   /// `[judge]` for a clone discovered for the first time: the owned profile's default backend and
   /// thresholds, so `judge diff-risk` can rate a slice (design §11.5) without a hand edit. Claude

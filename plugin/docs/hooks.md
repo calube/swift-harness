@@ -8,7 +8,7 @@ each one calls the same code as the `swiftgate` command it names.
 | Event | What it does | Budget |
 |---|---|---|
 | SessionStart | Injects the module map (package, module, role, kind), the Xcode pin against the selected Xcode, the RESUME line of each active plan in the shared `swift-harness/plans/index.json` under the git common dir, and the absolute path of the plugin reference docs (from `CLAUDE_PLUGIN_ROOT`, named only when `standards.md` exists there; otherwise a line saying why it is unavailable). Records which plugin the session loaded ([Session records](#session-records)). | < 1s |
-| PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, and deleting the global DerivedData. Paths it writes go through the Edit/Write guard ([Bash writes](#bash-writes)). On `git commit`, adds `swiftgate comments --staged` findings and, when `[judge]` is enabled, the comment judge's CUT and TRIM answers on the staged comments, both as advisory context. The judge's answers are cached, and it is skipped after 15s. | < 50ms |
+| PreToolUse (Bash) | Denies raw `xcodebuild` (read-only queries such as `-list` pass), `simctl erase\|delete all`, turning snapshot recording on, deleting the global DerivedData, and an `agent-device batch` of a validation flow under `.harness/qa/` or a plan's `qa/` folder, which `qa run` drives (`guard.validation-flow-by-hand`). Paths it writes go through the Edit/Write guard ([Bash writes](#bash-writes)). On `git commit`, adds `swiftgate comments --staged` findings and, when `[judge]` is enabled, the comment judge's CUT and TRIM answers on the staged comments, both as advisory context. The judge's answers are cached, and it is skipped after 15s. | < 50ms |
 | PreToolUse (Edit/Write) | Denies hand edits to `__Snapshots__/`, `Package.resolved`, `.xcresult` bundles, and a plan's `orchestrator.lock`. Plan state and design artifacts are writable only by the orchestrating session (below). | < 50ms |
 | PreToolUse (subagent) | Decides every Bash, Edit, Write, WebFetch and WebSearch call a subagent makes with an explicit allow or deny, never the prompt ([Subagents never prompt](#subagents-never-prompt)). | < 50ms |
 | PostToolUse (Edit/Write `*.swift`) | Formats the file in place with `swift format`, then runs `swiftgate lint` on that file alone. A gating finding comes back as a block next to the tool result. | < 1s |
@@ -91,6 +91,7 @@ PreToolUse call carries `agent_id`, the hook decides it after the guards above:
 | A write outside the repository's checkouts, such as `/tmp` | deny, naming `.harness/tmp/` (`guard.subagent-outside-checkouts`) |
 | A build worker's or fixer's write to the main checkout | deny (`guard.build-agent-main-checkout`) |
 | A reviewer's or verifier's Bash other than 1 `swiftgate events span start\|end`, even outside a project | deny (`guard.reviewer-bash`) |
+| A merge fixer's `swiftgate check` at `push`, `ready`, `merge` or `final` when its worktree's run history already holds 3 such runs | deny, naming `swiftgate test-only` (`guard.fixer-gate-cap`) |
 | Anything else | allow |
 
 The checkouts are the main checkout and each sibling `<repo>-…` directory whose `.git` is a file.

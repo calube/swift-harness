@@ -21,6 +21,8 @@ public struct QAReport: Sendable, Equatable {
   public let atBase: Bool
   /// A `--final` run: every row, with each flow recorded.
   public let final: Bool
+  /// The build had ended when the run started, so a row that didn't verify never will.
+  public let settled: Bool
   /// The commit the rows ran at; `nil` when none ran.
   public let commit: String?
   public let verdict: Verdict
@@ -34,15 +36,18 @@ public struct QAReport: Sendable, Equatable {
   /// - Parameter gaps: final-pass evidence the flow rows didn't leave, each a nit.
   public init(
     runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
-    commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [], notes: [String] = []
+    settled: Bool = false, commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [],
+    notes: [String] = []
   ) {
     let findings =
-      Self.findings(rows: rows, atBase: atBase) + Self.findings(gaps: gaps, rows: rows)
+      Self.findings(rows: rows, atBase: atBase, settled: settled)
+      + Self.findings(gaps: gaps, rows: rows)
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
     self.init(
-      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: commit,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
+      commit: commit,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
       findings: findings, notes: notes,
       message: rows.isEmpty
@@ -57,8 +62,9 @@ public struct QAReport: Sendable, Equatable {
   }
 
   private init(
-    runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, commit: String?,
-    verdict: Verdict, rows: [QARow], findings: [Finding], notes: [String], message: String
+    runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, settled: Bool,
+    commit: String?, verdict: Verdict, rows: [QARow], findings: [Finding], notes: [String],
+    message: String
   ) {
     self.schemaVersion = Self.currentSchemaVersion
     self.runID = runID
@@ -66,6 +72,7 @@ public struct QAReport: Sendable, Equatable {
     self.after = after
     self.atBase = atBase
     self.final = final
+    self.settled = settled
     self.commit = commit
     self.verdict = verdict
     self.rows = rows
@@ -80,8 +87,8 @@ public struct QAReport: Sendable, Equatable {
     runID: String? = nil
   ) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: nil,
-      verdict: .blocked,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: false,
+      commit: nil, verdict: .blocked,
       rows: [], findings: [], notes: [], message: message)
   }
 
@@ -91,21 +98,24 @@ public struct QAReport: Sendable, Equatable {
     runID: String? = nil
   ) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: nil,
-      verdict: .green,
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: false,
+      commit: nil, verdict: .green,
       rows: [], findings: [], notes: [note], message: "no validation row to run")
   }
 
   /// This report with `notes` added after its own.
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
-      runID: runID, plan: plan, after: after, atBase: atBase, final: final, commit: commit,
-      verdict: verdict, rows: rows, findings: findings, notes: notes + more, message: message)
+      runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
+      commit: commit, verdict: verdict, rows: rows, findings: findings, notes: notes + more,
+      message: message)
   }
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
   /// so only a row that passes there is a finding.
-  public static func findings(rows: [QARow], atBase: Bool) -> [Finding] {
+  /// - Parameter settled: the build had ended, so a row that didn't verify is never proven: its
+  ///   `qa.check-unverified` gates, where during merges it is a nit and a waiting row none.
+  public static func findings(rows: [QARow], atBase: Bool, settled: Bool = false) -> [Finding] {
     rows.compactMap { row in
       let named = "row \(row.row) (\(row.requirement), \(row.layer.rawValue)) `\(row.check)`"
       let rule: (id: String, severity: Severity, message: String)
@@ -117,13 +127,15 @@ public struct QAReport: Sendable, Equatable {
           checkPassesAtBaseRuleID, .major,
           "\(named) passes at the merge base, so it can't tell the change from its absence"
         )
-      case (.unverified, false):
-        rule = (checkUnverifiedRuleID, .nit, "\(named): \(row.message)")
+      case (.unverified, false), (.waiting, false), (.abandoned, false):
+        guard settled || row.result != .waiting else { return nil }
+        let gates = settled || row.result == .abandoned
+        rule = (checkUnverifiedRuleID, gates ? .major : .nit, "\(named): \(row.message)")
       case (.unverified, true):
         rule = (
           checkUnverifiedRuleID, .nit, "\(named): no red run at the merge base: \(row.message)"
         )
-      case (.pass, false), (.red, true), (.waiting, _):
+      case (.pass, false), (.red, true), (.waiting, true), (.abandoned, true):
         return nil
       }
       // Every argument is non-empty, so the contract can't refuse it.
@@ -153,8 +165,8 @@ extension QAReport {
 
 extension QAReport: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runID, plan, after, atBase, final, commit, verdict, rows, findings,
-      notes, message
+    case schemaVersion, runID, plan, after, atBase, final, settled, commit, verdict, rows,
+      findings, notes, message
   }
 
   public init(from decoder: any Decoder) throws {
@@ -171,6 +183,8 @@ extension QAReport: Codable {
       atBase: try c.decode(Bool.self, forKey: .atBase),
       // Reports written before `--final` existed hold no key, and none of them was final.
       final: try c.decodeIfPresent(Bool.self, forKey: .final) ?? false,
+      // Reports written before a run knew the build had ended hold no key.
+      settled: try c.decodeIfPresent(Bool.self, forKey: .settled) ?? false,
       commit: try c.decodeIfPresent(String.self, forKey: .commit),
       verdict: try c.decode(Verdict.self, forKey: .verdict),
       rows: try c.decode([QARow].self, forKey: .rows),
@@ -188,6 +202,7 @@ extension QAReport: Codable {
     try c.encode(after, forKey: .after)
     try c.encode(atBase, forKey: .atBase)
     try c.encode(final, forKey: .final)
+    try c.encode(settled, forKey: .settled)
     try c.encode(commit, forKey: .commit)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(rows, forKey: .rows)

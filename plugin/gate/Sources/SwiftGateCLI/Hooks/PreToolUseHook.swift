@@ -28,6 +28,7 @@ enum PreToolUseHook {
         return deny(violation)
       }
       if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let violation = fixerGateCap(command, payload: payload) { return deny(violation) }
       if let brownfield {
         switch DirtyFileRead.read(brownfield.discoverDirty) {
         case .absent: break
@@ -105,6 +106,40 @@ enum PreToolUseHook {
             .contains(where: isDirectory)
       else { return [target.path] }
       return [target.path] + target.entries.map { target.path + "/" + $0 }
+    }
+  }
+
+  /// The fixer's full-gate cap, counted in the run history of each worktree the command gates.
+  private static func fixerGateCap(_ command: String, payload: HookPayload) -> GuardViolation? {
+    guard payload.agentType == FixerGateCapGuard.agentType else { return nil }
+    for call in FixerGateCapGuard.gateCalls(
+      in: command, cwd: payload.cwd, directoryExists: isDirectory)
+    {
+      let records =
+        worktreeRoot(holding: call.directory).flatMap {
+          try? RunStore(worktreeRoot: $0).readHistory().records
+        } ?? []
+      if let violation = FixerGateCapGuard.evaluate(
+        call, priorRuns: FixerGateCapGuard.cappedRuns(in: records), agentType: payload.agentType)
+      {
+        return violation
+      }
+    }
+    return nil
+  }
+
+  /// The nearest directory at or above `directory` holding a `.swiftgate.toml` or a `.git`: where
+  /// `check` keeps its runs.
+  private static func worktreeRoot(holding directory: String) -> URL? {
+    var current = URL(filePath: directory, directoryHint: .isDirectory).standardizedFileURL
+    while true {
+      for marker in [Config.fileName, ".git"]
+      where FileManager.default.fileExists(atPath: current.appending(path: marker).path) {
+        return current
+      }
+      let parent = current.deletingLastPathComponent()
+      guard parent.path != current.path else { return nil }
+      current = parent
     }
   }
 

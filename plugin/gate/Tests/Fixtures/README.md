@@ -2533,6 +2533,40 @@ cp $S/qa-runs/20261004T222811Z-0be8aeb0/report.json $F/after-report.json
 
 `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-2` matched nothing.
 
+## qa run: rows still waiting once the build ended
+
+`QA/aidoku-validation-3/` holds what the iOS validation trial's third attempt on `Aidoku/Aidoku`
+left (`evals/results/2026-10-04-brownfield-ios-validation-3/`, finding 1). `validation.json` is the
+plan's table: 2 flow rows and a state row after `confirm-downloads-setting`, and an acceptance row
+after `confirm-downloads-check`. `ledger.json` is the plan's ledger at the end, with
+`confirm-downloads-setting` `abandoned`. `build-events.jsonl` is the build run's
+`events.jsonl`: that task's merge, its GREEN merge gate, then the `final` gate.
+`final-report.json` is the plain `qa run` after `final`: 3 rows `waiting` and GREEN. From the
+repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/QA/aidoku-validation-3
+mkdir -p $F && cp $S/validation.json $F/validation.json
+sed -E 's#/Users/[^/]*/Developer/trials/#/TRIALS/#g' $S/ledger.json > $F/ledger.json
+cp $S/build-events.jsonl $F/build-events.jsonl
+cp $S/qa-runs/20261005T002359Z-7b81c6a7/qa/report.json $F/final-report.json
+```
+
+The `sed` replaces the trial clone's parent folder in each task's `worktree` with `/TRIALS/` and
+changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-3`
+matched nothing.
+
+`at-base-report.json` is the orchestrator's `qa run --at-base` in that trial, after `qa adopt`: all
+4 rows red at `c1766cda`, the 2 flows on a device. `store.state.sh` is the state row's script the
+validation worker wrote. With `S` and `F` as above:
+
+```sh
+cp $S/qa-runs/20261004T235239Z-4acebe48/qa/report.json $F/at-base-report.json
+cp $S/qa/confirm-large-downloads-store.state.sh $F/store.state.sh
+```
+
+The same `grep` on both files matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
@@ -2814,6 +2848,40 @@ cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
 matched nothing.
 
+## Brownfield trial: a merge fixer looping on the merge gate
+
+The third iOS validation trial on `Aidoku/Aidoku` sent 1 red merge to the fixer, which found each
+of its test file's 3 faults by running `check --tier merge` again.
+`BrownfieldTrial/aidoku-validation-3-fixer-gates.jsonl` holds each of its Bash calls that ran a
+`check --tier`, in order, with the fix worktree as `/WORKTREE` and the harness's plugin as
+`/PLUGIN`. `BrownfieldTrial/aidoku-validation-3-test-compile.tail.txt` is the output tail that the
+red merge gate's `area.test-failed` finding quoted after `exit 65:`. It shows the new test file
+that didn't compile, with the plan checkout as `/CLONE` and Xcode's DerivedData as `/DERIVED`. `W`
+is the fix worktree, `P` the plugin, `C` the plan checkout and `D` the DerivedData directory the
+trial ran with. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial \
+  W=… P=… C=… D=… python3 - <<'PY'
+import json, os
+S, F, W, P, C, D = (os.environ[k] for k in ("S", "F", "W", "P", "C", "D"))
+with open(f"{F}/aidoku-validation-3-fixer-gates.jsonl", "w") as out:
+    for line in open(f"{S}/fixer.jsonl"):
+        content = json.loads(line).get("message", {}).get("content")
+        for c in content if isinstance(content, list) else []:
+            if c.get("type") == "tool_use" and c["name"] == "Bash" and "check --tier" in c["input"]["command"]:
+                command = c["input"]["command"].replace(W, "/WORKTREE").replace(P, "/PLUGIN")
+                out.write(json.dumps({"command": command}) + "\n")
+report = json.load(open(f"{S}/gates/merge-setting.json"))
+message = next(x["message"] for x in report["findings"] if x["severity"] == "major")
+tail = message.split("exit 65:\n", 1)[1].replace(C, "/CLONE").replace(D, "/DERIVED")
+open(f"{F}/aidoku-validation-3-test-compile.tail.txt", "w").write(tail)
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
+nothing.
+
 ## Brownfield trial: an iOS plan whose acceptance row names a source file
 
 `BrownfieldTrial/aidoku-validation-2-PLAN.md` is the `PLAN.md` the orchestrator first wrote in
@@ -2854,6 +2922,33 @@ PY
 The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
 both files matched nothing.
 
+## Brownfield trial: a UI plan with no flow row, finished on a RED qa run
+
+The first tic-tac-toe trial ran `swiftgate run spec.md` on an iOS app starter with 1 `xcode`
+area rooted at `.`. `BrownfieldTrial/tic-tac-toe-1-PLAN.md` is its `PLAN.md`: the
+`ttt-screen` task writes `Packages/AppFeature/Sources/AppUI/` and `UITests/` and covers 3
+requirements whose only rows are acceptance rows naming 1 XCUITest class, with no `flow` row
+(finding 4). `tic-tac-toe-1-config.toml` is the clone's `config.toml`, and
+`tic-tac-toe-1-plan.json` and `tic-tac-toe-1-validation.json` are what `plan import` wrote from
+that plan. `tic-tac-toe-1-qa/<run>/qa/report.json` holds the 2 `qa run --plan spec` reports of
+step 8, both RED and neither `--final`; the orchestrator ran `build finish` before it read the
+second (finding 10). `S` is the trial folder, which kept the clone's plan state and each run's
+`qa/` folder. From the repository root:
+
+```sh
+S=<trial folder> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+mkdir -p $F/tic-tac-toe-1-qa
+cp $S/PLAN.md $F/tic-tac-toe-1-PLAN.md
+cp $S/config.toml $F/tic-tac-toe-1-config.toml
+cp $S/plan.json $F/tic-tac-toe-1-plan.json
+cp $S/validation.json $F/tic-tac-toe-1-validation.json
+for r in 20261005T010144Z-9350394a 20261005T010428Z-75c783e4; do
+  mkdir -p $F/tic-tac-toe-1-qa/$r/qa && cp $S/qa-runs/$r/report.json $F/tic-tac-toe-1-qa/$r/qa/
+done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-*` matched nothing.
+
 ## Brownfield trial: a flow row's sim run on an iOS clone
 
 `BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
@@ -2875,6 +2970,39 @@ cp $R/sim/steps/*.tree.json $F/sim/steps/
 
 `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-setting-flow` matched
 nothing.
+
+## Brownfield trial: the validation worker's Bash calls and flows on an iOS clone
+
+`Hooks/aidoku-validation-3-worker-bash.json` holds every Bash command the validation worker ran in
+the third iOS validation trial on `Aidoku/Aidoku`, in order. Calls 14 and 17 drive its prepared
+flows with a raw `agent-device batch`. `BrownfieldTrial/aidoku-validation-3-config.toml` is that
+clone's `config.toml` after the run, and `BrownfieldTrial/aidoku-validation-3-toggle.flow.json` and
+`aidoku-validation-3-store.flow.json` are the 2 flows the worker wrote. `H` is the harness checkout
+the trial ran and `C` the clone. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures H=… C=… python3 - <<'PY'
+import json, os
+S, F, H, C = (os.environ[k] for k in ("S", "F", "H", "C"))
+commands = []
+for line in open(f"{S}/validation-worker.jsonl"):
+    entry = json.loads(line)
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list): continue
+    for block in content:
+        if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            commands.append(block["input"]["command"])
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+open(f"{F}/Hooks/aidoku-validation-3-worker-bash.json", "w").write(
+    scrub(json.dumps(commands, indent=2, ensure_ascii=False) + "\n"))
+PY
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/config.toml $F/aidoku-validation-3-config.toml
+cp $S/qa/confirm-large-downloads-toggle.flow.json $F/aidoku-validation-3-toggle.flow.json
+cp $S/qa/confirm-large-downloads-store.flow.json $F/aidoku-validation-3-store.flow.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 4 files matched nothing.
 
 ## Node installs: 1 lockfile per package manager
 
@@ -2905,3 +3033,36 @@ done
 ```
 
 `grep -rniE '/Users|/private|/var/folders|caleb' NodeInstall` matched nothing.
+
+## Brownfield trial: a cutoff after a task's merge gate
+
+`BrownfieldTrial/aidoku-validation-3-build-events.jsonl` is the build run's `events.jsonl` from the
+third iOS validation trial on `Aidoku/Aidoku`, and `aidoku-validation-3-cutoff.json` is the
+`cutoff.json` `build cutoff` wrote in that run. The setting task merged, its first merge was undone
+on a RED gate, the fixer's branch merged, and its GREEN merge gate was recorded in the same second
+as the cutoff, which then set the task `abandoned`. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/build-events.jsonl $F/aidoku-validation-3-build-events.jsonl
+cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
+nothing.
+
+## Brownfield trial: a clone that commits its own config
+
+`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A
+brownfield one-shot trial ran `swiftgate run spec.md` on a fresh copy of the starter, and its
+discovery wrote the common dir's `config.toml` beside this committed file, so every command in the
+user's checkout failed on the 2 configs. The copy in that trial's repository matched this file byte
+for byte. From the repository root:
+
+```sh
+cp evals/apps/interview-starter/.swiftgate.toml \
+  plugin/gate/Tests/Fixtures/BrownfieldTrial/starter-swiftgate.toml
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/starter-swiftgate.toml` matched
+nothing.

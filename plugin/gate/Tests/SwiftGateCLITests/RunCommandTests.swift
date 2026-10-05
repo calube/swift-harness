@@ -268,7 +268,7 @@ struct RunCommandTests {
           started: started, spec: copy.path(percentEncoded: false), origin: spec.path,
           specSource: .copied, planBranch: "swift-harness/add-sharing", base: head,
           timeBox: TimeBoxLimits(
-            budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config)))
+            budgetMin: 40, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config)))
     #expect(prepared.clock == clock)
     #expect(FileManager.default.fileExists(atPath: clone.layout.config.path))
     #expect(prepared.settings == clone.layout.settings.path(percentEncoded: false))
@@ -276,7 +276,7 @@ struct RunCommandTests {
   }
 
   @Test(
-    "run writes the brownfield preset's 45-minute box into clock.json, and --time-box replaces it for that run alone — catches a brownfield run with no budget"
+    "run writes the brownfield preset's 40-minute box into clock.json, and --time-box replaces it for that run alone — catches a brownfield run with no budget"
   )
   func clockCarriesTheBox() async throws {
     let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
@@ -300,13 +300,13 @@ struct RunCommandTests {
     #expect(
       try written(configured)
         == TimeBoxLimits(
-          budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
+          budgetMin: 40, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
     #expect(
       try written(flagged)
         == TimeBoxLimits(budgetMin: 30, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .flag))
     let config = try TOMLConfigDecoder().decodeBrownfield(
       String(contentsOf: clone.layout.config, encoding: .utf8))
-    #expect(config.buildPresets["brownfield"]?.timeBudgetMin == 45)
+    #expect(config.buildPresets["brownfield"]?.timeBudgetMin == 40)
   }
 
   @Test(
@@ -335,9 +335,9 @@ struct RunCommandTests {
     }
     #expect(report.phase == .normal)
     #expect(report.elapsedSeconds == 360)
-    #expect(report.budgetMin == 45)
+    #expect(report.budgetMin == 40)
     #expect(report.deadlines.planBy == launch.addingTimeInterval(8 * 60))
-    #expect(report.deadlines.endsAt == launch.addingTimeInterval(45 * 60))
+    #expect(report.deadlines.endsAt == launch.addingTimeInterval(40 * 60))
     #expect(report.next == RunClockReport.Next(deadline: "planBy", secondsLeft: 120))
     guard case .refused(let message, let status) = missing else {
       Issue.record("a plan with no clock got a report")
@@ -773,5 +773,65 @@ struct RunCommandTests {
     }
     #expect(error?.message.contains(brokenShim) == true, "\(String(describing: error))")
     #expect(error?.message.contains("build broke in") == true, "\(String(describing: error))")
+  }
+
+  @Test(
+    "run in a clone that commits a .swiftgate.toml sets it aside: the checkout, a plan worktree, the hooks and the report all run the brownfield profile on 1 state root, and the tree is untouched — catches every command failing on 2 configs and events split across 2 state roots"
+  )
+  func committedConfigIsSetAside() async throws {
+    let committed = try Fixture.text("BrownfieldTrial/starter-swiftgate.toml")
+    let clone = try await RunClone(files: [
+      "Package.swift": "// swift-tools-version:6.0\n", Config.fileName: committed,
+    ])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let blob = try await clone.git("hash-object", "--", Config.fileName)
+    let started = Date(timeIntervalSince1970: 1_800_000_000)
+
+    let prepared = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(
+        warmup: FakeWarmup(steps: Steps(), config: clone.layout.config), now: { started }))
+
+    #expect(try await clone.git("status", "--porcelain", "--ignored") == "")
+    #expect(
+      try String(contentsOf: clone.root.appending(path: Config.fileName), encoding: .utf8)
+        == committed)
+    let record = try CommittedConfigSetAside.decode(
+      Data(contentsOf: clone.layout.committedConfigSetAside))
+    #expect(record == CommittedConfigSetAside(blob: blob, setAsideAt: started))
+    #expect(
+      prepared.notes.contains { $0.contains(Config.fileName) && $0.contains("set aside") },
+      "\(prepared.notes)")
+
+    func canonical(_ root: StateRoot) -> String {
+      guard case .gitDir(let directory) = root else { return "the tree \(root)" }
+      return directory.resolvingSymlinksInPath().standardizedFileURL.path
+    }
+    let worktree = clone.base.appending(path: "plan-worktree", directoryHint: .isDirectory)
+    try await clone.git("worktree", "add", "-q", worktree.path, prepared.clock.planBranch)
+    for checkout in [clone.root, worktree] {
+      guard case .brownfield? = try ConfigLoader().loadProfile(repositoryRoot: checkout) else {
+        Issue.record("\(checkout.path) didn't load the brownfield profile")
+        continue
+      }
+      #expect(try ConfigLoader().load(repositoryRoot: checkout) == nil)
+      #expect(StateRootResolver.profile(worktree: checkout) == .brownfield)
+      #expect(
+        canonical(StateRootResolver.eventStore(worktree: checkout))
+          == canonical(.gitDir(clone.root.appending(path: ".git", directoryHint: .isDirectory))))
+      guard case .brownfield? = ProjectRoot.locateProfile(from: checkout) else {
+        Issue.record("a hook in \(checkout.path) ran the owned profile")
+        continue
+      }
+    }
+
+    let outcome = await BrownfieldRunReportRun.write(
+      slug: prepared.slug, planBranch: nil, base: prepared.clock.base, root: clone.root,
+      runner: clone.runner)
+    let report = try #require(outcome.report, "\(outcome.message)")
+    #expect(report.committedConfig?.items == [record.reportLine])
+    #expect(report.text.contains("## Committed config"))
   }
 }

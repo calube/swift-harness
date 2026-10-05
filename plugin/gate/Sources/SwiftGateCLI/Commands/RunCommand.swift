@@ -223,6 +223,11 @@ extension RunCommand {
       } catch {
         throw RunStartError(message: "discover --apply: \(describe(error))")
       }
+      if let note = try await setAsideCommittedConfig(
+        root: rootPath, layout: layout, at: started, runner: runner)
+      {
+        notes.append(note)
+      }
       // The box needs the preset discovery just wrote, so the clock is written again with it.
       let box = TimeBoxLimits.resolve(
         preset: try brownfieldPreset(layout: layout), override: timeBox)
@@ -260,6 +265,32 @@ extension RunCommand {
       clock: clock, settings: layout.settings.path(percentEncoded: false),
       warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID,
       notes: discovered.notes + notes)
+  }
+
+  /// Records that the clone runs the brownfield profile over the committed `.swiftgate.toml` at
+  /// `root`, before the warm-up or any session reads a config, and returns the line saying so;
+  /// `nil` when nothing is committed there. The file stays in the tree as it is: the run adopts
+  /// no owned profile, whose gates and standards would judge code the run never touched.
+  private static func setAsideCommittedConfig(
+    root: String, layout: BrownfieldStateLayout, at date: Date, runner: any ProcessRunner
+  ) async throws(RunStartError) -> String? {
+    let committed = URL(filePath: root, directoryHint: .isDirectory).appending(
+      path: Config.fileName, directoryHint: .notDirectory)
+    guard FileManager.default.fileExists(atPath: committed.path) else { return nil }
+    let blob = try await git(["hash-object", "--", Config.fileName], root: root, runner: runner)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let record = CommittedConfigSetAside(blob: blob, setAsideAt: date)
+    let data: Data
+    do {
+      data = try record.encoded()
+    } catch {
+      throw RunStartError(message: "encoding the set-aside record: \(error)")
+    }
+    try write(data, to: layout.committedConfigSetAside.path)
+    return "run: \(committed.path(percentEncoded: false)) set aside for this clone, which runs the "
+      + "brownfield profile from \(layout.config.path(percentEncoded: false)); the file is "
+      + "unchanged. Delete \(layout.committedConfigSetAside.path(percentEncoded: false)) and that "
+      + "config.toml to run the owned profile again"
   }
 
   /// `[build.presets.brownfield]` of the config discovery wrote; `nil` when it defines none.

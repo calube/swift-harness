@@ -182,7 +182,7 @@ struct RunViewContractTests {
       JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
     let validation = try #require(object["validation"] as? [String: Any])
     #expect(keys(validation) == ["plan", "counts", "rows", "keptFlows"])
-    #expect(keys(validation["counts"]) == ["pass", "red", "unverified", "waiting"])
+    #expect(keys(validation["counts"]) == ["pass", "red", "unverified", "waiting", "abandoned"])
     let row = first(validation["rows"])
     #expect(
       keys(row) == [

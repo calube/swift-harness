@@ -1,0 +1,83 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "dd208a7f1dc9aedcc06b4479e5c1c259e7241d33",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-new-game, acceptance) `test: InterviewStarterUITests/GameFlowUITests`: exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.Interview…",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "3 of 3 rows verified: 2 pass, 1 red, 0 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/01-req-board-screen.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 51329,
+      "requirement" : "req-board-screen",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/02-req-status-text.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 51525,
+      "requirement" : "req-status-text",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/03-req-new-game.acceptance.txt"
+      ],
+      "exitStatus" : 65,
+      "layer" : "acceptance",
+      "message" : "exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.Interview…",
+      "ms" : 57257,
+      "requirement" : "req-new-game",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T010428Z-75c783e4",
+  "schemaVersion" : 1,
+  "verdict" : "RED"
+}

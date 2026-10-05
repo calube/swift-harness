@@ -50,20 +50,20 @@ they take no span call here.
 ## Time box
 
 A run ends inside its time box: `[build.presets.brownfield] time_budget_min` minutes from the
-launch, 45 unless the config or the `--time-box <min>` option of `swiftgate run` says otherwise. The box keeps a
+launch, 40 unless the config or the `--time-box <min>` option of `swiftgate run` says otherwise. The box keeps a
 reserve at its end for the merges of the tasks still running, `final` and this report: starts
 stop `stop_starts_before_min` minutes before the end, and the cutoff comes 5 minutes before it.
 `"$SG" run clock <slug> --json` prints where the run stands: its `phase`, each deadline in
 `deadlines` and the seconds to the `next` one. Read it at the start of steps 1, 3, 5, 6 and 7.
 
-| Deadline | At 45 min | When it passes |
+| Deadline | At 40 min | When it passes |
 |---|---|---|
 | `exploreBy` | 5 min | stop every explorer still running and plan their areas from your own reading |
 | `planBy` | 8 min | write `PLAN.md` now from what you know, with an assumption for each open question |
 | `contractBy` | 12 min | land the smallest contract that builds: fewer types, more stubs |
-| `noNewStartsAt` | 32 min | `build next` starts nothing new; running tasks go on |
-| `cutoffAt` | 40 min | `build cutoff` decides every running task (step 7) |
-| `endsAt` | 45 min | the report is printed |
+| `noNewStartsAt` | 27 min | `build next` starts nothing new; running tasks go on |
+| `cutoffAt` | 35 min | `build cutoff` decides every running task (step 7) |
+| `endsAt` | 40 min | the report is printed |
 
 No early deadline is a reason to skip a step: past one, finish that step at its smallest and go
 on. A contract with no GREEN `slice` by `noNewStartsAt` lets no task start: go to step 8 with
@@ -143,7 +143,8 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
 - **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
   step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
-  `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`,
+  `<config>`'s `[brownfield]` builds only at `slice` (an `xcode` area's slice runs
+  `build-for-testing`, so its test targets compile); its tests and their proof run at `merge`,
   which proves only the tests that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
   running, is marked as unknown; `slice` measures it.
 
@@ -173,6 +174,13 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
+- A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
+  when an acceptance UI test also checks it, so `qa run` records its journey and proves it red
+  first. A
+  task writes a screen when a `Writes` path inside the area's root has a folder or file named
+  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
+  `.storyboard` or `.xib`. A requirement no flow can check gives the reason in its row's `Reason`.
+  The import fails naming each requirement that has neither.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
@@ -231,8 +239,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      workflow. When `build next` lists it, run `worktree create` and `ledger set … in-progress` as
      for any task, then launch 1 Agent tool call in the background with `subagent_type`
      `general-purpose` and `model` `opus`, the 1 alias the tool takes here. Its prompt names the
-     task's worktree, `<slug>` as its plan, its rows from `## Validation`, the contract commit's sha,
-     and says to work in that worktree and follow
+     task's worktree and id, `<slug>` as its plan, its rows from `## Validation`, the contract
+     commit's sha, and says to work in that worktree and follow
      `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Its write set names no
      test file, so it writes `.harness/qa/<slug>/` alone. When it returns:
      1. From `<checkout>`, `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into
@@ -244,7 +252,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, in the foreground like every
         gate, though a flow row boots a leased device. This `--at-base` run is never skipped, and
         no task that a row's `Runs after` names merges before it has run: such a task that
-        finishes first keeps its checked return and merges once this run is done. A row that reads `pass` there fails it with
+        finishes first keeps its checked return and merges once this run is done. It takes each
+        row the worker's `--prepared-by` run proved from the `at-base-run.json` the adopt copied
+        while its check is byte-identical, naming that run in the row's `reusedFrom`, and runs
+        only the rest. A row that reads `pass` there fails it with
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
@@ -255,7 +266,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      An acceptance test in the area's framework is never the validation task's: its row's
      `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's
      source reverted. The brownfield tiers refuse `--proof-base`, and that prove stands in for it.
-     At the cutoff, `TaskStop` a validation task still running and set it `abandoned`, which
+     At the cutoff, `TaskStop` a validation task still running, set it `abandoned` and
+     `worktree remove … --abandoned` it, which
      frees the merges waiting on item 3; its rows have no checks, so `qa run` reads them red and
      the report quotes them.
    - **Validate each merge**, as [the build loop's after-merge step](../build/references/event-loop.md#after-each-merge)
@@ -283,10 +295,16 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
      go on with the loop. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
-        already set it `abandoned`, with the reason the report quotes.
-     2. Merge each task in `finish`, in order, as the build loop's completion step does. A
-        conflict or a RED `merge` gate gets no fixer at the cutoff: `build merge --undo`, then
-        `"$SG" ledger set <slug> <task> abandoned --session <session> --json`.
+        already set it `abandoned`, with the reason the report quotes. Then discard its
+        worktrees: `"$SG" worktree remove <slug> <task> --abandoned --session <session> --json`
+        removes the task's and its fixer's, merged or not, and keeps their branches.
+     2. Merge each task in `finish`, in order, as the build loop's completion step does, from
+        where it stands: a task already merged skips `build merge`, and one in `landed` skips
+        its merge gate too, going straight to `qa run --after`, `ledger set … done` and
+        `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
+        gets no fixer at the cutoff: `build merge --undo`, then
+        `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
+        `worktree remove … --abandoned` as item 1 says.
      3. Start nothing else, and go to step 8.
 
      `build cutoff` records the cutoff as `budget` halts it answers itself, so never run
@@ -332,17 +350,23 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
    `lint` and `build` against the baseline, plus each area's `e2e`.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
-3. `"$SG" qa run --plan <slug> --json` in `<checkout>` runs every validation row whose tasks
-   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict counts as a red
-   `final` in item 4, whose fix task owns the files the red rows' checks exercise, and item 4's
-   second `final` runs this item again.
+3. `"$SG" qa run --plan <slug> --final --json` in `<checkout>` runs every validation row whose
+   tasks merged, and records each flow with a video. Read its verdict, and keep its `runID` and
+   rows for item 5 and step 9. A RED verdict with a `red` row
+   counts as a red `final` in item 4, whose fix task owns the files the red rows' checks exercise,
+   and item 4's second `final` runs this item again. After `final` a row that never verified,
+   `unverified` or `abandoned`, is RED too; with no `red` row no fix task makes it run, so it
+   goes to the report as is.
 4. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its
    span with `"$SG" events span end <span> --outcome red`, goes on to item 5 and ends the run RED;
    the report quotes its findings as `rule: message`. Past the cutoff a fix task doesn't fit in
    the box: a red `final` then goes straight to item 5 and ends the run RED.
-5. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+5. `"$SG" build finish <slug> --session <session> --qa-run <runID> --json`, naming item 3's
+   newest `runID`. A plan with a validation table can't finish without the newest `qa run
+   --final` and its id: `build finish` refuses, naming that run and its verdict. It records the
+   verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
    reports in the user's checkout, and `<plan-branch>` holds every commit.
@@ -356,8 +380,8 @@ fallbacks, the time box with each task that didn't fit it, and the plan branch t
 line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
 line, covers only what merged. A plan with a validation table adds `validation: <n> of <m> rows
-verified` after it, from the newest `qa run` over every row: GREEN over 0 verified means no check
-ran. Print it as your last message as written, then 1 line per row of
+verified` after it, from the newest `qa run` over every row: after `final`, a row that never
+verified makes it RED. Print it as your last message as written, then 1 line per row of
 step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 

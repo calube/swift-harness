@@ -8,7 +8,7 @@ import Testing
 
 /// A throwaway main checkout `<base>/app` whose `.git` is the common dir holding plan state, with
 /// one configured package `Pkg`.
-private struct WorktreeScenario {
+struct WorktreeScenario {
   static let plan = "2026-09-26-build"
   static let otherPlan = "2026-09-26-other"
   static let alice = "5e0c7a1b-2d3f-4a6b-8c9d-0e1f2a3b4c5d"

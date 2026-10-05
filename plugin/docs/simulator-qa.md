@@ -9,17 +9,18 @@ plan's validation rows. Simulator sessions (`sim verify`, `sim down`) are in
 
 `swiftgate qa lint <flow file>... [--json]` checks `agent-device batch` steps files offline, before
 any device boots (simulator QA amendment §6.1). A steps file is a JSON list of
-`{"command": "<name>", "input": {...}}` steps. The rules check each step against the step schemas
-the pinned `agent-device` reports from its MCP `tools/list`, which ship as
-`qa/agent-device-schemas-<pin>.json` in the plugin. They check each `id="…"` selector against the raw
-values of the 1 `enum AccessibilityID: String` in the Swift file `[qa] accessibility_ids` names. The
-rules never read strings under `text` and `value`, which hold app content, as selectors or refs.
+`{"command": "<name>", "input": {...}}`. Each step is checked against the step schemas
+the pinned `agent-device` reports from its MCP `tools/list`, shipped as the plugin's
+`qa/agent-device-schemas-<pin>.json`. They check each `id="…"` selector against the raw
+values of the 1 `enum AccessibilityID: String` in the Swift file `[qa] accessibility_ids` names; a
+brownfield clone, with no such key, gets no id check and no note. Strings under `text` and
+`value` are app content, never selectors or refs.
 
 The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) when:
 
 - the plugin root (`SWIFTGATE_HARNESS_ROOT`) is unset;
-- the schema file is missing, doesn't parse, uses a schema keyword the reader doesn't support or
-  records another version than the pin;
+- the schema file is missing, unparsable, uses an unsupported keyword or records another version
+  than the pin;
 - the config (`.swiftgate.toml`, or a brownfield clone's `config.toml`) doesn't load;
 - the configured id file doesn't read or holds no single String-backed `AccessibilityID` enum with
   plain string raw values;
@@ -27,14 +28,15 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 
 ## qa run
 
-`swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]` runs the rows of a plan's
+`swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
-validation.json; with none it is GREEN with a note, and with several it exits 2 naming them. A row
-runs once every `Runs after` task is `done` in the ledger, the `--after` task counting as merged;
-`--after` keeps only the rows that name it, and a row with an unmerged task reads `waiting`.
+validation.json: none is GREEN with a note, several exit 2. A row runs once each `Runs after`
+task merged, per the ledger or build events, `--after` counting as merged and keeping only its
+rows. A row with an unmerged task reads `waiting`; once the build ended (`--final`, or a `final`
+gate after the last merge) `abandoned` if its task was, else `unverified`.
 
-Rows run in the current checkout in layer order, acceptance, then flow, then state. A red row
-leaves its own requirement's later-layer rows `unverified`; other requirements' rows still run. A requirement's state rows run straight after
+Rows run in the checkout in layer order: acceptance, flow, state. A red row
+leaves only its own requirement's later-layer rows `unverified`. A requirement's state rows run straight after
 its last flow row, on that flow's device. An acceptance or state check is a shell command run by
 `/bin/sh -c`, or a file under the plan's state directory such as `qa/<name>.state.sh`, run as its own
 program when executable and by `/bin/sh` otherwise. An acceptance check `test: <id>` (or
@@ -45,20 +47,20 @@ assigned that run, `QA_DIR`, the plan's `qa/` folder, and `QA_EVIDENCE_DIR`, the
 Exit 0 is `pass`; any other exit, a signal or the 10-minute timeout is `red`; a check that couldn't
 start is `unverified`. A red row's message adds its first failure line. An acceptance check may write
 a JUnit or xUnit report to `$QA_JUNIT`, the path a `test:` row passes as `{junit}`; a report or result bundle showing
-no test ran is `red` at the merge base and `unverified` otherwise. A screenshot, tree or log never
-passes a row. A state row runs only once every flow row for its requirement passed.
+no test ran is `red` at the merge base and `unverified` otherwise. A pass counts the tests they show
+passed and lists them as evidence. A screenshot, tree or log never
+passes a row. A state row runs only after its requirement's flow rows all pass.
 
-`--at-base` runs every row, whatever its tasks, at the merge base of `HEAD` and `main` (a brownfield
-clone's plan branch) in a scratch worktree, with no layer stop, and records each failure's exit
-status. Each `unverified` row's nit there says it has no red run.
+`--at-base` runs every row at the merge base, and `--prepared-by` a validation worker's rows before
+`qa adopt`; see [`simulator-qa-at-base.md`](simulator-qa-at-base.md).
 
 `--final` runs every ready row and records each flow, with its logs (see
 [the final pass](simulator-qa-flows.md#the-final-pass)). It takes neither `--at-base` nor `--after`.
 
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
 stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row. Its message leads with
-how many rows got an answer, `pass` or `red`: an unverified row is a nit, so `0 of 3 rows verified`
-can still read GREEN, and `run report` repeats that count under its `final` line.
+how many rows got a `pass` or `red`. An unverified row is a nit during merges; once the
+build ended, it and an abandoned row gate. `run report` repeats the count under its `final` line.
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 [`simulator-qa-flows.md`](simulator-qa-flows.md).

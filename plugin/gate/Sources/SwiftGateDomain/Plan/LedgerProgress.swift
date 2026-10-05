@@ -23,6 +23,17 @@ public struct LedgerProgress: Sendable, Equatable {
   /// The ids of the tasks marked `done`.
   public var merged: Set<String> { Set(tasks.filter { $0.status == .done }.map(\.id)) }
 
+  /// The ids of the tasks on `main`: marked `done`, or merged by `log`'s events. The ledger reads
+  /// `done` only after a merge's post-merge steps, so the events say which merges already landed.
+  public func merged(per log: BuildEventLog?) -> Set<String> {
+    merged.union(tasks.map(\.id).filter { log?.mergeStage(task: $0) != nil })
+  }
+
+  /// Each task's status by id; a repeated id keeps its last status.
+  public var statuses: [String: TaskStatus] {
+    Dictionary(tasks.map { ($0.id, $0.status) }, uniquingKeysWith: { _, last in last })
+  }
+
   public func contains(_ id: String) -> Bool { tasks.contains { $0.id == id } }
 }
 

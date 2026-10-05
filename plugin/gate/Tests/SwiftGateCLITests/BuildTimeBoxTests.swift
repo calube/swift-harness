@@ -210,6 +210,37 @@ struct BuildTimeBoxTests {
   }
 
   @Test(
+    "at the cutoff a task whose merge and GREEN merge gate are recorded while the ledger still reads in-progress finishes and is listed as landed, past the point where a merge gate fits — catches the cutoff abandoning a merged, gated task"
+  )
+  func cutoffKeepsALandedTask() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("store", .inProgress), ("web", .inProgress)])
+    try scenario.writeClock()
+    let record = try await scenario.start(.brownfield)
+    try scenario.writeReturn("store", runID: record.runID, outcome: .readyToMerge)
+    let store = try await BuildRunStore.open(
+      plan: BoxScenario.plan, runID: record.runID, git: scenario.git)
+    let merged = BoxScenario.launch.addingTimeInterval(38 * 60)
+    try await store.append(
+      .merge(.init(task: "store", preCommit: "base", postCommit: "merged", at: merged)))
+    try await store.append(
+      .gate(
+        .init(
+          stage: .merge(task: "store"), tier: .merge, verdict: .green,
+          runID: "20261004T100000Z-00000002", at: merged.addingTimeInterval(170))))
+
+    let result = await scenario.cutoff(atMinute: 41)
+
+    #expect(result.verdict == .green, "\(result.message)")
+    let report = try #require(result.report)
+    #expect(report.finish == ["store"])
+    #expect(report.landed == ["store"])
+    #expect(report.abandoned.map(\.task) == ["web"])
+    #expect(try scenario.ledger() == ["store": .inProgress, "web": .abandoned])
+  }
+
+  @Test(
     "build cutoff before the cutoff exits 1 naming the seconds left and changes nothing — catches in-flight work dropped while it still had time"
   )
   func cutoffWaitsForItsTime() async throws {

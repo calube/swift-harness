@@ -17,8 +17,8 @@ a row's result nor draws a timeline bar.
 
 ## The tab
 
-- **Strip.** Counts of pass, red, unverified and waiting rows. The tab's badges carry the red,
-  unverified and waiting counts, so a red check shows from any tab.
+- **Strip.** Counts of pass, red, unverified and waiting rows, and abandoned rows when any. The
+  tab's badges carry every count but pass, so a red check shows from any tab.
 - **Groups.** Rows group by the tasks they run after, in ledger order; a row that runs after several
   tasks shows under each. A waiting row ends each of its groups as "waiting on <task>". A row whose
   report didn't read sits under "no task named".

@@ -53,32 +53,31 @@ Lint every flow file until it is GREEN:
 
 ## Record why each check fails now
 
-Run each check once against today's code and record its failure reason: a stub's return, a 404, a
+Prove each check red against today's code and record its failure reason: a stub's return, a 404, a
 missing element, a failing step. A check that fails on an import error, a typo, a missing file or a
 lint finding isn't ready: fix it and run it again before you return.
 
-- **Acceptance**: run the test, or the command, and record the assertion it fails on.
-- **Flow**: judge it with the `sim verify` that judges it after the merge, so a red from the
-  screen's audit, an assertion or an app exit shows now, not after its tasks merged. Build and
-  install the base app only through `swiftgate sim up`, never on a device you pick yourself. Drive
-  the steps file as 1 batch on that device, snap the step it stopped at with `--assert` set to the
-  text that step expected, release the device on every path, then judge:
+- **Acceptance test** in the repository: run the test and record the assertion it fails on.
+- **Every check under `.harness/qa/<plan>/`** (flow, state, acceptance script): 1 run from your
+  worktree's toplevel proves them all, in the foreground with the Bash `timeout` at 600000:
 
   ```bash
-  "$SG" sim up --scenario <scenario> --json
-  agent-device batch --steps-file .harness/qa/<plan>/<name>.flow.json --udid <udid> --session <session> --on-error stop --json
-  "$SG" sim snap "<the step the batch stopped at>" --assert "<text that step expected>" <runID> --json
-  "$SG" sim down <runID> --json
-  "$SG" sim verify <runID> --json
+  "$SG" qa run --plan <plan> --at-base --prepared-by <your task id> --json
   ```
 
-  The red run is `sim verify`'s: record its `verdict` and each finding's `rule` and `message`,
-  with the batch's failing step number and message beside them. A batch's output alone is never a
-  red run. Run the flows one after another: a `sim up` at a commit this worktree already built,
-  with the same uncommitted changes, installs that build again instead of building.
-- **State**: run the script after its flow's `sim snap`, before `sim down`, with `QA_DIR` set to
-  `.harness/qa/<plan>/` and `QA_SIM_UDID` and `QA_SIM_SESSION` from `sim up`'s JSON, and record
-  its exit status and output.
+  It runs only the rows you write, from your prepared folder, at the merge base in a scratch tree:
+  each flow is linted, run as 1 batch on a device `sim up` leases, snapped at each step and judged
+  by `sim verify`, and each state row runs on its flow's device. Record each row's `result` and
+  `message`, and the run id. Run it last, after your final edit, and leave the
+  `at-base-run.json` it writes: once `qa adopt` copies your folder, the orchestrator's
+  `qa run --at-base` takes each row whose check is still byte-identical from it instead of
+  running the row again. A row that reads `pass` can't tell the change from its absence: fix
+  the check. A row that reads `unverified` has no red run: fix what its message names and run
+  again.
+
+Never prove a red by hand: no raw agent-device batch of a prepared flow (the hook denies it, as
+`guard.validation-flow-by-hand`), and no `sim up`, `sim snap` or `sim verify` of your own. `qa run`
+leases and releases the device itself.
 
 Your recorded reason is a note. The gate confirms the red run: once you return, the orchestrator
 copies your folder into plan state with `qa adopt` and runs `qa run --at-base`, and an acceptance
@@ -89,10 +88,10 @@ test goes through `prove` with its `--proof-base` before the tasks it waits for.
 1 line per check, then 1 line per missing contract name:
 
 ```text
-<requirement> <layer> <path>: <failure reason>
+<requirement> <layer> <path>: <result>: <message> (qa run <run id>)
 <requirement> <layer> <path>: not run: <why>
 missing: <name> (<requirement>): <why the check needs it>
 ```
 
-A check you couldn't run, such as a flow whose `sim up` failed, returns `not run` with the
-reason, never a guessed failure.
+A check you couldn't run, such as a flow `qa run` left `unverified` because its device didn't
+come up, returns `not run` with the reason, never a guessed failure.

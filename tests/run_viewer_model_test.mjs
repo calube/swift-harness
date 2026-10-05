@@ -325,6 +325,8 @@ const tests = {
     const view = runView({ validation: { plan: 'sample', counts: { pass: 3, red: 1, unverified: 2, waiting: 0 }, rows: [] } })
     assert.deepEqual(M.validationBadges(view).map((b) => [b.key, b.kind, b.n, b.text]), [['red', 'bad', 1, '1 red'], ['unverified', 'warn', 2, '2 unverified']])
     assert.deepEqual(M.validationBadges(runView({ validation: null })), [])
+    const ended = runView({ validation: { plan: 'sample', counts: { pass: 1, red: 0, unverified: 0, waiting: 0, abandoned: 3 }, rows: [] } })
+    assert.deepEqual(M.validationBadges(ended).map((b) => [b.key, b.kind, b.n, b.text]), [['abandoned', 'bad', 3, '3 abandoned']])
   },
 
   'a qa.check span reads as qa check on the timeline — catches a raw event kind as a bar label'() {

@@ -534,15 +534,31 @@ struct DiscoverTests {
   }
 
   @Test(
-    "a first discovery writes a 45-minute box with starts stopping 13 minutes before its end — catches a brownfield run with no budget"
+    "a first discovery writes a 40-minute box with starts stopping 13 minutes before its end — catches a brownfield run with no budget"
   )
   func freshPresetHasABox() throws {
     let config = Discover.config(
       from: DiscoverProposal(head: "abc", areas: [], dirty: []), keeping: nil)
 
     let preset = try #require(config.buildPresets["brownfield"])
-    #expect(preset.timeBudgetMin == 45)
+    #expect(preset.timeBudgetMin == 40)
     #expect(preset.stopStartsBeforeMin == 13)
+  }
+
+  @Test(
+    "a first discovery leaves stall_min unset, so the stall watch waits the default 15 minutes, longer than a cold slice gate — catches a stall watch that fires during the run's first cold build"
+  )
+  func freshPresetStallsAtTheDefault() throws {
+    let config = Discover.config(
+      from: DiscoverProposal(head: "abc", areas: [], dirty: []), keeping: nil)
+    // A trial's contract slice gate ran a cold xcodebuild build for 295 s.
+    let coldSliceGateSeconds = 295
+
+    let preset = try #require(config.buildPresets["brownfield"])
+    #expect(preset.stallMin == nil)
+    #expect(preset.effectiveStallMin == BuildPreset.defaultStallMin)
+    #expect(preset.effectiveStallMin * 60 > coldSliceGateSeconds)
+    #expect(!BrownfieldConfigTOML.render(config).contains("stall_min"))
   }
 
   @Test(
@@ -565,7 +581,7 @@ struct DiscoverTests {
     let filled = Discover.config(from: proposal, keeping: existing([:]))
 
     #expect(kept.buildPresets == ["brownfield": edited])
-    #expect(filled.buildPresets["brownfield"]?.timeBudgetMin == 45)
+    #expect(filled.buildPresets["brownfield"]?.timeBudgetMin == 40)
   }
 
   @Test(
