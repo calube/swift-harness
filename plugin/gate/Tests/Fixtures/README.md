@@ -3051,6 +3051,38 @@ cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
 nothing.
 
+## QA: a test runner the busy shared simulator refused to launch
+
+`QA/runner-launch/` and `Xcresult/runner-busy.*` come from a brownfield trial whose `test:`
+acceptance rows ran `xcodebuild test -destination 'platform=iOS Simulator,name=iPhone 17'` on the
+shared device while other sessions launched on it. `busy-1.tail.txt` and `busy-2.tail.txt` are the
+ends of 2 rows' saved output (`qa/<row>.acceptance.txt`, stdout then stderr) from 2 `qa run`s, each
+exit 65 with "Failed to install or launch the test runner … Busy (\"Application failed preflight
+checks\")". `passed.tail.txt` is the end of a passing row's output from the same run as `busy-1`.
+`Xcresult/runner-busy.{tests,build-results}.json` are read from `busy-1`'s result bundle, and
+`runner-busy.status` is that run's exit status. From `plugin/gate/Tests/Fixtures`, with `S` the
+trial folder and `APP`, `CLASS`, `REQ` the app's name, its UI test class and the busy row's
+requirement:
+
+```sh
+SCRUB="s#$S/#/TRIAL/#g; s#/Users/[^/]*/#/HOME/#g; s#$APP#App#g; s#$CLASS#MainFlowUITests#g; s#$REQ#req-reset#g"
+tailfrom() { a=$(grep -n "$2" "$1" | head -1 | cut -d: -f1); sed -n "$a,\$p" "$1" | sed -E "$SCRUB"; }
+mkdir -p QA/runner-launch
+tailfrom $S/qa-runs/<busy-1 run>/<row>.acceptance.txt '^\*\*\* If you believe' > QA/runner-launch/busy-1.tail.txt
+tailfrom $S/qa-runs/<busy-2 run>/<row>.acceptance.txt '^\*\*\* If you believe' > QA/runner-launch/busy-2.tail.txt
+tailfrom $S/qa-runs/<busy-1 run>/<passing row>.acceptance.txt '^Test session results' > QA/runner-launch/passed.tail.txt
+B=$S/repo/.harness/runs/<busy-1 run>/qa/<row>.acceptance.xcresult
+xcrun xcresulttool get test-results tests --path $B | sed -E "$SCRUB" > Xcresult/runner-busy.tests.json
+xcrun xcresulttool get build-results --path $B | sed -E "$SCRUB" > Xcresult/runner-busy.build-results.json
+echo 65 > Xcresult/runner-busy.status
+```
+
+The `sed` replaces the trial folder with `/TRIAL/`, the home folder with `/HOME/`, and the app,
+class and requirement names, and changes nothing else. The result bundle's only failing case is
+the runner's own "encountered an error", whose message is the launch failure.
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/runner-launch Xcresult/runner-busy.*` matched
+nothing.
+
 ## Brownfield trial: a clone that commits its own config
 
 `BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A

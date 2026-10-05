@@ -1,0 +1,55 @@
+{
+  "devices" : [
+    {
+      "architecture" : "arm64",
+      "deviceId" : "AA8B08DE-DB63-4FE1-960D-00834C0B6740",
+      "deviceName" : "iPhone 17",
+      "modelName" : "iPhone 17",
+      "osBuildNumber" : "23C52",
+      "osVersion" : "26.2",
+      "platform" : "iOS Simulator"
+    }
+  ],
+  "testNodes" : [
+    {
+      "children" : [
+        {
+          "children" : [
+            {
+              "children" : [
+                {
+                  "children" : [
+                    {
+                      "name" : "Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.AppUITests.xctrunner. The request was denied by service delegate (SBMainWorkspace) for reason: Busy (\"Application failed preflight checks\"). (Underlying Error: The request to open \"com.example.AppUITests.xctrunner\" failed. The request was denied by service delegate (SBMainWorkspace) for reason: Busy (\"Application failed preflight checks\"). (Underlying Error: The operation couldn’t be completed. Application failed preflight checks)))",
+                      "nodeType" : "Failure Message"
+                    }
+                  ],
+                  "name" : "AppUITests-Runner encountered an error",
+                  "nodeIdentifier" : "AppUITests-Runner encountered an error",
+                  "nodeType" : "Test Case",
+                  "result" : "Failed"
+                }
+              ],
+              "name" : "System Failures",
+              "nodeType" : "Test Suite",
+              "result" : "Failed"
+            }
+          ],
+          "name" : "AppUITests",
+          "nodeIdentifierURL" : "test://com.apple.xcode/App/AppUITests",
+          "nodeType" : "UI test bundle",
+          "result" : "Failed"
+        }
+      ],
+      "name" : "App",
+      "nodeType" : "Test Plan",
+      "result" : "Failed"
+    }
+  ],
+  "testPlanConfigurations" : [
+    {
+      "configurationId" : "1",
+      "configurationName" : "Test Scheme Action"
+    }
+  ]
+}

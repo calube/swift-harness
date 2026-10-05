@@ -63,7 +63,7 @@ public enum XcodeBuildForTesting {
     "-showBuildTimingSummary",
   ]
 
-  private static func takesValue(_ previous: String) -> Bool {
+  static func takesValue(_ previous: String) -> Bool {
     previous.hasPrefix("-") && !flags.contains(previous)
   }
 }

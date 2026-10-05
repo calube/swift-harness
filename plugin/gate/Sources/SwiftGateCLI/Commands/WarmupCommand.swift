@@ -67,7 +67,11 @@ struct WarmupCommand: AsyncParsableCommand {
 
     let store = WarmupTimesStore(layout: layout)
     let known = store.load(tree: tree)
-    let runner = dependencies.areaRunner ?? LiveAreaCommandRunner(processRunner: process)
+    let runner =
+      dependencies.areaRunner
+      ?? LeasedDeviceAreaRunner(
+        base: LiveAreaCommandRunner(processRunner: process),
+        leases: LiveTestDeviceLeases(runner: process))
     let baseline = BaselineStore(
       layout: layout, runner: runner,
       scratch: LiveScratchWorktrees(
