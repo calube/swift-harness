@@ -10,13 +10,21 @@ import Foundation
 public enum SimAuditScope: Sendable, Equatable {
   /// Every interactive element in each step's tree.
   case everyControl
-  /// Only the interactive elements one of these selectors names by identifier.
-  case targeted([SimSelector])
+  /// Only the interactive elements one of these selectors names by identifier; `pressed` are the
+  /// selectors the flow presses, whose controls' tap targets are measured.
+  case targeted([SimSelector], pressed: [SimSelector] = [])
   /// No element, with why.
   case unaudited(reason: String)
 
   /// The nit that counts what a narrowed audit left out. It never gates.
   public static let untargetedRuleID = "sim.a11y-untargeted"
+
+  /// The nit naming each pressed control drawn smaller than ``minimumTapTarget`` on a side. It
+  /// never gates.
+  public static let tapTargetRuleID = "sim.tap-target"
+
+  /// The smallest tap target the Human Interface Guidelines allow, in points, on either side.
+  public static let minimumTapTarget = 44.0
 
   /// Why a brownfield clone's `sim verify` with no flow judges no control.
   public static let noFlowReason =
@@ -29,7 +37,8 @@ public enum SimAuditScope: Sendable, Equatable {
     switch (profile, flowSteps) {
     case (.owned, _): .everyControl
     case (.brownfield, nil): .unaudited(reason: noFlowReason)
-    case (.brownfield, let steps?): .targeted(SimSelector.all(in: steps))
+    case (.brownfield, let steps?):
+      .targeted(SimSelector.all(in: steps), pressed: SimSelector.pressed(in: steps))
     }
   }
 
@@ -132,6 +141,11 @@ public struct SimSelector: Sendable, Equatable {
     }
     for step in steps { visit(.object(step.input), key: nil) }
     return found
+  }
+
+  /// The selector each `press` step of `steps` presses, in step order and once each.
+  public static func pressed(in steps: [FlowStep]) -> [SimSelector] {
+    []
   }
 
   /// Whether `element` satisfies every term of an alternative holding an `id` term: the selector

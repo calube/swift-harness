@@ -63,6 +63,10 @@ public protocol Git: Sendable {
 
   /// Every file the index tracks, toplevel-relative, in git's order.
   func trackedFiles() async throws(GitError) -> [String]
+
+  /// The full ids of the commits reachable from `tip` and not from `base`, oldest first: what
+  /// `git log base..tip` lists.
+  func commits(from base: String, to tip: String) async throws(GitError) -> [String]
 }
 
 /// Every case means git could not answer, which is never evidence about the code: `blocked`.

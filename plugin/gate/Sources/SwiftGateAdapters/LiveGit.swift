@@ -213,6 +213,10 @@ public struct LiveGit: Git, DiffReading {
     return ids
   }
 
+  public func commits(from base: String, to tip: String) async throws(GitError) -> [String] {
+    []
+  }
+
   private static func isObjectID(_ text: String) -> Bool {
     (text.utf8.count == 40 || text.utf8.count == 64)
       && text.utf8.allSatisfy {

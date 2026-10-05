@@ -25,6 +25,12 @@ public enum QARunHistory {
       .filter { seen.insert($0.run.runID).inserted }
   }
 
+  /// The runs directory of each state root ``stateRoots(sharing:)`` names, `worktree`'s own
+  /// first: where a run made in any checkout of the clone, or kept from a removed one, lies.
+  public static func runsDirectories(sharing worktree: URL) -> [URL] {
+    [RunStore(worktreeRoot: worktree).state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)]
+  }
+
   /// `worktree`'s own state root first, then, when it is under a git dir, the common dir's and
   /// each linked worktree's: where every checkout of the clone, and every removed checkout's
   /// kept runs, keep their runs.

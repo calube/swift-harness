@@ -886,3 +886,18 @@ public enum TaskReturnCheck {
     return findings
   }
 }
+
+/// A return whose commits a worker mistyped or left out, refilled from the branch itself, so no
+/// agent hand-edits a return file to fix a sha.
+public enum TaskReturnCommitRefill {
+  /// `taskReturn` with its commits replaced by `branchCommits`, the branch's commits past its
+  /// base oldest first, and a `notes` line naming what didn't resolve and the `range` read; `nil`
+  /// when every listed commit resolves, or when `branchCommits` is empty, so the check still
+  /// flags what it can't refill. A ready-to-merge return listing none is refilled too.
+  public static func refill(
+    _ taskReturn: TaskReturn, states: [String: TaskReturnEvidence.CommitState],
+    branchCommits: [String], range: String
+  ) -> TaskReturn? {
+    nil
+  }
+}

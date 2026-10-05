@@ -109,7 +109,7 @@ struct SimAuditScopeTests {
   func trialFlowFileGatesOnlyItsContract() throws {
     let steps = try FlowSteps.parse(try Self.file("flow.json"))
     let audit = SimAuditScope.scope(profile: .brownfield, flowSteps: steps)
-    guard case .targeted(let selectors) = audit else {
+    guard case .targeted(let selectors, _) = audit else {
       Issue.record("expected a targeted scope, got \(audit)")
       return
     }

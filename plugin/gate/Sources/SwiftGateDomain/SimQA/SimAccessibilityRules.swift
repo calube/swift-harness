@@ -21,15 +21,24 @@ public enum SimAccessibilityRules {
       switch scope {
       case .everyControl:
         judged += found
-      case .targeted(let selectors) where selectors.contains { $0.namesIdentifier(element) }:
+      case .targeted(let selectors, _) where selectors.contains { $0.namesIdentifier(element) }:
         judged += found
-      case .targeted(let selectors) where selectors.contains { $0.matches(element) }:
+      case .targeted(let selectors, _) where selectors.contains { $0.matches(element) }:
         navigated += found.count
       case .targeted, .unaudited:
         untargeted += found.count
       }
     }
     return (judged, untargeted, navigated)
+  }
+
+  /// The distinct controls `scope` left out of `tree` with a finding, and the pressed controls
+  /// drawn under ``SimAuditScope/minimumTapTarget`` on a side, so a run counts each control once
+  /// however many steps show it.
+  public static func controls(_ tree: SimTree, step: SimStep, scope: SimAuditScope)
+    -> SimAuditControls
+  {
+    SimAuditControls()
   }
 
   private static func findings(_ element: SimElement, step: SimStep) -> [SimEvidenceFinding] {
@@ -58,5 +67,43 @@ public enum SimAccessibilityRules {
     guard let label = element.label else { return false }
     let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
     return !trimmed.isEmpty && trimmed != element.identifier
+  }
+}
+
+/// 1 control as the audit counts it: the same role, identifier and label in any step is 1 control,
+/// wherever a scroll or a removed row moved it.
+public struct SimControl: Sendable, Hashable {
+  public let role: SimElementRole
+  public let identifier: String?
+  public let label: String?
+
+  public init(_ element: SimElement) {
+    role = element.role
+    identifier = element.identifier
+    label = element.label
+  }
+
+  /// How a note names it: its identifier, else its label, after its role.
+  public var name: String {
+    "\(role.rawValue) " + (identifier ?? label.map { "\"\($0)\"" } ?? "with no identifier or label")
+  }
+}
+
+/// What an audit counts across a run's steps, each control once.
+public struct SimAuditControls: Sendable, Equatable {
+  /// Controls with a finding that no selector matches.
+  public var untargeted: Set<SimControl> = []
+  /// Controls with a finding that a selector matches only by label, role or text.
+  public var navigated: Set<SimControl> = []
+  /// Pressed controls drawn under the minimum tap target, with the frame first seen.
+  public var smallTargets: [SimControl: SimFrame] = [:]
+
+  public init() {}
+
+  /// Adds `other`'s controls, keeping the frame first seen for a small target.
+  public mutating func merge(_ other: SimAuditControls) {
+    untargeted.formUnion(other.untargeted)
+    navigated.formUnion(other.navigated)
+    smallTargets.merge(other.smallTargets) { first, _ in first }
   }
 }

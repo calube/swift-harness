@@ -68,8 +68,9 @@ struct QAFlowRunnerAuditTests {
 
     let steps = try FlowSteps.parse(
       try Fixture.data("BrownfieldTrial/aidoku-setting-flow/flow.json"))
-    let expected = SimAuditScope.targeted(SimSelector.all(in: steps))
-    guard case .targeted(let selectors) = expected, !selectors.isEmpty else {
+    let expected = SimAuditScope.targeted(
+      SimSelector.all(in: steps), pressed: SimSelector.pressed(in: steps))
+    guard case .targeted(let selectors, _) = expected, !selectors.isEmpty else {
       Issue.record("the trial flow names no selector")
       return
     }
