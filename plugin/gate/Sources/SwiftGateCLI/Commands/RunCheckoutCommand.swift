@@ -69,20 +69,88 @@ enum RunCheckoutRun {
     let keeping = WorktreeRun.keepRuns(from: context.path, into: kept)
     let events = WorktreeRun.copyEvents(
       from: context.path, into: main, commonDirectory: context.common)
+    let workspace = LiveGitWorkspace(runner: runner, repositoryRoot: root.path)
     do throws(GitWorkspaceError) {
-      try await LiveGitWorkspace(runner: runner, repositoryRoot: root.path)
-        .removeWorktree(at: context.path, force: false)
+      try await workspace.removeWorktree(at: context.path, force: false)
     } catch {
       return context.report(.blocked, .blocked, "\(error)" + keeping.message + events.message)
     }
+    let left = await removeTaskWorktrees(
+      context, kept: kept, main: main, workspace: workspace)
     var report = context.report(
-      .removed, .green,
-      "removed \(context.path); \(context.branch) stays" + keeping.message + events.message)
-    report.keptRuns = keeping.kept
-    report.unkeptRuns = keeping.unkept.isEmpty ? nil : keeping.unkept
+      left.verdict == .green ? .removed : .blocked, left.verdict,
+      "removed \(context.path); \(context.branch) stays" + keeping.message + events.message
+        + left.message)
+    report.keptRuns = keeping.kept + left.keptRuns
+    let unkept = keeping.unkept + left.unkeptRuns
+    report.unkeptRuns = unkept.isEmpty ? nil : unkept
     report.events = events.copied
     report.unkeptEvents = events.unkept
+    report.discarded = left.discarded
+    report.keptBranches = left.keptBranches
     return report
+  }
+
+  /// What the removal did with the task and fix worktrees the run left.
+  private struct LeftWorktrees {
+    var discarded: [String] = []
+    var keptBranches: [String] = []
+    var keptRuns: [String] = []
+    var unkeptRuns: [WorktreeReport.UnkeptRun] = []
+    var message = ""
+    var verdict = Verdict.green
+  }
+
+  /// Removes each ledger task's worktree and its fix worktree still on disk, merged or not, as
+  /// `worktree remove --abandoned` does: their runs and events are kept first, uncommitted edits
+  /// go, and both branches stay so every commit stays reachable. The run has ended, so nothing
+  /// works in them any more.
+  private static func removeTaskWorktrees(
+    _ context: Context, kept: StateRoot, main: String, workspace: LiveGitWorkspace
+  ) async -> LeftWorktrees {
+    var left = LeftWorktrees()
+    let tasks: [String]
+    do {
+      let plan = try PlanStateLayout(commonDirectory: context.common).plan(context.slug)
+      tasks = try PlanStateStore(plan: plan).ledger().tasks.map(\.id)
+    } catch {
+      left.message = "; the ledger can't be read (\(error)), so no task worktree was removed"
+      return left
+    }
+    for task in tasks {
+      for name in [task, "fix-\(task)"] {
+        let names: TaskWorktree
+        do throws(GitWorkspaceError) {
+          names = try TaskWorktree(
+            commonDirectory: context.common, plan: context.slug, task: name, profile: .brownfield)
+        } catch {
+          continue
+        }
+        do throws(GitWorkspaceError) {
+          if try await workspace.branchExists(names.branch) {
+            left.keptBranches.append(names.branch)
+          }
+          guard FileManager.default.fileExists(atPath: names.path) else { continue }
+          let runs = WorktreeRun.keepRuns(from: names.path, into: kept)
+          let events = WorktreeRun.copyEvents(
+            from: names.path, into: main, commonDirectory: context.common)
+          left.keptRuns += runs.kept
+          left.unkeptRuns += runs.unkept
+          left.message += runs.message + events.message
+          try await workspace.removeWorktree(at: names.path, force: true)
+          left.discarded.append(names.path)
+        } catch {
+          left.message += "; \(names.path) wasn't removed: \(error)"
+          left.verdict = .blocked
+        }
+      }
+    }
+    if !left.discarded.isEmpty {
+      left.message +=
+        "; removed \(left.discarded.joined(separator: ", ")), keeping branches "
+        + left.keptBranches.joined(separator: ", ")
+    }
+    return left
   }
 
   /// A brownfield plan the caller holds the lock for, and where its checkout goes.
@@ -214,9 +282,11 @@ struct RunCheckoutRemoveCommand: AsyncParsableCommand {
     discussion:
       "Copies each gate run under the checkout's runs/ into the user's checkout, and any events "
       + "the checkout kept itself into its events/imported/<storeID>/, then removes the "
-      + "checkout. The plan branch stays. Exits 0 when removed; 1 when this session doesn't hold "
-      + "the plan's lock or there is no checkout; 2 for a missing --session, a clone that isn't "
-      + "brownfield, or a failed git step, such as a checkout with uncommitted changes.")
+      + "checkout, then every task and fix worktree the plan's tasks left, merged or not, the "
+      + "same way. The plan branch and every task and fix branch stay. Exits 0 when removed; 1 "
+      + "when this session doesn't hold the plan's lock or there is no checkout; 2 for a missing "
+      + "--session, a clone that isn't brownfield, or a failed git step, such as a checkout with "
+      + "uncommitted changes.")
 
   @Argument(help: "The plan's slug.")
   var plan: String

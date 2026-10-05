@@ -241,7 +241,7 @@ enum BuildCheckReturnRun {
             worktree: worktree, git: git, warnings: &warnings)
         }
       }
-      outside = WriteSet.outside(changed, writeSet: task.writeSet)
+      outside = WriteSet.outsideChanges(changed, writeSet: task.writeSet)
       if !outside.isEmpty {
         warnings.append(
           "the task branch changed \(outside.count) file(s) outside its write set: "

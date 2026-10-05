@@ -177,4 +177,50 @@ struct RunCheckoutCommandTests {
     #expect(report.message.contains("untracked"), "git's own reason: \(report.message)")
     #expect(FileManager.default.fileExists(atPath: scenario.checkout + "/unsaved.py"))
   }
+
+  @Test(
+    "remove also removes every task and fix worktree the run left for the plan, merged or not, and keeps their branches — catches a fix worktree whose fixer never started left beside the clone"
+  )
+  func removeTakesTheRunsWorktreesAndKeepsBranches() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    #expect(await scenario.create().status == .created)
+    let taskTip = try await scenario.commitTask()
+    let fix = try TaskWorktree(
+      commonDirectory: scenario.common, plan: PlanBranchScenario.slug,
+      task: "fix-\(PlanBranchScenario.task)", profile: .brownfield)
+    try await scenario.git("worktree", "add", "-q", "-b", fix.branch, fix.path, scenario.planBranch)
+    try Data("HALF = 1\n".utf8).write(to: URL(filePath: fix.path + "/half.py"))
+
+    let report = await RunCheckoutRun.remove(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
+      runner: scenario.runner)
+
+    #expect(report.status == .removed, "\(report.message)")
+    #expect(Set(report.discarded ?? []) == [scenario.taskWorktree, fix.path])
+    #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree))
+    #expect(!FileManager.default.fileExists(atPath: fix.path))
+    let taskBranch = "\(PlanBranchScenario.slug)/\(PlanBranchScenario.task)"
+    #expect(try await scenario.git("rev-parse", "refs/heads/\(taskBranch)") == taskTip)
+    #expect(try await scenario.git("rev-parse", "refs/heads/\(fix.branch)") == scenario.contract)
+    #expect(Set(report.keptBranches ?? []) == [taskBranch, fix.branch])
+    #expect(try await scenario.git("worktree", "list", "--porcelain").contains(fix.path) == false)
+  }
+
+  @Test(
+    "remove of a dirty plan checkout leaves the task worktrees too — catches task worktrees discarded by a removal that then stopped"
+  )
+  func dirtyCheckoutKeepsTheTaskWorktrees() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    #expect(await scenario.create().status == .created)
+    try Data("UNSAVED = 1\n".utf8).write(to: URL(filePath: scenario.checkout + "/unsaved.py"))
+
+    let report = await RunCheckoutRun.remove(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
+      runner: scenario.runner)
+
+    #expect(report.status == .blocked, "\(report.message)")
+    #expect(FileManager.default.fileExists(atPath: scenario.taskWorktree))
+  }
 }

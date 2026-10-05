@@ -26,6 +26,7 @@ public struct RuleIDSourceScan: Sendable, Equatable {
   public static let notRuleIDs: [String: String] = [
     "api.typesafe.ai": "the host a judge backend sends to, which `[judge] send_to` names",
     "commit.gpgsign": "a git config key",
+    "contents.xcworkspacedata": "a file Xcode keeps in every project's workspace",
     "sourcecode.asm": "an Xcode `lastKnownFileType` a file reference carries",
     "sourcecode.c.c": "an Xcode `lastKnownFileType` a file reference carries",
     "sourcecode.c.objc": "an Xcode `lastKnownFileType` a file reference carries",

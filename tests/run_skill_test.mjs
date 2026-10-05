@@ -286,6 +286,27 @@ function capturedBackgroundCalls() {
   return rendered
 }
 
+/** Each paragraph of `files` that launches an agent with the Agent tool without saying it runs in
+ * the background with `run_in_background: true`, as `file:line: …`. A foreground worker or fixer
+ * holds every merge and start until it returns. */
+export function agentLaunchProblems(files) {
+  const problems = []
+  for (const [file, text] of Object.entries(files)) {
+    const lines = text.split('\n')
+    let start = 0
+    for (let i = 0; i <= lines.length; i++) {
+      if (i < lines.length && lines[i].trim() !== '') continue
+      const paragraph = lines.slice(start, i).join(' ')
+      if (/\blaunch/i.test(paragraph) && /\bAgent tool\b/.test(paragraph)) {
+        if (!/run_in_background: true/.test(paragraph)) problems.push(`${file}:${start + 1}: an Agent launch with no run_in_background: true`)
+        if (/Agent tool,? in the foreground/.test(paragraph)) problems.push(`${file}:${start + 1}: an Agent launch in the foreground`)
+      }
+      start = i + 1
+    }
+  }
+  return problems
+}
+
 /** Every `swiftgate` call in `files` as `path flags…` strings, for presence checks. */
 function calls(files) {
   return Object.values(files).flatMap(text => extractInvocations(text).map(inv => inv.words.join(' ')))
@@ -486,6 +507,15 @@ const tests = {
     assert.deepEqual(flagged('a shared /tmp path'), tmp)
     assert.deepEqual(backgroundWorkProblems({ 'x.md': '- Run `"$SG" check --tier merge --json &` and go on.\n- Then `"$SG" qa run --plan <slug> --json`.' }),
       ['x.md:1: a gate or qa run in the background'])
+  },
+
+  'every worker, fixer and explorer the run skill and the build loop launch is a background Agent call with run_in_background: true — catches a foreground fixer holding every merge and start for 481 s'() {
+    assert.deepEqual(agentLaunchProblems(runSkillFiles()), [])
+    assert.deepEqual(agentLaunchProblems(buildSkillFiles()), [])
+    const loop = read('skills/build/references/event-loop.md')
+    assert.match(section(loop, 'Conflict or red main') ?? '', /Launch `swift-harness:build-fixer` with the Agent tool in the background, passing\s+`run_in_background: true`/)
+    assert.deepEqual(agentLaunchProblems({ 'x.md': 'Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and give it:\n\nThen go on.' }),
+      ['x.md:1: an Agent launch with no run_in_background: true', 'x.md:1: an Agent launch in the foreground'])
   },
 
   'the run skill and the build loop run qa run --at-base after qa adopt, never skip it, and merge no task its rows wait for before it — catches checks adopted after their tasks merged with no red run'() {

@@ -54,11 +54,14 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   /// Whether the run started on a tree with uncommitted changes outside the harness's own state.
   /// Absent in records written before it existed, or when git couldn't say.
   public let dirty: Bool?
+  /// ``GateReuse/key(_:)`` of the inputs a brownfield tier ran on, so a later run on the same
+  /// inputs can answer with this one. Absent for every other run, and when an input was unknown.
+  public let reuseKey: String?
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
-    dirty: Bool? = nil
+    dirty: Bool? = nil, reuseKey: String? = nil
   ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
@@ -73,6 +76,7 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.headCommit = headCommit
     self.base = base
     self.dirty = dirty
+    self.reuseKey = reuseKey
   }
 }
 

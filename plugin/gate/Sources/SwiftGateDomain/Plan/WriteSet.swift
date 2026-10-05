@@ -30,6 +30,63 @@ public enum WriteSet {
     paths.filter { path in !writeSet.contains { entriesOverlap($0, path) } }
   }
 
+  /// A file a tool writes for a Swift package or an Xcode project rather than a person: the
+  /// `Package.resolved` lockfile beside a package manifest or in a project's or workspace's
+  /// `xcshareddata/swiftpm/`, a shared scheme, or a project's own workspace files.
+  public struct GeneratedFile: Sendable, Equatable {
+    public let path: String
+    /// The `/`-terminated package, `.xcodeproj` or `.xcworkspace` directory it belongs to, or
+    /// `""` for the lockfile of a package at the repository root.
+    public let owner: String
+
+    public init(path: String, owner: String) {
+      self.path = path
+      self.owner = owner
+    }
+  }
+
+  /// `path` as a ``GeneratedFile``, or `nil` when a person writes it.
+  public static func generated(_ path: String) -> GeneratedFile? {
+    let parts = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+    guard let name = parts.last else { return nil }
+    // The outermost: a project's own `project.xcworkspace` belongs to the project.
+    if let index = parts.firstIndex(where: {
+      $0.hasSuffix(".xcodeproj") || $0.hasSuffix(".xcworkspace")
+    }) {
+      let owner = parts[...index].joined(separator: "/") + "/"
+      let inside = parts[(index + 1)...].joined(separator: "/")
+      let workspace = parts[index].hasSuffix(".xcodeproj") ? "project.xcworkspace/" : ""
+      let known = [
+        workspace + "xcshareddata/swiftpm/Package.resolved",
+        workspace + "contents.xcworkspacedata",
+        workspace + "xcshareddata/IDEWorkspaceChecks.plist",
+      ]
+      let scheme =
+        inside.hasPrefix("xcshareddata/xcschemes/") && name.hasSuffix(".xcscheme")
+        && parts.count == index + 4
+      return known.contains(inside) || scheme ? GeneratedFile(path: path, owner: owner) : nil
+    }
+    guard name == "Package.resolved" else { return nil }
+    let owner = parts.dropLast().joined(separator: "/")
+    return GeneratedFile(path: path, owner: owner.isEmpty ? "" : owner + "/")
+  }
+
+  /// Whether `writeSet` writes in the package or project `file` belongs to. A lockfile at the
+  /// repository root needs the root manifest itself, since every entry is under the root.
+  public static func writesIn(_ file: GeneratedFile, writeSet: [String]) -> Bool {
+    guard !file.owner.isEmpty else { return outside(["Package.swift"], writeSet: writeSet).isEmpty }
+    return writeSet.contains { entriesOverlap($0, file.owner) }
+  }
+
+  /// ``outside(_:writeSet:)`` without the generated files that belong to a package or project
+  /// the write set writes in: running its tests or opening it in Xcode rewrites them.
+  public static func outsideChanges(_ paths: [String], writeSet: [String]) -> [String] {
+    outside(paths, writeSet: writeSet).filter { path in
+      guard let file = generated(path) else { return true }
+      return !writesIn(file, writeSet: writeSet)
+    }
+  }
+
   /// Whether any entry of `lhs` collides with any entry of `rhs` — the check `plan-lint` runs
   /// pairwise across a wave's tasks.
   public static func overlaps(_ lhs: [String], _ rhs: [String]) -> Bool {

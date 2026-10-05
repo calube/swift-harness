@@ -39,13 +39,19 @@ enum GateRun {
   ///   - checkTier: the `check` tier this run gates at, as its events' source.
   ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
   ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
+  ///   - reuseKey: the ``GateReuse`` key of a brownfield tier's inputs; `nil` always runs.
   static func execute(
     root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
     proofBases: [String]? = nil, base: String? = nil, git: (any Git)? = nil,
     checkTier: CheckTier? = nil, events: (any HarnessEventWriting)? = nil,
-    workingTree: (any WorkingTreeReading)? = nil,
+    workingTree: (any WorkingTreeReading)? = nil, reuseKey: String? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
+    if let reuseKey, let checkTier,
+      try reuse(root: root, format: format, command: command, key: reuseKey, tier: checkTier)
+    {
+      return
+    }
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)
     let clock = ContinuousClock()
     let startedAt = Date()
@@ -84,13 +90,46 @@ enum GateRun {
         headCommit: headCommit, base: resolvedBase, treeHash: telemetry.tree?.treeHash,
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
         testResults: context.tests.cases, baselineCount: parts.baselineCount,
-        proofs: context.proofs.results, flows: context.flows.flows)
+        proofs: context.proofs.results, flows: context.flows.flows,
+        reuseKey: telemetry.tree?.dirty == false ? reuseKey : nil)
     }
     Console.write(
       try ReportRenderer.render(
         report, format: format, state: StateRootResolver.resolve(worktree: root)))
     let status = report.verdict.exitCode
     if status != 0 { throw ExitCode(status) }
+  }
+
+  /// Prints the newest GREEN run recorded with `key`, with a `gate.reused` note naming it, and
+  /// records nothing: the inputs it ran on are the same, so its verdict stands. `false` when no
+  /// such run, or its report, can be read.
+  static func reuse(
+    root: URL, format: OutputFormat, command: String, key: String, tier: CheckTier
+  ) throws -> Bool {
+    let store = RunStore(worktreeRoot: root)
+    guard let records = try? store.readHistory().records,
+      let prior = GateReuse.reusable(records, command: command, key: key),
+      let data = try? Data(
+        contentsOf: store.state.url(RunLayout.runDirectory(for: prior.runID))
+          .appending(path: RunLayout.reportFileName)),
+      let recorded = try? RecordedRunReport.decode(data)
+    else { return false }
+    let note = try Finding(
+      ruleID: GateReuse.ruleID, severity: .nit, file: ".", line: nil,
+      message:
+        "check --tier \(tier.rawValue) reused GREEN run \(prior.runID): the same tree, merge "
+        + "base, swiftgate build and clone config, baseline and warm-up times; nothing re-ran",
+      failureScenario: nil)
+    let report = try RunReport(
+      runID: recorded.report.runID, durationMilliseconds: recorded.report.durationMilliseconds,
+      tiers: recorded.report.tiers, findings: recorded.report.findings + [note],
+      allowances: recorded.report.allowances)
+    Console.write(
+      try ReportRenderer.render(
+        report, format: format, state: StateRootResolver.resolve(worktree: root)))
+    let status = report.verdict.exitCode
+    if status != 0 { throw ExitCode(status) }
+    return true
   }
 
   /// Where a run's events go, and the tree it starts on. `events` stands in for the project's

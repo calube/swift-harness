@@ -3251,3 +3251,73 @@ run's own `events/qa.jsonl` repeats them. The `sed` replaces the trial folder in
 worktree paths. The copy leaves out the acceptance rows' saved output, which holds machine paths,
 and the flow rows' device evidence. The trial kept no `run.json`.
 `grep -rniE '/Users|/private|/var/folders|caleb' RunView/aidoku-validation-3` matched nothing.
+
+## Brownfield trial: a foreground fixer, a fixer's generated files and a duplicate merge gate
+
+A brownfield one-shot trial on an iOS starter app (2026-10-05) launched its first merge fixer with
+`run_in_background: false`, failed 2 fixers' `check-return --fix` on files outside the task's write
+set, and ran the merge gate twice on 1 commit. `S` is the trial folder, `C` its clone. From the
+repository root:
+
+```sh
+S=<trial folder> C=<clone> F=plugin/gate/Tests/Fixtures \
+  RENAMES='<module-1>=RecordClient <module-2>=KeypadInput <task>=keypad-rules' python3 - <<'PY'
+import json, os, re, subprocess
+S, C, F = (os.environ[k] for k in "SCF")
+pairs = [pair.split("=") for pair in os.environ["RENAMES"].split()]
+def rename(s):
+    for old, new in pairs: s = s.replace(old, new)
+    return s
+calls, returns = [], {}
+for line in open(f"{S}/transcripts/orchestrator.jsonl"):
+    content = json.loads(line).get("message", {}).get("content")
+    for c in content if isinstance(content, list) else []:
+        if c.get("type") != "tool_use": continue
+        if c["name"] == "Agent":
+            calls.append({"tool_name": "Agent", "subagent_type": c["input"]["subagent_type"],
+                          "run_in_background": c["input"].get("run_in_background")})
+        if c["name"] == "Bash":
+            command = c["input"]["command"]
+            m = re.search(r"cat > \.harness/build/\$R/fix-([a-z-]+)\.json <<'EOF'\n(.*?)\nEOF", command, re.S)
+            if m: returns.setdefault(m.group(1), json.loads(m.group(2)))
+            if "fix-root-flow.json','w'" in command:
+                m = re.search(r"^d=(\{.*?\})\nopen\(", command, re.S | re.M)
+                returns.setdefault("root-flow", eval(m.group(1).replace("\\$", "$"), {"None": None}))
+open(f"{F}/Hooks/trial-orchestrator-agent-launches.json", "w").write(json.dumps(calls, indent=2) + "\n")
+ledger = {t["id"]: t["writeSet"] for t in json.load(open(f"{S}/ledger.json"))["tasks"]}
+cases = []
+for task, ret in sorted(returns.items()):
+    changed = sorted(set(subprocess.run(["git", "-C", C, "show", "--name-only", "--format="] + ret["commits"],
+        capture_output=True, text=True, check=True).stdout.split()))
+    cases.append({"task": rename(task), "writeSet": [rename(p) for p in ledger[task]],
+                  "changed": [rename(p) for p in changed],
+                  "notesName": [rename(p) for p in changed if p in ret["notes"]]})
+open(f"{F}/BrownfieldTrial/trial-fix-returns.json", "w").write(json.dumps(cases, indent=2) + "\n")
+PY
+jq -c 'select(.kind=="gate.run" and (.runID=="20261005T015747Z-355056fd" or .runID=="20261005T015850Z-f3b10af5"))' \
+  $S/events/gate.jsonl > $F/BrownfieldTrial/trial-duplicate-merge-gates.jsonl
+```
+
+- `Hooks/trial-orchestrator-agent-launches.json`: the orchestrator's 2 Agent tool calls, each
+  reduced to the fields the launch guard reads.
+- `BrownfieldTrial/trial-fix-returns.json`: per fixer, the task's write set from the ledger, the
+  files its commits changed (`git show --name-only`) and which of them the return's notes named.
+  `RENAMES` swaps the app's 2 module names and 1 task id for the neutral ones it names; nothing
+  else changed.
+- `BrownfieldTrial/trial-duplicate-merge-gates.jsonl`: the 2 `gate.run` events, byte for byte.
+
+`Hooks/pre-tool-use-agent-build-fixer.json` is a live PreToolUse payload for an Agent call
+(Claude Code 2.1.288, 2026-10-05), recorded in a scratch git repository with the plugin's matcher
+naming `Agent`, scrubbed as the other hook payloads are:
+
+```sh
+SWIFTGATE_HOOK_RECORD_DIR=<dir> claude -p "Use the Agent tool exactly once, with subagent_type \
+  swift-harness:build-fixer, run_in_background false, description 'capture', and this prompt: \
+  'Reply with the single word ok. Use no tool.' Then reply done." --plugin-dir <plugin> \
+  --permission-mode acceptEdits --setting-sources project,local \
+  --output-format stream-json --verbose --include-hook-events
+```
+
+It shows the Agent tool's `tool_input` carries `subagent_type` and `run_in_background`.
+`grep -rniE '/Users|/private|/var/folders|caleb' Hooks/trial-* Hooks/pre-tool-use-agent-* BrownfieldTrial/trial-*`
+matched nothing.
