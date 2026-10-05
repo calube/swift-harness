@@ -80,9 +80,9 @@ public enum XcodeDerivedData {
     }
   }
 
-  /// `request` as `prove` runs it in a scratch tree: an `xcodebuild` builds in the worktree's own
-  /// prove DerivedData for the area, seeded from the area's seed, never in Xcode's global one
-  /// keyed by the scratch path. The worktree's own build stays untouched.
+  /// `request` as `prove` and the baseline rerun run it in a scratch tree: an `xcodebuild` builds
+  /// in the worktree's own prove DerivedData for the area, seeded from the area's seed, never in
+  /// Xcode's global one keyed by the scratch path. The worktree's own build stays untouched.
   public static func proveRequest(_ request: AreaCommandRequest, layout: BrownfieldStateLayout)
     -> AreaCommandRequest
   {

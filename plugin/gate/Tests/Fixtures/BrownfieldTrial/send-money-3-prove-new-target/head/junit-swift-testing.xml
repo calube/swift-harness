@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="4" failures="0" skipped="0" time="0.000459458">
+    <testcase classname="AccountClientTests.AccountClientTests" name="failingSendKeepsBalance()" time="0.000196583" />
+    <testcase classname="AccountClientTests.AccountClientTests" name="seed()" time="0.000122334" />
+    <testcase classname="AccountClientTests.AccountClientTests" name="sendDebits()" time="0.000115791" />
+    <testcase classname="AccountClientTests.AccountClientTests" name="overdraftRefused()" time="0.000193416" />
+  </testsuite>
+</testsuites>
