@@ -1,0 +1,9 @@
+  "now" : "2026-10-05T08:13:32Z",
+  "phase" : "no-new-starts",
+{
+  "command" : "build cutoff",
+  "message" : "the cutoff comes in 215 s, at 2026-10-05T08:17:07Z; running tasks keep going until then",
+  "plan" : "spec",
+  "verdict" : "RED"
+}
+exit=1

@@ -17,11 +17,19 @@ enum BuildHaltRun {
 
   /// - Parameters:
   ///   - enabled: `.swiftgate.toml`'s `[telemetry] enabled`; `false` records nothing.
+  ///   - cutoffAt: the build run's time-box cutoff, `nil` for a build with no box; a `budget`
+  ///     halt before it exits 1 and records nothing.
   static func halt(
     log: BuildHaltLog, enabled: Bool, buildRun: String, task: String?, reason: BuildHaltReason,
-    json: Bool
+    json: Bool, cutoffAt: Date? = nil
   ) -> Output {
     let command = "build halt"
+    if RunID.isValid(buildRun),
+      let why = BuildHalts.refusal(reason: reason, now: log.time(), cutoffAt: cutoffAt)
+    {
+      return Output(
+        stdout: "", stderr: "swiftgate \(command): \(why); nothing recorded\n", status: 1)
+    }
     if let refusal = refusal(command, buildRun: buildRun, task: task, enabled: enabled) {
       return refusal
     }
@@ -154,6 +162,8 @@ struct BuildHaltCommand: AsyncParsableCommand {
       "Writes build.halt to the main checkout's .harness/events/build.jsonl, or in a brownfield "
       + "clone to <git-common-dir>/swift-harness/events/build.jsonl: the build run, the "
       + "task and the reason, never the question's text. A halt no resume answers stays open. "
+      + "In a run with a time box, a budget halt before its cutoff exits 1 and records nothing: "
+      + "`build cutoff` records the cutoff's halts. "
       + "Exit 0 recorded, or nothing to record with [telemetry] enabled = false; 2 for a --run "
       + "or --task that isn't an id, or a store that can't be read or written; 64 for an "
       + "unknown --reason.")
@@ -173,10 +183,15 @@ struct BuildHaltCommand: AsyncParsableCommand {
     switch await BuildHaltRun.store(command: "build halt") {
     case .refused(let refused): try BuildHaltRun.finish(refused)
     case .found(let root, let enabled):
+      let common = try? await LiveGit(
+        runner: LiveProcessRunner(), repositoryRoot: FileManager.default.currentDirectoryPath
+      ).commonDirectory()
+      let record = common.flatMap { BuildRunStore.record(runID: buildRun, commonDirectory: $0) }
       try BuildHaltRun.finish(
         BuildHaltRun.halt(
           log: BuildHaltLog(root: root), enabled: enabled, buildRun: buildRun,
-          task: task, reason: reason, json: output.json))
+          task: task, reason: reason, json: output.json,
+          cutoffAt: record?.timeBox?.deadlines.cutoffAt))
     }
   }
 }

@@ -177,7 +177,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case notHeld = "not-held"
     /// The branch conflicts with `main`.
     case conflicted
-    /// The run's newest merge isn't this task's, is already undone, or there is none.
+    /// The run's newest merge isn't this task's, is already undone, or there is none; or the
+    /// cutoff said to finish the task and no RED merge gate came after its merge.
     case undoRefused = "undo-refused"
     /// The branch to merge doesn't exist.
     case branchMissing = "branch-missing"
@@ -427,6 +428,12 @@ public struct BuildMerge: Sendable {
         throw stop(
           command, context, .refused, "build run \(context.run.runID) has no merge to undo",
           reason: .undoRefused)
+      }
+      let cutoff = FileManager.default.contents(
+        atPath: context.run.layout.directory + "/" + CutoffRecord.fileName
+      ).flatMap { try? CutoffRecord.decode($0) }
+      if let why = CutoffRule.undoRefusal(task: task, cutoff: cutoff, log: log) {
+        throw stop(command, context, .refused, why, reason: .undoRefused)
       }
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
       let removed = try await removeFixWorktree(command, context)
