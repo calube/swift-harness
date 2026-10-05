@@ -168,8 +168,12 @@ public enum LivePlanError: Error, Sendable, Equatable {
       "requirement `\(id)` is in `## Requirements` but no task's `- Covers:` names it"
     case .invalidValidation(let line, let reason):
       "`## Validation` line \(line): \(reason)"
-    case .doneTaskCoverage(let task, _, _):
-      "task `\(task)` is done"
+    case .doneTaskCoverage(let task, let added, let removed):
+      "task `\(task)` is done, so its `- Covers:` stays as it merged"
+        + (added.isEmpty ? "" : "; it gains " + added.map { "`\($0)`" }.joined(separator: ", "))
+        + (removed.isEmpty
+          ? "" : "; it drops " + removed.map { "`\($0)`" }.joined(separator: ", "))
+        + ": give a requirement to a task that isn't done, or put the done task's back"
     }
   }
 }
@@ -595,12 +599,22 @@ private enum ValidationSection {
 
 extension LivePlan {
   /// The executor's ledger. A task id `existing` already holds keeps its status, branch, worktree
-  /// and line count, so a re-import after an edit doesn't reset work in flight.
+  /// and line count, so a re-import after an edit doesn't reset work in flight. A task it holds
+  /// as done keeps its `- Covers:` too: its work merged against those requirements, so moving one
+  /// onto or off it misstates what covers it.
   public func ledger(
     maxParallel: Int, existing: Ledger?, worktree: (String) -> String
   ) throws(LivePlanError) -> Ledger {
     let kept = Dictionary(
       (existing?.tasks ?? []).map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    for task in tasks {
+      guard let old = kept[task.id], old.status == .done else { continue }
+      let added = task.covers.filter { !old.covers.contains($0) }
+      let removed = old.covers.filter { !task.covers.contains($0) }
+      guard added.isEmpty, removed.isEmpty else {
+        throw .doneTaskCoverage(task: task.id, added: added, removed: removed)
+      }
+    }
     let ledgerTasks = tasks.map { task in
       let old = kept[task.id]
       return LedgerTask(

@@ -35,10 +35,12 @@ public enum RunViewBuilder {
         RunView.Damage(source: $0.source, reason: RunView.notWrittenYet)
       }
     }
-    let usage = events.compactMap { event -> AgentUsageEvent? in
-      guard case .agentUsage(let usage) = event.payload else { return nil }
-      return usage
-    }
+    // A message ingested again under its role supersedes its untagged copy, as in `events summary`.
+    let usage = UsageIngest.resolved(
+      events.compactMap { event -> AgentUsageEvent? in
+        guard case .agentUsage(let usage) = event.payload else { return nil }
+        return usage
+      })
     let viewTasks = tasks.map { task in
       self.task(
         task, events: ledgerEvents, returns: input.join?.returns ?? [:], usage: usage,
@@ -54,6 +56,7 @@ public enum RunViewBuilder {
       spec: RunViewRequirements.rows(input.requirements, tasks: tasks),
       tasks: viewTasks,
       roles: roles(usage),
+      cost: cost(usage, judgeCalls: judgeCalls(events, around: usage)),
       spans: ordered(
         (runSpan.map { [$0] } ?? []) + taskSpans + gates.spans
           + RunViewSpans.brownfieldSpans(
@@ -144,8 +147,40 @@ public enum RunViewBuilder {
   private static func roles(_ usage: [AgentUsageEvent]) -> [RunView.Role] {
     AgentRole.allCases.compactMap { role in
       let own = usage.filter { $0.role == role }
-      return own.isEmpty ? nil : RunView.Role(role: role, tokens: tokens(own))
+      guard !own.isEmpty else { return nil }
+      let priced = own.compactMap(\.costUSD)
+      return RunView.Role(
+        role: role, tokens: tokens(own), costUSD: priced.isEmpty ? nil : priced.reduce(0, +),
+        unpriced: own.count - priced.count)
     }
+  }
+
+  /// The judge calls made between the run's first and last message: a judge call names no build
+  /// run, so it counts toward the one whose messages surround it, as `events summary` counts it.
+  private static func judgeCalls(_ events: [HarnessEvent], around usage: [AgentUsageEvent])
+    -> [JudgeCallEvent]
+  {
+    let times = usage.map(\.messageTime)
+    guard let first = times.min(), let last = times.max() else { return [] }
+    return events.compactMap { event in
+      guard case .judgeCall(let call) = event.payload, first <= event.time, event.time <= last
+      else { return nil }
+      return call
+    }
+  }
+
+  private static func cost(_ usage: [AgentUsageEvent], judgeCalls: [JudgeCallEvent])
+    -> RunView.Cost?
+  {
+    let priced = usage.compactMap(\.costUSD)
+    let judged = judgeCalls.compactMap(\.costUSD)
+    guard !priced.isEmpty || !judged.isEmpty else { return nil }
+    let agents = priced.reduce(0, +)
+    let judge = judged.reduce(0, +)
+    return RunView.Cost(
+      usd: agents + judge, agentsUSD: agents, judgeUSD: judge, priced: priced.count,
+      unpriced: usage.count - priced.count, judgeCalls: judgeCalls.count,
+      judgeCallsWithoutCost: judgeCalls.count - judged.count)
   }
 
   private static func timeBox(_ box: RunTimeBox) -> RunView.TimeBox {

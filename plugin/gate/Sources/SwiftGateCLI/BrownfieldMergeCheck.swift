@@ -396,6 +396,7 @@ enum BrownfieldMergeCheck {
       if let key, let pass = dependencies.reuse?.store.pass(key) {
         context.steps.record(
           gateStep(step), tier: nil, milliseconds: 0, verdict: .green, area: area.name)
+        if let tests = pass.tests { context.areaTests.record(tests.reused(from: pass.runID)) }
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
       }
@@ -405,10 +406,13 @@ enum BrownfieldMergeCheck {
           request, kind: area.kind, layout: dependencies.layout
         ).map { URL(filePath: $0, directoryHint: .isDirectory) })
       let (outcome, milliseconds) = await GateRun.timed { await runner.run(request) }
+      var tests: AreaTestCounts?
       if [.test, .testFiles, .e2e].contains(step),
         let counts = await dependencies.testCounts.counts(of: request)
       {
-        context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
+        let counted = AreaTestCounts(area: area.name, step: step, counts: counts)
+        context.areaTests.record(counted)
+        tests = counted
       }
       var lintFindings: [Finding] = []
       var lintUnread = false
@@ -426,7 +430,8 @@ enum BrownfieldMergeCheck {
         verdict: outcome == .passed ? .green : .red,
         derivedData: step == .lint ? .none : derivedData, area: area.name)
       if outcome == .passed, let key, let reuse = dependencies.reuse {
-        reuse.store.record(AreaStepPass(runID: reuse.runID, tier: tier.rawValue), key: key)
+        reuse.store.record(
+          AreaStepPass(runID: reuse.runID, tier: tier.rawValue, tests: tests), key: key)
       }
       result.runs.append(
         StepRun(

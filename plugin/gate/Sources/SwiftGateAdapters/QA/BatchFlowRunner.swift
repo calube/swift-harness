@@ -409,7 +409,12 @@ public actor QAFlowRunner {
       }
     }
     evidence += finalFiles
-    evidence.append("\(row.relativeDirectory)/sim/\(SimStep.logFileName)")
+    // A batch that stopped before its first capture snapped no step, so it has no step log.
+    if FileManager.default.fileExists(
+      atPath: simDirectory.appending(path: SimStep.logFileName).path)
+    {
+      evidence.append("\(row.relativeDirectory)/sim/\(SimStep.logFileName)")
+    }
 
     if batch.stop == nil || row.atBase {
       await state(Self.environment(started, simDirectory: simDirectory))

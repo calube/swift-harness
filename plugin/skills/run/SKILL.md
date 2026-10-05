@@ -191,7 +191,7 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
   `…Reducer` or `…ViewModel`. The contract's stubs don't count. A requirement no flow can check
   opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
-  `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. A reason
+  `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. An existing-tests requirement opens its reason-only row with `gate:` and the tier, `final` or `merge`. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
   least 1 `flow` row. The import fails naming each requirement and area that breaks this.
 - A screen fed by a dependency client, a `…Client` module such as `APIClient`, runs its flows

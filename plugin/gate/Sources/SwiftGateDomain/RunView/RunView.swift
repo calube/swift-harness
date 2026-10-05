@@ -467,15 +467,16 @@ public struct RunView: Sendable, Equatable, Encodable {
 
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
-    spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [], halts: [Halt] = [],
-    validation: RunViewValidation? = nil, damage: [Damage] = [], unwritten: [Damage] = [],
-    evidenceBase: String? = nil
+    cost: Cost? = nil, spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [],
+    halts: [Halt] = [], validation: RunViewValidation? = nil, damage: [Damage] = [],
+    unwritten: [Damage] = [], evidenceBase: String? = nil
   ) {
     self.cursor = cursor
     self.run = run
     self.spec = spec
     self.tasks = tasks
     self.roles = roles
+    self.cost = cost
     self.spans = spans
     self.gates = gates
     self.proofs = proofs

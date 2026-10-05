@@ -117,9 +117,15 @@
   const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : Math.round(n / 1e3) + "k");
   const fmtTokens = (t) => (t == null ? "pending" : fmtTok(sum(t)));
   // US dollars to 2 places; `null` when no cost is known, which a page shows as no figure.
-  const fmtUSD = (usd) => null;
+  const fmtUSD = (usd) => (usd == null ? null : usd > 0 && usd < 0.005 ? "<$0.01" : "$" + usd.toFixed(2));
   // The header's cost stat: the run's dollars and what they leave out.
-  const costStat = (cost) => null;
+  const costStat = (cost) => {
+    if (cost == null) return null;
+    const notes = [];
+    if (cost.judgeCalls) notes.push(`${cost.judgeCalls} judge ${cost.judgeCalls === 1 ? "call" : "calls"} included`);
+    if (cost.unpriced) notes.push(`${cost.unpriced} ${cost.unpriced === 1 ? "message" : "messages"} unpriced`);
+    return [fmtUSD(cost.usd), ["cost"].concat(notes).join(", ")];
+  };
   const fmtMin = (m) => {
     const s = Math.round(m * 60);
     return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s";
