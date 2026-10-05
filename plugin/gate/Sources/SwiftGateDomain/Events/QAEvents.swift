@@ -14,11 +14,15 @@ public struct QACheckEvent: Sendable, Equatable, Codable {
   public let waitingOn: [String]
   /// The prepared at-base run whose result this row took instead of running; absent otherwise.
   public let reusedFrom: String?
+  /// `true` for a repair worker's at-base proof of a candidate flow (`--prepared-by` with
+  /// `--requirement`); absent otherwise. A row's history leaves it out until a `qa.repair` adopts
+  /// that run.
+  public let repairProof: Bool?
 
   public init(
     plan: String, row: Int, requirement: String, layer: ValidationLayer, result: QAResult,
     atBase: Bool, exitStatus: Int?, milliseconds: Int, evidence: [String], waitingOn: [String],
-    reusedFrom: String? = nil
+    reusedFrom: String? = nil, repairProof: Bool? = nil
   ) {
     self.plan = plan
     self.row = row
@@ -31,19 +35,20 @@ public struct QACheckEvent: Sendable, Equatable, Codable {
     self.evidence = evidence
     self.waitingOn = waitingOn
     self.reusedFrom = reusedFrom
+    self.repairProof = repairProof
   }
 
-  public init(plan: String, row: QARow, atBase: Bool) {
+  public init(plan: String, row: QARow, atBase: Bool, repairProof: Bool = false) {
     self.init(
       plan: plan, row: row.row, requirement: row.requirement, layer: row.layer,
       result: row.result, atBase: atBase, exitStatus: row.exitStatus,
       milliseconds: row.milliseconds, evidence: row.evidence, waitingOn: row.waitingOn,
-      reusedFrom: row.reusedFrom)
+      reusedFrom: row.reusedFrom, repairProof: repairProof ? true : nil)
   }
 
   private enum CodingKeys: String, CodingKey {
     case plan, row, requirement, layer, result, atBase, exitStatus, evidence, waitingOn,
-      reusedFrom
+      reusedFrom, repairProof
     case milliseconds = "ms"
   }
 }

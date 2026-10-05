@@ -51,6 +51,11 @@ exists and fails for the reason the feature is missing.
   Target elements by `id="…"` selectors whose ids are raw values of the app's `AccessibilityID`
   module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. Every flow
   checks at least 1 thing with a `wait` or `is` step; a `get` reads a value and never counts.
+  A `wait` puts its target under the key its `kind` reads, which the tool runs whatever `kind`
+  says: `{"kind": "absent", "absent": "id=\"<id>\""}` waits for an element to go, and the same
+  target under `selector` waits for it to appear. Each kind's key is in
+  `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-steps.md`; `qa lint` refuses a mismatch as
+  `qa.flow-kind-key`.
   A screen a dependency client feeds never reaches the live service: the flow's first step is
   `{"command": "open", "input": {"app": "<bundle id>", "relaunch": true, "launchArgs":
   ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
@@ -129,15 +134,19 @@ come up, returns `not run` with the reason, never a guessed failure.
 The orchestrator sends 1 flow row back to you when a fixer found it red twice and judged the flow,
 not the app, at fault. Your brief names the fix worktree, the row's requirement and rows, the
 fixer's `flow row:` line, both red run ids and their evidence paths. The worktree's
-`.harness/qa/<plan>/` already holds the requirement's adopted checks.
+`.harness/qa/<plan>/` already holds that requirement's adopted checks and nothing else: 1 folder,
+1 requirement.
 
-- Read the evidence the brief names and `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-gestures.md`.
+- Read the evidence the brief names, `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-gestures.md` and
+  `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-steps.md`.
   Decide whether the flow is at fault: a step the pinned tool can't drive as written, a selector
   for the wrong element, or a step the app can't satisfy as written.
 - Change only the requirement's files in that folder, and add no other file. Keep every `wait` and
   `is` step, in order, with a `timeoutMs` no shorter: change, add or drop only the steps that drive
-  the app. `qa adopt --repair` refuses a repair that weakens what the row checks, or changes
-  nothing.
+  the app. A `wait` whose target sits under another kind's key, which `qa lint` names as
+  `qa.flow-kind-key`, stays a `wait` of the same kind with its target moved to the key the lint
+  message names; an `is` never replaces a `wait`. `qa adopt --repair` refuses a repair that
+  weakens what the row checks, or changes nothing.
 - Lint it, then prove it red at the merge base on a `wait` or `is` step the row already had, or
   the step it failed at there before, in the foreground with the Bash `timeout` at 600000:
 
@@ -145,8 +154,13 @@ fixer's `flow row:` line, both red run ids and their evidence paths. The worktre
   "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --output .harness/tmp/qa-repair.json
   ```
 
-  A red there on a step you added, or a flow file the tool refuses, isn't ready: fix it and run
-  again. Commit nothing; `qa adopt --repair` checks all of this before it takes the files.
+  Run it yourself, every time, before you return: the adopt refuses a repair with no such run
+  after its last edit. A red there on a step you added, or a flow file the tool refuses, isn't
+  ready: fix it and run again. Commit nothing; `qa adopt --repair` checks all of this before it
+  takes the files.
+- A brief that quotes a refused adopt's findings is a second try: make the change each message
+  says would pass, such as the step a `qa.repair-weakens-check` message quotes, then lint and
+  prove it again.
 
 Return 1 line:
 
