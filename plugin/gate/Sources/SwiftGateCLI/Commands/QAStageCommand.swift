@@ -44,7 +44,84 @@ enum QAStageRun {
     runner: any ProcessRunner
   ) async -> QAStageReport {
     var report = QAStageReport(worktree: worktree, plan: plan, requirement: requirement)
-    report.message = "not implemented"
+    func refused(_ message: String) -> QAStageReport {
+      var refusal = report
+      refusal.verdict = .red
+      refusal.message = message + "; nothing was staged"
+      return refusal
+    }
+    let files = FileManager.default
+    let target = CanonicalPath.of(URL(filePath: worktree, relativeTo: root))
+    let checkouts: [String]
+    do {
+      checkouts = try await QACheckouts(runner: runner, repositoryRoot: root.path).paths()
+    } catch {
+      report.message = "listing this repository's checkouts: \(error)"
+      return report
+    }
+    guard checkouts.contains(target) else {
+      return refused(
+        "\(target) is not a checkout of this repository: `git worktree list` names "
+          + checkouts.joined(separator: ", "))
+    }
+    let state: PlanStateLayout.Plan
+    do {
+      state = try PlanStateLayout(commonDirectory: try await git.commonDirectory()).plan(plan)
+    } catch {
+      report.message = "resolving plan `\(plan)`'s state directory: \(error)"
+      return report
+    }
+    let tablePath = state.directory + "/" + ValidationTable.fileName
+    let table: ValidationTable
+    do {
+      guard let data = files.contents(atPath: tablePath) else {
+        report.message = "\(tablePath) is missing"
+        return report
+      }
+      table = try ValidationTableJSON.decode(data)
+    } catch {
+      report.message = "\(tablePath) doesn't read: \(error)"
+      return report
+    }
+    var names: [String] = []
+    for row in table.rows where row.requirement == requirement {
+      guard let name = QAFlowRepair.preparedName(row.check), !names.contains(name) else {
+        continue
+      }
+      names.append(name)
+    }
+    guard !names.isEmpty else {
+      return refused(
+        "no row of \(tablePath) checks `\(requirement)` with a \(QAReport.directory)/ file")
+    }
+    let adopted = URL(filePath: state.directory, directoryHint: .isDirectory)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    let absent = names.filter { !files.fileExists(atPath: adopted.appending(path: $0).path) }
+    guard absent.isEmpty else {
+      return refused(
+        "\(adopted.path) lacks \(absent.joined(separator: ", ")), which `\(requirement)`'s "
+          + "rows check")
+    }
+    let preparedRoot = URL(filePath: target, directoryHint: .isDirectory)
+      .appending(path: QAAdoptRun.preparedDirectory, directoryHint: .isDirectory)
+    let destination = preparedRoot.appending(path: plan, directoryHint: .isDirectory)
+    report.destination = destination.path
+    do {
+      if files.fileExists(atPath: preparedRoot.path) { try files.removeItem(at: preparedRoot) }
+      try files.createDirectory(at: destination, withIntermediateDirectories: true)
+      for name in names {
+        try files.copyItem(at: adopted.appending(path: name), to: destination.appending(path: name))
+      }
+    } catch {
+      report.message =
+        "staging `\(requirement)`'s checks into \(destination.path): \(error); remove "
+        + "\(preparedRoot.path) before a repair worker starts there"
+      return report
+    }
+    report.verdict = .green
+    report.files = names
+    report.message =
+      "staged \(names.count) check file(s) of `\(requirement)` in \(destination.path)"
     return report
   }
 

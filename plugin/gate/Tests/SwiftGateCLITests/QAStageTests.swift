@@ -29,8 +29,10 @@ struct QAStageTests {
       if FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory),
         !isDirectory.boolValue
       {
-        names.append(String(directory.appending(path: name).resolvingSymlinksInPath().path
-          .dropFirst(base.count)))
+        names.append(
+          String(
+            directory.appending(path: name).resolvingSymlinksInPath().path
+              .dropFirst(base.count)))
       }
     }
     return names.sorted()

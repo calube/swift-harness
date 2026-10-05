@@ -259,7 +259,7 @@ struct NewSubcommandRegistrationTests {
   static let implemented: Set<String> = [
     "plan claim", "plan release", "plan release --force", "plan set", "index set", "design-diff",
     "run report",
-    "qa run", "qa run --after --at-base", "qa run --at-base --prepared-by", "qa adopt",
+    "qa run", "qa run --after --at-base", "qa run --at-base --prepared-by", "qa adopt", "qa stage",
     "design-diff --chain", "design-scope", "evidence capture",
     "plan-schedule",
     "prose",
