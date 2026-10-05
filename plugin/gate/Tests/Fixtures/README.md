@@ -2723,6 +2723,44 @@ last `sed` replaced the clone's absolute path in the GREEN merge gate's baseline
 '/Users|/private|/var/folders|caleb|@[a-z]+\.|home|/tmp' RunView/brownfield-rejected` and the secrets grep
 above matched nothing.
 
+## Run view: brownfield runs cut off with an undone merge
+
+`RunView/price-tracker-1/` and `RunView/send-money-2/` are the state 2 brownfield trials of
+2026-10-05 left, each a `swiftgate run` of the interview starter, with build runs
+`20261005T025144Z-77b256da` and `20261005T025212Z-65cdde10` of plan `spec`. They feed the gate
+budget, the gate watch, the merge queue, the scheduler's free slots, the run view and the report's
+review depth.
+
+- In price-tracker-1, 3 tasks ran at once. The `app-core` merge gate's prove step hung from about
+  03:03 to 03:20, and nothing stopped it. The orchestrator never handled `client-live`'s return, and the
+  view lost its 3 slice gates. At the cutoff, `app-core` was undone and abandoned after
+  a `continue` budget halt.
+- In send-money-2, 3 checked returns held every slot while the validation task waited. The run
+  merged `send-ui`, undid it, fixed it, merged it again, then undid and abandoned it at the cutoff.
+
+With `T` the trial's folder under the block-prep harness runs, `C=$T/state` (the clone's
+`swift-harness` state root, copied after the run), `P=$C/plans/spec`, `R` the build run's folder
+under `$P/build`, and `t` the trial's name, copied 2026-10-05:
+
+```sh
+S="s#/Users/[^/\"]*/Developer/trials/practice/$t/repo-#../repo-#g; s#\"/Users/[^/\"]*/Developer/trials/practice/$t/repo/spec\.md\"#\"/spec.md\"#g"
+mkdir -p events returns
+cp $C/events/{gate,span,build,brownfield,usage}.jsonl $C/events/store.json events/
+sed -E "$S" $P/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json; cp $P/plan.json plan.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/cutoff.json cutoff.json; cp $R/returns/*.json returns/
+```
+
+The `sed` made each ledger worktree path relative (`../repo-spec-<task>`) and set `clock.json`'s
+`spec` and `origin` to `/spec.md`, as `brownfield-blocked` spells them. The trials removed every
+task worktree before they ended, so neither capture has a `worktrees/` folder.
+
+`RunView/price-tracker-1/out/merge-{tracker-ui,app-core}.json` are the orchestrator's merge gate
+outputs, copied unedited with `cp $P/out/merge-{tracker-ui,app-core}.json out/`. The
+`tracker-ui` gate's JSON is GREEN. The `app-core` file is empty, because its gate never finished.
+Its creation time in the clone was 03:00:00Z, which the gate-wait tests set again because git
+keeps no creation time. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|/tmp'` matched
+nothing in either folder. `home` matches only a task title in send-money-2's `plan.json`.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on

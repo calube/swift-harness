@@ -75,7 +75,6 @@ struct GateBudgetTests {
     "a merge gate's budget is the slowest merge gate the clone already ran, with each area's span — catches the price-tracker orchestrator waiting 1241 s on a merge gate with no expected time"
   )
   func mergeBudgetFromHistory() throws {
-    // The app-core merge gate started at 03:00:00, after tracker-ui's merge gate had run.
     let events = try Trial.priceTracker.events(before: try at("2026-10-05T03:00:00Z"))
     let budget = GateBudget.estimate(tier: .merge, events: events)
     #expect(budget.source == .history)
@@ -236,7 +235,7 @@ struct MergeQueueTests {
   }
 
   @Test(
-    "with 3 slots held by tasks whose checked returns only wait to merge, build next starts the validation task ahead of the other ready task, and the next free slot goes on — catches the send-money slot deadlock broken by hand"
+    "with 3 slots held by tasks whose checked returns only wait to merge, build next starts the validation task ahead of the other ready task, and once the trial started it by hand, the freed slot goes to the other ready task — catches the send-money slot deadlock broken by hand"
   )
   func waitingReturnsFreeTheirSlots() throws {
     let trial = Trial.sendMoney
@@ -251,7 +250,6 @@ struct MergeQueueTests {
         idle: running.filter { log.workerFinished(task: $0) })
     }
     #expect(try next("2026-10-05T02:56:56Z").toStart == ["spec-validation"])
-    // The trial started the validation task by hand at 02:57:06; the third slot is then free.
     #expect(try next("2026-10-05T02:59:52Z").toStart == ["account-fake"])
     let ledger = try LedgerJSON.decode(trial.data("ledger.json"))
     #expect(
