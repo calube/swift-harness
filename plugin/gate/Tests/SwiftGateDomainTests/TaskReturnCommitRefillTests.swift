@@ -73,3 +73,47 @@ struct TaskReturnCommitRefillTests {
     #expect(refilled.commits == branch)
   }
 }
+
+/// A 2026-10-05 brownfield trial's task return, whose worker listed its 3 commits newest first,
+/// against the branch's commits past its base.
+@Suite("task return commit order")
+struct TaskReturnCommitOrderTests {
+  static let range = "swift-harness/spec..spec/engine"
+
+  static func captured() throws -> (TaskReturn, [String]) {
+    let listed = try JSONDecoder().decode(
+      [String].self, from: try Fixture.data("BuildReturn/commit-order/worker-commits.json"))
+    let branch = try Fixture.text("BuildReturn/commit-order/branch-commits.txt")
+      .split(separator: "\n").map(String.init)
+    let taskReturn = TaskReturn(
+      task: "engine", outcome: .readyToMerge, commits: listed,
+      gate: .init(tier: .slice, verdict: .green, runID: "20261005T191248Z-34bc0059"),
+      review: nil, testsAdded: [], notes: "worker notes", designConflict: nil)
+    return (taskReturn, branch)
+  }
+
+  @Test(
+    "the trial's return listing its commits newest first is put in the branch's order, so its last entry is the branch tip its gate ran at, with a notes line naming the range read, while a list already in order, or one naming a commit the range lacks, is left as listed — catches check-return reading a gate at the tip as stale and the orchestrator hand-editing the return"
+  )
+  func newestFirstIsReordered() throws {
+    let (taskReturn, branch) = try Self.captured()
+    #expect(taskReturn.commits == ["25bd815", "81edfaa", "8d8c74f"])
+
+    let reordered = try #require(
+      TaskReturnCommitRefill.reorder(taskReturn, branchCommits: branch, range: Self.range))
+
+    #expect(reordered.commits == ["8d8c74f", "81edfaa", "25bd815"])
+    let tip = try #require(branch.last)
+    #expect(tip.hasPrefix(try #require(reordered.commits.last)))
+    #expect(reordered.notes.hasPrefix(taskReturn.notes))
+    #expect(reordered.notes.contains(Self.range), "\(reordered.notes)")
+    #expect(reordered.gate == taskReturn.gate)
+    #expect(
+      TaskReturnCommitRefill.reorder(reordered, branchCommits: branch, range: Self.range) == nil)
+    let foreign = TaskReturn(
+      task: taskReturn.task, outcome: taskReturn.outcome,
+      commits: ["25bd815", "0000000", "8d8c74f"], gate: taskReturn.gate, review: nil,
+      testsAdded: [], notes: taskReturn.notes, designConflict: nil)
+    #expect(TaskReturnCommitRefill.reorder(foreign, branchCommits: branch, range: Self.range) == nil)
+  }
+}

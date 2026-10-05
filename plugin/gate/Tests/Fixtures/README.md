@@ -5386,3 +5386,24 @@ and `moving` are as captured. The clone's `config.toml` differs from
 `price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
 `price-tracker-1-base-files.txt`, so the import test reads those 2.
 `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
+
+## Build return: a worker's commits listed newest first
+
+`BuildReturn/commit-order/worker-commits.json` is the `commits` a 2026-10-05 brownfield practice
+trial's engine task's build worker returned, newest first, as its workflow's journal recorded it.
+`branch-commits.txt` is that task branch's commits past its base, oldest first, read from the
+trial's clone after the run. The gate the return cited ran at the branch tip, the list's first
+entry, so `build check-return` called it stale. `J` is the task workflow's `journal.jsonl` and `C`
+the trial's clone:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BuildReturn/commit-order; mkdir -p $F
+python3 -c "import json,sys
+for l in open(sys.argv[1]):
+    d=json.loads(l); r=d.get('result')
+    if d.get('type')=='result' and isinstance(r,dict) and 'commits' in r:
+        open(sys.argv[2],'w').write(json.dumps(r['commits'])+'\n')" $J $F/worker-commits.json
+git -C $C log --reverse --format=%H eb3edcf..25bd815 > $F/branch-commits.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
