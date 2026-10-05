@@ -1,0 +1,26 @@
+[
+  {
+    "id": "spec-engine",
+    "deps": [
+      "spec-contract"
+    ],
+    "writeSet": [
+      "Packages/AppFeature/Sources/FieldCore/",
+      "Packages/AppFeature/Tests/FieldCoreTests/"
+    ]
+  },
+  {
+    "id": "spec-screen",
+    "deps": [
+      "spec-contract"
+    ],
+    "writeSet": [
+      "Packages/AppFeature/Sources/AppCore/FieldFeature.swift",
+      "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+      "Packages/AppFeature/Sources/AppUI/FieldView.swift",
+      "Packages/AppFeature/Sources/AppUI/AppView.swift",
+      "Packages/AppFeature/Tests/AppCoreTests/FieldFeatureTests.swift",
+      "UITests/LaunchFlowUITests.swift"
+    ]
+  }
+]
