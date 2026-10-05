@@ -83,11 +83,12 @@ struct QAMergeTreeCreditTests {
   func readyTaskIsNotHeldForOthers() throws {
     let combined = try Self.combined()
     let merge = try #require(combined.trialMerge)
-    let waiting = merge.alongside + [
-      QATrialMerge.Branch(
-        task: Self.thread, branch: "\(Self.plan)/\(Self.thread)",
-        tip: "a2f8dc27e5e36641724691ef43c3e91f66ec1305")
-    ]
+    let waiting =
+      merge.alongside + [
+        QATrialMerge.Branch(
+          task: Self.thread, branch: "\(Self.plan)/\(Self.thread)",
+          tip: "a2f8dc27e5e36641724691ef43c3e91f66ec1305")
+      ]
 
     #expect(
       QAMergeReadiness.of(
