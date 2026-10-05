@@ -58,12 +58,19 @@ public struct AreaCommandBounds: Sendable {
   public let tier: CheckTier
   /// What a command gets when no warm-up measured its area, or its step has no measure.
   public let fallback: Duration
+  /// Each area's latest whole test run in a merge gate, in milliseconds: what a test step is
+  /// expected to take in place of the warm-up's figure.
+  public let measuredTests: [String: Int]
 
-  public init(times: WarmupTimesFile, box: RunTimeBox?, tier: CheckTier, fallback: Duration) {
+  public init(
+    times: WarmupTimesFile, box: RunTimeBox?, tier: CheckTier, fallback: Duration,
+    measuredTests: [String: Int] = [:]
+  ) {
     self.times = times
     self.box = box
     self.tier = tier
     self.fallback = fallback
+    self.measuredTests = measuredTests
   }
 
   /// A test step in the checkout runs on the build its `build` step just made, so it gets
