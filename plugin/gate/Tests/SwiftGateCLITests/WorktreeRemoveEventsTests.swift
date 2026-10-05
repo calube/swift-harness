@@ -72,6 +72,20 @@ private struct DeletingWorkspace: GitWorkspace {
     try? FileManager.default.removeItem(atPath: path)
   }
 
+  func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
+    async throws(GitWorkspaceError)
+  {
+    try await fake.switchWorktree(at: path, toNewBranch: branch, from: base)
+  }
+
+  func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError) -> [String] {
+    try await fake.uncommittedPaths(inWorktree: path)
+  }
+
+  func resetWorktree(at path: String) async throws(GitWorkspaceError) {
+    try await fake.resetWorktree(at: path)
+  }
+
   func deleteBranch(_ branch: String) async throws(GitWorkspaceError) {
     try await fake.deleteBranch(branch)
   }

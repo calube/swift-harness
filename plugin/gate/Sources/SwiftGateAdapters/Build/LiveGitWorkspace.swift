@@ -59,6 +59,32 @@ public struct LiveGitWorkspace: GitWorkspace {
       ["worktree", "remove"] + (force ? ["--force", "--force"] : []) + ["--", path])
   }
 
+  public func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
+    async throws(GitWorkspaceError)
+  {
+    try Self.checkRef(branch)
+    try Self.checkRef(base)
+    try await succeed(["-C", path, "switch", "--quiet", "--no-track", "-c", branch, base])
+  }
+
+  public func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError)
+    -> [String]
+  {
+    let arguments = ["-C", path, "status", "--porcelain=v1", "--untracked-files=all"]
+    let output = try await git(arguments)
+    guard output.status.isSuccess else {
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+    return output.stdout.text.split(separator: "\n").map { String($0.dropFirst(3)) }
+  }
+
+  public func resetWorktree(at path: String) async throws(GitWorkspaceError) {
+    try await succeed(["-C", path, "switch", "--quiet", "--detach"])
+    try await succeed(["-C", path, "reset", "--quiet", "--hard"])
+    try await succeed(["-C", path, "clean", "-ffdq"])
+  }
+
   public func deleteBranch(_ branch: String) async throws(GitWorkspaceError) {
     try Self.checkRef(branch)
     try await succeed(["branch", "--quiet", "-D", "--", branch])

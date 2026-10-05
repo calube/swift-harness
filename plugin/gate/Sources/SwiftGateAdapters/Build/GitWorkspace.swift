@@ -5,6 +5,8 @@ import SwiftGateDomain
 public enum GitWorkspaceError: Error, Sendable, Equatable, CustomStringConvertible {
   case git(GitError)
   case clone(path: String, detail: String)
+  /// A pooled worktree slot couldn't be taken, returned or recorded.
+  case pool(path: String, detail: String)
 
   public var verdict: Verdict { .blocked }
 
@@ -15,6 +17,7 @@ public enum GitWorkspaceError: Error, Sendable, Equatable, CustomStringConvertib
         + stderr.trimmingCharacters(in: .whitespacesAndNewlines)
     case .git(let error): "git: \(error)"
     case .clone(let path, let detail): "cloning \(path): \(detail)"
+    case .pool(let path, let detail): "worktree slot \(path): \(detail)"
     }
   }
 }
@@ -34,6 +37,17 @@ public protocol GitWorkspace: Sendable {
 
   /// `git worktree remove`; `force` also discards a dirty or untracked tree.
   func removeWorktree(at path: String, force: Bool) async throws(GitWorkspaceError)
+
+  /// In the existing worktree at `path`, `git switch -c <branch> <base>`.
+  func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
+    async throws(GitWorkspaceError)
+
+  /// The worktree's tracked changes and untracked files, ignored files left out.
+  func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError) -> [String]
+
+  /// Detaches the worktree's `HEAD`, discards its tracked changes and deletes its untracked
+  /// files. Ignored files, such as build directories, stay.
+  func resetWorktree(at path: String) async throws(GitWorkspaceError)
 
   /// Deletes the local branch whatever it is merged into; callers check that first.
   func deleteBranch(_ branch: String) async throws(GitWorkspaceError)
@@ -105,6 +119,15 @@ public struct TaskWorktree: Sendable, Equatable {
       throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
     }
     return try sibling(commonDirectory: commonDirectory, named: plan)
+  }
+
+  /// A brownfield plan's pooled worktree slot `<repo>-<plan>.slot-<number>`, beside the main
+  /// checkout (``WorktreePool``). The `.` keeps it apart from every `<repo>-<plan>-<task>`.
+  /// - Throws: ``GitWorkspaceError/git(_:)`` for a `commonDirectory` that isn't a checkout's `.git`.
+  public static func slotPath(commonDirectory: String, plan: String, number: Int)
+    throws(GitWorkspaceError) -> String
+  {
+    try sibling(commonDirectory: commonDirectory, named: "\(plan).slot-\(number)")
   }
 
   /// `<repo>-<suffix>` beside the main checkout `<repo>`.

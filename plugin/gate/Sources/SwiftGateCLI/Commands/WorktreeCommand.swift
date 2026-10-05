@@ -60,6 +60,9 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   var installs: [Install]? = nil
   /// `create` in a brownfield clone: node areas left without an install, and why.
   var installNotes: [String]? = nil
+  /// `create` in a brownfield clone: `true` when the worktree is a pooled slot an earlier task
+  /// built in, so its build products are warm; `false` for a new slot. Absent otherwise.
+  var reusedSlot: Bool? = nil
 
   /// 1 node dependency install `create` ran in the new worktree. A failed one leaves the
   /// worktree created; its area's commands then run as they would without it.
