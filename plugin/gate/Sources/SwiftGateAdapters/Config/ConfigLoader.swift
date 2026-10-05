@@ -12,8 +12,14 @@ public struct ConfigLoader: Sendable {
   }
 
   /// Returns `nil` when the repository has no config: swift-harness is not enabled there, and
-  /// hooks must be no-ops.
+  /// hooks must be no-ops. A clone that set its committed config aside has none either: it runs
+  /// the brownfield profile, so no owned rule or hook reads the file.
   public func load(repositoryRoot: URL) throws(ConfigLoadError) -> Config? {
+    if let common = Self.commonDirectory(enclosing: repositoryRoot),
+      StateRootResolver.setsAsideCommittedConfig(commonDir: common)
+    {
+      return nil
+    }
     let file = repositoryRoot.appending(path: Self.fileName, directoryHint: .notDirectory)
     let data: Data
     do {
@@ -38,7 +44,8 @@ public enum LoadedConfig: Sendable, Equatable {
 }
 
 public enum ProfileLoadError: Error, Sendable, Equatable, CustomStringConvertible {
-  /// Both configs exist, so the clone's profile is ambiguous.
+  /// Both configs exist and no run set the committed one aside, so the clone's profile is
+  /// ambiguous.
   case conflict(committed: String, common: String)
   /// The committed `.swiftgate.toml` failed to load.
   case config(ConfigLoadError)
@@ -78,7 +85,10 @@ extension ConfigLoader {
     let files = FileManager.default
     let hasCommitted = files.fileExists(atPath: committed.path)
     let hasCommon = files.fileExists(atPath: common.path)
-    if hasCommitted && hasCommon {
+    if hasCommitted && hasCommon
+      && !files.fileExists(
+        atPath: commonDir.appending(path: StateRootResolver.setAsideFile).path)
+    {
       throw .conflict(committed: committed.path, common: common.path)
     }
     if hasCommon {

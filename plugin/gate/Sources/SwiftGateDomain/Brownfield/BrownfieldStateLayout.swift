@@ -25,6 +25,10 @@ public struct BrownfieldStateLayout: Sendable, Equatable {
   public var config: URL { cloneRoot.appending(path: BrownfieldConfig.fileName) }
   /// The hook wiring `swiftgate claude` passes to `claude --settings`.
   public var settings: URL { cloneRoot.appending(path: "settings.json") }
+  /// The record that `swiftgate run` set the committed `.swiftgate.toml` aside for this clone.
+  public var committedConfigSetAside: URL {
+    cloneRoot.appending(path: CommittedConfigSetAside.fileName)
+  }
   /// The last proposal and its inputs' hashes.
   public var discoverDirectory: URL { directory("discover") }
   public var discoverLast: URL { discoverDirectory.appending(path: "last.json") }
