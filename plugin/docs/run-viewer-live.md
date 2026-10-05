@@ -1,7 +1,9 @@
 # Live pages and saved reports
 
-The [run viewer](run-viewer.md) shows a run while it builds, through `swiftgate view`, and after it ends,
-through the report folder `swiftgate report --html` writes.
+The [run viewer](run-viewer.md) shows a run while it builds, through `swiftgate view`, and after it
+ends, through the report folder `swiftgate report --html` writes. Read this page to know when a
+saved report is final, what a live page polls, how the live server starts and stops, and what a
+missing file means mid-run.
 
 ## A run's end
 
@@ -18,9 +20,18 @@ names no spec page: no damage, and the Spec tab says so.
 
 ## Live mode
 
-`view` answers `GET /`, `/view.json`, `/final`, `/server` and each flow's linked `/runs/` file; else
-404. A request whose `Host` isn't `127.0.0.1` or `localhost` at its port gets 403, so a page
-elsewhere can't reach it through a rebound name.
+`view` answers these requests, and 404 to any other:
+
+| Path | Serves |
+|---|---|
+| `GET /` | the page |
+| `/view.json` | the run view; see the polling rules below |
+| `/final` | the run's final report, once written |
+| `/server` | the server's own pid, which `view --ensure` checks |
+| `/runs/<run id>/<path>` | each file a flow row links |
+
+A request whose `Host` isn't `127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere
+can't reach it through a rebound name.
 
 The page polls `/view.json?after=<token>` each second, naming the token of the view it holds. The
 server answers 204 when none of the run's files moved since that token, and otherwise the whole

@@ -1,8 +1,9 @@
 # Validation rows in the run viewer
 
 The [run viewer](run-viewer.md)'s Validation tab shows what `swiftgate qa run` found for the plan's
-validation rows during 1 build run. It shows once a `qa run` checked a row, and reads only what that
-command wrote: nothing here runs a check.
+validation rows during 1 build run. Read this page to know which `qa run` results the tab keeps,
+what each part of the tab shows, and how it links evidence. The tab shows once a `qa run` checked a
+row, and reads only what that command wrote: nothing here runs a check.
 
 ## What it reads
 
@@ -34,7 +35,7 @@ output, flow, and the prepared at-base run a reused check took its result from.
 - **Why it failed.** A red row's button opens its requirement, layer, check, exit status, reason,
   evidence paths and the last 12 lines of its saved output.
 - **Why unverified.** An unverified row's button names the check that didn't run and why, such as a red
-  row in an earlier layer, or a flow row before the flow runner exists.
+  row in an earlier layer, or a flow row that ran with no flow runner (`flow runner not built`).
 - **Why unverified** also opens on a passing flow row whose final pass left no video or no contact
   sheet, naming which and why, such as a recorder busy past the 5-minute bound.
 - **Flow rows.** A flow row lists its steps with a pass or fail mark. Each step links to the video at
@@ -53,7 +54,9 @@ Each row lists its evidence by path and never embeds it: the page holds no image
 `runs/<run id>/<path>` in its own folder, where `report` copies each file the view links, videos and sheets
 first, up to 256 MB, so its links work wherever the folder goes. A result bundle stays behind for its
 `.tests.json` summary. A file it can't copy is a footer line, named without a link. A live page links
-`../runs/<run id>/<path>`, and its server answers each linked file and 404s any other. Every string passes the payload guard. A check, reason, step label,
+`../runs/<run id>/<path>`, and its server answers each linked file and 404s any other.
+
+Every string passes the payload guard. A check, reason, step label,
 test name or path the guard rejects, or a path that leaves its run directory, drops out as a footer
 line naming the `qa run` and row, or the gate run and kept flow. Output lines lose machine paths and stay
 1 line each. A missing or undecodable report, and an evidence path that leaves its run directory, are

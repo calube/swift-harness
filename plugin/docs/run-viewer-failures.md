@@ -1,7 +1,8 @@
 # Why a run failed
 
 The [run viewer](run-viewer.md) says why a span is red, a task stopped or a build halted, from the
-gate's `report.json` and the run's events. Nothing here changes what a gate decides.
+gate's `report.json` and the run's events. Read this page to know where each reason comes from and
+what the popover and task drawer show. Nothing here changes what a gate decides.
 
 ## The failure reason
 
@@ -70,11 +71,9 @@ A worker's gate run, which no return or ledger event names, belongs to the task 
 run store holds it; failing that, to the task whose window holds its time. So a task whose return
 `check-return` rejected, which links no gate run, still shows the GREEN slice its worktree ran.
 
-
 ## Privacy
 
-A RED gate's finding messages, and a rejected return's `check-return` messages, are the only report text
-the view keeps. The builder puts each on
-1 line and cuts it to 400 bytes. A path under a checkout becomes repo-relative; every other absolute path,
+A RED gate's finding messages, and a rejected return's `check-return` messages, are the only report
+text the view keeps. The builder puts each on 1 line and cuts it to 400 bytes. A path under a checkout becomes repo-relative; every other absolute path,
 home path or `file://` URL becomes `<path>`. A message the guard still rejects reads "message
 withheld". A finding with no file, or a file outside the repository, shows no location.

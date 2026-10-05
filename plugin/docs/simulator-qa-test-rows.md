@@ -1,14 +1,19 @@
 # Simulator QA: test rows
 
-How `swiftgate qa run` runs an acceptance row whose check names a test, and how it and a
-brownfield gate keep an `xcodebuild test` off the simulator every session shares. The rest of
-`qa run` is in [`simulator-qa.md`](simulator-qa.md).
+This page covers how `swiftgate qa run` runs an acceptance row whose check names a test, and how
+`qa run` and a brownfield gate keep an `xcodebuild test` off the simulator every session shares.
+Read it when a `test:` row reads `unverified`, or when a run waits for a device. The rest of
+`qa run` is in [`simulator-qa.md`](simulator-qa.md#qa-run).
 
 ## The test form
 
-An acceptance check `test: <id>` (or `test <area>: <id>`) runs the area's test command narrowed to
-that test: `-only-testing:<id>` for an `xcode` area, writing `qa/<NN>-<req>.acceptance.xcresult`,
-`test_files` with `{tests}` or `{files}` otherwise.
+An acceptance check `test: <id>` runs the area's own test command, narrowed to that 1 test. Write
+`test <area>: <id>` to name the area when more than 1 area runs tests.
+
+| Area | How it narrows | `<id>` |
+|---|---|---|
+| `xcode` | `-only-testing:<id>`, writing `qa/<NN>-<requirement>.acceptance.xcresult` | `<Target>/<Class>[/<method>]` |
+| any other | the area's `test_files`, with `{tests}` or `{files}` | whatever `test_files` places there |
 
 ## 1 run per check
 
@@ -43,9 +48,9 @@ the time box's end; `build finish` and `run checkout remove` release it. 1 `qa r
 time; another queues for it until the run's cutoff (`--final`: the box's end), writing a
 `qa.setup` `device-wait` event as it starts waiting and another with the wait's length. A device
 still borrowed then leaves the flow rows `unverified`, naming who borrows it. The build run's device
-takes no `sim` slot: there is 1 per build run, and the slots stay for clones. A run's own holder
-still waiting for a slot at that deadline is stopped, and its row reads `sim.no-slot`, naming the
-slot holders. A brownfield `qa run`'s trial merge or merge-base tree is a
+takes no `sim` slot: there is 1 per build run, and the slots stay for clones. When a run's own holder is
+still waiting for a slot at that deadline, `qa run` stops it, and its row reads `sim.no-slot`,
+naming the slot holders. A brownfield `qa run`'s trial merge or merge-base tree is a
 pooled worktree slot, the same slots task worktrees use, so the app `sim up` builds there stays
 warm for the next run in that slot.
 

@@ -2,7 +2,8 @@
 
 How to test a reducer whose state advances on a clock: an action starts a repeating timer effect,
 and another action, or the tick that ends the run, stops it. The test proves 3 things: the timer
-ticks at its interval, each tick changes state, and nothing ticks after the stop. Rules cited as
+ticks at its interval, each tick changes state, and nothing ticks after the stop. Read it before
+you test a timer, a countdown or any effect that loops on a clock. Rules cited as
 `P5`–`P7` are in [testing-playbook.md](testing-playbook.md), `D1` in [standards.md](standards.md).
 
 ## The reducer
@@ -145,7 +146,7 @@ Each passes against a reducer whose stop doesn't cancel the timer:
 
 ## Output to read past
 
-Under each `TestStore` failure, `swift test` also prints "To fix this, add
-"IssueReportingTestSupport" as a dependency to your test target." That line describes how the
-issue was reported, not why the test failed: the `✘` line above it is the failure. Leave
+Under each `TestStore` failure, `swift test` also prints a hint to add
+`IssueReportingTestSupport` as a dependency to your test target. That hint describes how the
+library reports an issue, not why the test failed. The `✘` line above it is the failure. Leave
 `Package.swift` alone ([standards.md § 0](standards.md#library-pins) pins the packages).
