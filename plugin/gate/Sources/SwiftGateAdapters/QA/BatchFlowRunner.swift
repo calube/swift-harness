@@ -48,14 +48,18 @@ public struct QAFlowDeviceHold: Sendable, Equatable {
   public var keptAfterRun: Bool
   /// How long a hold kept after the run lasts unreleased; `nil` for the config's session timeout.
   public var timeoutMinutes: Int?
+  /// When a holder still waiting for a `sim` slot is stopped; `nil` outside a box.
+  public var slotDeadline: QARunDeadline?
 
   public init(
-    runID: String, directory: URL, keptAfterRun: Bool = false, timeoutMinutes: Int? = nil
+    runID: String, directory: URL, keptAfterRun: Bool = false, timeoutMinutes: Int? = nil,
+    slotDeadline: QARunDeadline? = nil
   ) {
     self.runID = runID
     self.directory = directory
     self.keptAfterRun = keptAfterRun
     self.timeoutMinutes = timeoutMinutes
+    self.slotDeadline = slotDeadline
   }
 }
 

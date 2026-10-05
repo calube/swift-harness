@@ -151,4 +151,23 @@ struct RunViewReaderQATests {
       at: Self.captured.appending(path: "runs/\(Self.full)/qa"), to: target.appending(path: "qa"))
     #expect(reader.snapshot(buildRun: RunViewReaderTests.buildRun).cursor != before)
   }
+
+  @Test(
+    "the plan's validation.json reads into the input as it stands now, and a plan with none reads as nil without damage — catches a Validation tab that can't tell which rows the plan still has"
+  )
+  func readsThePlansValidationTable() throws {
+    let repository = try Self.repository()
+    defer { repository.remove() }
+    #expect(try repository.read().validation == nil)
+
+    let captured = Fixture.gateDirectory.appending(
+      path: "Tests/Fixtures/RunView/price-tracker-4/validation.json")
+    try FileManager.default.copyItem(
+      at: captured,
+      to: repository.planDirectory.appending(path: ValidationTable.fileName))
+    let input = try repository.read()
+    #expect(input.validation == (try ValidationTableJSON.decode(try Data(contentsOf: captured))))
+    #expect(input.validation?.unitOnly.count == 4)
+    #expect(input.damage.isEmpty, "\(input.damage)")
+  }
 }

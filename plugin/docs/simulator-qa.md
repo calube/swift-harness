@@ -62,8 +62,8 @@ passes a row. A state row runs only after its requirement's flow rows all pass.
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
 stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row. Its message leads with
 how many rows got a `pass` or `red`, counting the table's reason-only rows in the total and naming
-them. An unverified row is a nit during merges; once the build ended, it and an abandoned row
-gate. A table with no row a check runs reads `unverified` with `qa.no-verifiable-row`, a nit during
+them. An unverified row is a nit during merges, but leaves the run BLOCKED, naming why; once the
+build ended, it and an abandoned row gate. A table with no row a check runs reads `unverified` with `qa.no-verifiable-row`, a nit during
 merges that gates once the build ended. `run report` repeats the count under its `final` line.
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see

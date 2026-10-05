@@ -203,9 +203,9 @@ const REFRESH_FIXTURE = 'gate/Tests/Fixtures/AgentDevice/pull-to-refresh'
 const GESTURES = 'docs/simulator-qa-flow-gestures.md'
 
 // 1 captured refresh batch: its step 3, whether the list refreshed, and how far step 3 moved.
-function capturedRefresh(name) {
-  const steps = JSON.parse(read(`${REFRESH_FIXTURE}/${name}.steps.json`))
-  const output = JSON.parse(read(`${REFRESH_FIXTURE}/${name}.stdout`))
+function capturedRefresh(name, fixture = REFRESH_FIXTURE) {
+  const steps = JSON.parse(read(`${fixture}/${name}.steps.json`))
+  const output = JSON.parse(read(`${fixture}/${name}.stdout`))
   const results = output.data?.results ?? output.error.details.partialResults
   const data = results.find(result => result.step === 3).data
   const [y1, y2] = data.from ? [data.from.y, data.to.y] : [data.y1, data.y2]
@@ -242,6 +242,26 @@ export function refreshProblems(text, { pass, short }) {
     problems.push(`${least[1]} pt is not past the ${short.distance} pt drag that didn't refresh and within the ${pass.distance} pt one that did`)
   }
   if (!/`scroll`[^.]*\bnever\b[^.]*refresh/i.test(prose)) problems.push('the recipe never says a `scroll` never pulls to refresh')
+  return problems
+}
+
+const SHORT_REFRESH_FIXTURE = 'gate/Tests/Fixtures/AgentDevice/pull-to-refresh-short'
+const PLAN_SHAPE = 'skills/run/references/plan-shape.md'
+// The modifier the captured short list pins its 1 pt drag target with.
+const BOTTOM_ANCHOR = '.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier('
+
+/**
+ * Where a text's pull to refresh on a list too short to hold 2 ids 350 pt apart falls short of
+ * the captured run: it pins the drag's end with the captured modifier, the contract adds it, and
+ * the drag's destination is that pinned id. The fourth price-tracker trial left its refresh row
+ * out because a 3-row list had no element that far below its top row.
+ */
+export function shortListProblems(text) {
+  const problems = []
+  const prose = flat(text)
+  if (!prose.includes(BOTTOM_ANCHOR)) problems.push('no 1 pt id pinned to the bottom safe area with the captured modifier')
+  if (!/\bcontract\b[^.]*\bbottom\b|\bbottom\b[^.]*\bcontract\b/i.test(prose)) problems.push('never says the contract adds the bottom-pinned id')
+  if (!/"destination": "id=\\"<bottom[^"]*"/.test(prose)) problems.push('the drag never ends on the bottom-pinned id')
   return problems
 }
 
@@ -455,6 +475,28 @@ const tests = {
     assert.match(refreshProblems(good.replace('id=\\"a\\"', '@e3'), captured).join('\n'), /`source` is no `id=`/)
     assert.match(refreshProblems(good.replace('"kind": "drag"', '"kind": "pan"'), captured).join('\n'), /kind is `pan`/)
     assert.match(refreshProblems(good.replace('never', 'may'), captured).join('\n'), /never pulls to refresh/)
+  },
+
+  'on the captured 3-row list the drag from the top row to the 1 pt bottom-pinned id refreshes and the drag to the last row doesn\'t — catches a short-list recipe built on a capture that shows nothing'() {
+    const pinned = capturedRefresh('drag-to-bottom', SHORT_REFRESH_FIXTURE)
+    const lastRow = capturedRefresh('drag-to-last-row', SHORT_REFRESH_FIXTURE)
+    assert.deepEqual([pinned.refreshed, lastRow.refreshed], [true, false])
+    assert.ok(pinned.distance >= 350, `${pinned.distance} pt`)
+    assert.ok(lastRow.distance < 350, `${lastRow.distance} pt`)
+    assert.match(pinned.step.input.destination, /^id=/)
+    assert.ok(read(`${SHORT_REFRESH_FIXTURE}/ShortRefreshProbe.swift`).includes(BOTTOM_ANCHOR), 'the probe pins its target another way')
+  },
+
+  'the validation worker, the gestures doc and the plan shape pull a short list to refresh onto a contract id pinned to the bottom safe area — catches a refresh row left out because no element sits 350 pt below the top row'() {
+    for (const file of [WORKER, GESTURES, PLAN_SHAPE]) assert.deepEqual(shortListProblems(read(file)), [], file)
+  },
+
+  'the short-list check names a missing modifier, contract and destination — catches a check that passes anything'() {
+    const good = `The contract adds a bottom-pinned id: \`${BOTTOM_ANCHOR}"x.bottom")\`. The drag is \`{"command": "gesture", "input": {"kind": "drag", "source": "id=\\"<top row>\\"", "destination": "id=\\"<bottom id>\\""}}\`.`
+    assert.deepEqual(shortListProblems(good), [])
+    assert.match(shortListProblems(good.replace('safeAreaInset', 'overlay')).join('\n'), /captured modifier/)
+    assert.match(shortListProblems(good.replace('contract', 'worker')).join('\n'), /contract adds/)
+    assert.match(shortListProblems(good.replace('<bottom id>', '<lower element>')).join('\n'), /never ends on/)
   },
 
   'the validation worker\'s repair mode rewrites 1 requirement\'s flow, keeps its assertions and proves it red at the base again — catches a repair that weakens a check to pass'() {

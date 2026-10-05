@@ -428,6 +428,29 @@ relaunches the app, waits for `Refreshes 0`, runs step 3, then waits 5 s for `Re
 | `drag-short.{steps.json,stdout,stderr,status}` | the same drag to `id="probe.row.3"`: 208 pt. Exits 1, `details.step` 4: no refresh |
 | `scroll-up.{steps.json,stdout,stderr,status}` | the trials' `scroll` `direction: up`, `amount: 0.8`, `settle: true`: (201, 87) to (201, 787) in 400 ms, starting in the navigation bar. Exits 1, `details.step` 4: no refresh |
 
+### AgentDevice/pull-to-refresh-short
+
+A pull to refresh on a list too short to hold 2 ids 350 pt apart, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. The fourth price-tracker trial left
+its refresh row out because its 3-row watchlist had no element that far below the top row, and
+`agent-device` 0.21.18 drags only between 2 targets, while a `pan` needs an origin point. The app is
+`ShortRefreshProbe.swift` with `Info.plist`: the `Refreshes 0` text over 3 rows, `probe.row.0` to
+`probe.row.2`, in a `.refreshable` `List` whose `.safeAreaInset(edge: .bottom)` holds a 1 pt
+`Color.clear` with the id `probe.bottom`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/pull-to-refresh-short/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app, waits for `Refreshes 0`, drags from
+`id="probe.row.0"`, then waits 5 s for `Refreshes 1`.
+
+| Files | Step 3 |
+|---|---|
+| `drag-to-bottom.{steps.json,stdout,stderr,status}` | the drag to `id="probe.bottom"`: (201, 246) to (201, 840), 594 pt over 1300 ms. Exits 0 and the list refreshed |
+| `drag-to-last-row.{steps.json,stdout,stderr,status}` | the drag to `id="probe.row.2"`: 104 pt. Exits 1, `details.step` 4: no refresh |
+
 Probes on the same app and device, 3 to 6 runs each: drags of 312 pt and 364 pt refreshed every
 time, also from a `NavigationLink` row (no navigation followed) and under an inline title, and a
 355 pt drag did in a `ScrollView` with a `LazyVStack`. Drags of 156 pt, 208 pt and 266 pt never
@@ -4007,6 +4030,20 @@ sed -E 's#"/[^"]*/price-tracker-3/repo/#"/trial/repo/#' $S/plans/spec/clock.json
 
 `grep -laE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-3-*` matched nothing.
 
+`BrownfieldTrial/price-tracker-4-AssetDetailFeatureTests-for-await.swift` is the detail test file
+the fourth price-tracker trial's worker committed: its `cancellationStopsRequest` waits for a
+stream's first element with `for await _ in started.stream { break }`, which `testlint` passed and
+which then hung at the base until prove killed it at 227 s.
+`price-tracker-4-AssetDetailFeatureTests.swift` is the same file after the worker dropped the wait.
+With `T` the trial clone:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+P=Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift
+git -C $T show 725c938:$P > $F/price-tracker-4-AssetDetailFeatureTests-for-await.swift
+git -C $T show 17bf2e7:$P > $F/price-tracker-4-AssetDetailFeatureTests.swift
+```
+
 ## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans and fixer
 
 The third price-tracker trial (2026-10-05) priced its unrun `final` at the cutoff as its 227 s
@@ -4230,3 +4267,31 @@ orch=list(commands(sys.argv[2], lambda c: 'qa run --plan spec --after send-flow 
 json.dump([{"command":scrub(fixer[0])},{"command":scrub(orch[0])}],sys.stdout,indent=2); print()
 PY
 ```
+
+## Brownfield trial: price-tracker-4's re-imported validation rows and worker returns
+
+The fourth price-tracker trial (2026-10-05) re-imported its plan after its first at-base `qa run`,
+moving the refresh requirement from flow row 3 to a reason-only row, so 6 flow rows became 5. The
+Validation tab then kept a stale row 6, filed the at-base refresh result under row 3, showed none of
+the 4 reason-only rows, and printed a worktree slot's absolute path from the at-base row 3 message.
+`RunView/price-tracker-4/` holds the run's `qa.jsonl`, the `qa/report.json` of each of its 5 `qa
+run`s and the plan's final `validation.json`, with the trial folder's absolute prefix cut to
+`/trial/`. `Transcripts/price-tracker-4-workflows/` holds the orchestrator session's 3 build
+Workflow records, cut as the `Transcripts/cb039a0d-…` records are. With `S` the run's copied state
+directory and `P` its `transcripts` folder:
+
+```sh
+F=plugin/gate/Tests/Fixtures/RunView/price-tracker-4; mkdir -p $F/events
+cut='s#/Users/[^/]+/Developer/trials/practice/price-tracker-4/#/trial/#g'
+sed -E "$cut" $S/events/qa.jsonl > $F/events/qa.jsonl
+for r in 20261005T074901Z-090098cf 20261005T075618Z-1cf3ff64 20261005T080814Z-ffc2a55e \
+  20261005T081116Z-e407d716 20261005T081823Z-e87338ca; do
+  mkdir -p $F/runs/$r/qa; sed -E "$cut" $S/runs/$r/qa/report.json > $F/runs/$r/qa/report.json; done
+cp $S/plans/spec/validation.json $F/validation.json
+W=plugin/gate/Tests/Fixtures/Transcripts/price-tracker-4-workflows; mkdir -p $W
+for f in "$P"/906f7d75-4c8b-4434-bedd-0e8173d509ba/workflows/wf_*.json; do
+  jq -S '{runId, workflowName, status, args: {task: .args.task, plan: .args.plan}}' "$f" \
+    > "$W/$(basename "$f")"; done
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` matched nothing in either folder.

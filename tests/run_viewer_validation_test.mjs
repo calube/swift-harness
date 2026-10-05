@@ -197,6 +197,14 @@ const withFlows = writePage(flowView)
 const withHistory = writePage(historyView)
 const withLastPass = writePage(lastPassView)
 const withRepair = writePage(repairView)
+// The fourth price-tracker trial's 4 reason-only requirements, as its plan's validation.json holds them.
+const TRIAL_REASONS = JSON.parse(readFileSync(new URL('../plugin/gate/Tests/Fixtures/RunView/price-tracker-4/validation.json', import.meta.url), 'utf8')).unitOnly
+const withReasons = writePage(view({ validation: { ...validation, reasonOnly: TRIAL_REASONS } }))
+const onlyReasons = writePage(view({ validation: { plan: 'sample-notes', counts: { pass: 0, red: 0, unverified: 0, waiting: 0 }, rows: [], reasonOnly: TRIAL_REASONS, keptFlows: [] } }))
+const REASONS = `(() => { document.querySelector('[role=tab][data-tab="validation"]')?.click()
+  const items = [...document.querySelectorAll('.qa-reason-only-row')]
+  return { tabs: [...document.querySelectorAll('[role=tab]')].map((t) => t.dataset.tab), requirements: items.map((li) => li.dataset.requirement),
+    texts: items.map((li) => li.innerText), errors: document.body.dataset.errors } })()`
 const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
   const r = document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="${n}"]')
   return { steps: [...r.querySelectorAll('.qa-step')].map((li) => ({ n: li.dataset.n, ok: li.dataset.ok, mark: li.querySelector('.qa-mark').getAttribute('aria-label'), href: li.querySelector('a')?.getAttribute('href') ?? null, text: li.innerText })),
@@ -409,6 +417,18 @@ const tests = {
     assert.ok(shown.video && shown.video.includes(QA) && shown.video.endsWith('video.mp4'), `video link ${shown.video}`)
     assert.equal(shown.steps, 3)
     assert.equal(shown.errors, '0')
+    assert.deepEqual(page.errors, [])
+  },
+
+  async 'the trial\'s 4 reason-only requirements list under the rows with their reasons, and a plan with only reason-only rows still shows the tab — catches a tab that hides why a requirement has no check'() {
+    for (const file of [withReasons, onlyReasons]) {
+      await page.load(file)
+      const got = await page.evaluate(REASONS)
+      assert.ok(got.tabs.includes('validation'), JSON.stringify(got.tabs))
+      assert.deepEqual(got.requirements, TRIAL_REASONS.map((r) => r.requirement))
+      got.texts.forEach((text, i) => assert.ok(text.includes(TRIAL_REASONS[i].reason), text))
+      assert.equal(got.errors, '0')
+    }
     assert.deepEqual(page.errors, [])
   },
 

@@ -1,0 +1,9 @@
+{
+  "args": {
+    "plan": "spec",
+    "task": "tracker-detail"
+  },
+  "runId": "wf_1ac4deed-6c3",
+  "status": "completed",
+  "workflowName": "swift-harness-build-task"
+}

@@ -21,6 +21,9 @@ struct BuildGateWaitReport: Sendable, Equatable, Encodable {
   /// The gate's own verdict and run id, once ``action`` is `read`.
   let gateVerdict: Verdict?
   let gateRunId: String?
+  /// The task of each Workflow run that ended during the call, or its run id when it names none;
+  /// empty unless ``action`` is `worker-returned`.
+  let returned: [String]
   let message: String
 }
 
@@ -36,6 +39,7 @@ enum BuildGateWaitRun {
   static func run(
     slug: String, tier: CheckTier, output: URL, maxWait: Int, git: any Git,
     clock: any BuildClock, events: @Sendable () -> [HarnessEvent],
+    endedWorkflows: @Sendable () -> [String: String] = { [:] },
     sleep: @Sendable (Int) async -> Void
   ) async -> BuildLoopResult<BuildGateWaitReport> {
     guard (0...maxWaitLimit).contains(maxWait) else {
@@ -62,13 +66,29 @@ enum BuildGateWaitRun {
     }
     let budget = GateBudget.estimate(tier: tier, events: events())
     let cutoffFile = store.layout.directory + "/" + CutoffRecord.fileName
+    let endedBefore = Set(endedWorkflows().keys)
     var waited = 0
     while true {
       let verdict = finishedGate(output)
-      let watch = GateWatch.decide(
+      var watch = GateWatch.decide(
         finished: verdict != nil, startedAt: startedAt, now: clock.now(), budget: budget,
         timeBox: record.timeBox,
         cutoffDecided: FileManager.default.fileExists(atPath: cutoffFile))
+      var returned: [String] = []
+      if watch.action == .wait {
+        let ended = endedWorkflows()
+        returned = ended.keys.filter { !endedBefore.contains($0) }.sorted().compactMap {
+          ended[$0]
+        }
+        if !returned.isEmpty {
+          watch = GateWatch(
+            action: .workerReturned, elapsedSeconds: watch.elapsedSeconds,
+            deadlineAt: watch.deadlineAt, secondsToDeadline: watch.secondsToDeadline,
+            reason:
+              "\(returned.joined(separator: ", ")) returned while the gate ran for "
+              + "\(watch.elapsedSeconds) s: handle its completion notice, then watch again")
+        }
+      }
       if watch.action != .wait || waited >= maxWait {
         return BuildLoopResult(
           command: command, plan: slug, verdict: .green,
@@ -77,7 +97,8 @@ enum BuildGateWaitRun {
             output: output.path, action: watch.action, startedAt: startedAt,
             elapsedSeconds: watch.elapsedSeconds, deadlineAt: watch.deadlineAt,
             secondsToDeadline: watch.secondsToDeadline, budget: budget,
-            gateVerdict: verdict?.verdict, gateRunId: verdict?.runID, message: watch.reason),
+            gateVerdict: verdict?.verdict, gateRunId: verdict?.runID, returned: returned,
+            message: watch.reason),
           holder: nil, message: watch.reason)
       }
       let step = max(1, min(pollSeconds, maxWait - waited, watch.secondsToDeadline))
@@ -118,8 +139,9 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
       + "from the warm-up's build and test times. The gate overruns at 3 times that, or "
       + "earlier when the time box needs the time for final and the report. Waits up to "
       + "--max-wait seconds, then prints `action`: `read` (the verdict is in), `wait` (call "
-      + "again), `overrun` (stop the gate and treat it as RED) or `cutoff` (run `build "
-      + "cutoff` first). Writes nothing. Exits 0 with the report, and 2 for a missing output "
+      + "again), `overrun` (stop the gate and treat it as RED), `cutoff` (run `build "
+      + "cutoff` first) or, with --session, `worker-returned` (a Workflow run of the session "
+      + "ended during the call: handle its notice, then call again). Writes nothing. Exits 0 with the report, and 2 for a missing output "
       + "file, no build run, or a --max-wait outside 0 to 540.")
 
   @Argument(help: "The plan's slug.")
@@ -134,11 +156,22 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
   @Option(name: .customLong("max-wait"), help: "Seconds to wait for a decision, 0 to 540.")
   var maxWait: Int = BuildGateWaitRun.defaultMaxWait
 
+  @Option(
+    help:
+      "The session whose Workflow runs to watch: the call returns worker-returned when one ends.")
+  var session: String?
+
   @OptionGroup var outputFormat: OutputOptions
 
   func run() async throws {
     let directory = URL(
       filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    // A session with no record, or a record with no transcript, watches no Workflow runs.
+    let workflows = session.flatMap { id in
+      (try? SessionRecordStore(worktreeRoot: directory).record(sessionID: id))?.flatMap {
+        $0.transcriptPath.map(WorkflowRecords.directory(transcriptPath:))
+      }
+    }
     let result = await BuildGateWaitRun.run(
       slug: plan, tier: tier, output: URL(filePath: output, relativeTo: directory),
       maxWait: maxWait, git: BuildLoop.git(), clock: LiveBuildClock(),
@@ -146,6 +179,7 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
         EventStoreReader(files: LiveEventStoreFiles(root: directory))
           .read(EventQuery(kinds: [.gateRun, .gateStep, .warmupRun])).events.map(\.event)
       },
+      endedWorkflows: { workflows.map { WorkflowRecords.ended(in: $0) } ?? [:] },
       sleep: { seconds in try? await Task.sleep(for: .seconds(seconds)) })
     Console.write(BuildGateWaitRun.render(result, format: outputFormat.format))
     try BuildLoop.exit(result)

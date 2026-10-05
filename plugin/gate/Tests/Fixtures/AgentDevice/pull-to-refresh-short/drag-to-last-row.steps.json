@@ -1,0 +1,7 @@
+[
+  {"command": "open", "input": {"app": "com.example.ShortRefreshProbe", "relaunch": true}},
+  {"command": "wait", "input": {"selector": "id=\"probe.refreshes\" label=\"Refreshes 0\"", "timeoutMs": 15000}},
+  {"command": "gesture", "input": {"kind": "drag", "source": "id=\"probe.row.0\"", "destination": "id=\"probe.row.2\""}},
+  {"command": "wait", "input": {"selector": "id=\"probe.refreshes\" label=\"Refreshes 1\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"probe.row.0\""}}
+]

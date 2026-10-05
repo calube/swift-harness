@@ -71,18 +71,28 @@ public struct QAReport: Sendable, Equatable {
     let verified =
       "\(Self.verified(rows)) of \(rows.count + reasonOnly) rows verified"
       + (reasonOnly > 0 ? " (\(reasonOnly) reason-only)" : "")
+    // A row that was due to run and didn't verify leaves the run unanswered, never GREEN.
+    let unrun = atBase ? [] : rows.filter { $0.result == .unverified }
+    let why =
+      unrun.first.map { row in
+        "; BLOCKED: row \(row.row) (\(row.requirement), \(row.layer.rawValue)) was due to run "
+          + "and is unverified: \(row.message)"
+          + (unrun.count > 1 ? " (and \(unrun.count - 1) more)" : "")
+      } ?? ""
     let message =
       if unverifiable {
         verified + ": unverified, no row has a check to run"
       } else if rows.isEmpty {
         "no validation row to run"
       } else {
-        verified + ": " + counts.joined(separator: ", ")
+        verified + ": " + counts.joined(separator: ", ") + why
       }
+    let verdict: Verdict =
+      findings.contains { $0.severity.failsGate } ? .red : unrun.isEmpty ? .green : .blocked
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
       commit: commit, atBaseRecord: atBaseRecord, trialMerge: trialMerge,
-      verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
+      verdict: verdict, rows: rows,
       reasonOnly: reasonOnly, findings: findings, notes: notes, message: message)
   }
 

@@ -243,14 +243,14 @@ struct QAReportTests {
   }
 
   @Test(
-    "only unverified and waiting rows leave the run GREEN — catches a note that gates"
+    "an unverified row that was due to run leaves the run BLOCKED, never GREEN, while its finding stays a non-gating note — catches a run that ran nothing read as passing"
   )
-  func unverifiedIsGreen() {
+  func unverifiedIsBlocked() {
     let report = QAReport(
       runID: "r1", plan: "p", after: nil, atBase: false, commit: "abc",
       rows: [Self.row(1, .flow, .unverified), Self.row(2, .state, .waiting)])
 
-    #expect(report.verdict == .green)
+    #expect(report.verdict == .blocked)
     #expect(report.findings.map(\.ruleID) == [QAReport.checkUnverifiedRuleID])
     #expect(report.findings.allSatisfy { !$0.severity.failsGate })
   }

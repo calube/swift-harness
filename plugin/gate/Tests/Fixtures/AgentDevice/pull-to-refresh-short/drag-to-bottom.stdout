@@ -1,0 +1,145 @@
+{
+  "success": true,
+  "data": {
+    "total": 5,
+    "executed": 5,
+    "totalDurationMs": 8461,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-refresh-short",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/requests/2b17eb6291568088.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/events.ndjson",
+          "sessionReused": false,
+          "selection": {
+            "reason": "explicit-selector",
+            "source": "local",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.ShortRefreshProbe",
+          "appBundleId": "com.example.ShortRefreshProbe",
+          "startup": {
+            "durationMs": 3361,
+            "measuredAt": "2026-10-05T08:46:49.215Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.ShortRefreshProbe",
+            "appBundleId": "com.example.ShortRefreshProbe"
+          },
+          "timing": {
+            "runnerDemand": "required",
+            "runnerPrewarmKind": "session",
+            "runnerPrewarmScheduled": true,
+            "openDispatchDurationMs": 628,
+            "launchUrlDurationMs": 0,
+            "runnerPrewarmWaited": false,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 2732,
+            "totalDurationMs": 3361
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-92505",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.ShortRefreshProbe"
+        },
+        "durationMs": 3880
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 496,
+          "selector": "id=\"probe.refreshes\" label=\"Refreshes 0\""
+        },
+        "durationMs": 505
+      },
+      {
+        "step": 3,
+        "command": "gesture",
+        "ok": true,
+        "data": {
+          "kind": "drag",
+          "durationMs": 1300,
+          "pointerCount": 1,
+          "from": {
+            "x": 201,
+            "y": 246
+          },
+          "to": {
+            "x": 201,
+            "y": 840
+          },
+          "targets": {
+            "source": {
+              "selectorChain": [
+                "id=\"probe.row.0\"",
+                "role=\"statictext\" label=\"Row 0\"",
+                "label=\"Row 0\""
+              ],
+              "resolution": {
+                "source": "runtime",
+                "phase": "pre-action",
+                "kind": "unique"
+              }
+            },
+            "destination": {
+              "selectorChain": [
+                "id=\"probe.bottom\"",
+                "text=\"probe.bottom\""
+              ],
+              "resolution": {
+                "source": "runtime",
+                "phase": "pre-action",
+                "kind": "unique"
+              }
+            }
+          },
+          "runnerMainThreadBusy": false,
+          "currentUptimeMs": 341040641.00245833,
+          "gestureStartUptimeMs": 341038978.74300003,
+          "gestureEndUptimeMs": 341040640.7670417,
+          "message": "Dragged id=\"probe.row.0\" to id=\"probe.bottom\"",
+          "executionProfile": "timed-pan",
+          "timing": {
+            "executionProfile": "timed-pan",
+            "gestureDurationMs": 1300
+          }
+        },
+        "durationMs": 3564
+      },
+      {
+        "step": 4,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 508,
+          "selector": "id=\"probe.refreshes\" label=\"Refreshes 1\""
+        },
+        "durationMs": 509
+      },
+      {
+        "step": 5,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "exists",
+          "pass": true,
+          "selector": "id=\"probe.row.0\"",
+          "matches": 1
+        },
+        "durationMs": 2
+      }
+    ]
+  }
+}
