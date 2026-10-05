@@ -15,35 +15,44 @@ public struct SwiftPMReader: EcosystemReader {
       // `Package@swift-6.0.swift` variants describe the same package; `Tuist/Package.swift`
       // declares a Tuist project's dependencies, not a package of its own.
       guard parts.last == "Package.swift", parts.dropLast().last != "Tuist" else { return nil }
-      let root = SwiftDiscoverPaths.dirname(path)
-      guard !absorbed.contains(root), let data = tree.read(path) else { return nil }
-      let manifest = String(decoding: data, as: UTF8.self)
-      let name =
-        root == "."
-        ? (SwiftDiscoverText.quoted(after: "name:", following: "Package(", in: manifest) ?? "root")
-        : SwiftDiscoverPaths.basename(root)
-      var commands: [AreaStep: Sourced<String>] = [
-        .build: Sourced(value: "swift build", source: path, confidence: .found)
-      ]
-      var missing: [AreaStep: String] = [:]
-      if manifest.contains(".testTarget(") {
-        commands[.test] = Sourced(value: "swift test", source: path, confidence: .found)
-        commands[.testFiles] = Sourced(
-          value: "swift test --filter {tests}", source: path, confidence: .found)
-      } else {
-        missing[.test] = "no test target in \(path)"
-      }
-      if let lint = SwiftDiscoverLint.command(root: root, tree: tree) {
-        commands[.lint] = lint
-      } else {
-        missing[.lint] = SwiftDiscoverLint.missingReason
-      }
-      return ProposedArea(
-        name: SwiftDiscoverText.areaName(name), root: root, language: .swift, kind: .swiftpm,
-        source: path, commands: commands, missing: missing,
-        testGlobs: [SwiftDiscoverPaths.join(root, "Tests/**/*.swift")], xcode: nil,
-        generatedProjectTracked: nil)
+      guard !absorbed.contains(SwiftDiscoverPaths.dirname(path)) else { return nil }
+      return Self.area(manifest: path, in: tree)
     }
+  }
+
+  /// The area the package whose manifest is `path` makes. `runElsewhere` names its test targets an
+  /// Xcode scheme already runs, which this area's `test` leaves out.
+  public static func area(
+    manifest path: String, in tree: TrackedTreeSnapshot, runElsewhere: Set<String> = []
+  ) -> ProposedArea? {
+    let root = SwiftDiscoverPaths.dirname(path)
+    guard let data = tree.read(path) else { return nil }
+    let manifest = String(decoding: data, as: UTF8.self)
+    let name =
+      root == "."
+      ? (SwiftDiscoverText.quoted(after: "name:", following: "Package(", in: manifest) ?? "root")
+      : SwiftDiscoverPaths.basename(root)
+    var commands: [AreaStep: Sourced<String>] = [
+      .build: Sourced(value: "swift build", source: path, confidence: .found)
+    ]
+    var missing: [AreaStep: String] = [:]
+    if manifest.contains(".testTarget(") {
+      commands[.test] = Sourced(value: "swift test", source: path, confidence: .found)
+      commands[.testFiles] = Sourced(
+        value: "swift test --filter {tests}", source: path, confidence: .found)
+    } else {
+      missing[.test] = "no test target in \(path)"
+    }
+    if let lint = SwiftDiscoverLint.command(root: root, tree: tree) {
+      commands[.lint] = lint
+    } else {
+      missing[.lint] = SwiftDiscoverLint.missingReason
+    }
+    return ProposedArea(
+      name: SwiftDiscoverText.areaName(name), root: root, language: .swift, kind: .swiftpm,
+      source: path, commands: commands, missing: missing,
+      testGlobs: [SwiftDiscoverPaths.join(root, "Tests/**/*.swift")], xcode: nil,
+      generatedProjectTracked: nil)
   }
 }
 
