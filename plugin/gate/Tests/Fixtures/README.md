@@ -3470,6 +3470,42 @@ PY
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: the warm-up times and time box an area command's bound reads
+
+`BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run wrote at its
+base tree: AppFeature's warm test took 31.7 s, and that run's
+merge gate then held a hung test's prove step for 1033 s. `price-tracker-1-clock.json` is the same
+run's launch clock, with its absolute spec paths cut to `/trial/repo/`. From the trial's copied
+state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/warmup/20356747eb132f654aa83d669d3156442e11a963.json $F/price-tracker-1-warmup.json
+sed -E 's#"/[^"]*/price-tracker-1/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
+  > $F/price-tracker-1-clock.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-1-*` matched nothing.
+
+## Brownfield trial: a box's gate times and a qa run's flow rows near the cutoff
+
+`BrownfieldTrial/send-money-2-gate-runs.jsonl` is every `gate.run` line of a brownfield run's
+`events/gate.jsonl`: 6 slices, 6 merges (the longest 289.3 s) and a 206.6 s `final`.
+`send-money-2-at-base-run.json` is that run's at-base `qa run` record, whose 3 flow rows took 53 to
+124 s; a post-merge `qa run` of those rows started 9 s before the cutoff and ran 304 s.
+`send-money-2-clock.json` is the run's launch clock, with its absolute spec paths cut to
+`/trial/repo/`. From the trial's copied state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/send-money-2-gate-runs.jsonl
+cp $S/plans/spec/qa/at-base-run.json $F/send-money-2-at-base-run.json
+sed -E 's#"/[^"]*/send-money-2/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
+  > $F/send-money-2-clock.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-2-*` matched nothing.
+
 ## Brownfield trial: a screen task merged with its flows unrun
 
 The second send-money trial merged its screens task before any flow ran on its branch: 1 of its 3

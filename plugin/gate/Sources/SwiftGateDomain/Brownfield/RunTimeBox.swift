@@ -287,3 +287,31 @@ public struct CutoffRecord: Sendable, Equatable, Codable {
     return encoder
   }
 }
+
+/// How long a run's `final` gate takes, as its clone's gate history measured it.
+public enum MeasuredFinalGate {
+  /// `build finish`, the checkout's removal and the report after `final`: under a minute in the
+  /// fifth memos trial.
+  public static let reportSeconds = 60
+
+  /// The longest `check final` in `runs`; with none, the longest `check merge`, since a `final`
+  /// runs every step a merge does for every area. Whole seconds, rounded up; `nil` with neither.
+  public static func seconds(in runs: [GateRunEvent]) -> Int? {
+    let finals = runs.filter { $0.command == "check final" }.map(\.milliseconds)
+    let merges = runs.filter { $0.command == "check merge" }.map(\.milliseconds)
+    guard let longest = (finals.isEmpty ? merges : finals).max() else { return nil }
+    return (longest + 999) / 1000
+  }
+}
+
+extension TimeBoxLimits {
+  /// These limits with the final reserve grown to hold `finalSeconds` of `final` and the report,
+  /// never shrunk, and never past where starts stop.
+  public func holding(finalSeconds: Int?) -> TimeBoxLimits {
+    guard let finalSeconds else { return self }
+    let needed = (finalSeconds + MeasuredFinalGate.reportSeconds + 59) / 60
+    return TimeBoxLimits(
+      budgetMin: budgetMin, stopStartsBeforeMin: stopStartsBeforeMin,
+      finalReserveMin: max(finalReserveMin, min(needed, stopStartsBeforeMin)), source: source)
+  }
+}

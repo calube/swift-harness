@@ -107,11 +107,14 @@ private struct BoxScenario {
       try TaskReturnJSON.encode(taskReturn))
   }
 
-  func cutoff(atMinute minute: Double) async -> BuildLoopResult<BuildCutoffReport> {
+  func cutoff(
+    atMinute minute: Double, leftovers: (any RunLeftovers)? = nil, finalSeconds: Int? = nil
+  ) async -> BuildLoopResult<BuildCutoffReport> {
     await BuildCutoffRun.run(
       slug: Self.plan, session: Self.session, git: git,
       clock: BoxClock(date: Self.launch.addingTimeInterval(minute * 60)),
-      telemetry: BuildCutoffTelemetry(log: BuildHaltLog(root: telemetryRoot), enabled: true))
+      telemetry: BuildCutoffTelemetry(log: BuildHaltLog(root: telemetryRoot), enabled: true),
+      leftovers: leftovers, finalSeconds: finalSeconds)
   }
 
   func ledger() throws -> [String: TaskStatus] {
@@ -127,8 +130,72 @@ private struct BoxScenario {
   }
 }
 
+/// Records what a cutoff asked of the run's leftovers, with 1 gate running in each worktree it
+/// names and 1 orphaned scratch tree to prune.
+final class RecordingLeftovers: RunLeftovers {
+  private let stopped = Mutex<[[String]]>([])
+  private let pruned = Mutex(0)
+
+  var stopRequests: [[String]] { stopped.withLock { $0 } }
+  var pruneCount: Int { pruned.withLock { $0 } }
+
+  func stopGates(in worktrees: [String]) async -> [RunningGate] {
+    stopped.withLock { $0.append(worktrees) }
+    return worktrees.enumerated().map { index, worktree in
+      RunningGate(
+        pid: Int32(100 + index), processStart: 1, toplevel: worktree, tier: "slice",
+        startedAt: Date(timeIntervalSince1970: 0))
+    }
+  }
+
+  func pruneScratchTrees() async -> ScratchWorktreeSweep {
+    pruned.withLock { $0 += 1 }
+    return ScratchWorktreeSweep(removed: ["/scratch/.repo-swiftgate-prove-100-ab"])
+  }
+}
+
 @Suite("a brownfield build inside its time box")
 struct BuildTimeBoxTests {
+  @Test(
+    "a final measured at 400 s grows the reserve to 8 min, so the cutoff acts at minute 38 of a 45 min box where the fixed 5 min reserve would wait — catches a cutoff that leaves final less time than it takes"
+  )
+  func measuredFinalBringsTheCutoffEarlier() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("web", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+
+    let fixed = await scenario.cutoff(atMinute: 38)
+    #expect(fixed.verdict == .red, "the fixed reserve's cutoff is at minute 40")
+
+    let measured = await scenario.cutoff(atMinute: 38, finalSeconds: 400)
+    #expect(measured.verdict == .green, "\(measured.message)")
+    #expect(measured.report?.abandoned.map(\.task) == ["web"])
+  }
+
+  @Test(
+    "the cutoff stops the gates still running in each task it abandons and prunes their scratch trees, leaving the finishing task's gates alone — catches a killed gate's scratch tree and a cut task's gate outliving the cutoff"
+  )
+  func cutoffStopsAbandonedGates() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("store", .inProgress), ("web", .inProgress)])
+    try scenario.writeClock()
+    let record = try await scenario.start(.brownfield)
+    try scenario.writeReturn("store", runID: record.runID, outcome: .readyToMerge)
+    let leftovers = RecordingLeftovers()
+
+    let result = await scenario.cutoff(atMinute: 40, leftovers: leftovers)
+
+    let report = try #require(result.report, "\(result.message)")
+    #expect(report.abandoned.map(\.task) == ["web"])
+    #expect(leftovers.stopRequests == [["../web"]])
+    #expect(report.stoppedGates == ["slice in ../web"])
+    #expect(leftovers.pruneCount == 1)
+    #expect(report.prunedScratchTrees == ["/scratch/.repo-swiftgate-prove-100-ab"])
+  }
+
   @Test(
     "build start in a brownfield plan anchors run.json's box at the launch clock, and with no clock at build start from the preset — catches a brownfield run with no budget, or a box measured from build start"
   )

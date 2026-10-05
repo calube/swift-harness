@@ -7,6 +7,9 @@ public enum ProofRules {
   public static let notProvenRuleID = "prove.not-proven"
   public static let compileOnlyRuleID = "prove.compile-only"
   public static let crashedRuleID = "prove.crashed"
+  /// With the source reverted the test ran past its bound and was killed: it hangs where it
+  /// should fail on an assertion.
+  public static let hangsAtBaseRuleID = "prove.hangs-at-base"
   public static let failsAtHeadRuleID = "prove.fails-at-head"
   public static let noEvidenceRuleID = "prove.no-evidence"
   public static let summaryRuleID = "prove.summary"

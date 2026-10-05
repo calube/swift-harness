@@ -1,0 +1,38 @@
+{
+  "areas" : {
+    "APIClient" : {
+      "coldMs" : 131085,
+      "steps" : {
+        "build" : "passed",
+        "test" : "passed"
+      },
+      "testMs" : 23156
+    },
+    "AppFeature" : {
+      "coldMs" : 240679,
+      "steps" : {
+        "build" : "passed",
+        "test" : "passed"
+      },
+      "testMs" : 31715
+    },
+    "InterviewStarter" : {
+      "coldMs" : 321657,
+      "steps" : {
+        "build" : "passed",
+        "test" : "passed"
+      },
+      "testMs" : 76839
+    },
+    "LogClient" : {
+      "coldMs" : 170421,
+      "steps" : {
+        "build" : "passed",
+        "test" : "passed"
+      },
+      "testMs" : 35217
+    }
+  },
+  "tree" : "20356747eb132f654aa83d669d3156442e11a963",
+  "version" : 1
+}

@@ -214,6 +214,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The merge gate run `--undo` recorded in the build run's log for the commit it undid; `nil`
   /// when the log already held it or no `check` run started at that commit.
   public let gateRunId: String?
+  /// The scratch trees an undo pruned, left by gates that ended without removing them.
+  public var prunedScratchTrees: [String]?
   /// The branches `--undo` kept the work it took off `main` on, or an earlier fix branch it set
   /// aside before cutting the new one, as `<plan>/fix-<task>-<n>`; `nil` when it kept none.
   public let keptBranches: [String]?
@@ -265,12 +267,17 @@ public struct BuildMerge: Sendable {
   let clock: any BuildClock
   /// Which ``TaskWorktree`` layout names the checkout and branch merges land in.
   let profile: RepositoryProfile
+  /// Prunes the scratch trees of gates that ended unfinished once an undo lands; `nil` leaves
+  /// them.
+  let leftovers: (any RunLeftovers)?
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
-    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned
+    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned,
+    leftovers: (any RunLeftovers)? = nil
   ) {
     self.profile = profile
+    self.leftovers = leftovers
     self.plan = plan
     self.task = task
     self.fix = fix
@@ -429,17 +436,26 @@ public struct BuildMerge: Sendable {
       }
       let kept = try await keepUndoneWork(command, context, undone: lastMerge)
       let (files, detail) = try await cutFix(command, context)
+      // The merge gate that sent this undo may have died inside its prove, leaving a scratch
+      // tree registered.
+      let sweep = await leftovers?.pruneScratchTrees()
+      let pruned = sweep.map { sweep in
+        (sweep.removed.isEmpty ? "" : " Pruned \(sweep.removed.count) scratch tree(s).")
+          + sweep.failures.map { " A scratch tree wasn't pruned: \($0)." }.joined()
+      }
       let keptNote =
         kept.isEmpty
         ? ""
         : " Kept the work it took off \(context.names.baseBranch) on "
           + "\(kept.joined(separator: ", ")); merge it into the fix worktree to build on it."
-      return report(
+      var undone = report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
         gateRunId: gate.runID, keptBranches: kept.isEmpty ? nil : kept,
         message: "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to "
-          + "\(lastMerge.preCommit).\(gate.note)\(removed)\(keptNote) \(detail)")
+          + "\(lastMerge.preCommit).\(gate.note)\(removed)\(keptNote) \(detail)\(pruned ?? "")")
+      undone.prunedScratchTrees = sweep?.removed
+      return undone
     } catch {
       return error.report
     }

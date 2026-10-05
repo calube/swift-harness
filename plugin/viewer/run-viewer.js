@@ -380,7 +380,7 @@
   }
 
   // proof: the assertion's file, line and kind only; a report never carries source
-  const outcomeText = { proven: ["failed", "ok", "proven"], "passes-reverted": ["passed", "bad", "not proven"], "compile-only": ["didn't compile", "warn", "not proven"], crashed: ["crashed", "warn", "not proven"], skipped: ["skipped", "warn", "not proven"] };
+  const outcomeText = { proven: ["failed", "ok", "proven"], "passes-reverted": ["passed", "bad", "not proven"], "compile-only": ["didn't compile", "warn", "not proven"], crashed: ["crashed", "warn", "not proven"], "hangs-at-base": ["hung", "bad", "not proven"], skipped: ["skipped", "warn", "not proven"] };
   function renderProof() {
     $("proof").innerHTML = `<thead><tr><th>test</th><th>with the change reverted</th><th>assertion</th></tr></thead><tbody>` +
       view.proofs.map((p) => {

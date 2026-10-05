@@ -666,7 +666,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `snapshots.recorded` | playbook P4 (`snapshots record`) |
 | `impact.untested-change` | playbook P9 |
 | `coverage.diff`, `coverage.uncovered-lines`, `coverage.no-data`, `coverage.no-t1-tests`, `coverage.summary` | playbook §4 |
-| `prove.not-proven`, `prove.compile-only`, `prove.crashed`, `prove.fails-at-head`, `prove.no-evidence`, `prove.summary` | playbook P2 |
+| `prove.not-proven`, `prove.compile-only`, `prove.crashed`, `prove.hangs-at-base`, `prove.fails-at-head`, `prove.no-evidence`, `prove.summary` | playbook P2 |
 | `stress.failed`, `stress.crashed`, `stress.no-evidence` | playbook P8 |
 | `reach.no-production-lines`, `reach.fails-alone`, `reach.no-data`, `changed-tests.summary` | playbook §5.2 |
 | `mutate.survived`, `mutate.killed`, `mutate.unviable`, `mutate.no-evidence`, `mutate.bare-equivalent`, `mutate.summary` | playbook §5.2 |

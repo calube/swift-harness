@@ -151,12 +151,18 @@ enum BuildNextRun {
         return .blocked(command, slug, "reading build run \(runID)'s events: \(error)")
       }
       let now = clock.now()
+      // The clone's measured `final` grows the reserve, so the cutoff it reports comes earlier.
+      let finalSeconds = MeasuredFinalGateReader.seconds(worktree: root)
+      let timeBox = record.timeBox.map { box in
+        RunTimeBox(
+          startedAt: box.startedAt, limits: box.limits.holding(finalSeconds: finalSeconds))
+      }
       let result = BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
-        now: now, required: required, timeBox: record.timeBox,
+        now: now, required: required, timeBox: timeBox,
         idle: running.filter { log.workerFinished(task: $0) })
       let queue = log.mergeQueue(running: running)
-      let secondsToCutoff = record.timeBox.map {
+      let secondsToCutoff = timeBox.map {
         max(0, Int($0.deadlines.cutoffAt.timeIntervalSince(now).rounded(.up)))
       }
       let notDone = Set(ledger.tasks.filter { $0.status != .done }.map(\.id))
@@ -171,7 +177,7 @@ enum BuildNextRun {
         stallMin: StallWatch.minutes(
           preset: record.preset.effectiveStallMin, secondsToCutoff: secondsToCutoff),
         readyToMerge: queue.ready, merging: queue.merging,
-        timeBox: record.timeBox.map { box in
+        timeBox: timeBox.map { box in
           let deadlines = box.deadlines
           return BuildNextReport.TimeBox(
             noNewStartsAt: deadlines.noNewStartsAt, cutoffAt: deadlines.cutoffAt,

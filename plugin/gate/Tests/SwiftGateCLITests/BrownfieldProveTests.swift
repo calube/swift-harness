@@ -32,6 +32,7 @@ private final class TreeReadingRunner: AreaCommandRunning {
     for path in selected {
       let body = (try? String(contentsOf: tree.appending(path: path), encoding: .utf8)) ?? ""
       if body.contains("crash") { return .crashed(signal: 6, tail: "\(path) aborted") }
+      if body.contains("hang") { return .timedOut(tail: "\(path) started") }
       if body.contains("needs new") && library?.contains("new") != true { failed = true }
     }
     return failed ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
@@ -109,7 +110,8 @@ struct BrownfieldProveTests {
 
   private static func prove(
     _ clone: Clone, runner: TreeReadingRunner, testFiles: String?,
-    proofs: ProveResultCollector = ProveResultCollector()
+    proofs: ProveResultCollector = ProveResultCollector(),
+    bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)? = nil
   ) async -> ChangedTestJudgement {
     let process = LiveProcessRunner(baseEnvironment: environment)
     return await BrownfieldProve.run(
@@ -120,7 +122,7 @@ struct BrownfieldProveTests {
         scratch: LiveScratchWorktrees(
           runner: process, repositoryRoot: clone.root.path,
           directory: clone.base.appending(path: "scratch")),
-        runner: runner, deadline: .seconds(60)))
+        runner: runner, deadline: .seconds(60), bound: bound))
   }
 
   private static func gating(_ judgement: ChangedTestJudgement) -> [String] {
@@ -162,6 +164,31 @@ struct BrownfieldProveTests {
         "check 'tests/a.test' 'tests/b.test' 'tests/c.test'", "check 'tests/a.test'",
         "check 'tests/b.test'", "check 'tests/c.test'",
       ])
+  }
+
+  @Test(
+    "a run of 2 changed tests that hangs with the source reverted isn't rerun test by test: each is prove.hangs-at-base under the run's bound — catches prove multiplying a hang's wait by the test count"
+  )
+  func hangIsNotRerunAlone() async throws {
+    let clone = try await Self.clone(tests: [
+      "tests/a.test": "needs new\n", "tests/spins.test": "hang\n",
+    ])
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = TreeReadingRunner()
+    let proofs = ProveResultCollector()
+
+    let judgement = await Self.prove(
+      clone, runner: runner, testFiles: "check {files}", proofs: proofs,
+      bound: { _, _ in AreaCommandBound(duration: .seconds(400), reason: "the scratch bound") })
+
+    #expect(runner.commands == ["check 'tests/a.test' 'tests/spins.test'"])
+    #expect(runner.requests.withLock { $0.map(\.deadline) } == [.seconds(400)])
+    #expect(
+      Self.gating(judgement) == [
+        "prove.hangs-at-base tests/a.test", "prove.hangs-at-base tests/spins.test",
+      ])
+    #expect(judgement.verdict == .red)
+    #expect(proofs.results.map(\.outcome) == [.hangsAtBase, .hangsAtBase])
   }
 
   @Test(

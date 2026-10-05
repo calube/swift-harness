@@ -12,18 +12,21 @@ enum BrownfieldProve {
     let runner: any AreaCommandRunning
     /// A file's text, or `nil` when it can't be read.
     let readFile: @Sendable (URL) -> String?
-    /// Per command run.
+    /// Per command run, when ``bound`` is `nil`.
     let deadline: Duration
     /// The worktree's state, whose prove DerivedData an `xcodebuild` in the scratch tree builds
     /// in; `nil` leaves each command as it is.
     let layout: BrownfieldStateLayout?
+    /// Each area's bound for a command in the scratch tree, by step.
+    let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
       readFile: @escaping @Sendable (URL) -> String? = {
         try? String(contentsOf: $0, encoding: .utf8)
       },
-      deadline: Duration, layout: BrownfieldStateLayout? = nil
+      deadline: Duration, layout: BrownfieldStateLayout? = nil,
+      bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)? = nil
     ) {
       self.git = git
       self.scratch = scratch
@@ -31,6 +34,7 @@ enum BrownfieldProve {
       self.readFile = readFile
       self.deadline = deadline
       self.layout = layout
+      self.bound = bound
     }
 
     /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.
@@ -108,6 +112,19 @@ enum BrownfieldProve {
     guard !plans.isEmpty else {
       return judgement.merged(with: note("prove: no new or changed tests since \(base)"))
     }
+    // A plan whose run the box leaves too little time isn't started: it would only be killed.
+    plans = plans.filter { plan in
+      guard let bound = dependencies.bound?(plan.area.name, plan.step), bound.cannotFinish else {
+        return true
+      }
+      let expected = bound.expected.map { " its measured \($0.components.seconds) s" } ?? ""
+      judgement = judgement.merged(
+        with: blocked(
+          "\(plan.area.name)'s changed tests not run: \(bound.reason) can't hold\(expected)",
+          file: plan.ids.first?.file ?? "."))
+      return false
+    }
+    guard !plans.isEmpty else { return judgement }
     let reverted = changed.filter { !tests.contains($0) }
     guard !reverted.isEmpty else {
       return judgement.merged(
@@ -149,6 +166,13 @@ enum BrownfieldProve {
     let area: BrownfieldArea
     let ids: [AreaTestID]
     let command: Command
+    /// The step its first run is.
+    var step: AreaStep {
+      switch command {
+      case .selected: .testFiles
+      case .whole: .test
+      }
+    }
   }
 
   /// The outcome of running some areas' plans.
@@ -220,9 +244,12 @@ enum BrownfieldProve {
   ) async -> AreaRun {
     let area = plan.area
     let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
+    // Read again for each run: the box's time left shrinks between them.
+    var bound: AreaCommandBound?
     var runs = 0
     func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> AreaCommandOutcome {
       runs += 1
+      bound = dependencies.bound?(area.name, step)
       var junit: String?
       if template.contains("{junit}") {
         try? FileManager.default.createDirectory(
@@ -235,7 +262,7 @@ enum BrownfieldProve {
         junit: junit.map(ChangedTestIDs.shellQuoted))
       let request = AreaCommandRequest(
         area: area.name, step: step, command: command, workingDirectory: directory.path,
-        deadline: dependencies.deadline, environment: [:], junitPath: junit)
+        deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
       return await dependencies.runner.run(
         dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request)
     }
@@ -247,7 +274,8 @@ enum BrownfieldProve {
       whole = true
       let outcome = await run(command, step: .test, ids: plan.ids)
       outcomes = plan.ids.map { ($0, outcome) }
-      judgement = ProveVerdict.judgeWhole(area: area.name, ids: plan.ids, outcome: outcome)
+      judgement = ProveVerdict.judgeWhole(
+        area: area.name, ids: plan.ids, outcome: outcome, bound: bound)
     case .selected(let template):
       whole = false
       let together = await run(template, step: .testFiles, ids: plan.ids)
@@ -260,7 +288,7 @@ enum BrownfieldProve {
       } else {
         outcomes = plan.ids.map { ($0, together) }
       }
-      judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes)
+      judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes, bound: bound)
     }
     let proven = outcomes.filter {
       if case .failed = $0.1 { return true }

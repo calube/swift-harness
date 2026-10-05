@@ -45,7 +45,8 @@ Each gets `QA_PORT`, a loopback port the OS
 assigned that run, `QA_DIR`, the plan's `qa/` folder, and `QA_EVIDENCE_DIR`, the run's `qa/` folder.
 
 Exit 0 is `pass`; any other exit, a signal or the 10-minute timeout is `red`; a check that couldn't
-start is `unverified`. A red row's message adds its first failure line. An acceptance check may write
+start is `unverified`. Inside a run's box, a row that can't finish before the cutoff (`--final`: the
+box's end) doesn't start and is `unverified`. A red row's message adds its first failure line. An acceptance check may write
 a JUnit or xUnit report to `$QA_JUNIT`, the path a `test:` row passes as `{junit}`; a report or result bundle showing
 no test ran is `red` at the merge base and `unverified` otherwise. A pass counts the tests they show
 passed and lists them as evidence. A screenshot, tree or log never

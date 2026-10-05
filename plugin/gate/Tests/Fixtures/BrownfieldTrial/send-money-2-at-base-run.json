@@ -1,0 +1,35 @@
+{
+  "commit" : "34c651c251ff9a32d213b6519967a386eaf4ea0c",
+  "preparedBy" : "spec-validation",
+  "rows" : [
+    {
+      "check" : "qa/search-contacts.flow.json",
+      "digest" : "41b496703a7c7e4fd1312b96c2c55c15ecd5e04f974c93cc670c29c04b524b4f",
+      "layer" : "flow",
+      "message" : "step 3 `fill` failed: Batch failed at step 6 (fill): Selector did not match: id=\"home.search\"",
+      "ms" : 123894,
+      "requirement" : "req-search",
+      "result" : "red"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "digest" : "efaba0391b4faad2161dbead47335cef21bd58b4ec2ff6cf4983331628df2521",
+      "layer" : "flow",
+      "message" : "step 5 `wait` failed: Batch failed at step 11 (wait): wait timed out for selector: id=\"amount.value\"",
+      "ms" : 97208,
+      "requirement" : "req-send-success",
+      "result" : "red"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "digest" : "9f43a1e7fc5048df202b6e641552c62072694fc23ae17759ed57442ea05cfdfc",
+      "layer" : "flow",
+      "message" : "step 5 `wait` failed: Batch failed at step 11 (wait): wait timed out for selector: id=\"amount.value\"",
+      "ms" : 53225,
+      "requirement" : "req-send-failure",
+      "result" : "red"
+    }
+  ],
+  "runID" : "20261005T025942Z-64ab32ed",
+  "schemaVersion" : 1
+}

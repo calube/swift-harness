@@ -9,7 +9,7 @@ enum BuildMergeRun {
   static func run(
     slug: String, task: String, undo: Bool, fix: Bool = false, session: String?, git: any Git,
     workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock,
-    profile: RepositoryProfile = .owned
+    profile: RepositoryProfile = .owned, leftovers: (any RunLeftovers)? = nil
   ) async -> BuildMergeReport {
     let command = undo ? BuildMerge.undoCommand : BuildMerge.mergeCommand
     if let refusal: BuildLoopResult<BuildMergeReport> = await BuildLoop.authorize(
@@ -24,7 +24,7 @@ enum BuildMergeRun {
     let flow = BuildMerge(
       plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger,
       clock: clock,
-      profile: profile)
+      profile: profile, leftovers: leftovers)
     return undo ? await flow.undo() : await flow.merge()
   }
 
@@ -52,7 +52,8 @@ struct BuildMergeCommand: AsyncParsableCommand {
       + "../<repo>-<plan>-fix-<task> on <plan>/fix-<task> from main with the conflicted merge in "
       + "it. --undo resets main to the task's recorded pre commit, only while main is still at "
       + "its post commit, records the newest `check --tier` run at that commit as the task's merge "
-      + "gate unless the log holds it, records an undo event, and cuts the same fix worktree "
+      + "gate unless the log holds it, records an undo event, prunes the scratch trees of gates "
+      + "that ended unfinished, and cuts the same fix worktree "
       + "with the task merged in. A fix worktree already there is removed first, its gate reports "
       + "kept, and blocks the undo while it has uncommitted changes; any work the undo takes off "
       + "main that no branch holds, such as a merged fix branch's, stays on "
@@ -98,7 +99,9 @@ struct BuildMergeCommand: AsyncParsableCommand {
       git: LiveGit(runner: runner, repositoryRoot: root),
       workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root),
       merger: LiveMergeRunner(runner: runner), clock: LiveBuildClock(),
-      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)))
+      profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)),
+      leftovers: LiveRunLeftovers(
+        directory: URL(filePath: root, directoryHint: .isDirectory), runner: runner))
     Console.write(BuildMergeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

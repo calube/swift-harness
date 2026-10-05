@@ -45,7 +45,11 @@ struct BrownfieldMergeCheckTests {
   private static func run(
     _ clone: Clone, tier: CheckTier, areas: [BrownfieldArea], changed: [String],
     runner: FakeAreaCommandRunner, sliceBuildsOnly: Bool = false,
-    context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil
+    context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil,
+    bound:
+      (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
+      nil,
+    reuse: AreaStepReuse? = nil
   ) async throws -> GateRunParts {
     let runner = areaRunner ?? runner
     let git = FakeGit(
@@ -56,14 +60,19 @@ struct BrownfieldMergeCheckTests {
       brownfield: BrownfieldSettings(
         discoveredAt: "base0", sliceBudgetSeconds: 30, timeBudgetMinutes: 0, sensitive: []),
       areas: areas, allow: [], buildPresets: [:])
+    var scratchBound: (@Sendable (String, AreaStep) -> AreaCommandBound)?
+    if let bound {
+      scratchBound = { area, step in bound(area, step, .scratch) }
+    }
     let dependencies = BrownfieldMergeCheck.Dependencies(
       config: config, layout: clone.layout, git: git, runner: runner,
       baseline: BaselineStore(layout: clone.layout, runner: runner, scratch: scratch),
       prove: BrownfieldProve.Dependencies(
         git: git, scratch: scratch, runner: runner, readFile: { _ in "it('works')\n" },
-        deadline: .seconds(5)),
+        deadline: .seconds(5), bound: scratchBound),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      sliceBuildsOnly: { _ in sliceBuildsOnly }, deadline: .seconds(5))
+      sliceBuildsOnly: { _ in sliceBuildsOnly }, deadline: .seconds(5), bound: bound,
+      reuse: reuse)
     return try await BrownfieldMergeCheck.run(
       root: clone.root, tier: tier, base: "main",
       context: context ?? GateRun.Context(runID: "run", directory: clone.base),
@@ -113,6 +122,152 @@ struct BrownfieldMergeCheckTests {
     #expect(
       !proven.requests.contains { $0.step == .testFiles },
       "an area slice already proved isn't proved again")
+  }
+
+  /// The bounds the price-tracker trial's warm-up times give, with no time box running.
+  private static let trialBound:
+    @Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound = {
+      area, step, tree in
+      let times =
+        (try? WarmupTimesFile.decode(
+          Fixture.data("BrownfieldTrial/price-tracker-1-warmup.json"),
+          tree: "20356747eb132f654aa83d669d3156442e11a963")) ?? WarmupTimesFile(tree: "")
+      return AreaCommandBounds(times: times, box: nil, tier: .merge, fallback: .seconds(3600))
+        .bound(area: area, step: step, tree: tree, now: Date(timeIntervalSince1970: 0))
+    }
+
+  @Test(
+    "a test step that hangs at the head is held only to its bound and is RED naming the step, the bound and the output's tail — catches a hung test holding the merge gate for the flat hour"
+  )
+  func hungTestStepIsRedAtItsBound() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let hung = FakeAreaCommandRunner { request in
+      request.step == .test && !clone.inScratch(request)
+        ? .timedOut(tail: "◇ Test spinsUntilStarted() started.") : .passed
+    }
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("AppFeature")], changed: ["AppFeature/src/a.js"],
+      runner: hung, bound: Self.trialBound)
+
+    let test = try #require(hung.requests.first { $0.step == .test && !clone.inScratch($0) })
+    #expect(test.deadline == .milliseconds(5 * 31_715))
+    #expect(Self.verdict(parts) == .red)
+    let finding = try #require(parts.findings.first { $0.ruleID == "area.test-failed" })
+    #expect(finding.message.contains("test"))
+    #expect(finding.message.contains("159 s"))
+    #expect(finding.message.contains("5 × AppFeature's 31.7 s warm test"))
+    #expect(finding.message.contains("spinsUntilStarted() started"))
+  }
+
+  @Test(
+    "a step the box leaves less time than its measured run isn't started and the tier is BLOCKED saying so — catches a gate step started only to be killed at the cutoff"
+  )
+  func stepThatCannotFinishIsNotStarted() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let short: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = { _, step, _ in
+      step == .test
+        ? AreaCommandBound(
+          duration: .seconds(20), reason: "the 20 s left before the run's cutoff",
+          expected: .milliseconds(31_715))
+        : AreaCommandBound(duration: .seconds(600), reason: "the floor")
+    }
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("AppFeature")], changed: ["AppFeature/src/a.js"],
+      runner: runner, bound: short)
+
+    #expect(!runner.requests.contains { $0.step == .test })
+    #expect(Self.verdict(parts) == .blocked)
+    #expect(
+      parts.findings.contains {
+        $0.ruleID == CheckRun.notRunRuleID && $0.message.contains("AppFeature test")
+          && $0.message.contains("20 s left")
+      })
+  }
+
+  @Test(
+    "a moved test's prove runs in the scratch tree under the scratch bound, and a hang there is RED prove.hangs-at-base recorded per test — catches prove waiting out a test that spins forever with the source reverted"
+  )
+  func proveHangAtBaseIsAResult() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let changed = ["AppFeature/src/lib.js", "AppFeature/tests/spins.test.js"]
+    let hung = FakeAreaCommandRunner { request in
+      request.step == .testFiles && clone.inScratch(request)
+        ? .timedOut(tail: "◇ Test spins() started.") : .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("AppFeature")], changed: changed, runner: hung,
+      sliceBuildsOnly: true, context: context, bound: Self.trialBound)
+
+    let prove = try #require(hung.requests.first { $0.step == .testFiles && clone.inScratch($0) })
+    #expect(prove.deadline == .milliseconds(240_679 + 5 * 31_715))
+    #expect(Self.gating(parts) == ["prove.hangs-at-base AppFeature/tests/spins.test.js"])
+    let finding = try #require(parts.findings.first { $0.ruleID == "prove.hangs-at-base" })
+    #expect(finding.message.contains("400 s"))
+    #expect(context.proofs.results.map(\.outcome) == [.hangsAtBase])
+  }
+
+  @Test(
+    "final takes each area command a merge passed on the same inputs and runs only the rest, naming what it reused — catches final rerunning every step at a tree whose merge just passed"
+  )
+  func finalReusesMergePasses() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let areas = [Self.area("web", e2e: "e2e-web"), Self.area("api")]
+    let changed = ["web/src/lib.js"]
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+
+    _ = try await Self.run(
+      clone, tier: .merge, areas: areas, changed: changed,
+      runner: FakeAreaCommandRunner { _ in .passed },
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+    let final = FakeAreaCommandRunner { _ in .passed }
+    let parts = try await Self.run(
+      clone, tier: .final, areas: areas, changed: changed, runner: final,
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+
+    let ran = Set(final.requests.map { "\($0.area) \($0.step.rawValue)" })
+    #expect(ran == ["web e2e", "api build", "api test"])
+    #expect(Self.verdict(parts) == .green)
+    let reused = parts.findings.filter { $0.ruleID == GateReuse.ruleID }
+    #expect(reused.count == 3, "web build, test and lint")
+    #expect(reused.allSatisfy { $0.message.contains("merge-run") })
+  }
+
+  @Test(
+    "a prove run the box leaves less time than its measured cold run isn't started and the tier is BLOCKED — catches a prove started at the cutoff only to be killed"
+  )
+  func proveThatCannotFinishIsNotStarted() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let short: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
+      _, _, tree in
+      tree == .scratch
+        ? AreaCommandBound(
+          duration: .seconds(90), reason: "the 90 s left before the run's cutoff",
+          expected: .milliseconds(240_679))
+        : AreaCommandBound(duration: .seconds(600), reason: "the floor")
+    }
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("AppFeature")],
+      changed: ["AppFeature/src/lib.js", "AppFeature/tests/new.test.js"], runner: runner,
+      sliceBuildsOnly: true, bound: short)
+
+    #expect(!runner.requests.contains { clone.inScratch($0) })
+    #expect(Self.verdict(parts) == .blocked)
+    #expect(parts.findings.contains { $0.message.contains("90 s left") })
   }
 
   @Test(
@@ -295,7 +450,8 @@ struct BrownfieldMergeCheckTests {
       runner: runner, context: finalContext)
 
     #expect(Self.verdict(final) == .red)
-    #expect(Self.gating(final) == ["baseline.whole-step \(clone.layout.baseline(tree: "tree0").path)"])
+    #expect(
+      Self.gating(final) == ["baseline.whole-step \(clone.layout.baseline(tree: "tree0").path)"])
     let whole = try #require(
       final.findings.first { $0.ruleID == BrownfieldRuleID.baselineWholeStep.rawValue })
     #expect(
@@ -544,4 +700,13 @@ extension BrownfieldMergeCheckTests {
       head.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(path)' ") },
       "\(head.map(\.command))")
   }
+}
+
+/// Area step passes kept in memory for 1 test.
+private final class MemoryAreaSteps: AreaStepReusing {
+  private let passes = Mutex<[String: AreaStepPass]>([:])
+
+  func pass(_ key: String) -> AreaStepPass? { passes.withLock { $0[key] } }
+
+  func record(_ pass: AreaStepPass, key: String) { passes.withLock { $0[key] = pass } }
 }
