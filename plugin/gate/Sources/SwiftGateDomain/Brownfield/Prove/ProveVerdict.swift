@@ -11,7 +11,9 @@ public enum ProveVerdict {
     guard idCount > 1 else { return false }
     switch outcome {
     case .failed, .crashed: return true
-    case .passed, .timedOut: return false
+    // A pass that ran some of the ids but not all says nothing about which it missed.
+    case .passed: return executed.map { $0 > 0 && $0 < idCount } ?? false
+    case .timedOut: return false
     }
   }
 
@@ -20,7 +22,8 @@ public enum ProveVerdict {
   /// away what holds them (a new target, a new module), which proves them as a build failure
   /// does. `executed` is `nil` when the run left no report that reads.
   public static func reading(_ outcome: AreaCommandOutcome, executed: Int?) -> AreaCommandOutcome {
-    outcome
+    guard outcome == .passed, executed == 0 else { return outcome }
+    return .failed(exit: 0, tail: ranNoneTail, junit: nil)
   }
 
   /// The output tail ``reading(_:executed:)`` gives a run that found none of its tests.

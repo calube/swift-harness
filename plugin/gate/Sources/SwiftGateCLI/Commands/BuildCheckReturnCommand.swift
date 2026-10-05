@@ -263,8 +263,8 @@ enum BuildCheckReturnRun {
       addedTests: addedTests)
   }
 
-  /// The test files the task branch adds or changes and still holds, in the areas that own them,
-  /// for the areas whose `slice` runs changed tests alone. A test in any other area is a warning:
+  /// The test files the task branch adds or changes and that still declare a test at its tip, in
+  /// the areas that own them, for the areas whose `slice` runs changed tests alone. A test in any other area is a warning:
   /// a slice over the budget only builds it, so it first runs at `merge`.
   private static func brownfieldTests(
     _ changed: [String], tip: String, worktree: URL, git: any Git, warnings: inout [String]
@@ -293,7 +293,10 @@ enum BuildCheckReturnRun {
     guard !tests.isEmpty else { return [] }
     let held: Set<String>
     do {
-      held = Set(try await git.contents(of: tests, at: tip).keys)
+      held = Set(
+        try await git.contents(of: tests, at: tip).filter { path, text in
+          declaresTests(path: path, text: text)
+        }.keys)
     } catch {
       throw Blocked("reading the task branch's test files at \(tip): \(error)")
     }
@@ -313,6 +316,15 @@ enum BuildCheckReturnRun {
           + "tests alone, so a slice over the budget only builds them and they first run at merge")
     }
     return added
+  }
+
+  /// Whether a test file at the branch tip still declares a test. A Swift file emptied to its
+  /// imports holds none, so no gate could run it; any other language's file counts as holding
+  /// tests.
+  private static func declaresTests(path: String, text: String) -> Bool {
+    guard path.hasSuffix(".swift") else { return true }
+    return ChangedTestDiscovery.declaresTests(
+      in: SourceUnit(input: SourceInput(path: path, text: text), scope: nil))
   }
 
   /// Builds the host tests the task branch adds or changes, in scratch trees of its tip, with the

@@ -31,7 +31,7 @@ public enum ChangedTestDiscovery {
   /// Whether `unit` declares at least 1 test: a file emptied to its imports holds none, so no run
   /// can select anything from it.
   public static func declaresTests(in unit: SourceUnit) -> Bool {
-    true
+    !TestFunction.all(in: unit).isEmpty
   }
 
   /// `name(label:_:)`, the form Swift Testing ids use.

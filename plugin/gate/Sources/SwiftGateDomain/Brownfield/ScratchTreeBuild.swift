@@ -20,7 +20,30 @@ public enum ScratchTreeBuild {
   /// unchanged when it runs neither, already names a scratch or build path, or spells them in a
   /// way the insertion can't place.
   public static func swiftPMCommand(_ command: String, scratchPath: String) -> String {
-    command
+    let subcommands = ["build", "test"]
+    let builds = ShellSyntax.simpleCommands(in: command).filter {
+      $0.name == "swift" && $0.arguments.first.map(subcommands.contains) == true
+    }
+    let namesItsOwn = builds.contains { build in
+      build.arguments.contains { argument in
+        ["--scratch-path", "--build-path"].contains {
+          argument == $0 || argument.hasPrefix($0 + "=")
+        }
+      }
+    }
+    // Matched in the parsed words, then inserted in the text as written; a count that differs
+    // means a `swift` spelled through a path or quoting the text can't place.
+    let bare = subcommands.flatMap { command.ranges(ofBareWord: "swift \($0)") }
+      .sorted { $0.lowerBound < $1.lowerBound }
+    guard !builds.isEmpty, !namesItsOwn, bare.count == builds.count else { return command }
+    let insertion = " \(swiftPMOption) \(AreaCommandExpansion.shellQuoted(scratchPath))"
+    var rewritten = ""
+    var rest = command.startIndex
+    for range in bare {
+      rewritten += command[rest..<range.upperBound] + insertion
+      rest = range.upperBound
+    }
+    return rewritten + command[rest...]
   }
 
   /// `request` as a scratch tree runs it for an area of `kind`.
@@ -28,8 +51,19 @@ public enum ScratchTreeBuild {
     _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout
   ) -> AreaCommandRequest {
     switch kind {
-    case .xcode: XcodeDerivedData.proveRequest(request, layout: layout)
-    default: request
+    case .xcode:
+      return XcodeDerivedData.proveRequest(request, layout: layout)
+    case .swiftpm:
+      let command = swiftPMCommand(
+        request.command, scratchPath: swiftPMScratchPath(area: request.area, layout: layout))
+      guard command != request.command else { return request }
+      return AreaCommandRequest(
+        area: request.area, step: request.step, command: command,
+        workingDirectory: request.workingDirectory, deadline: request.deadline,
+        environment: request.environment, junitPath: request.junitPath,
+        resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
+    default:
+      return request
     }
   }
 
@@ -41,6 +75,7 @@ public enum ScratchTreeBuild {
   {
     switch area.kind {
     case .xcode: ["\(XcodeDerivedData.provePath(area: area.name, layout: layout))/Build"]
+    case .swiftpm: [swiftPMScratchPath(area: area.name, layout: layout)]
     default: []
     }
   }
