@@ -225,6 +225,9 @@ enum WorktreeRun {
     case .success(let resolved): context = resolved
     case .failure(let refusal): return refusal.report
     }
+    if abandoned {
+      return await discard(context, git: git, workspace: workspace, profile: profile)
+    }
     let names: TaskWorktree
     if fix {
       // The fix worktree `build merge` cuts for this task, named the way it names it.
@@ -267,6 +270,68 @@ enum WorktreeRun {
         + events.message,
       keptRuns: keeping.kept, unkeptRuns: keeping.unkept.isEmpty ? nil : keeping.unkept,
       events: events.copied, unkeptEvents: events.unkept)
+  }
+
+  /// Removes the worktrees a task the ledger records as `abandoned` left, its fixer's too, merged
+  /// or not. Both branches stay, so the commits stay reachable; nothing touches the base branch.
+  private static func discard(
+    _ context: HeldTask, git: any Git, workspace: any GitWorkspace, profile: RepositoryProfile
+  ) async -> WorktreeReport {
+    let names = context.names
+    let report = Reporter(
+      command: context.command, slug: context.slug, task: context.task, names: names)
+    switch context.ledger() {
+    case .failure(let refusal): return refusal.report
+    case .success(let ledger):
+      let status = ledger.tasks.first { $0.id == context.task }?.status
+      guard status == .abandoned else {
+        return report.refused(
+          "task `\(context.task)` isn't abandoned (it's `\(status?.rawValue ?? "missing")`); "
+            + "remove a merged task's worktree without --abandoned")
+      }
+    }
+    let fixNames: TaskWorktree
+    do {
+      fixNames = try TaskWorktree(
+        commonDirectory: try await git.commonDirectory(), plan: context.slug,
+        task: "fix-\(context.task)", profile: profile)
+    } catch {
+      return report.blocked("\(error)")
+    }
+    var discarded: [String] = []
+    var kept: [String] = []
+    var notes = ""
+    do throws(GitWorkspaceError) {
+      for branch in [names.branch, fixNames.branch] where try await workspace.branchExists(branch) {
+        kept.append(branch)
+      }
+      for worktree in [names, fixNames]
+      where FileManager.default.fileExists(atPath: worktree.path) {
+        notes += keepRuns(from: worktree.path, into: worktree.mainCheckout).message
+        notes +=
+          copyEvents(
+            from: worktree.path, into: worktree.mainCheckout,
+            commonDirectory: worktree.commonDirectory
+          ).message
+        // The worker is gone: its uncommitted edits go, its commits stay on the branch.
+        try await workspace.removeWorktree(at: worktree.path, force: true)
+        discarded.append(worktree.path)
+      }
+    } catch {
+      let done = discarded.isEmpty ? "" : "; removed \(discarded.joined(separator: ", "))"
+      return report.blocked("\(error)\(done)")
+    }
+    var removed = WorktreeReport(
+      command: context.command, plan: context.slug, task: context.task, status: .removed,
+      verdict: .green, holder: nil, worktree: names.path, branch: names.branch, cloned: nil,
+      missing: nil,
+      message: (discarded.isEmpty
+        ? "no worktree of abandoned task `\(context.task)` to remove"
+        : "removed \(discarded.joined(separator: ", "))")
+        + (kept.isEmpty ? "" : "; kept branches \(kept.joined(separator: ", "))") + notes)
+    removed.discarded = discarded
+    removed.keptBranches = kept
+    return removed
   }
 
   /// What `remove` did with a worktree's `.harness/events/`.
