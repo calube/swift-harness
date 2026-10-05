@@ -1,7 +1,9 @@
 # 0008. Simulator QA validates in layers, and keeps flows in XCUITest
 
-Status: accepted by the user, 2026-10-04, with the simulator QA amendment
-(`docs/designs/2026-10-04-simulator-qa-layered-evidence-amendment.md`) and the 17 decisions in its §12.
+Status: accepted 2026-10-04, built, with 2 parts opt-in per app. Goes with the
+[simulator QA amendment](../designs/2026-10-04-simulator-qa-layered-evidence-amendment.md) and the 17 decisions
+in its §12. Batch flows, the recording lock and both flow rules ship. The typed id module and keep-always
+attachments are opt-in per app: bootstrap stamps neither, and only `examples/SampleApp` sets them up.
 Amends [ADR 0005](0005-simulator-qa-drives-agent-device.md).
 
 ## Context
@@ -29,8 +31,8 @@ held across 0.21.16, 0.21.18 and 0.21.20.
    copies into plan state. `swiftgate qa run` runs it on the device `sim up` leased. No gate replays it across
    runs, and the repo still holds no steps file.
 2. **Kept flows stay XCUITest.** A flow worth keeping becomes a T3 XCUITest plus a `[[flows]]` entry, as [ADR 0005](0005-simulator-qa-drives-agent-device.md)
-   decided. The app and its UI tests share a typed accessibility-id module, so an id typo fails to compile. T3
-   keeps attachments always, so a kept flow leaves an MP4 and per-step activities on a pass. Both flow sources
+   decided. The app and its UI tests share a typed accessibility-id module, so an id typo fails to compile. When the app's
+   test plan keeps attachments always, as `examples/SampleApp`'s does, a kept flow leaves an MP4 and per-step activities on a pass. Both flow sources
    normalise to 1 `qa.flow` record for the report.
 3. **1 recording at a time per Mac.** The Mac allows 1 simulator recording at once, whoever started it. A
    machine-wide recording lock with 1 slot orders the harness's final passes. When another session holds a

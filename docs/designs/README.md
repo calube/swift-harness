@@ -1,21 +1,22 @@
 # Designs
 
-One file per design doc. Status here is a summary; each doc's own RESUME header is canonical. The
-plans that built these designs live only in the tag `harness-freeze-2026-10-05`.
+1 file per design. Each design opens with a status line checked against the code at the freeze tag
+`harness-freeze-2026-10-05`, and an "In brief" summary. The bodies are the designs as approved; short notes mark
+where the shipped code differs. The plans that built these designs live only in the freeze tag.
 
-| Design | Status | Covers |
+| Design | Status | Summary |
 |---|---|---|
-| [2026-09-24-swift-harness-foundation-design.md](2026-09-24-swift-harness-foundation-design.md) | Built | Sub-project 1 (Foundation): `swiftgate`, standards, testing playbook, hooks, bootstrap, core skills |
-| [2026-09-25-design-plan-workflows-design.md](2026-09-25-design-plan-workflows-design.md) | Built | Sub-project 2: `/swift-harness:design` and `/swift-harness:plan` workflows |
-| [2026-09-26-build-executor-design.md](2026-09-26-build-executor-design.md) | Built | Sub-project 5: `/swift-harness:build`, `/swift-harness:ship` and build presets |
-| [2026-09-27-fast-modes-design.md](2026-09-27-fast-modes-design.md) | Built | Surface commits and `surface-check`, a sprint skill, a design-free ship path |
-| [2026-09-27-speed-research-coverage-design.md](2026-09-27-speed-research-coverage-design.md) | Built | Where each ship speed research change lives; host-compiled views and a stale-session check |
-| [2026-09-28-simulator-qa-design.md](2026-09-28-simulator-qa-design.md) | Approved 2026-09-28; decision record [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md) | Sub-project 3: `swiftgate sim`, dependency scenarios, the QA skill driving `agent-device`, screenshot and accessibility-tree evidence |
-| [2026-09-28-agentic-profiling-design.md](2026-09-28-agentic-profiling-design.md) | Approved 2026-09-28; decisions in its §2 and §12 | Sub-project 4: `swiftgate profile` and `leaks` over xctrace and `footprint`, Simulator only, report-only findings |
-| [2026-09-30-jev-judge-backend-design.md](2026-09-30-jev-judge-backend-design.md) | Approved 2026-09-30; decisions in its §12; decision record [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md) | TypeSafe's Jev as an opt-in second backend behind the judge seam, blocking on its own at the block threshold (the block calibration was removed on 2026-09-30); `swiftgate judge ask`; `swiftgate judge bench`, comparing pinned Sonnet 5.5 with pinned Jev |
-| [2026-09-30-harness-telemetry-design.md](2026-09-30-harness-telemetry-design.md) | Draft 2026-09-30; the user's 4 decisions in its §14 | Local, on-by-default telemetry for self-improvement: gate runs, steps and every test result, hooks, caches, halts and transcript token counts as `HarnessEvent` kinds; `swiftgate events list\|summary\|ingest`; copy-up to main on worktree removal |
-| [2026-10-03-brownfield-profile-design.md](2026-10-03-brownfield-profile-design.md) | Approved 2026-10-03; the user's 16 decisions in its §17 | A `brownfield` profile for repositories the harness doesn't own: state in the git common dir, `swiftgate discover`, language-neutral test-quality rules, per-area commands, a 30 s slice gate with per-task prove, Xcode inclusion checks, and a one-shot Opus/Sonnet/Jev run from a provided `spec.md` |
-| [2026-10-03-run-viewer-design.md](2026-10-03-run-viewer-design.md) | Approved 2026-10-03; the user's 15 decisions in its §3 | 1 HTML page for a build run: `swiftgate report --html` writes a static report, `swiftgate view` serves it live; `span`, `prove.result` and `agent.tools` events, the `RunView` contract, the spec mapping |
-| [2026-10-04-simulator-qa-layered-evidence-amendment.md](2026-10-04-simulator-qa-layered-evidence-amendment.md) | Approved 2026-10-04; the user's 17 decisions in its §12; decision record [ADR 0008](../adrs/0008-simulator-qa-layered-validation.md) | Amends sub-project 3: a validation table of acceptance, flow and state checks per requirement, checks prepared during the build, `agent-device` batch flows, final-pass video and logs as evidence, and a report row per check |
+| [Foundation](2026-09-24-swift-harness-foundation-design.md) | Built | `swiftgate`, the standards, the testing playbook, hooks, bootstrap and the core skills |
+| [Design and plan workflows](2026-09-25-design-plan-workflows-design.md) | Built | `/swift-harness:design` turns a request into an evidence-backed design; `/swift-harness:plan` turns it into scheduled tasks |
+| [Build executor](2026-09-26-build-executor-design.md) | Built | `/swift-harness:build`, `/swift-harness:ship` and named presets turn a plan or a spec file into merged, gated code |
+| [Fast modes](2026-09-27-fast-modes-design.md) | Built | Surface commits with `surface-check`, `/swift-harness:sprint`, and ship without a design step |
+| [Ship speed research coverage](2026-09-27-speed-research-coverage-design.md) | Built | Maps each ship speed change to what carries it; adds the `arch.ui-host-compiled` rule and a stale-session doctor check |
+| [Simulator QA](2026-09-28-simulator-qa-design.md) | Built | `swiftgate sim` leases a simulator, records screenshot and accessibility-tree evidence, and judges it; kept flows become XCUITest |
+| [Agentic profiling](2026-09-28-agentic-profiling-design.md) | Designed, not built | A `swiftgate profile` and `leaks` over xctrace and `footprint` on the Simulator, report-only; no code exists |
+| [Jev judge backend](2026-09-30-jev-judge-backend-design.md) | Built | TypeSafe's Jev as an opt-in second judge beside Claude, with a cascade to Claude, `judge ask` and `judge bench` |
+| [Harness telemetry](2026-09-30-harness-telemetry-design.md) | Built; the code has since added more event kinds | Local, on-by-default typed events for gate runs, tests, hooks, caches, halts and token use; `swiftgate events` |
+| [Brownfield profile](2026-10-03-brownfield-profile-design.md) | Built | Runs the harness in a repository it doesn't own: `discover`, `run`, the `slice`, `merge` and `final` tiers, no files in the tree |
+| [Run viewer](2026-10-03-run-viewer-design.md) | Built | 1 page per build run: `swiftgate report --html` writes it, `swiftgate view` serves it live |
+| [Simulator QA layered evidence](2026-10-04-simulator-qa-layered-evidence-amendment.md) | Partly built: validation rows, `swiftgate qa`, flow rules, video and logs shipped; bootstrap doesn't stamp the typed id module or keep-always attachments | Plans each requirement's checks in 4 layers before the code exists, runs them after each merge, and records evidence beside each pass |
 
 See [`../index.md`](../index.md) for the full doc router.

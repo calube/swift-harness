@@ -1,4 +1,16 @@
-# swift-harness — sub-project 2: design & plan workflows
+# swift-harness: design and plan workflows
+
+**Status: Built.** `/swift-harness:design`, `/swift-harness:plan`, their 11 agents and every `swiftgate` command
+in §6.1 ship in the plugin. The plan skill later gained a second input, a confirmed spec page, which this design
+predates (see the note in §3.2).
+
+**In brief.** This design adds 2 plugin skills. `/swift-harness:design` turns a feature request into a design
+doc the user approves, and `/swift-harness:plan` turns that design into tasks a build can schedule. They exist to
+keep invented APIs and unchecked claims out of a design's decisions: every claim cites a checked quote, a captured
+command output or a compiled probe. The design skill researches with parallel agents, checks claims with
+`swiftgate evidence` and `swiftgate probe`, and lints the doc. 3 reviewers read it before the user approves it on
+a published page. The plan skill splits the design into tasks, schedules them into waves with
+`swiftgate plan-schedule`, lints the result, and keeps plan state in the git common dir that every worktree shares.
 
 <!-- RESUME
 Status: APPROVED 2026-09-25. Built. The brainstorm decisions record (D1–D20; D19 amends D11) and the plan now live only in the tag `harness-freeze-2026-10-05`.
@@ -103,6 +115,10 @@ flowchart LR
 
 Runs only when the design's approval record matches its current `designSha` (directly or through a
 valid clarify chain, §8.4). Writes `plan.json` and `ledger.json` under the git common dir (§4).
+
+> Note: the shipped plan skill also plans from a confirmed spec page with no design doc (`"source": "specPage"`).
+> It confirms the page with `swiftgate plan confirm` and lands its surface commit with `swiftgate plan surface`.
+> The [fast modes design](2026-09-27-fast-modes-design.md) §5 describes that path.
 
 ### 3.3 Split of responsibility
 
@@ -430,6 +446,9 @@ Exit codes as Foundation: **0** pass · **1** violations · **2** gate error. `-
 | `index set <slug> <status> <resume>` | index.json | updated index | adapter (FileLock) |
 | `calibrate design` | seeded cases | per-agent pass/fail vs labels | adapter (Claude CLI runner, as the Foundation judge) |
 
+> Note: the shipped CLI also has `swiftgate plan claim|release|set`. The design skill runs `plan claim` to create
+> the plan directory and write the per-plan `orchestrator.lock` (§6.3). `evidence cache` manages the reuse cache.
+
 ### 6.2 Command detail
 
 - **`evidence check`** — D3 rules per kind (§5.2). `--at <ref>` re-checks against another ref:
@@ -739,4 +758,4 @@ amendment).
 | §2 row 2 | ledger at `.harness/ledger.json`, "ledger canonical in git"; per-plan ledger under `.harness/plans/<id>/` | plan state (`index.json`, `plan.json`, `ledger.json`, lock) in `$(git rev-parse --git-common-dir)/swift-harness/plans/`, never committed; design doc, ADR and evidence committed under `docs/<area>/`; escalation fallback verified as halt/ask/resume |
 | §4.2 | `.harness/plans/` stamped in the repo with `design.md` and `evidence/` per plan | bootstrap no longer stamps `.harness/plans/`; design and evidence live in `docs/<area>/designs/`; bootstrap stamps `docs/index.md` and the `AGENTS.md` pointer |
 | §4.2, §8 | `.harness/orchestrator.lock` (repo-level) | per-plan lock in the common dir |
-| (repo docs) | plugin repo docs previously lived under a `superpowers` tree (`specs`, `plans`) and a separate `decisions` folder | the plugin repo's own docs moved to `docs/designs`, `docs/adrs`, `docs/plans` with a `docs/index.md` router |
+| (repo docs) | plugin repo docs previously lived under a `superpowers` tree (`specs`, `plans`) and a separate `decisions` folder | the plugin repo's own docs moved to `docs/designs`, `docs/adrs`, `docs/plans` with a `docs/index.md` router; after the freeze, `docs/plans` lives only in the tag `harness-freeze-2026-10-05` |

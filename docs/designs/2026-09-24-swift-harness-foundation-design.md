@@ -1,4 +1,15 @@
-# swift-harness — Foundation design
+# swift-harness: Foundation design
+
+**Status: Built.** `swiftgate` and every command in §5.1, the standards, the testing playbook, the hooks, bootstrap
+and the 7 core skills ship in `plugin/`. Of the later work the §2 map lists, the design and plan workflows, the
+build loop and simulator QA shipped; agentic profiling has a design and no code.
+
+**In brief.** swift-harness is a Claude Code plugin that holds Claude to a fixed engineering bar on SwiftUI iOS
+apps. Without it, an agent drifts on architecture, writes tests that can't fail and reports success from exit
+codes. This design sets out the base layer: 1 gate tool, `swiftgate`, plus written standards, a testing playbook,
+hooks that call the gate, and skills that order the work. The gate runs lint, architecture, test, coverage,
+mutation and red/green proof checks in 3 tiers and returns GREEN, RED or BLOCKED. All of it shipped. The layout in
+§4.1 later moved under `plugin/` ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)).
 
 > Where this design and the design & plan workflows design disagree, the later design wins: its
 > [§15 corrections](2026-09-25-design-plan-workflows-design.md#15-foundation-spec-corrections)
@@ -39,6 +50,12 @@ ledgers, one shared verdict vocabulary) and none of its backend-specific machine
 | 4 | Agentic profiling | 1, 3 | `swiftgate profile` / `leaks`: xctrace + `leaks` summarized to compact JSON; signpost-scoped measurements; XCTMetric baselines |
 | 5 | Build loop & workflows | 1–2 (corrected by the [build executor spec](2026-09-26-build-executor-design.md) §15: its `validate` stage calls 3–4 once they exist) | executes ledger waves across worktrees; review→fix→re-gate loop; full reviewer set; `validate` workflow with sim QA + profile diff |
 
+> Note: what each row became. Row 2 shipped, with plan state in the git common dir rather than a committed
+> `.harness/ledger.json` (see the corrections linked at the top). Row 3 shipped as `swiftgate sim`, `swiftgate qa`
+> and `/swift-harness:qa`. Row 4 has a [design](2026-09-28-agentic-profiling-design.md) and no code: `swiftgate`
+> has no `profile` or `leaks` command. Row 5 shipped as `/swift-harness:build` and `/swift-harness:ship`, with a
+> `validate` skill and stage that runs simulator QA only, and no `validate` or `milestone` workflow.
+
 ## 3. Locked decisions
 
 | Decision | Choice |
@@ -70,6 +87,11 @@ agents/                   # reviewer subagents (one focus each) + finding verifi
 workflows/                # multi-agent orchestration scripts: review (Foundation), validate, milestone
 templates/                # files /swift-harness:bootstrap stamps into an app repo
 ```
+
+> Note: this layout now sits under `plugin/` ([ADR 0002](../adrs/0002-consumer-plugin-in-plugin-dir.md)), so the
+> standards are `plugin/docs/standards.md` and the shim is `plugin/bin/swiftgate`; the root `bin/` is gone.
+> `plugin/skills/` holds 17 skills and `plugin/workflows/` holds `review`, `build-task`, `design-research` and
+> `design-review`.
 
 Component notes (checked against the Claude Code plugin docs, 2026-09-24):
 
@@ -439,6 +461,8 @@ contract is *typed questions → calibrated probabilities*, not free-form rubric
   distributions, no prose. It is served through Vercel AI Gateway's native HTTP API (also the AI SDK
   evaluation API and TypeSafe's Python SDK `langchain-typesafe`), so the Swift adapter calls it over
   HTTP directly. Pricing, rate limits, and request schema to be verified when the adapter is built.
+  (The Jev adapter shipped: see the [Jev judge backend design](2026-09-30-jev-judge-backend-design.md) and
+  [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md).)
 - Policy is thresholds, not opinions: p ≥ `block_threshold` may block at `ready`; between the two
   thresholds is advisory; below is ignored. The judge alone never produces `RED` below `ready`.
 - Cache by hash(test, diff, question-set version, backend, model) → stable re-runs, zero cost on hit.
@@ -518,6 +542,10 @@ honor the harness re-entry flag; `BLOCKED` does not count as a strike.
 | `/swift-review` (thin) | parallel reviewers — concurrency/Sendable, architecture & TCA fit, test quality/slop, API & error design, SwiftUI best practices (when UI is touched) — via the `review` workflow (§9.2), seeded with `arch`/`testlint`/`comments`/`mutate` output; every finding verified against code before reporting; shared verdict contract (below). Sub-project 5 adds observability, accessibility, privacy/security reviewers and the review→fix→re-gate loop (3-round cap, then escalate) |
 | `swift-test-gate` | pre-ready sequence: scope → `check --tier push` → test-slop judgment rubric → `check --tier ready` (prove, stress, reach, mutate) |
 
+> Note: in the shipped plugin, validate adds simulator QA rows and no profile diff or leak check, since profiling
+> has no code. The review→fix→re-gate loop ships in the build executor; the observability, accessibility and
+> privacy reviewers don't exist.
+
 ### 9.1 Review verdict contract
 
 Shared by every reviewer and by sub-project 5's panel so findings merge cleanly:
@@ -526,6 +554,10 @@ Shared by every reviewer and by sub-project 5's panel so findings merge cleanly:
   (concrete input/state → wrong outcome), `evidence` (tool output, test, or code citation), `fix`.
 - Verdicts (literal strings, machine-matched): `merge` · `fix-then-merge` · `refactor-needed`.
 - A finding without a concrete failure scenario is dropped at the verify step.
+
+> Note: [ADR 0001](../adrs/0001-review-severity-for-standards-violations.md) changed this contract. A finding now
+> carries a `kind`: a `defect` still needs a reproduced failure, and a `standards-violation` needs a cited rule
+> instead. The review skill runs 4 to 10 agents, not the 8–10 below.
 
 ### 9.2 `review` workflow
 

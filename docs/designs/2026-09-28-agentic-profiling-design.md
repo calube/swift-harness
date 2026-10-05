@@ -1,4 +1,15 @@
-# swift-harness: agentic profiling (sub-project 4)
+# swift-harness: agentic profiling
+
+**Status: Designed, not built.** The harness froze before any of this design shipped. `swiftgate` has no `profile`
+or `leaks` command, no `[profile]` config table and no profiling fixtures. The build's `validate` stage runs
+simulator QA only. Everything below describes the intended design, not current behaviour.
+
+**In brief.** This design describes a check for whether a change makes an iOS app slower or heavier on the
+Simulator. A `swiftgate profile` command would record launch time, CPU, hangs, memory peak and signpost spans with
+Apple's `xctrace` and `footprint`, then compare the base and the change on 1 cloned simulator. A `swiftgate leaks`
+command would report leaks from weak-reference tests. Findings would stay advisory until enough repeat runs set a
+noise band for each metric. None of it shipped. Today the standards' tracing rule and the `obs.direct-signposter`
+lint rule are the only related pieces in the code.
 
 <!-- RESUME
 Status: APPROVED 2026-09-28 by the user: the 4 decisions in §2 and §9, and all 12 choices §12 records.
@@ -228,6 +239,9 @@ runbook). Profiling measures timing, so load corrupts it.
   builds. `[profile] budget_min` or `--budget-min` changes it; the run stops at the budget and reports what it skipped.
 
 ## 11. Where it runs
+
+> Note: none of this runs today. The `validate` skill runs `check --tier ready`, and the build's `validate` stage
+> runs simulator QA under the preset's `sim_qa` key. No preset has a `validate` key.
 
 - **`/swift-validate` and the build executor's `validate` stage** run `swiftgate leaks`, then `profile --base
   <merge base>`, after sub-project 3's QA and after the `ready` tier. Findings go into the evidence summary and the

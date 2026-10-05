@@ -1,5 +1,17 @@
 # swift-harness: harness telemetry
 
+**Status: Built, and the code has grown past this design.** Every kind, stream and command below ships:
+`swiftgate events list|summary|ingest`, `build halt|resume`, copy-up on worktree removal and `[telemetry] enabled`.
+Later designs added 13 kinds, 3 streams (`brownfield`, `span`, `qa`) and `events span`, which this design doesn't
+cover. [`plugin/docs/telemetry.md`](../../plugin/docs/telemetry.md) is the current reference; notes in §5 and §7
+mark the main differences.
+
+**In brief.** Telemetry records what happens in real harness runs as typed events, on the machine that ran them
+and nowhere else. It covers gate runs and steps, every test result, hook decisions, cache lookups, build halts, and
+token counts read from Claude Code transcripts. It exists so that a person or a session can ask what was slow or
+costly, which gate was wrong and which test flaked, and answer from data instead of a hand-kept log. It shipped as
+`swiftgate events`, with `list`, `summary`, `ingest` and `span`, and it is on by default.
+
 <!-- RESUME
 Status: APPROVED 2026-09-30 by the user, with the 4 questions in §14 and the judge-log question decided.
 Built 2026-10-01: every kind, reader section and command below has merged. Where the code differed, this design now
@@ -119,6 +131,12 @@ project with `.swiftgate.toml`, no command writes events, as hooks already do no
 into a consumer repo. The commented `[telemetry]` table is in `plugin/templates/swiftgate.toml`.
 
 ## 5. Event kinds
+
+> Note: the shipped code has more kinds than this section lists: `build.return-checked`, `discover.run`,
+> `warmup.run`, `span.start`, `span.end`, `prove.result`, `agent.tools`, `qa.check`, `qa.flow`, `qa.repair` and
+> `qa.setup`. `GateStep`, the agent `role` enum and the halt answers carry extra values too. In a brownfield clone,
+> every worktree writes to 1 store in the git common dir. `swiftgate events list --help` and
+> [`plugin/docs/telemetry.md`](../../plugin/docs/telemetry.md) list the current set.
 
 Each row's emit point is the 1 place that writes that kind. Other code may gather timing or data and pass it in,
 but only the named place calls the writer.
@@ -275,6 +293,10 @@ steps, flakes, cost and wrong gates. Worker gate runs reach main through copied-
 summary covers them while `stats` keeps counting only the checkout's own history, as it does today.
 
 ## 7. Privacy
+
+> Note: 2 later kinds relax the rules below, and [`plugin/docs/telemetry.md`](../../plugin/docs/telemetry.md)
+> states both. `build.return-checked` keeps up to 10 scrubbed finding messages, and `qa.repair` keeps flow step
+> commands. `agent.tools` keeps repo-relative file paths.
 
 Allowed in a payload: ids, counts, milliseconds, model ids, rule ids, test ids, hashes, closed enum values and
 repo-relative paths. Never collected: source text, finding or failure messages, diffs, prompts, transcript text,

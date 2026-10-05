@@ -1,8 +1,9 @@
 # 0006. Profiling wraps xctrace, and reports before it blocks
 
-Status: accepted, 2026-09-28, by the user, with the agentic profiling design
-(`docs/designs/2026-09-28-agentic-profiling-design.md`). Fills the foundation design's sub-project 4 row and the
-build executor spec's `validate` stage (§8.6).
+Status: accepted 2026-09-28, not built. The harness froze before profiling shipped: `swiftgate` has no `profile`
+or `leaks` command. Goes with the [agentic profiling design](../designs/2026-09-28-agentic-profiling-design.md),
+and fills the profiling row of the [Foundation design](../designs/2026-09-24-swift-harness-foundation-design.md)'s
+map.
 
 ## Context
 
@@ -29,6 +30,8 @@ Leak evidence defaults to XCTest-level checks (a weak reference is `nil` after t
 repo may override it to the host `leaks` tool once that works on its machine.
 
 ## Consequences
+
+These would hold once profiling ships; none applies to the frozen harness.
 
 - No new dependency, and the check lives in `plugin/gate/` like every other check.
 - A regression shows up in `validate`'s evidence and the PR body but can't fail a build yet. A real slowdown can

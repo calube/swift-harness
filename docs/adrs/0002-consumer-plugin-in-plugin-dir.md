@@ -1,11 +1,11 @@
 # 0002. Consumer plugin lives in `plugin/`
 
-Status: accepted, 2026-09-25. Changes the plugin layout in the Foundation design (§4.1). Lands as the
-packaging task before the first real install.
+Status: accepted 2026-09-25, built. Changes the plugin layout in the
+[Foundation design](../designs/2026-09-24-swift-harness-foundation-design.md) (§4.1).
 
 ## Context
 
-The repo serves two audiences. Contributors build the harness: they need designs, ADRs, plans, handoffs,
+The repo serves 2 audiences. Contributors build the harness: they need designs, ADRs, process docs,
 the e2e report, gate tests and an `AGENTS.md` about developing the plugin. Consumers install the plugin
 into their app sessions: they need skills, agents, hooks, workflows, templates, the `swiftgate` source
 and the standards and playbook that skills read at runtime.
@@ -28,7 +28,7 @@ settle three facts that make this untenable:
 flowchart LR
   subgraph repo["repo root: contributors"]
     A[AGENTS.md + CLAUDE.md]
-    D["docs/: index, designs, adrs, plans, handoffs, e2e-report"]
+    D["docs/: index, designs, adrs, process, results, e2e-report"]
     E[examples/, tests/]
     M[".claude-plugin/marketplace.json → ./plugin"]
   end
@@ -37,7 +37,7 @@ flowchart LR
     S[skills · agents · hooks · workflows · templates]
     B["bin/swiftgate → builds into CLAUDE_PLUGIN_DATA"]
     G["gate/ (swiftgate source)"]
-    R["docs/: standards, testing-playbook, hooks"]
+    R["docs/: standards, testing-playbook, hooks, …"]
   end
   M --> P
 ```
@@ -58,18 +58,18 @@ The two audiences need different guidance, not just different files.
 |---|---|---|
 | Entry point | root `AGENTS.md` (+ `CLAUDE.md` symlink) | the block bootstrap stamps into the app's `AGENTS.md` (`plugin/templates/AGENTS.md`) |
 | Standing context | `docs/index.md` router, worker brief, orchestrator runbook | SessionStart `additionalContext`: session id, active plans, the resolved path to the plugin's reference docs |
-| Task steering | the implementation plan, the interfaces note | skills (`SKILL.md`), agent prompts, hook feedback messages |
-| Reference docs | `docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs` | `plugin/docs/`: standards, testing playbook, hooks, review contract |
-| What it teaches | gate layering (domain / adapters / CLI), fixtures captured from real tools, every rule ships a fixture and a rule-index row, worktrees and one committer, the plan and wave process | app rules: module kinds, determinism, clients, testing tiers, how to read verdicts |
+| Task steering | the implementation plan, in plan state | skills (`SKILL.md`), agent prompts, hook feedback messages |
+| Reference docs | `docs/designs`, `docs/adrs`, `docs/process`, `docs/results` | `plugin/docs/`: standards, testing playbook, hooks, review contract |
+| What it teaches | gate layering (domain / adapters / CLI), fixtures captured from real tools, every rule ships a fixture and a rule-index row, worktrees and one committer, the plan and build process | app rules: module kinds, determinism, clients, testing tiers, how to read verdicts |
 
 Rules that keep the channels apart:
 
-- Nothing under `plugin/` references contributor docs (`docs/designs`, `docs/adrs`, `docs/plans`, `docs/handoffs`)
+- Nothing under `plugin/` references contributor docs (`docs/designs`, `docs/adrs`, `docs/process`, `docs/results`)
   or any path above `plugin/`. A contract that consumers need at runtime, such as the review verdict contract
   from [ADR 0001](0001-review-severity-for-standards-violations.md) (review severity for standards violations), gets a consumer copy in `plugin/docs/`.
 - Consumer docs never name the plugin's install path. SessionStart computes it each session from
-  `CLAUDE_PLUGIN_ROOT` (or `SWIFT_HARNESS_PLUGIN_ROOT`, exported by the shim, if hooks don't receive it),
-  so nothing machine-specific is committed.
+  `CLAUDE_PLUGIN_ROOT`, and reports it unavailable when hooks don't receive it, so the repo commits nothing
+  machine-specific.
 - The contributor `AGENTS.md` doesn't restate app rules. It points to `plugin/docs/standards.md`, which
   contributors need only when they change a rule or `examples/`.
 
@@ -77,8 +77,8 @@ Rules that keep the channels apart:
 
 - Consumers compile SwiftSyntax on the first run of each version, which takes minutes, and they receive
   `gate/Tests`. A prebuilt binary release can remove both later, without changing this layout.
-- Every source path moves once. The move runs after all code waves of the design-and-plan build, so no
-  in-flight task collides with it.
+- Every source path moved once, after the design and plan workflows shipped, so no in-flight task
+  collided with it.
 - `claude plugin validate plugin` becomes part of the ready gate for the plugin repo. It runs when `claude`
   is on PATH and is skipped with a note otherwise; it never makes the gate BLOCKED.
 
