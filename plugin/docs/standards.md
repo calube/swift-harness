@@ -784,7 +784,6 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes an `xcode` area's screen or feature, with no `flow` row and no `Reason` naming an obstacle kind |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.validation-obstacle-fakeable` | a screen requirement excused only by `network:` while its `xcode` area holds a `…Client` module a launch-selected fake can serve |
-| `plan-lint.validation-reason-without-obstacle` | a reason-only row whose `Reason` opens with no obstacle kind and no `gate:` |
 | `plan-lint.check-missing-dependency` | a task's row or acceptance exercising another task's work without depending on it |
 | `build-next.unmerged-dependency`, `build-next.missing-model`, `build-next.write-set-overlap`, `build-next.not-started` | build executor §8.1 (scheduling); why `build next` left a pending task unstarted, as its `self-test` seeds answer |
 | `ledger-set.refused-transition`, `ledger-set.written-despite-refusal` | build executor §6.2 (`ledger set`); a refused transition, and a refusal that still wrote the ledger |

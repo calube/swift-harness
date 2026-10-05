@@ -3872,15 +3872,14 @@ leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone'
 differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
 
-## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans, fixer and reasons
+## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans and fixer
 
 The third price-tracker trial (2026-10-05) priced its unrun `final` at the cutoff as its 227 s
 merge gate plus 60 s, while the real `final` took 35 s with 6 of its 8 area steps reused; its
 validation agent waited on `pgrep -f` through the Monitor tool after the guard denied the same
 wait in Bash; its run-end ingest filed the fixer as the orchestrator and the worker of the
 Workflow the cutoff killed with no role; 3 spans never ended; `build next` kept the refused
-watchlist-screen ready to merge while its fixer worked; and plan import took a reason-only row
-with no obstacle. `T` is the trial folder under the practice-trial runs folder, its clone's state
+watchlist-screen ready to merge while its fixer worked. `T` is the trial folder under the practice-trial runs folder, its clone's state
 copied as `state/` and its transcripts as `transcripts/`. From the repository root:
 
 ```sh
@@ -3894,7 +3893,6 @@ cp $S/warmup/f0bd7c247ed6a4afd220dfad6893cc719ca66bfa.json $F/price-tracker-3-wa
 cp $S/config.toml $F/price-tracker-3-config.toml
 cp $S/events/build.jsonl $F/price-tracker-3-halts.jsonl
 cp $S/events/span.jsonl $F/price-tracker-3-spans.jsonl
-cp $S/plans/spec/validation.json $F/price-tracker-3-validation.json
 ```
 
 `Hooks/price-tracker-3-monitor-pgrep-wait.json` is the validation agent's Monitor call, its name

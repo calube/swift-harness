@@ -1,6 +1,4 @@
-import Foundation
 import SwiftGateDomain
-import SwiftGateTestSupport
 import Testing
 
 private let requirements = ["req-draft-list", "req-offline-save", "req-draft-sync"]
@@ -130,42 +128,5 @@ struct PlanLintValidationTests {
     ] {
       #expect(try lint([row(check), flow, state]).isEmpty, "\(check)")
     }
-  }
-}
-
-@Suite("a brownfield plan's reason-only rows name their obstacle")
-struct ReasonObstacleTests {
-  static func table() throws -> ValidationTable {
-    try ValidationTableJSON.decode(
-      Fixture.data("BrownfieldTrial/price-tracker-3-validation.json"))
-  }
-
-  static func findings(_ table: ValidationTable, obstacles: Bool) throws -> [Finding] {
-    let requirements = Array(
-      Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))
-    ).sorted()
-    let tasks = Set(table.rows.flatMap { $0.runsAfter + [$0.writer] })
-    return try PlanLintValidation.findings(
-      table: table, requirements: requirements, taskIDs: tasks, hasIOSArea: true,
-      file: "PLAN.md", reasonsNameObstacles: obstacles)
-  }
-
-  @Test(
-    "of the third price-tracker trial's 3 reason-only rows, only req-coingecko-client's, excused by its unit tests with no obstacle, is a major plan-lint.validation-reason-without-obstacle; `system:` and `gate:` pass, and a plan that doesn't ask keeps none — catches plan import accepting \"unit tests prove it\" as a reason no flow can check"
-  )
-  func unitTestReasonIsAFinding() throws {
-    let table = try Self.table()
-
-    let found = try Self.findings(table, obstacles: true).filter {
-      $0.ruleID == PlanLintValidation.reasonWithoutObstacleRuleID
-    }
-
-    #expect(found.count == 1)
-    #expect(found.first?.severity == .major)
-    #expect(found.first?.message.contains("req-coingecko-client") == true, "\(found)")
-    #expect(
-      try Self.findings(table, obstacles: false).allSatisfy {
-        $0.ruleID != PlanLintValidation.reasonWithoutObstacleRuleID
-      })
   }
 }
