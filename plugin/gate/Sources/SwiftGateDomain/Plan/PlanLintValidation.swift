@@ -9,6 +9,8 @@ public enum PlanLintValidation {
   public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
   public static let appWithoutFlowRuleID = "plan-lint.validation-app-without-flow"
   public static let obstacleFakeableRuleID = "plan-lint.validation-obstacle-fakeable"
+  public static let clockUnheldRuleID = "plan-lint.validation-clock-unheld"
+  public static let obstacleSeedableRuleID = "plan-lint.validation-obstacle-seedable"
 
   /// What may stop a flow checking a screen requirement. A screen requirement's `Reason` opens
   /// with 1 of these and a colon, such as `data: needs a source with 50 chapters`, or it doesn't
@@ -69,19 +71,45 @@ public enum PlanLintValidation {
     return modules
   }
 
-  /// A task as the screen check reads it: the requirements it covers and the paths it writes.
+  /// A task as the screen check reads it: the requirements it covers, the paths it writes and
+  /// what its brief says it builds.
   public struct TaskWrites: Sendable, Equatable {
     public let id: String
     public let covers: [String]
     /// Repository-relative paths; a path ending in `/` is a prefix.
     public let writes: [String]
+    /// The brief's title, scope and acceptance lines, from ``briefText(_:)``; empty when the
+    /// caller has no brief.
+    public let text: String
 
-    public init(id: String, covers: [String], writes: [String]) {
+    public init(id: String, covers: [String], writes: [String], text: String = "") {
       self.id = id
       self.covers = covers
       self.writes = writes
+      self.text = text
     }
   }
+
+  /// What a task builds, as the clock and seed checks read it: the brief's title, scope and
+  /// acceptance lines, 1 per line. Its out-of-scope lines name what it doesn't build.
+  public static func briefText(_ brief: TaskBrief) -> String {
+    ([brief.title] + brief.scope + brief.acceptance).joined(separator: "\n")
+  }
+
+  /// Whether a task's brief says a clock drives its screen's state: a timer, a clock, a tick, a
+  /// `TimelineView` or a display link.
+  public static func drivesClock(_ text: String) -> Bool { false }
+
+  /// Whether a brief gives the app a seam that holds the clock: it reads `-harness-scenario` and
+  /// names a scenario with the word `held`.
+  public static func holdsClock(_ text: String) -> Bool { false }
+
+  /// Whether a plan's briefs give its engine a seed or a launch scenario, so a scenario can place
+  /// an entity at a known spot.
+  public static func takesSeedOrScenario(_ text: String) -> Bool { false }
+
+  /// Whether a reason's detail excuses a flow by a target that moves or is placed at random.
+  public static func namesMovingTarget(_ reason: String) -> Bool { false }
 
   /// An `xcode` area: an app whose screens a flow row can drive.
   public struct AppArea: Sendable, Equatable {
