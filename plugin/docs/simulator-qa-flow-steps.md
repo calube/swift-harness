@@ -34,6 +34,22 @@ An `is` step checks once, with no wait: `{"command": "is", "input": {"predicate"
 "selector": "id=\"probe.loading\""}}`. It needs `selector`. `value` goes only with `predicate`
 `text`, which compares the element's text with it. Any other predicate drops `value` unchecked.
 
+## A checked element must be in view
+
+A `wait` for a selector, and an `is exists`, `is visible` or `is text`, match an element anywhere
+in the accessibility tree, including one the user can't see. iOS 26 draws a `.searchable` field
+as a floating bar over the bottom of the list, and the rows under it still match. Neither `is
+visible` nor `hittable=true` in the selector catches it: the pin's `hittable` only asks whether
+the element's centre is on screen, and it reads `true` before the bar joins the tree. The captured
+runs are in `plugin/gate/Tests/Fixtures/AgentDevice/under-search-bar/`.
+
+So `qa run` records each such step's selector as the `target` of its `sim/` step, and `sim
+verify` reds the row as `sim.covered` when, in the tree kept after the step, the centre of every
+element it matches lies inside a search field, tab bar, toolbar or keyboard listed after it. The
+fix is the app's: give the content room above the bar, such as a bottom `.contentMargins` or
+`.safeAreaPadding`. Or, when the list scrolls, the flow scrolls the element into view before the
+check. An absence check (`wait` `absent`, `is absent`, `is hidden`) names no target.
+
 ## What `qa lint` refuses
 
 `qa.flow-kind-key` refuses a `wait` whose target key isn't the 1 its `kind` reads, a `wait` with no

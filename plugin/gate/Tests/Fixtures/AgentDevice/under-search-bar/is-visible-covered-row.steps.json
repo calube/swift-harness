@@ -1,0 +1,5 @@
+[
+  {"command": "open", "input": {"app": "com.example.CoveredRowProbe", "relaunch": true}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.row.5\"", "timeoutMs": 15000}},
+  {"command": "is", "input": {"predicate": "visible", "selector": "id=\"probe.row.12\""}}
+]

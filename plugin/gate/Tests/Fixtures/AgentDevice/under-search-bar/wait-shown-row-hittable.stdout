@@ -1,0 +1,66 @@
+{
+  "success": true,
+  "data": {
+    "total": 2,
+    "executed": 2,
+    "totalDurationMs": 2154,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-under-search-bar",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-under-search-bar",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-under-search-bar/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-under-search-bar/requests/d9e2b058ee781d6d.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-under-search-bar/events.ndjson",
+          "sessionReused": true,
+          "selection": {
+            "reason": "existing-session",
+            "source": "session",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.CoveredRowProbe",
+          "appBundleId": "com.example.CoveredRowProbe",
+          "startup": {
+            "durationMs": 1225,
+            "measuredAt": "2026-10-05T11:55:42.419Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.CoveredRowProbe",
+            "appBundleId": "com.example.CoveredRowProbe"
+          },
+          "timing": {
+            "runnerDemand": "none",
+            "openDispatchDurationMs": 342,
+            "launchUrlDurationMs": 0,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 870,
+            "totalDurationMs": 1225
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-36877",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.CoveredRowProbe"
+        },
+        "durationMs": 1649
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 504,
+          "selector": "id=\"probe.row.5\" hittable=true"
+        },
+        "durationMs": 505
+      }
+    ]
+  }
+}

@@ -102,6 +102,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
     public let label: String
     /// The text an `is text` step expects, which `sim verify` looks for in the tree.
     public let assert: String?
+    /// The selector of the element the step checks is shown, which `sim verify` holds in view.
+    public let target: String?
     /// Driven-file indexes, 1-based: the kept tree, the screenshot, and the settle check.
     public let snapshot: Int
     public let screenshot: Int
@@ -111,11 +113,12 @@ public struct BatchFlowPlan: Sendable, Equatable {
 
     public init(
       after: Int, label: String, assert: String?, snapshot: Int, screenshot: Int, settle: Int,
-      screenshotPath: String
+      screenshotPath: String, target: String? = nil
     ) {
       self.after = after
       self.label = label
       self.assert = assert
+      self.target = target
       self.snapshot = snapshot
       self.screenshot = screenshot
       self.settle = settle
@@ -196,7 +199,7 @@ public struct BatchFlowPlan: Sendable, Equatable {
         Evidence(
           after: step.number, label: "after step \(step.number): \(label(step))",
           assert: expectedText(step), snapshot: first, screenshot: first + 1, settle: first + 2,
-          screenshotPath: path))
+          screenshotPath: path, target: checkedTarget(step)))
     }
     return BatchFlowPlan(
       steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo)
@@ -240,6 +243,24 @@ public struct BatchFlowPlan: Sendable, Equatable {
       offset += outcome?.durationMs ?? 0
     }
     return QAFlowRecord(source: .batch, steps: steps)
+  }
+
+  /// The selector of the element `step` checks is shown: a `wait` for a selector, or an `is`
+  /// whose predicate holds only for an element that is there. `nil` for any other step.
+  public static func checkedTarget(_ step: FlowStep) -> String? {
+    guard case .string(let selector)? = step.input["selector"] else { return nil }
+    switch step.command {
+    case "wait":
+      if case .string(let kind)? = step.input["kind"], kind != "selector" { return nil }
+      return selector
+    case "is":
+      guard case .string(let predicate)? = step.input["predicate"],
+        ["exists", "visible", "text"].contains(predicate)
+      else { return nil }
+      return selector
+    default:
+      return nil
+    }
   }
 
   /// A step's label: its command and what it acts on, such as `is text id="counter.value" "1"`.

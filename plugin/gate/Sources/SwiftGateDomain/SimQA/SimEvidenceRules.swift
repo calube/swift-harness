@@ -17,6 +17,9 @@ public enum SimEvidenceRule: String, Sendable, Equatable, CaseIterable {
   case a11yLabel = "sim.a11y-label"
   /// The app wasn't running at a step, or crashed during the run.
   case appExited = "sim.app-exited"
+  /// Every element a step's checked selector matches lies under a bar drawn over it: the check
+  /// passed on an element the user can't see or tap.
+  case covered = "sim.covered"
 
   public var verdict: Verdict { .red }
 }
@@ -191,6 +194,18 @@ public enum SimEvidenceRules {
         SimEvidenceFinding(
           rule: .assertAbsent, step: step.n, path: treePath,
           message: "\(name): no element's label or value is \"\(assert)\" in \(treePath)"))
+    }
+    if let target = step.target, let selector = SimSelector.parse(target),
+      case .bar(let bar)? = tree.cover(of: selector)
+    {
+      let named = [bar.label, bar.identifier].compactMap { $0 }.first.map { " \"\($0)\"" } ?? ""
+      findings.append(
+        SimEvidenceFinding(
+          rule: .covered, step: step.n, path: treePath,
+          message: "\(name): every element `\(target)` matches lies under the \(bar.role.rawValue)"
+            + "\(named) drawn over it in \(treePath), so the user can't see or tap it; give the "
+            + "content room above the bar, such as a bottom `.contentMargins` or "
+            + "`.safeAreaPadding`, or scroll the element into view before the check"))
     }
     let audited = SimAccessibilityRules.audit(tree, step: step, scope: audit)
     untargeted += audited.untargeted

@@ -23,6 +23,9 @@ enum TestOnlyCheck {
       @Sendable (_ area: BrownfieldArea) async -> Result<
         [ChangedTestFile], BrownfieldCheckSetupError
       >
+    /// Whether a repository-relative directory exists, which finds the area holding a test's
+    /// target when none is named.
+    var directoryExists: @Sendable (_ path: String) -> Bool = { _ in false }
 
     /// The clone's config and state, and `/bin/sh` commands. Each bound reads the nearest
     /// warm-up on HEAD's first-parent history that measured the area, under the box of the
@@ -63,6 +66,12 @@ enum TestOnlyCheck {
           } catch {
             return .failure(BrownfieldCheckSetupError(reason: "git: \(error)"))
           }
+        },
+        directoryExists: { path in
+          var isDirectory: ObjCBool = false
+          return FileManager.default.fileExists(
+            atPath: root.appending(path: path).path(percentEncoded: false),
+            isDirectory: &isDirectory) && isDirectory.boolValue
         })
     }
 
@@ -96,8 +105,16 @@ enum TestOnlyCheck {
     let bundle = context.directory.appending(path: "test-only.xcresult").path(
       percentEncoded: false)
     let resolved: AcceptanceTestCommand
-    switch AcceptanceTestReference(area: area, id: test).resolve(
-      in: dependencies.areas, junitPath: junit, resultBundlePath: bundle)
+    var reference = AcceptanceTestReference.testOnly(test, area: area)
+    if reference.area == nil {
+      let owners = AcceptanceTestReference.owningAreas(
+        of: reference.id, in: dependencies.areas, directoryExists: dependencies.directoryExists)
+      if owners.count == 1 {
+        reference = AcceptanceTestReference(area: owners[0], id: reference.id)
+      }
+    }
+    switch reference.resolve(
+      in: dependencies.areas, junitPath: junit, resultBundlePath: bundle, spelling: .testOnly)
     {
     case .success(let found): resolved = found
     case .failure(let unresolved): return try notRun(unresolved.reason)
@@ -235,10 +252,16 @@ struct TestOnlyCommand: AsyncParsableCommand {
       "Compile and run 1 test through a brownfield area's test command, with no baseline or "
       + "prove: the cheap loop before a merge gate.")
 
-  @Argument(help: "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode.")
+  @Argument(
+    help: ArgumentHelp(
+      "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode, or "
+        + "<area>: <id>."))
   var test: String
 
-  @Option(help: "The area to run it in; defaults to the 1 area with a test command.")
+  @Option(
+    help: ArgumentHelp(
+      "The area to run it in; defaults to the 1 area with a test command, or the 1 holding the "
+        + "id's test target."))
   var area: String?
 
   @OptionGroup var output: OutputOptions

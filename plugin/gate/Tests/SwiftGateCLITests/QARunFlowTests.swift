@@ -532,6 +532,43 @@ struct QARunSharedDeviceTests {
   }
 }
 
+extension QARunFlowTests {
+  @Test(
+    "each flow row's qa.setup and qa.flow events are written with its qa.check as the row ends, before the next row's, each once — catches the send-money trial's live viewer showing no flow or setup of a qa run until every row had ended"
+  )
+  func flowAndSetupEventsStreamPerRow() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.twoFlows(repo)
+    let simulator = try await Self.simulator(
+      repo, batch: "pass",
+      setup: [
+        QASetupStep(step: .device, milliseconds: 1200, reused: true),
+        QASetupStep(step: .install, milliseconds: 800),
+      ])
+    let events = MemoryEventLog()
+
+    let report = await Self.run(repo, simulator, events: events)
+
+    let rows = report.rows.map(\.row)
+    try #require(rows.count == 2)
+    let written = events.events.compactMap { event -> (kind: String, row: Int?)? in
+      switch event.payload {
+      case .qaCheck(let check): ("check", check.row)
+      case .qaFlow(let flow): ("flow", flow.row)
+      case .qaSetup(let setup): ("setup", setup.row)
+      default: nil
+      }
+    }
+    let order = written.filter { $0.row != nil }.map { "\($0.kind) \($0.row ?? 0)" }
+    #expect(
+      order == [
+        "setup \(rows[0])", "setup \(rows[0])", "flow \(rows[0])", "check \(rows[0])",
+        "setup \(rows[1])", "setup \(rows[1])", "flow \(rows[1])", "check \(rows[1])",
+      ], "\(order)")
+  }
+}
+
 /// The live device wiring `qa run` uses, where it, not a short-lived `sim up`, is each holder's
 /// parent.
 @Suite("qa run live flow device")
