@@ -142,7 +142,46 @@ enum QAAdoptRun {
     report.message =
       "adopted "
       + report.adopted.map { "\($0.plan) (\($0.files) files)" }.joined(separator: ", ")
+    for (name, plan) in plans {
+      report.unblocks += await unblocked(
+        plan: name, layout: plan, root: root, git: git, session: session)
+    }
+    if !report.unblocks.isEmpty {
+      report.message +=
+        "; once the --at-base run is done, \(report.unblocks.count) checked "
+        + (report.unblocks.count == 1 ? "return waits" : "returns wait")
+        + " to merge: run `build next` and merge the first in its readyToMerge"
+    }
     return report
+  }
+
+  /// The running tasks of `plan`'s newest build run whose checked return waits to merge, in
+  /// queue order, that a validation row runs after; none when the plan has no build run or its
+  /// state doesn't read.
+  static func unblocked(
+    plan name: String, layout plan: PlanStateLayout.Plan, root: URL, git: any Git,
+    session: String?
+  ) async -> [QAAdoptReport.Unblocked] {
+    guard
+      let data = FileManager.default.contents(
+        atPath: plan.directory + "/" + ValidationTable.fileName),
+      let table = try? ValidationTableJSON.decode(data),
+      let progress = try? PlanStateStore(plan: plan).ledgerProgress(),
+      let store = try? await BuildRunStore.latest(plan: name, git: git),
+      let log = try? store.events()
+    else { return [] }
+    let named = Set(table.rows.flatMap(\.runsAfter))
+    let running = Set(progress.tasks.filter { $0.status == .inProgress }.map(\.id))
+    let retried = BuildHalts.retried(
+      in: (try? BuildHaltLog(root: root).events()) ?? [], buildRun: store.runID)
+    return log.mergeQueue(running: running, retried: retried).ready
+      .filter { named.contains($0.task) }
+      .map { ready in
+        QAAdoptReport.Unblocked(
+          plan: name, task: ready.task, fix: ready.fix,
+          next: "\"$SG\" build merge \(name) \(ready.task)\(ready.fix ? " --fix" : "") "
+            + "--session \(session ?? "<session>") --json")
+      }
   }
 
   /// Copies only `repair.requirement`'s checks from the worktree's prepared folder into plan
@@ -364,7 +403,8 @@ enum QAAdoptRun {
     guard json else {
       return
         (["\(command): \(report.verdict.rawValue) \(report.message)"]
-        + report.findings.map { "  \($0.ruleID): \($0.message)" }).joined(separator: "\n")
+        + report.findings.map { "  \($0.ruleID): \($0.message)" }
+        + report.unblocks.map { "  \($0.task): \($0.next)" }).joined(separator: "\n")
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
