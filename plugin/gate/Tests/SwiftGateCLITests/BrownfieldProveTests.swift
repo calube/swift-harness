@@ -235,6 +235,55 @@ extension BrownfieldProveTests {
       ])
     #expect(proofs.results.allSatisfy { $0.proofBase == mergeBase && mergeBase != nil })
   }
+
+  @Test(
+    "a swiftpm area's reverted runs take their turn in a linked worktree's own prove scratch path, and the prove's outcome adds up how long they waited for it — catches the send-money trial's prove step whose 106-323 s hid the wait for the 1 shared scratch path the other slices built in"
+  )
+  func swiftPMWaitsAreTimedInTheWorktreesOwnPath() async throws {
+    let clone = try await Self.clone(tests: [
+      "tests/guards.test": "needs new\n", "tests/idle.test": "always\n",
+    ])
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let layout = BrownfieldStateLayout(
+      commonDir: clone.root.appending(path: ".git", directoryHint: .isDirectory),
+      gitDir: clone.root.appending(path: ".git/worktrees/slot-2", directoryHint: .isDirectory))
+    let requests = Mutex<[AreaCommandRequest]>([])
+    // Each run waited 1.2 s for another build to leave the directory.
+    let runner = FakeAreaCommandRunner { request in
+      requests.withLock { $0.append(request) }
+      request.buildLock?.waits.add(milliseconds: 1200)
+      return .failed(exit: 1, tail: "1 failed", junit: nil)
+    }
+    let config = BrownfieldConfig(
+      brownfield: BrownfieldSettings(
+        discoveredAt: "0", sliceBudgetSeconds: 30, timeBudgetMinutes: 0, sensitive: []),
+      areas: [
+        BrownfieldArea(
+          name: "Feature", root: ".", language: .swift, kind: .swiftpm, test: "swift test",
+          testFiles: "swift test --filter {files}", lint: nil, build: nil, e2e: nil,
+          testGlobs: ["tests/**"], packs: [], xcode: nil)
+      ],
+      allow: [], buildPresets: [:])
+    let process = LiveProcessRunner(baseEnvironment: Self.environment)
+
+    let outcome = await BrownfieldProve.prove(
+      root: clone.root, base: "main", config: config,
+      junitDirectory: clone.base.appending(path: "junit"), proofs: ProveResultCollector(),
+      dependencies: BrownfieldProve.Dependencies(
+        git: LiveGit(runner: process, repositoryRoot: clone.root.path),
+        scratch: LiveScratchWorktrees(
+          runner: process, repositoryRoot: clone.root.path,
+          directory: clone.base.appending(path: "scratch")),
+        runner: runner, deadline: .seconds(60), layout: layout))
+
+    let path = ScratchTreeBuild.proveScratchPath(area: "Feature", layout: layout)
+    #expect(path.hasSuffix("/.git/worktrees/slot-2/swift-harness/derived-data/prove/Feature"))
+    let ran = requests.withLock { $0 }
+    #expect(!ran.isEmpty)
+    #expect(ran.allSatisfy { $0.command.hasPrefix("swift test --scratch-path '\(path)' ") })
+    #expect(ran.allSatisfy { $0.buildLock?.directory == path })
+    #expect(outcome.lockWaitMilliseconds == 1200 * ran.count)
+  }
 }
 
 /// Replays 1 captured run of a SwiftPM `test_files` command: writes its JUnit reports where the
@@ -379,7 +428,7 @@ private struct ProveTestFailure: Error {
 @Suite("the tree a scratch-tree bound prices")
 struct BrownfieldProvePricedTreeTests {
   @Test(
-    "a scratch tree reads as built once the area's prove DerivedData holds a Build folder or its shared SwiftPM scratch path exists, per area, and a checkout's tree is left as given — catches a seeded prove priced at its cold cost, which blocked price-tracker-4's merge gate on 218 s left against 225 s when the build took 10.7 s"
+    "a scratch tree reads as built once the area's prove DerivedData holds a Build folder or the worktree's own SwiftPM prove scratch path exists, per area, and a checkout's tree is left as given — catches a seeded prove priced at its cold cost, which blocked price-tracker-4's merge gate on 218 s left against 225 s when the build took 10.7 s"
   )
   func builtScratchFromItsBuildDirectories() throws {
     let base = TestTemporaryDirectory.root.appending(
@@ -405,6 +454,10 @@ struct BrownfieldProvePricedTreeTests {
       withIntermediateDirectories: true)
     try FileManager.default.createDirectory(
       atPath: ScratchTreeBuild.swiftPMScratchPath(area: "Feature", layout: layout),
+      withIntermediateDirectories: true)
+    #expect(priced("Feature") == .scratch, "only the shared path is built, not this slot's")
+    try FileManager.default.createDirectory(
+      atPath: ScratchTreeBuild.proveScratchPath(area: "Feature", layout: layout),
       withIntermediateDirectories: true)
     #expect(priced("App") == .builtScratch)
     #expect(priced("Feature") == .builtScratch)

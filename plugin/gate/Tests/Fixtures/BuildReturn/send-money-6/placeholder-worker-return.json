@@ -1,0 +1,16 @@
+{
+  "commits": [],
+  "designConflict": null,
+  "gate": {
+    "runId": "20261005T093416Z-86f87547",
+    "tier": "slice",
+    "verdict": "GREEN"
+  },
+  "notes": "placeholder",
+  "outcome": "ready-to-merge",
+  "review": null,
+  "span": "a5f1cc382cbfc2ab",
+  "surfaceCommit": null,
+  "task": "amount-input",
+  "testsAdded": []
+}

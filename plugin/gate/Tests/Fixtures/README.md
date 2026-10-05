@@ -4295,3 +4295,32 @@ for f in "$P"/906f7d75-4c8b-4434-bedd-0e8173d509ba/workflows/wf_*.json; do
 ```
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` matched nothing in either folder.
+
+## Brownfield trial: send-money-6's set-aside config, combined red run and placeholder return
+
+The sixth send-money trial (2026-10-05) reported its committed `.swiftgate.toml` as unchanged,
+though its contract added a module to it on the plan branch; quoted `--after account-client` in
+account-client's `flows-red` refusal for the run `20261005T094736Z-1149c44c`, which merged
+account-client's branch with amount-feature's alongside; and its amount-input build-worker returned
+ready-to-merge on a GREEN slice gate with `commits: []` and the notes `placeholder`, though its
+branch held `0b486ef`. `R` is the trial's clone, `T` its run folder, holding the clone's state as
+`state/` and the transcripts:
+
+```sh
+R=<send-money-6 clone> T=<send-money-6 run folder> F=BrownfieldTrial
+cp $R/.git/swift-harness/committed-config-set-aside.json $F/send-money-6-committed-config-set-aside.json
+git -C $R rev-parse swift-harness/spec:.swiftgate.toml > $F/send-money-6-committed-config-at-tip.txt
+cp $T/state/runs/20261005T094736Z-1149c44c/qa/report.json $F/send-money-6-qa-before-account-client-amount-feature.json
+mkdir -p BuildReturn/send-money-6
+python3 - $T/transcripts/b06295ef-b9a6-4477-8f69-11866cc98e3c/subagents/workflows/wf_657f668b-bf6/journal.jsonl \
+  > BuildReturn/send-money-6/placeholder-worker-return.json <<'PY'
+import json,sys
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    r=d.get('result')
+    if d.get('type')=='result' and isinstance(r,dict) and r.get('outcome')=='ready-to-merge':
+        print(json.dumps(r,indent=2,sort_keys=True)); break
+PY
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` matched none of the 4 files.

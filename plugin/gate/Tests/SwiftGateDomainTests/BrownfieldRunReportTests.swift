@@ -90,39 +90,69 @@ import Testing
         .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "gate-1", at: at)),
       ])),
     validation: RunReportInput<QAReport>? = nil,
-    setAside: RunReportInput<CommittedConfigSetAside>? = nil
+    setAside: RunReportInput<CommittedConfigSetAside>? = nil,
+    setAsideAtPlanTip: CommittedConfigSetAside.AtPlanTip = .unknown
   ) -> BrownfieldRunReportInputs {
     BrownfieldRunReportInputs(
       slug: "csv", planBranch: "swift-harness/csv", planBranchHead: planBranchHead, plan: plan,
       baseline: baseline, discover: discover, build: build, ledger: ledger,
-      validation: validation, setAside: setAside)
+      validation: validation, setAside: setAside, setAsideAtPlanTip: setAsideAtPlanTip)
   }
 
   @Test(
     "a run that set the committed config aside says so in its own section, and a record that won't read says why — catches a run on the brownfield profile reported as if the repository's own config governed it"
   )
-  func committedConfigSection() {
+  func committedConfigSection() throws {
     let record = CommittedConfigSetAside(
       blob: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
       setAsideAt: Date(timeIntervalSince1970: 1_800_000_000))
     let path = "/clone/.git/swift-harness/committed-config-set-aside.json"
 
-    let read = BrownfieldRunReport.make(Self.inputs(setAside: .read(record)))
+    let read = BrownfieldRunReport.make(
+      Self.inputs(setAside: .read(record), setAsideAtPlanTip: .blob(try #require(record.blob))))
     let broken = BrownfieldRunReport.make(
       Self.inputs(setAside: .unreadable(source: path, reason: "not JSON")))
     let none = BrownfieldRunReport.make(Self.inputs(setAside: .missing(path: path)))
 
-    #expect(read.committedConfig == .init(items: [record.reportLine], note: nil))
     #expect(
       lines("Committed config", in: read.text) == [
         ".swiftgate.toml (blob 4b825dc642cb6eb9a060e54bf8d69288fbee4904) set aside for this "
           + "clone at 2027-01-15T08:00:00Z: every command ran the brownfield profile, and the "
-          + "file is unchanged in the tree"
+          + "plan branch leaves the file unchanged"
       ])
     #expect(broken.committedConfig?.note?.contains(path) == true)
     #expect(none.committedConfig == nil)
     #expect(!none.text.contains("## Committed config"))
   }
+  @Test(
+    "the send-money trial's set-aside config, which its contract changed on the plan branch, is reported as changed with the head's blob, a file the plan branch deleted as deleted, and a head that couldn't be read says so — catches the trial's report calling the file unchanged though merging the plan branch adds a module to it"
+  )
+  func committedConfigChangedOnThePlanBranch() throws {
+    let record = try CommittedConfigSetAside.decode(
+      try Fixture.data("BrownfieldTrial/send-money-6-committed-config-set-aside.json"))
+    let tip = try Fixture.text("BrownfieldTrial/send-money-6-committed-config-at-tip.txt")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let blob = try #require(record.blob)
+    #expect(tip != blob)
+    let prefix =
+      ".swiftgate.toml (blob \(blob)) set aside for this clone at 2026-10-05T09:25:21Z: every "
+      + "command ran the brownfield profile, and "
+
+    let changed = BrownfieldRunReport.make(
+      Self.inputs(setAside: .read(record), setAsideAtPlanTip: .blob(tip)))
+    #expect(
+      lines("Committed config", in: changed.text) == [
+        prefix + "the plan branch changes the file (blob \(tip) at its head), so merging it "
+          + "changes the committed config"
+      ])
+    #expect(
+      record.reportLine(atPlanTip: .absent)
+        == prefix + "the plan branch deletes the file, so merging it deletes the committed config")
+    #expect(
+      record.reportLine(atPlanTip: .unknown)
+        == prefix + "whether the plan branch changes the file couldn't be read")
+  }
+
 
   @Test(
     "a final GREEN over a qa run that verified no row says so straight after the final line — catches a run report that leads with GREEN when no validation row ran"
