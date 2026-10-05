@@ -1,0 +1,32 @@
+{
+  "success": true,
+  "data": {
+    "session": "swiftgate-capture-scenario-first",
+    "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first",
+    "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/runner.log",
+    "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/requests/6d52bd08bd70d499.ndjson",
+    "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/events.ndjson",
+    "appName": "com.example.LaunchProbe",
+    "appBundleId": "com.example.LaunchProbe",
+    "selection": {
+      "reason": "explicit-selector",
+      "source": "local",
+      "candidateCount": 1,
+      "bootOccurred": false
+    },
+    "startup": {
+      "durationMs": 1358,
+      "measuredAt": "2026-10-05T12:30:19.831Z",
+      "method": "open-command-roundtrip",
+      "appTarget": "com.example.LaunchProbe",
+      "appBundleId": "com.example.LaunchProbe"
+    },
+    "platform": "ios",
+    "target": "mobile",
+    "device": "agent-device-capture-19979",
+    "id": "UDID",
+    "device_udid": "UDID",
+    "ios_simulator_device_set": null,
+    "message": "Opened: com.example.LaunchProbe"
+  }
+}

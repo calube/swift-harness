@@ -279,6 +279,23 @@ export function flowRowLineProblems(text) {
   return problems
 }
 
+/**
+ * Where a fixer text lets app behaviour change to fit a fake. In the sixth price-tracker trial a
+ * fake that counted calls read 1 pull that loaded twice as 2 refreshes, and the fixer added a
+ * 2 s refresh cooldown that drops a user's second pull, with no assumption naming it.
+ */
+export function fakeFitProblems(text) {
+  const sentences = text.replace(/\s+/g, ' ').split(/(?<=\.)\s+/)
+  const problems = []
+  if (!sentences.some(s => /\bfake's timing or call count\b/.test(s) && /\bthe fake or the flow\b/.test(s) && /\bnever the app's behaviour\b/.test(s))) {
+    problems.push('a red from the fake\'s timing or call count is never sent to the fake or the flow, away from the app\'s behaviour')
+  }
+  if (!sentences.some(s => /\bcooldown/.test(s) && /\bdebounce/.test(s) && /`assumption: /.test(s))) {
+    problems.push('behaviour the fixer adds, such as a cooldown or debounce, gets no `assumption:` line')
+  }
+  return problems
+}
+
 /** The orchestrator's brief to a fixer: event-loop.md from the fixer's launch to its wait. */
 function fixerBrief() {
   const text = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8')
@@ -400,6 +417,24 @@ const tests = {
     assert.match(flowRowLineProblems(good.replace('simulator-qa-flow-gestures.md', 'the docs')).join('\n'), /gestures doc/)
     assert.match(flowRowLineProblems(good.replace('Never edit', 'Edit')).join('\n'), /flow files/)
     assert.match(flowRowLineProblems(good.replace('in repair mode ', '')).join('\n'), /who rewrites/)
+  },
+
+  'the fixer and its launch brief fix a red from the fake\'s timing in the fake or the flow, and name any behaviour added to the app as an assumption — catches a fixer that drops a user\'s second pull to fit a fake'() {
+    assert.deepEqual(fakeFitProblems(parseFrontmatter(agentText('build-fixer')).body), [])
+    assert.deepEqual(fakeFitProblems(fixerBrief()), [])
+  },
+
+  'the orchestrator records each assumption line a fixer returns under the plan\'s assumptions — catches a fixer\'s added behaviour missing from the report'() {
+    const loop = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8').replace(/\s+/g, ' ')
+    assert.match(loop, /each `assumption:` line of its notes[^.]*`## Assumptions`/, 'event-loop.md never records a fixer\'s assumption lines')
+  },
+
+  'the fake fit check names a missing route and a missing assumption line — catches a check that passes anything'() {
+    const good = "A red from the fake's timing or call count goes to the fake or the flow, never the app's behaviour. Each cooldown, debounce or guard you add gets 1 `assumption: <what>` line."
+    assert.deepEqual(fakeFitProblems(good), [])
+    assert.match(fakeFitProblems(good.replace('never the app', 'or the app')).join('\n'), /fake or the flow/)
+    assert.match(fakeFitProblems(good.replace('`assumption: <what>`', 'note')).join('\n'), /assumption/)
+    assert.match(fakeFitProblems(good.replace('debounce', 'delay')).join('\n'), /cooldown or debounce/)
   },
 
   'the row cap check names a missing cap, return, evidence part and each ban — catches a check that passes anything'() {
