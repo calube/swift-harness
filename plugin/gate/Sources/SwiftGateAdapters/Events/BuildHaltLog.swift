@@ -85,7 +85,8 @@ public struct BuildHaltLog: Sendable {
 
   private var files: HarnessEventFiles { HarnessEventFiles(root: root) }
 
-  private func events() throws(BuildHaltLogError) -> [HarnessEvent] {
+  /// Every event of the build stream, halts and resumes among them, in write order.
+  public func events() throws(BuildHaltLogError) -> [HarnessEvent] {
     let data: Data?
     do throws(HarnessEventReadError) {
       data = try files.read(.build, runID: nil)
