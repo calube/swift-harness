@@ -40,6 +40,9 @@
           "question" : "tests"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "formal-greeting-meets-farewell",
       "model" : "opus"
     },
@@ -77,15 +80,18 @@
           "question" : "tests"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "formal-greeting",
       "model" : "sonnet"
     }
   ],
-  "contentHash" : "a47c3f11d622e64fe5dec647a51747bb5235354b74377ec8e6671023661d0bd3",
+  "contentHash" : "5e055c7c789fc25127e35c58732e10c0ee3e3ca2cb0f045b0bb78654eaf5dcbb",
   "hashedFiles" : [
     "plugin/agents/build-fixer.md",
     "plugin/agents/build-worker.md"
   ],
-  "passedAt" : "2026-09-29T02:28:25Z",
-  "schemaVersion" : 2
+  "passedAt" : "2026-10-05T01:06:34Z",
+  "schemaVersion" : 4
 }

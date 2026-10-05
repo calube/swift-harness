@@ -1,0 +1,40 @@
+    
+
+SwiftCompile normal arm64 Compiling\ ArchiveTests.swift /CLONE/AidokuTests/ArchiveTests.swift (in target 'AidokuTests' from project 'Aidoku')
+
+SwiftCompile normal arm64 /CLONE/AidokuTests/ArchiveTests.swift (in target 'AidokuTests' from project 'Aidoku')
+    cd /CLONE
+    
+
+SwiftCompile normal arm64 Compiling\ ComicInfoTests.swift /CLONE/AidokuTests/ComicInfoTests.swift (in target 'AidokuTests' from project 'Aidoku')
+
+SwiftCompile normal arm64 /CLONE/AidokuTests/ComicInfoTests.swift (in target 'AidokuTests' from project 'Aidoku')
+    cd /CLONE
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ AidokuTests (in target 'AidokuTests' from project 'Aidoku')
+
+EmitSwiftModule normal arm64 (in target 'AidokuTests' from project 'Aidoku')
+    cd /CLONE
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling CoverRecoveryTests.swift (in target 'AidokuTests' from project 'Aidoku')
+
+note: Run script build phase 'Run Script' will be run during every build because the option to run the script phase "Based on dependency analysis" is unchecked. (in target 'Aidoku' from project 'Aidoku')
+
+Test session results, code coverage, and logs:
+	/DERIVED/Aidoku-bamzmnjcyzprpbaafhnrsiposwuq/Logs/Test/Test-Aidoku-2026.10.04_19-01-56--0500.xcresult
+
+Testing failed:
+	Member 'toggle' expects argument of type 'ToggleSetting'
+	Property 'key' is not available due to missing import of defining module 'AidokuRunner'
+	Testing cancelled because the build failed.
+
+** TEST FAILED **
+
+
+The following build commands failed:
+	SwiftCompile normal arm64 Compiling\ ConfirmLargeDownloadsSettingTests.swift /CLONE/AidokuTests/ConfirmLargeDownloadsSettingTests.swift (in target 'AidokuTests' from project 'Aidoku')
+	SwiftCompile normal arm64 /CLONE/AidokuTests/ConfirmLargeDownloadsSettingTests.swift (in target 'AidokuTests' from project 'Aidoku')
+	Testing project Aidoku with scheme Aidoku
+(3 failures)

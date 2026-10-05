@@ -226,7 +226,11 @@ Launch `swift-harness:build-fixer` with the Agent tool, in the foreground, and g
   other `swiftgate` command through: a `swiftgate` on `PATH` may be another install, whose runs no
   store of this build holds;
 - that the gate run it returns must start at its last commit on a clean tree: commit first, then
-  gate. `check-return --fix` rejects any other run as `build-return.stale-gate`.
+  gate. `check-return --fix` rejects any other run as `build-return.stale-gate`;
+- that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
+  or `"$SG" check --tier fast` in an owned project, and runs the merge gate only to confirm a fix
+  that passes there. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
+  (`guard.fixer-gate-cap`).
 
 When it returns, end the span by its outcome: `"$SG" events span end <span> --outcome ok` for
 `ready-to-merge`, else `"$SG" events span end <span> --outcome red`.
