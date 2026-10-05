@@ -194,6 +194,11 @@ const { page, close } = await launch({ deadlineMs: 45000 })
 const withRows = writePage(view())
 const withoutRows = writePage(view({ validation: null }))
 const withFlows = writePage(flowView)
+// A red flow whose screenshot after step 2 took 11.5 s, from a captured qa run's batch timings.
+const timedSteps = steps([true, true, false]).map((st, i) => (i === 1 ? { ...st, captureMs: 11530 } : st))
+const withTimedFlow = writePage(view({
+  validation: { ...flowValidation, rows: [flowValidation.rows[0], { ...flowValidation.rows[1], flow: flowRecord(2, { steps: timedSteps, launch: { launchMs: 1404, settleMs: 820 } }) }] },
+}))
 const withHistory = writePage(historyView)
 const withLastPass = writePage(lastPassView)
 const withRepair = writePage(repairView)
@@ -303,6 +308,17 @@ const tests = {
     assert.equal(red.video, `../runs/${QA}/qa/02-req-save-note.flow/video.mp4`)
     assert.equal(red.why, 'Why it failed')
     assert.equal(red.media, 0)
+    assert.equal(red.errors, '0')
+    assert.deepEqual(page.errors, [])
+  },
+
+  async 'a flow row shows its open\'s launch and settle time, and the capture time after a step qa run captured after — catches a red flow whose slow capture or launch the tab hides'() {
+    await page.load(withTimedFlow)
+    const red = await page.evaluate(FLOW(2))
+    const launch = await page.evaluate(`document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="2"] .qa-launch')?.innerText ?? null`)
+    assert.equal(launch, 'launch 1.4 s, 0.8 s of it settling')
+    assert.deepEqual(red.steps.map((st) => /capture/.test(st.text)), [false, true, false])
+    assert.match(red.steps[1].text, /\+11\.5 s capture/)
     assert.equal(red.errors, '0')
     assert.deepEqual(page.errors, [])
   },

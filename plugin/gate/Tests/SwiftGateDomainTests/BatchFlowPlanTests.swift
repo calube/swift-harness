@@ -69,7 +69,7 @@ struct BatchFlowPlanTests {
   }
 
   @Test(
-    "the captured passing batch records each written step once with its offset from the batch's start, and no capture — catches offsets that skip the captures' time"
+    "the captured passing batch records each written step once with its offset from the batch's start and the time the captures after it took, and no capture as a step — catches offsets that skip the captures' time"
   )
   func recordsPassingBatch() throws {
     let plan = BatchFlowPlan.make(
@@ -83,11 +83,13 @@ struct BatchFlowPlanTests {
           source: .batch,
           steps: [
             QAFlowStep(
-              n: 1, label: "wait selector id=\"counter.value\"", offsetMs: 0, ok: true),
+              n: 1, label: "wait selector id=\"counter.value\"", offsetMs: 0, ok: true,
+              captureMs: 1281),
             QAFlowStep(
               n: 2, label: "press id=\"counter.increment\"", offsetMs: 1707, ok: true),
             QAFlowStep(
-              n: 3, label: "is text id=\"counter.value\" \"1\"", offsetMs: 2908, ok: true),
+              n: 3, label: "is text id=\"counter.value\" \"1\"", offsetMs: 2908, ok: true,
+              captureMs: 1153),
             QAFlowStep(n: 4, label: "snapshot", offsetMs: 4488, ok: true),
           ]))
     #expect(record.video == nil)
@@ -106,5 +108,25 @@ struct BatchFlowPlanTests {
     #expect(record.steps.map(\.n) == [1, 2, 3])
     #expect(record.steps.map(\.ok) == [true, true, false])
     #expect(record.steps.map(\.offsetMs) == [0, 1536, 2287])
+  }
+
+  @Test(
+    "the captured failing counter batch, which opens nothing, puts the time before its failing `is` in captures and the flow's own steps with no launch, and a failed capture gets no delay — catches a launch claimed for a flow that never opened the app"
+  )
+  func delayWithoutOpen() throws {
+    let plan = BatchFlowPlan.make(
+      steps: try Self.counterSteps(), screenshots: ["/SCRATCH/3.png", "/SCRATCH/4.png"])
+    let results = try Self.results("fail")
+
+    let delay = try #require(plan.delay(results: results, failedAt: 6))
+
+    #expect(
+      delay == QAFlowDelay(step: 3, beforeMs: 2287, openMs: 0, captureMs: 1149, launch: nil))
+    #expect(
+      delay.sentence
+        == "step 3 began 2.3 s into the batch: 1.1 s in captures qa run added, 1.1 s in the flow's other steps"
+    )
+    #expect(plan.record(results: results, failedAt: 6).launch == nil)
+    #expect(plan.delay(results: results, failedAt: 3) == nil, "a failed screenshot isn't a step")
   }
 }
