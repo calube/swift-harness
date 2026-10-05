@@ -201,9 +201,7 @@ enum BrownfieldSliceCheck {
       outcome.blocked = outcome.blocked || result.blocked
     }
 
-    let touched = areas.filter { area in
-      changed.contains { BrownfieldMergeCheck.owner(of: $0, in: areas)?.name == area.name }
-    }
+    let touched = AreaGating.touched(by: changed, in: areas)
     guard !touched.isEmpty else { return outcome }
     let change: Change
     do {

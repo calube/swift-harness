@@ -164,9 +164,7 @@ enum BrownfieldMergeCheck {
       return blocked("git: \(error)")
     }
     let areas = dependencies.config.areas
-    let touched = areas.filter { area in
-      changed.contains { owner(of: $0, in: areas)?.name == area.name }
-    }
+    let touched = AreaGating.touched(by: changed, in: areas)
     let gated = tier == .final ? areas : touched
 
     var outcome = Outcome(baselineCount: 0)
@@ -347,13 +345,8 @@ enum BrownfieldMergeCheck {
       ).variables)
   }
 
-  /// The area whose root holds `path`, the deepest when roots nest; `nil` for a path no area
-  /// holds.
   static func owner(of path: String, in areas: [BrownfieldArea]) -> BrownfieldArea? {
-    areas.filter { area in
-      let root = area.root.split(separator: "/").filter { $0 != "." }.joined(separator: "/")
-      return root.isEmpty || path == root || path.hasPrefix(root + "/")
-    }.max { $0.root.count < $1.root.count }
+    AreaGating.owner(of: path, in: areas)
   }
 
   private static func gateStep(_ step: AreaStep) -> GateStep {
