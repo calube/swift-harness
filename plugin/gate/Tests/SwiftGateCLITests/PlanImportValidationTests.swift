@@ -156,6 +156,38 @@ struct PlanImportValidationTests {
   }
 
   @Test(
+    "the tic-tac-toe trial's plan, whose screen task's requirements have only XCUITest acceptance rows, fails the import with validation-screen-without-flow naming each requirement and writes nothing, and imports once each row gives a reason — catches a UI plan imported with no flow row"
+  )
+  func ticTacToeScreenWithoutFlowFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "tic-tac-toe-1-PLAN.md"),
+      encoding: .utf8)
+    let clone = try await ValidationClone(plan: captured, config: "tic-tac-toe-1-config.toml")
+    defer { clone.remove() }
+
+    let report = await clone.run()
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.verdict == .red)
+    for requirement in ["req-board-screen", "req-status-text", "req-new-game"] {
+      let row = try #require(line(of: "| \(requirement) | acceptance |", in: captured))
+      #expect(
+        report.message.contains(
+          "line \(row): \(PlanLintValidation.screenWithoutFlowRuleID): \(requirement)"),
+        "\(report.message)")
+    }
+    #expect(!clone.exists("ledger.json"))
+    #expect(!clone.exists("validation.json"))
+
+    let check = "`test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen |"
+    try clone.write(
+      plan: captured.replacingOccurrences(
+        of: check + " |", with: check + " the app has no flow runner here |"))
+    let reasoned = await clone.run()
+    #expect(reasoned.status == .imported, "\(reasoned.message)")
+  }
+
+  @Test(
     "the captured plan's Validation table imports every row into validation.json beside the ledger — catches a row dropped between PLAN.md and the file qa run reads"
   )
   func importsEveryRow() async throws {
