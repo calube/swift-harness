@@ -349,9 +349,14 @@ enum BrownfieldSliceCheck {
       times: WarmupTimesFile(tree: "", areas: records), box: dependencies.box, tier: .slice,
       fallback: dependencies.deadline)
     let now = dependencies.now
+    let areas = dependencies.config.areas
+    let layout = dependencies.layout
     let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
       area, step, tree in
-      bounds.bound(area: area, step: step, tree: tree, now: now())
+      bounds.bound(
+        area: area, step: step,
+        tree: BrownfieldProve.pricedTree(tree, area: area, areas: areas, layout: layout),
+        now: now())
     }
     var copy = dependencies
     copy.bound = bound
@@ -597,7 +602,7 @@ enum BrownfieldSliceCheck {
         tree: .checkout, dependencies: dependencies)
     else { return nil }
     let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(atHead(prepared.request, dependencies))
+      await dependencies.runner.run(atHead(prepared.request, kind: area.kind, dependencies))
     }
     var result = AreaResult()
     var unread = false
@@ -634,7 +639,7 @@ enum BrownfieldSliceCheck {
         area, step: .build, repositoryRoot: root.path(percentEncoded: false), files: [],
         tree: .checkout, dependencies: dependencies)
     else { return nil }
-    let request = atHead(prepared.request, dependencies)
+    let request = atHead(prepared.request, kind: area.kind, dependencies)
     let derivedData = Self.derivedData(request, kind: area.kind, dependencies)
     let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(request) }
     context.steps.record(
@@ -699,12 +704,14 @@ enum BrownfieldSliceCheck {
       request(scratch, dependencies.bound(area.name, step, .scratch))
     }
     let derivedData = Self.derivedData(
-      atHead(request(root, dependencies.bound(area.name, step, .checkout)), dependencies),
+      atHead(
+        request(root, dependencies.bound(area.name, step, .checkout)), kind: area.kind,
+        dependencies),
       kind: area.kind, dependencies)
     // The command builds what it runs, so with no build the harness can see it starts cold.
     let bound = dependencies.bound(
       area.name, step, derivedData == .warm ? .checkout : .unbuiltCheckout)
-    let head = atHead(request(root, bound), dependencies)
+    let head = atHead(request(root, bound), kind: area.kind, dependencies)
     let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(head) }
     if let counts = await dependencies.testCounts.counts(of: head) {
       context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
@@ -790,12 +797,12 @@ enum BrownfieldSliceCheck {
         deadline: dependencies.deadline, environment: [:], junitPath: nil)
   }
 
-  /// A run in this worktree builds in its own DerivedData; a rerun in a scratch tree builds where
-  /// ``ScratchTreeBuild`` puts it, so it never overwrites this worktree's build.
-  private static func atHead(_ request: AreaCommandRequest, _ dependencies: Dependencies)
-    -> AreaCommandRequest
-  {
-    XcodeDerivedData.request(request, layout: dependencies.layout)
+  /// A run in this worktree builds where ``AreaBuildPlacement`` puts it; a rerun in a scratch tree
+  /// builds where ``ScratchTreeBuild`` puts it, so it never overwrites this worktree's build.
+  private static func atHead(
+    _ request: AreaCommandRequest, kind: AreaKind, _ dependencies: Dependencies
+  ) -> AreaCommandRequest {
+    AreaBuildPlacement.checkout(request, kind: kind, layout: dependencies.layout)
   }
 
   /// Whether the step's build directories already exist, read before it runs.

@@ -114,9 +114,13 @@ enum BrownfieldMergeCheck {
         layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
       let bounds = AreaCommandBounds(times: times, box: box, tier: tier, fallback: liveDeadline)
       // Each bound is taken as its command starts, so the box's time left is current.
+      let areas = config.areas
       let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
         area, step, tree in
-        bounds.bound(area: area, step: step, tree: tree, now: Date())
+        bounds.bound(
+          area: area, step: step,
+          tree: BrownfieldProve.pricedTree(tree, area: area, areas: areas, layout: layout),
+          now: Date())
       }
       let prove = BrownfieldProve.Dependencies(
         git: unbounded.git, scratch: unbounded.scratch, runner: runner, deadline: liveDeadline,
@@ -458,7 +462,8 @@ enum BrownfieldMergeCheck {
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
       }
-      let request = XcodeDerivedData.request(prepared.request, layout: dependencies.layout)
+      let request = AreaBuildPlacement.checkout(
+        prepared.request, kind: area.kind, layout: dependencies.layout)
       let derivedData = GateStepCollector.derivedData(
         buildDirectories: XcodeDerivedData.buildDirectories(
           request, kind: area.kind, layout: dependencies.layout

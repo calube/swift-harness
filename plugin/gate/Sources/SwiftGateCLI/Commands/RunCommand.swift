@@ -23,9 +23,10 @@ struct RunStartError: Error, Sendable, Equatable {
 /// Starts `swiftgate warmup` so that it outlives `run` and the orchestrator session, and nothing
 /// waits on it.
 protocol WarmupSpawning: Sendable {
-  /// Starts the warm-up in `directory`, appending its output to `log`, also building each SwiftPM
-  /// area in `seedCheckout` when given. Returns its pid when known.
-  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32?
+  /// Starts the warm-up in `directory`, appending its output to `log`, also warming the builds of
+  /// `seedCheckout` and of `plan`'s worktree slots when given. Returns its pid when known.
+  func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
+    async throws(RunStartError) -> Int32?
   /// Stops the warm-up `spawn` started, when the run it was started for never launched.
   func stop(pid: Int32)
 }
@@ -113,14 +114,25 @@ extension RunCommand {
     return prepared
   }
 
-  /// Stops the warm-up, removes the plan checkout, deletes the plan branch while it still points
-  /// at the base, and removes the plan dir with its lock. Returns what couldn't be undone.
+  /// Stops the warm-up, removes the slots it added and the plan checkout, deletes the plan branch
+  /// while it still points at the base, and removes the plan dir with its lock. Returns what
+  /// couldn't be undone.
   static func rollBack(_ prepared: RunPrepared, dependencies: Dependencies) async -> [String] {
     var left: [String] = []
     if let pid = prepared.warmupPID {
       dependencies.warmup.stop(pid: pid)
     } else {
       left.append("a warm-up whose pid is unknown, logging to \(prepared.warmupLog)")
+    }
+    let root = URL(filePath: prepared.root, directoryHint: .isDirectory)
+    let layout = try? await GitTrackedTree(runner: dependencies.runner, directory: root)
+      .stateLayout()
+    if let layout {
+      let disposal = await WorktreePool(
+        commonDirectory: layout.commonDir.path(percentEncoded: false), plan: prepared.slug
+      ).dispose(
+        workspace: LiveGitWorkspace(runner: dependencies.runner, repositoryRoot: prepared.root))
+      left += disposal.failures.map { "a slot: \($0)" }
     }
     if let checkout = prepared.checkout {
       let removed = try? await git(
@@ -283,7 +295,7 @@ extension RunCommand {
       checkedOut = true
       warmupPID = try await dependencies.warmup.spawn(
         directory: root, log: warmupLog,
-        seedCheckout: URL(filePath: checkout, directoryHint: .isDirectory))
+        seedCheckout: URL(filePath: checkout, directoryHint: .isDirectory), plan: slug)
     } catch {
       if checkedOut {
         _ = try? await git(
@@ -459,7 +471,9 @@ struct LiveWarmupSpawner: WarmupSpawning {
   /// the hash from this process's environment, so the child can't inherit it.
   var binary: GateBinary? = GateBinaryScope.current
 
-  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
+  func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
+    async throws(RunStartError) -> Int32?
+  {
     do {
       try FileManager.default.createDirectory(
         at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -477,7 +491,8 @@ struct LiveWarmupSpawner: WarmupSpawning {
         ProcessInvocation(
           executable: "/bin/sh",
           arguments: ["-c", script, "sh", log.path(percentEncoded: false), executable] + arguments
-            + (seedCheckout.map { ["--seed-checkout", $0.path(percentEncoded: false)] } ?? []),
+            + (seedCheckout.map { ["--seed-checkout", $0.path(percentEncoded: false)] } ?? [])
+            + (plan.map { ["--plan", $0] } ?? []),
           environmentOverlay: [GateBinary.sourceHashVariable: binary?.sourceHash],
           workingDirectory: directory.path(percentEncoded: false), timeout: .seconds(60)))
     } catch {

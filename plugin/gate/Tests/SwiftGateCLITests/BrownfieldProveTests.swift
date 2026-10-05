@@ -375,3 +375,40 @@ extension BrownfieldProveTests {
 private struct ProveTestFailure: Error {
   let detail: String
 }
+
+@Suite("the tree a scratch-tree bound prices")
+struct BrownfieldProvePricedTreeTests {
+  @Test(
+    "a scratch tree reads as built once the area's prove DerivedData holds a Build folder or its shared SwiftPM scratch path exists, per area, and a checkout's tree is left as given — catches a seeded prove priced at its cold cost, which blocked price-tracker-4's merge gate on 218 s left against 225 s when the build took 10.7 s"
+  )
+  func builtScratchFromItsBuildDirectories() throws {
+    let base = TestTemporaryDirectory.root.appending(
+      path: "priced-tree-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { TestTemporaryDirectory.remove(base) }
+    let layout = BrownfieldStateLayout(
+      commonDir: base.appending(path: "common", directoryHint: .isDirectory),
+      gitDir: base.appending(path: "common/worktrees/slot", directoryHint: .isDirectory))
+    func area(_ name: String, _ kind: AreaKind) -> BrownfieldArea {
+      BrownfieldArea(
+        name: name, root: ".", language: .swift, kind: kind, test: "t", testFiles: nil,
+        lint: nil, build: "b", e2e: nil, testGlobs: [], packs: [], xcode: nil)
+    }
+    let areas = [area("App", .xcode), area("Feature", .swiftpm), area("Web", .node)]
+    func priced(_ name: String, _ tree: AreaCommandTree = .scratch) -> AreaCommandTree {
+      BrownfieldProve.pricedTree(tree, area: name, areas: areas, layout: layout)
+    }
+
+    #expect(priced("App") == .scratch)
+    #expect(priced("Feature") == .scratch)
+    try FileManager.default.createDirectory(
+      atPath: XcodeDerivedData.provePath(area: "App", layout: layout) + "/Build",
+      withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      atPath: ScratchTreeBuild.swiftPMScratchPath(area: "Feature", layout: layout),
+      withIntermediateDirectories: true)
+    #expect(priced("App") == .builtScratch)
+    #expect(priced("Feature") == .builtScratch)
+    #expect(priced("Web") == .scratch, "no build directory the harness places")
+    #expect(priced("App", .checkout) == .checkout)
+  }
+}

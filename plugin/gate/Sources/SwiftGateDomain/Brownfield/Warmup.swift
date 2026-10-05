@@ -185,14 +185,20 @@ public struct WarmupTimesFile: Sendable, Equatable {
 /// use there. Nothing is recorded from it: the times and baseline come from the base tree's run.
 public struct WarmupSeedBuild: Sendable, Equatable {
   public let area: String
+  /// Absolute: the checkout it built in.
+  public let checkout: String
   public let milliseconds: Int
   /// `passed`, `failed` or `notInstalled`.
   public let outcome: WarmupOutcome
   /// The end of the build's output when it didn't pass.
   public let detail: String?
 
-  public init(area: String, milliseconds: Int, outcome: WarmupOutcome, detail: String?) {
+  public init(
+    area: String, checkout: String = "", milliseconds: Int, outcome: WarmupOutcome,
+    detail: String?
+  ) {
     self.area = area
+    self.checkout = checkout
     self.milliseconds = milliseconds
     self.outcome = outcome
     self.detail = detail
@@ -297,28 +303,32 @@ public enum Warmup {
     return result
   }
 
-  /// `area`'s build in `checkout`, the plan branch's checkout: SwiftPM keeps its build in each
-  /// package's `.build`, keyed by the sources' absolute paths, so only a build there warms the
-  /// builds the run makes there. `nil` for an area of another kind or with no build command.
+  /// `area`'s build in `checkout`, a checkout the run builds in: the plan branch's or a task
+  /// slot. Xcode keys a build by the project's absolute path, so only a build in the checkout's
+  /// own DerivedData warms the builds the run makes there; `layout` is that checkout's. `nil` for
+  /// an area of another kind (a swiftpm area builds in the scratch path the base tree's run
+  /// warmed), for a generated project the checkout doesn't hold, and with no build command.
   public static func seedRequest(
     area: BrownfieldArea, checkout: String, layout: BrownfieldStateLayout,
     tree: TrackedTreeSnapshot, deadline: Duration
   ) -> AreaCommandRequest? {
-    guard area.kind == .swiftpm else { return nil }
-    return AreaCommandExpansion.prepare(
-      area: area, step: .build, repositoryRoot: checkout, files: [], tests: [],
-      junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
-      deadline: deadline,
-      environment: AreaCacheEnvironment.make(area: area, layout: layout, tree: tree).variables
-    )?.request
+    let generated = area.xcode.map { $0.inclusion == .xcodegen || $0.inclusion == .tuist } ?? false
+    guard area.kind == .xcode, !generated,
+      let prepared = AreaCommandExpansion.prepare(
+        area: area, step: .build, repositoryRoot: checkout, files: [], tests: [],
+        junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
+        deadline: deadline,
+        environment: AreaCacheEnvironment.make(area: area, layout: layout, tree: tree).variables)
+    else { return nil }
+    return AreaBuildPlacement.checkout(prepared.request, kind: area.kind, layout: layout)
   }
 
   /// The seed build's result from what its command came to.
   public static func seedBuild(
-    area: String, outcome: AreaCommandOutcome, milliseconds: Int
+    area: String, checkout: String = "", outcome: AreaCommandOutcome, milliseconds: Int
   ) -> WarmupSeedBuild {
     WarmupSeedBuild(
-      area: area, milliseconds: milliseconds,
+      area: area, checkout: checkout, milliseconds: milliseconds,
       outcome: outcome == .passed ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
       detail: detail(outcome))
   }
@@ -362,7 +372,12 @@ public enum Warmup {
             detail: "no \(areaStep.rawValue) command in the config"))
         continue
       }
-      let request = prepared.request
+      // A swift build fills the area's shared scratch path, which every checkout and scratch tree
+      // builds in.
+      let request =
+        area.kind == .swiftpm
+        ? ScratchTreeBuild.swiftPMRequest(prepared.request, layout: dependencies.layout)
+        : prepared.request
       let started = ContinuousClock.now
       let outcome = await dependencies.run(
         AreaCommandRequest(

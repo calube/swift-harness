@@ -3,6 +3,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @Suite("LiveAreaCommandRunner")
@@ -167,6 +168,46 @@ struct LiveAreaCommandRunnerTests {
         "[ -d '\(directory.path)/junit' ] && \(writing(junit, failing: "a", "x")); exit 1",
         in: directory, junitPath: junit))
     #expect(BaselineStepResult.of(outcome) == .failedTests(["a.x"]))
+  }
+
+  @Test(
+    "2 builds into 1 worktree's DerivedData run 1 at a time, and builds into 2 DerivedData run together — catches a gate's xcodebuild starting in a slot while the warm-up still builds there, which xcodebuild fails on its locked build database"
+  )
+  func oneBuildPerDerivedData() async throws {
+    let directory = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let active = Mutex((now: 0, most: 0))
+    // Each command waits, yielding, for a second one to arrive, so 2 that may overlap do.
+    let processes = FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
+      active.withLock {
+        $0.now += 1
+        $0.most = max($0.most, $0.now)
+      }
+      let deadline = ContinuousClock.now + .seconds(1)
+      while active.withLock({ $0.now }) < 2, ContinuousClock.now < deadline { await Task.yield() }
+      active.withLock { $0.now -= 1 }
+      return ProcessOutput(status: .exited(0), stdout: "", stderr: "")
+    }
+    let runner = LiveAreaCommandRunner(processRunner: processes)
+    func build(into derivedData: String) -> AreaCommandRequest {
+      AreaCommandRequest(
+        area: "app", step: .build, command: "xcodebuild build", workingDirectory: directory.path,
+        deadline: .seconds(20), environment: [:], junitPath: nil,
+        derivedDataSeed: DerivedDataSeedCopy(
+          seed: directory.appending(path: "seed").path,
+          destination: directory.appending(path: derivedData).path))
+    }
+
+    async let first = runner.run(build(into: "slot/areas/app"))
+    async let second = runner.run(build(into: "slot/areas/app"))
+    #expect(await [first, second] == [.passed, .passed])
+    #expect(active.withLock { $0.most } == 1)
+
+    active.withLock { $0 = (0, 0) }
+    async let own = runner.run(build(into: "slot/areas/app"))
+    async let other = runner.run(build(into: "other/areas/app"))
+    #expect(await [own, other] == [.passed, .passed])
+    #expect(active.withLock { $0.most } == 2)
   }
 
   @Test("a passing command is passed — catches exit 0 read as a failure")

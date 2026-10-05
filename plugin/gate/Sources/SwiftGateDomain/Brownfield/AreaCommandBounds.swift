@@ -6,6 +6,9 @@ public enum AreaCommandTree: Sendable, Equatable {
   case checkout
   /// A fresh scratch tree (prove, a baseline rerun), whose build starts cold.
   case scratch
+  /// A scratch tree whose build directories already hold a build: the worktree's prove
+  /// DerivedData, or the area's shared SwiftPM scratch path.
+  case builtScratch
   /// The gate's own checkout before any build of the area there, or with a build the harness
   /// can't see: a `test-only` run, or a `slice` test step whose command builds what it runs.
   case unbuiltCheckout
@@ -65,7 +68,9 @@ public struct AreaCommandBounds: Sendable {
 
   /// A test step in the checkout runs on the build its `build` step just made, so it gets
   /// ``warmMultiple`` warm runs. Anything in a scratch tree or an unbuilt checkout, and a build,
-  /// starts cold: it gets the area's cold cost on top. `e2e`, which no warm-up times, and an unmeasured area get
+  /// starts cold: it gets the area's cold cost on top. A scratch tree whose build is already
+  /// there keeps that bound but is measured against the warm test, so the box refuses it only
+  /// when even a warm run can't fit. `e2e`, which no warm-up times, and an unmeasured area get
   /// ``fallback``. Then the box caps it: any other tier's step at the run's cutoff, and a `final`
   /// step or one already inside the final reserve at the box's end.
   public func bound(area: String, step: AreaStep, tree: AreaCommandTree, now: Date)
@@ -88,7 +93,9 @@ public struct AreaCommandBounds: Sendable {
     let warmText = "\(Self.warmMultiple) × \(area)'s \(Self.seconds(warm)) s warm test"
     let cold: Bool
     switch (tree, step) {
-    case (.scratch, _), (.checkout, .build), (.checkout, .generate), (.checkout, .lint): cold = true
+    case (.scratch, _), (.builtScratch, _), (.checkout, .build), (.checkout, .generate),
+      (.checkout, .lint):
+      cold = true
     case (.checkout, .test), (.checkout, .testFiles), (.checkout, .e2e): cold = false
     case (.unbuiltCheckout, _): cold = true
     }
@@ -105,6 +112,8 @@ public struct AreaCommandBounds: Sendable {
         (.unbuiltCheckout, .testFiles):
         .milliseconds(warm)
       case (.scratch, _): .milliseconds(record.coldMilliseconds)
+      // Its build compiles only what differs from the build already there.
+      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(warm)
       default: nil
       }
     guard Duration.milliseconds(milliseconds) > Self.floor else {

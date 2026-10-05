@@ -71,6 +71,29 @@ struct AreaCommandBoundsTests {
   }
 
   @Test(
+    "a prove run in a scratch tree whose build is already there keeps the cold kill bound but is measured against the warm test, so a box with less than the cold cost left still runs it — catches send-money-4's final prove not run because 96 s couldn't hold a measured 226 s cold cost, where a seeded prove build took 16 s"
+  )
+  func builtScratchRunIsMeasuredWarm() throws {
+    let bounds = AreaCommandBounds(
+      times: try Self.times(), box: try Self.box(), tier: .merge, fallback: .seconds(3600))
+    let cutoff = try Self.box().deadlines.cutoffAt
+
+    let bound = bounds.bound(
+      area: "AppFeature", step: .testFiles, tree: .builtScratch, now: try Self.at("03:03:24"))
+    #expect(bound.duration == .milliseconds(240_679 + 5 * 31_715))
+    #expect(bound.expected == .milliseconds(31_715))
+
+    let late = bounds.bound(
+      area: "AppFeature", step: .testFiles, tree: .builtScratch,
+      now: cutoff.addingTimeInterval(-100))
+    #expect(late.duration == .seconds(100))
+    #expect(!late.cannotFinish, "100 s left holds a 31.7 s warm test")
+    let cold = bounds.bound(
+      area: "AppFeature", step: .testFiles, tree: .scratch, now: cutoff.addingTimeInterval(-100))
+    #expect(cold.cannotFinish, "a cold scratch tree still needs its 240.7 s")
+  }
+
+  @Test(
     "near the cutoff a merge step is cut to the seconds left before it, and refused when they're under its measured time — catches a gate that runs past the box's cutoff"
   )
   func boxCapsAtTheCutoff() throws {

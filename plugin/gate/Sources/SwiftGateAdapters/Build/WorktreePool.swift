@@ -57,25 +57,30 @@ public struct WorktreePool: Sendable {
     try state().path(holding: branch)
   }
 
-  /// Checks `branch` out new from `base` in the first free slot, or in a new slot when none is
-  /// free, and records it there.
-  public func checkOut(branch: String, from base: String, workspace: any GitWorkspace)
-    async throws(GitWorkspaceError) -> Checkout
-  {
+  /// Checks `branch` out new from `base` in a free slot, or in a new slot when none fits, and
+  /// records it there. A task that `builds` takes the first free slot an area was built in, else
+  /// the first free one; a task that builds no area takes the first free slot nothing was built
+  /// in, else a new one, so it never holds a warm slot a build task could have taken.
+  public func checkOut(
+    branch: String, from base: String, builds: Bool = true, workspace: any GitWorkspace
+  ) async throws(GitWorkspaceError) -> Checkout {
     try await locked { () async throws(GitWorkspaceError) -> Checkout in
       var state = try state()
       if let held = state.path(holding: branch) {
         throw .pool(path: held, detail: "\(branch) is already checked out here")
       }
-      while let free = state.firstFree {
-        guard FileManager.default.fileExists(atPath: free.path) else {
-          state.drop(free.path)
-          continue
-        }
-        try await workspace.switchWorktree(at: free.path, toNewBranch: branch, from: base)
-        state.assign(branch, to: free.path)
+      for slot in state.slots
+      where slot.branch == nil && !FileManager.default.fileExists(atPath: slot.path) {
+        state.drop(slot.path)
+      }
+      let free = state.slots.filter { $0.branch == nil }.map(\.path)
+      let built = free.filter(Self.hasBuilt)
+      let pick = builds ? built.first ?? free.first : free.first { !built.contains($0) }
+      if let path = pick {
+        try await workspace.switchWorktree(at: path, toNewBranch: branch, from: base)
+        state.assign(branch, to: path)
         try write(state)
-        return Checkout(path: free.path, reused: true)
+        return Checkout(path: path, reused: true)
       }
       let path = try newSlotPath(state)
       try await workspace.addWorktree(at: path, branch: branch, from: base)
@@ -83,6 +88,39 @@ public struct WorktreePool: Sendable {
       try write(state)
       return Checkout(path: path, reused: false)
     }
+  }
+
+  /// Adds free slots, each checked out detached at `revision`, until the pool holds `count`, so
+  /// the warm-up can build in them before the first task takes one.
+  /// - Returns: the paths of the slots it added, in slot order.
+  public func prepare(count: Int, revision: String, workspace: any GitWorkspace)
+    async throws(GitWorkspaceError) -> [String]
+  {
+    try await locked { () async throws(GitWorkspaceError) -> [String] in
+      var state = try state()
+      for slot in state.slots where !FileManager.default.fileExists(atPath: slot.path) {
+        state.drop(slot.path)
+      }
+      var added: [String] = []
+      while state.slots.count < count {
+        let path = try newSlotPath(state)
+        try await workspace.addDetachedWorktree(at: path, revision: revision)
+        state.add(free: path)
+        added.append(path)
+        try write(state)
+      }
+      return added
+    }
+  }
+
+  /// Whether an area was built in the DerivedData of the worktree at `path`.
+  static func hasBuilt(_ path: String) -> Bool {
+    let worktree = URL(filePath: path, directoryHint: .isDirectory)
+    let areas = StateRootResolver.resolve(worktree: worktree).directory
+      .appending(path: "derived-data/areas", directoryHint: .isDirectory)
+    let files = FileManager.default
+    let names = (try? files.contentsOfDirectory(atPath: areas.path)) ?? []
+    return names.contains { files.fileExists(atPath: areas.appending(path: "\($0)/Build").path) }
   }
 
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never

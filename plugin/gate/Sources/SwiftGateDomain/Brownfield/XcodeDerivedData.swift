@@ -60,7 +60,8 @@ public enum XcodeDerivedData {
 
   /// The build directories `request`'s command builds into, for a gate step to label warm when
   /// they already exist: an `xcode` command's `Build` under the DerivedData
-  /// ``request(_:layout:)`` put it in, and a `swiftpm` area's `.build`. Empty for any other
+  /// ``request(_:layout:)`` put it in, and a `swiftpm` area's shared scratch path when its command
+  /// names it, else its `.build`. Empty for any other
   /// command, whose build directory the harness doesn't know.
   public static func buildDirectories(
     _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout
@@ -72,6 +73,9 @@ public enum XcodeDerivedData {
       ].first { request.command.contains(" \(option) \(AreaCommandExpansion.shellQuoted($0))") }
       return given.map { ["\($0)/Build"] } ?? []
     case .swiftpm:
+      let shared = ScratchTreeBuild.swiftPMScratchPath(area: request.area, layout: layout)
+      let option = " \(ScratchTreeBuild.swiftPMOption) \(AreaCommandExpansion.shellQuoted(shared))"
+      if request.command.contains(option) { return [shared] }
       var directory = request.workingDirectory
       while directory.count > 1, directory.hasSuffix("/") { directory.removeLast() }
       return ["\(directory)/.build"]

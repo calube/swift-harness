@@ -64,6 +64,18 @@ enum BrownfieldProve {
     }
   }
 
+  /// `tree` as a bound prices it for `area`: a scratch tree whose build directories already hold a
+  /// build is ``AreaCommandTree/builtScratch``. Read as each command starts.
+  static func pricedTree(
+    _ tree: AreaCommandTree, area: String, areas: [BrownfieldArea], layout: BrownfieldStateLayout
+  ) -> AreaCommandTree {
+    guard tree == .scratch, let owner = areas.first(where: { $0.name == area }) else { return tree }
+    let directories = ScratchTreeBuild.buildDirectories(area: owner, layout: layout)
+    let built =
+      !directories.isEmpty && directories.allSatisfy { FileManager.default.fileExists(atPath: $0) }
+    return built ? .builtScratch : tree
+  }
+
   /// Whether the scratch-tree build directories of `areas` already hold a build; `none` when no
   /// area's kind has 1 the harness places.
   static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
