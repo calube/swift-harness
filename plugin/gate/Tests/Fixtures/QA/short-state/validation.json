@@ -1,0 +1,4 @@
+{"schemaVersion":1,"unitOnly":[],"rows":[
+{"requirement":"slice-1-reset-after-increments-shows-zero","layer":"flow","check":"reads.flow.json","runsAfter":["counter-ui-reset-button"],"writer":"counter-ui-reset-button"},
+{"requirement":"slice-2-decrement-at-zero-stays-zero","layer":"flow","check":"short-state.flow.json","runsAfter":["counter-core-reset-and-decrement-floor"],"writer":"counter-core-reset-and-decrement-floor"}
+]}

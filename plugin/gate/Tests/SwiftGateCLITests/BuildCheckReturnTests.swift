@@ -933,6 +933,35 @@ struct BuildCheckReturnRecordTests {
   }
 
   @Test(
+    "a return whose notes end with the captured fixer's `flow row:` line is recorded with that row, its red runs and the fixer's call that the app is correct, for the final run to read — catches a proved race forgotten once the check is recorded"
+  )
+  func flowRowLinesAreRecorded() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let captured = try #require(
+      try JSONSerialization.jsonObject(
+        with: try Fixture.data("BuildReturn/no-repair/fix-return.json")) as? [String: Any])
+    let notes = try #require(captured["notes"] as? String)
+
+    let checked = await BuildCheckReturnRun.check(
+      file: try scenario.write(
+        try TaskReturnJSON.encode(
+          scenario.returnValue(
+            gate: TaskReturn.Gate(tier: .push, verdict: .green, runID: runID), notes: notes))),
+      plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+
+    #expect(checked.notRecorded == [])
+    let expected = [
+      FlowRowVerdict(
+        requirement: "req-send-sending-sent",
+        runs: ["20261005T151346Z-23962d10", "20261005T151815Z-9de928dd"], appShownCorrect: true)
+    ]
+    #expect(checked.report.flowRows == expected)
+    #expect(try await Self.returnChecks(scenario).map(\.flowRows) == [expected])
+  }
+
+  @Test(
     "with telemetry off, a GREEN check is recorded in the build run as a return-check naming the return's full last commit, and a RED one with its rules, both under the id the report's telemetry would carry — catches a verdict build merge can't read"
   )
   func verdictIsRecordedInTheBuildRun() async throws {

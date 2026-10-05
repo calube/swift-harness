@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
@@ -30,12 +31,12 @@ struct BatchFlowRunnerTests {
       ).encoded().write(to: sim.appending(path: SimSession.fileName))
     }
 
-    func run(_ runner: FakeProcessRunner, flow: String = "QA/counter.flow.json") async
-      -> BatchFlowOutcome
-    {
+    func run(
+      _ runner: FakeProcessRunner, flow: String = "QA/counter.flow.json", recordTo: String? = nil
+    ) async -> BatchFlowOutcome {
       await BatchFlowRunner(agentDevice: LiveAgentDevice(runner: runner)).run(
         stepsFile: Fixture.directory.appending(path: flow), on: target,
-        store: store, flowDirectory: flowDirectory)
+        store: store, flowDirectory: flowDirectory, recordTo: recordTo)
     }
   }
 
@@ -237,5 +238,128 @@ struct BatchFlowRunnerTests {
       delay.sentence
         == "step 3 began 13.7 s into the batch: 1.6 s opening the app (1.4 s to launch, 0.8 s of it settling), 11.5 s in captures qa run added, 0.5 s in the flow's other steps"
     )
+  }
+
+  /// A batch's output as printed, from `Fixtures/QA/short-state/`, answered with `status`.
+  static func shortStateRunner(_ name: String, status: Int32) throws -> FakeProcessRunner {
+    let output = ProcessOutput(
+      status: .exited(status),
+      stdout: CapturedStream(bytes: try Fixture.data("QA/short-state/\(name).batch.json")),
+      stderr: CapturedStream(bytes: Data()), elapsed: .zero)
+    return FakeProcessRunner { _ throws(ProcessRunnerError) in output }
+  }
+
+  @Test(
+    "the captured unrecorded batch whose `is` missed a badge shown for 1 s names a capture delay: qa run's own tree after step 2 shows `id=\"app.new\"` 1.3 s before step 3 began, and a red whose text no capture showed names none — catches a red row that blames the app or the contract for a state qa run's captures outlasted, or every slow red blamed on qa run"
+  )
+  func missedStateShownInACaptureIsACaptureDelay() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+
+    let outcome = await run.run(
+      try Self.shortStateRunner("unrecorded-short", status: 1),
+      flow: "QA/short-state/short-state.flow.json")
+
+    guard case .flow(let stop, _)? = outcome.stop else {
+      Issue.record("expected a flow stop, got \(String(describing: outcome.stop))")
+      return
+    }
+    #expect(stop == .step(n: 3, command: "is"))
+    let delay = try #require(outcome.delay)
+    #expect(
+      delay.lost
+        == QAFlowCaptureLoss(
+          after: 2, selector: "id=\"app.new\"", beforeMs: 1324, captureMs: 1324))
+    #expect(
+      delay.sentence.hasSuffix(
+        "; capture delay: the tree qa run captured after step 2 shows `id=\"app.new\"` 1.3 s "
+          + "before step 3 began, so the state was on screen and ended during the 1.3 s of "
+          + "captures qa run added there: this red is qa run's, no evidence against the app, the "
+          + "flow or the contract"), "\(delay.sentence)")
+
+    let unseen = await run.run(
+      try Self.captureDelayRunner("fail", status: 1), flow: "QA/capture-delay/fail.flow.json")
+    #expect(unseen.delay != nil)
+    #expect(
+      unseen.delay?.lost == nil,
+      "the `is` expected a status text no capture showed, though captures held it 11.5 s")
+  }
+
+  static let recordedShortVideo =
+    "/SCRATCH/app/.harness/runs/20261005T211436Z-8e3deac1/qa/"
+    + "02-slice-2-decrement-at-zero-stays-zero.flow/video.mp4"
+
+  @Test(
+    "the captured recorded batch leaves its 2 checks' trees waiting for the video, then each takes the video's frame from when its snapshot began as its PNG, unsettled — catches a recorded check left with no screenshot for sim verify, or one taken on the flow's clock"
+  )
+  func recordedChecksTakeTheirFramesFromTheVideo() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+    let outcome = await run.run(
+      try Self.shortStateRunner("recorded-short", status: 0),
+      flow: "QA/short-state/short-state.flow.json", recordTo: Self.recordedShortVideo)
+    #expect(outcome.stop == nil)
+    #expect(try run.store.steps().isEmpty, "no step is committed before its frame is read")
+    #expect(outcome.frames.map(\.videoMs) == [2565, 2982])
+    let video = run.root.appending(path: "video.mp4")
+    try Fixture.data("QA/short-state/recorded-short.video.mp4").write(to: video)
+
+    let missing = await BatchFlowRunner(
+      agentDevice: LiveAgentDevice(runner: try Self.shortStateRunner("recorded-short", status: 0)))
+      .commitFrames(outcome.frames, video: video, store: run.store)
+
+    #expect(missing == [])
+    let steps = try run.store.steps()
+    #expect(steps.map(\.n) == [1, 2])
+    #expect(steps.map(\.settled) == [nil, nil])
+    #expect(steps.map(\.target) == ["id=\"app.new\"", "id=\"app.new\""])
+    #expect(steps.map(\.elapsedMs) == [417, 442])
+    for step in steps {
+      let png = run.store.simDirectory.appending(path: step.screenshot)
+      let source = try #require(CGImageSourceCreateWithURL(png as CFURL, nil))
+      let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+      #expect(image.width > 0 && image.height > image.width, "a portrait frame of the device")
+      let tree = try Data(
+        contentsOf: run.store.simDirectory.appending(path: try #require(step.tree)))
+      #expect(try SimTree.parse(snapshotJSON: tree).elements.contains { $0.identifier == "app.new" })
+    }
+  }
+
+  @Test(
+    "with no video saved, the recorded batch's 2 checks commit no step and each says it has no video to take its screenshot from — catches a recording that failed after its batch leaving sim verify steps with no PNG"
+  )
+  func recordedChecksWithoutAVideoAreMissing() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+    let outcome = await run.run(
+      try Self.shortStateRunner("recorded-short", status: 0),
+      flow: "QA/short-state/short-state.flow.json", recordTo: Self.recordedShortVideo)
+
+    let missing = await BatchFlowRunner(
+      agentDevice: LiveAgentDevice(runner: try Self.shortStateRunner("recorded-short", status: 0)))
+      .commitFrames(outcome.frames, video: nil, store: run.store)
+
+    #expect(missing.count == 2, "\(missing)")
+    #expect(missing.allSatisfy { $0.hasSuffix("no video to take its screenshot from") })
+    #expect(try run.store.steps().isEmpty)
+    let left = try FileManager.default.contentsOfDirectory(
+      atPath: run.store.simDirectory.appending(path: SimStep.directoryName).path)
+    #expect(left.isEmpty, "staged screenshots are discarded: \(left)")
+  }
+
+  @Test(
+    "a frame asked for past the captured video's end is its last frame — catches a check at the end of a flow left with no screenshot because the recording stopped a few ms after it"
+  )
+  func frameAfterTheEndIsTheLastFrame() async throws {
+    let root = try TestTemporaryDirectory.make("video-frames")
+    defer { TestTemporaryDirectory.remove(root) }
+    let video = root.appending(path: "video.mp4")
+    try Fixture.data("QA/short-state/recorded-short.video.mp4").write(to: video)
+    let png = root.appending(path: "last.png")
+
+    try await AVVideoFrames().frame(video: video, atMs: 600_000, to: png)
+
+    let source = try #require(CGImageSourceCreateWithURL(png as CFURL, nil))
+    #expect(CGImageSourceCreateImageAtIndex(source, 0, nil) != nil)
   }
 }

@@ -1,0 +1,39 @@
+{
+  "launch" : {
+    "launchMs" : 1093,
+    "settleMs" : 700
+  },
+  "sheet" : "qa/01-slice-1-reset-after-increments-shows-zero.flow/sheet.png",
+  "source" : "batch",
+  "steps" : [
+    {
+      "captureMs" : 759,
+      "label" : "open",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "captureMs" : 394,
+      "label" : "wait selector id=\"app.status\"",
+      "n" : 2,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "captureMs" : 397,
+      "label" : "is text id=\"app.status\" \"100 posts available\"",
+      "n" : 3,
+      "offsetMs" : 811,
+      "ok" : true
+    },
+    {
+      "captureMs" : 389,
+      "label" : "is visible id=\"app.status\"",
+      "n" : 4,
+      "offsetMs" : 1209,
+      "ok" : true
+    }
+  ],
+  "video" : "qa/01-slice-1-reset-after-increments-shows-zero.flow/video.mp4"
+}

@@ -103,4 +103,53 @@ struct QARunFinalMergedCodeTests {
     #expect(report.rows.map(\.result) == Array(repeating: .abandoned, count: 5), "\(report.message)")
     #expect(report.rows.allSatisfy { $0.reusedFrom == nil })
   }
+
+  @Test(
+    "a row the fixer's run passed on this tree, after an earlier run read the same flow file red and a fixer's flow row line called the app correct there, is credited as flaky and unverified, while the other credited rows pass — catches a final report that shows a race won once as a pass"
+  )
+  func racyRowCreditedAsFlaky() async throws {
+    let repo = try await Self.repo(carried: true)
+    defer { repo.remove() }
+    try Self.fixerRecord(in: repo, tree: try await repo.git("rev-parse", "HEAD^{tree}"))
+    // The run before the fixer's, with the keypad row red on the same flow file.
+    let fixer = try QAMergedTreeRun.decode(
+      Fixture.data("\(Self.fixtures)/send-money-6-merged-tree-run-fixer.json"))
+    let redRun = "20261005T094500Z-0000beef"
+    let red = QAMergedTreeRun(
+      tree: String(repeating: "1", count: 40),
+      run: QAAtBaseRun(
+        runID: redRun, preparedBy: fixer.run.preparedBy, commit: fixer.run.commit,
+        rows: fixer.run.rows.map { row in
+          guard row.requirement == "req-keypad-input" else { return row }
+          return QAAtBaseRun.Row(
+            requirement: row.requirement, layer: row.layer, check: row.check, digest: row.digest,
+            result: .red, message: "step 4 `wait` failed", exitStatus: nil,
+            milliseconds: row.milliseconds)
+        }))
+    let directory = try RunStore(worktreeRoot: repo.root).runDirectory(for: redRun)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try red.encoded().write(to: directory.appending(path: QAMergedTreeRun.fileName))
+    let check = BuildEvent.returnCheck(
+      .init(
+        task: "amount-feature", fix: true, verdict: .green, commit: nil, checkID: "fix-check",
+        rules: [], at: Date(timeIntervalSince1970: 1_791_190_000), outcome: .gateRed,
+        flowRows: [
+          FlowRowVerdict(requirement: "req-keypad-input", runs: [redRun], appShownCorrect: true)
+        ]))
+    let events = repo.planDirectory.appending(path: "build/\(Self.buildRun)/events.jsonl")
+    let handle = try FileHandle(forWritingTo: events)
+    try handle.seekToEnd()
+    try handle.write(contentsOf: try BuildEventJSON.encodeLine(check))
+    try handle.close()
+
+    let report = await repo.run(QARunRun.Options(final: true))
+
+    let keypad = try #require(report.rows.first { $0.requirement == "req-keypad-input" })
+    #expect(keypad.result == .unverified, "\(keypad.message)")
+    #expect(keypad.message.hasPrefix("flaky: "), "\(keypad.message)")
+    #expect(keypad.message.contains("qa run \(redRun)"), "\(keypad.message)")
+    let others = report.rows.filter { (3...5).contains($0.row) }
+    #expect(others.map(\.result) == [.pass, .pass, .pass], "\(report.rows.map(\.message))")
+  }
 }

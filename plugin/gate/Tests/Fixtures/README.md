@@ -640,27 +640,30 @@ Xcode 26.2 on a clone `swiftgate sim up` made from the configured iPhone 17 (iOS
 
 ```
 plugin/gate/Tests/Fixtures/AgentDevice/record/capture.sh plugin/gate/.build/debug/swiftgate
+plugin/gate/Tests/Fixtures/AgentDevice/record/capture-frames.sh plugin/gate/.build/debug/swiftgate
 ```
 
-The script runs `sim up --json` in `examples/SampleApp`, makes every call with `--udid` and
-`--session` from its output, and runs `sim down` on exit. `recorded-pass.steps.json` and
-`recorded-fail.steps.json` are inputs: `AgentDevice/batch/pass.steps.json` and `fail.steps.json`
-with `{"command":"record","input":{"action":"start","path":"/SCRATCH/video.mp4"}}` put first. In
-each output the script replaces the scratch path with `/SCRATCH`, `$HOME` with `/HOME`, the clone's UDID
-with `UDID` and the session with `SESSION`.
+Each script runs `sim up --json` in `examples/SampleApp`, makes every call with `--udid` and
+`--session` from its output, and runs `sim down` on exit. In each output it replaces the scratch
+path with `/SCRATCH`, `$HOME` with `/HOME`, the clone's UDID with `UDID` and the session with
+`SESSION`.
+
+`capture-frames.sh` was run on 2026-10-05 the same way. It captures the batches in the shape `qa
+run` drives a recorded flow: 1 `snapshot` after each check, whose PNG is the video's frame, and no
+`screenshot` or settle `snapshot`. `recorded-pass.steps.json` and `recorded-fail.steps.json` are
+inputs: `AgentDevice/batch/pass.steps.json` and `fail.steps.json` with
+`{"command":"record","input":{"action":"start","path":"/SCRATCH/video.mp4"}}` put first and each
+check's `screenshot` and the `snapshot` after it taken out. `relaunched-pass.steps.json` is the
+driven `relaunched-pass.flow.json` cut the same way. Each video the script records is kept as
+`<batch>.mp4`.
 
 | Files | Call |
 |---|---|
-| `logs-start`, `logs-stop`, `logs-path` | `logs start` before the batches, then `logs stop` and `logs path` after them |
-| `recorded-pass`, `record-stop`, `contact-sheet` | the recorded counter flow on a fresh launch, `record stop`, then `record contact-sheet /SCRATCH/video.mp4 --out /SCRATCH/sheet.png --json` |
-| `recorded-fail`, `record-stop-after-fail` | the recorded flow run next, expecting `5`: step 7, the `is`, fails; then `record stop` |
-| `record-start-beside-outside` | `record start` while `xcrun simctl io <udid> recordVideo` runs on the same device |
-
-`relaunched-pass.{steps.json,stdout,stderr,status}` and `relaunched-record-stop.*` come from
-`plugin/gate/Tests/Fixtures/AgentDevice/record/capture-relaunched.sh plugin/gate/.build/debug/swiftgate`,
-captured on 2026-10-05 the same way. After a `press` leaves the counter at 1, it runs the driven
-`relaunched-pass.flow.json`: its `open` with `relaunch: true` first, `record start` second, then the
-counter flow, which passes only because the relaunch reset the counter; then `record stop`.
+| `logs-start`, `logs-stop`, `logs-path` | `capture.sh`: `logs start`, then `logs stop` and `logs path` after the outside recorder |
+| `recorded-pass`, `record-stop`, `contact-sheet`, `recorded-pass.mp4` | `capture-frames.sh`: the recorded counter flow on a fresh launch, `record stop`, then `record contact-sheet /SCRATCH/video.mp4 --out /SCRATCH/sheet.png --json` |
+| `recorded-fail`, `record-stop-after-fail`, `recorded-fail.mp4` | `capture-frames.sh`: the recorded flow run next, expecting `5`: step 5, the `is`, fails; then `record stop` |
+| `relaunched-pass`, `relaunched-record-stop`, `relaunched-pass.mp4` | `capture-frames.sh`: after a `press` leaves the counter at 1, the driven `relaunched-pass.flow.json`: its `open` with `relaunch: true` first, `record start` second, then the counter flow, which passes only because the relaunch reset the counter; then `record stop` |
+| `record-start-beside-outside` | `capture.sh`: `record start` while `xcrun simctl io <udid> recordVideo` runs on the same device |
 | `network-dump` | `network dump 25 --include headers` |
 | `app-container` | `xcrun simctl get_app_container <udid> com.example.SampleApp data` |
 | `log-show` | `xcrun simctl spawn <udid> log show --style compact --info --debug --predicate 'subsystem == "com.example.SampleApp"' --start <time before sim up>` |
@@ -668,10 +671,13 @@ counter flow, which passes only because the relaunch reset the counter; then `re
 Observed behavior the final pass relies on:
 
 - A batch whose first step is `record start` reports that step's `durationMs`; the steps after it
-  sum to `totalDurationMs` less it. The passing video's sheet spans 4833 ms, the 4476 ms of steps
-  after `record start` plus the `record stop` call, so the video starts when `record start` ends.
-- A `record start` after an `open` reports only its own `durationMs` (669 ms after a 1400 ms
+  sum to `totalDurationMs` less it. The passing video's sheet spans 3283 ms, the 2935 ms of steps
+  after a 3513 ms `record start` plus the `record stop` call, so the video starts when `record
+  start` ends.
+- A `record start` after an `open` reports only its own `durationMs` (628 ms after a 1323 ms
   relaunch), so the video starts when the steps up to and including it end.
+- Each `snapshot` after a check took 378 to 405 ms; the `screenshot` and settle `snapshot` it
+  replaces took about 750 ms more.
 - A recording started inside a batch outlives the batch, failed or passed: `record stop` after it
   returns the video.
 - `network dump` parses the session app log, so the stream runs for the whole flow.
@@ -2850,6 +2856,57 @@ the clone's UDID, and changes nothing else. In `fail.batch.json` the `open` repo
 into the batch. `fail.flow-record.json` and `report.json` are the record and report from before a
 flow record carried those times. `grep -rniE '/Users|/private|/var/folders|caleb' QA/capture-delay`
 matched nothing.
+
+## qa run: a state that lasts 1 s, read with captures on and off the flow's clock
+
+`QA/short-state/` is 2 real `swiftgate qa run`s over 2 flow rows on a copy of
+`evals/apps/interview-starter` changed by `short-state-app.py`: an app whose state advances on a
+clock, showing a `New` badge (`id="app.new"`) for 1 s, 3 s after the posts load. Captured
+2026-10-05 with `agent-device` 0.21.18 and Xcode 26.2, from a `swiftgate` debug build of this
+change, on clones the harness made under its `sim` lock. `validation.json`, `reads.flow.json`
+(relaunch, `wait` for `id="app.status"`, then `is text` and `is visible` on it) and
+`short-state.flow.json` (relaunch, `wait` for `id="app.new"`, then `is visible` on it) are
+hand-written inputs; the ledger is `RunView/build-run-1/ledger.json`. From `plugin/gate` after
+`swift build --product swiftgate`, with `<harness>` this checkout and `<inputs>` this folder:
+
+```sh
+SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
+T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/interview-starter/ $T/app/ && cd $T/app
+python3 $IN/short-state-app.py $T/app
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
+SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
+mkdir -p $P && cp $F/ledger.json $P/ledger.json
+cp $IN/validation.json $IN/reads.flow.json $IN/short-state.flow.json $P/
+$SG qa run --final   # exit 0: both rows pass, each recorded
+$SG qa run           # exit 1: row 2 red at step 3 `is`, a capture delay
+SCRUB="s#/private$T#/SCRATCH#g; s#$T#/SCRATCH#g; s#$HOME#/HOME#g; s#<udid>#UDID#g"
+```
+
+Each flow folder's `batch.json`, `steps.json` and `flow.json` went through `sed -E "$SCRUB"` to
+`recorded-reads.*` and `recorded-short.*` (row 1 and row 2 of the `--final` run) and
+`unrecorded-short.*` (row 2 of the plain run), as `.batch.json`, `.steps.json` and
+`.flow-record.json`; the plain run's `report.json` is `unrecorded-report.json`, and row 2's
+`video.mp4` of the `--final` run is `recorded-short.video.mp4`. In the `--final` run each check
+took 1 inline `snapshot` (389 to 442 ms), and the `is` after the badge's `wait` passed 442 ms
+later. In the plain run each check took a `snapshot`, a `screenshot` and a settle `snapshot` (1324
+ms after the `wait`): the first `snapshot` holds `id="app.new"`, the settle `snapshot` doesn't, and
+the `is` failed. The same `--final` run made by the harness before this change (3 captures after
+each check) took 1109 to 1284 ms per check and read row 2 red. `grep -rniE
+'/Users|/private|/var/folders|caleb' QA/short-state` matched nothing.
+
+## qa run: a flow row red where a fixer showed the app correct, then passing unchanged
+
+`QA/racy-pass/` comes from a brownfield trial of an app whose state advances on a clock. A fixer's
+reproduction test showed a state lasting 0.48 s, and its return called the row a contract gap;
+the same flow file then passed in the fix branch's `qa run`. `red-run.merged-tree-run.json` and
+`pass-run.merged-tree-run.json` are the 2 before-merge runs' `qa/merged-tree-run.json`, and
+`fixer-flow-rows.txt` is the `flow row:` lines of the fixer's return notes. Every file went through
+a `sed` that renames the trial's requirement ids, check files, accessibility ids, labels and
+nouns to generic ones (`req-remaining`, `qa/remaining.flow.json`, `app.remaining`, `Remaining:`,
+`entity`) and changes nothing else; the digests are the trial's. In the red run `req-remaining`
+is red with digest `d0acfb55…`; in the pass run it passes with the same digest.
 
 ## qa run: a state row behind another requirement's red flow
 

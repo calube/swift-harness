@@ -92,7 +92,7 @@ struct QARunFinalTests {
     let event = try #require(Self.flowEvents(events).first)
     #expect(event.video == "\(folder)/\(FinalPassRecorder.videoFileName)")
     #expect(event.sheet == "\(folder)/\(FinalPassRecorder.sheetFileName)")
-    #expect(event.steps.map(\.offsetMs) == [0, 1721, 2557, 4109])
+    #expect(event.steps.map(\.offsetMs) == [0, 847, 1711, 2530])
     let runDirectory = try repo.runDirectory(report)
     let record = try JSONDecoder().decode(
       QAFlowRecord.self,
@@ -102,10 +102,44 @@ struct QARunFinalTests {
       #expect(flow.evidence.contains(path))
       #expect(FileManager.default.fileExists(atPath: runDirectory.appending(path: path).path))
     }
+    let sim = SimRunStore(simDirectory: runDirectory.appending(path: "\(folder)/sim"))
+    let checks = try sim.steps()
+    #expect(checks.map(\.settled) == [nil, nil], "each check's PNG is the video's frame")
+    for check in checks {
+      let png = try Data(contentsOf: sim.simDirectory.appending(path: check.screenshot))
+      #expect(png.starts(with: [0x89, 0x50, 0x4E, 0x47]), "\(check.screenshot) is a PNG")
+    }
     let logs = "qa/logs/02-req-count"
     #expect(flow.evidence.contains("\(logs)/\(EvidenceCollector.appLogFileName)"))
     #expect(flow.evidence.contains("\(logs)/\(EvidenceCollector.containerDirectory)"))
     #expect(simulator.calls.dropFirst() == ["down after state", "verify"])
+  }
+
+  @Test(
+    "the captured recorded flow whose video doesn't open is unverified, naming each check left with no frame for its screenshot, never passed or failed on half its evidence — catches a broken export read as an app that failed sim verify"
+  )
+  func unreadableVideoLeavesTheFlowUnverified() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try QARunFlowTests.plan(repo)
+    let runner = try CapturedFinalPass.runner(
+      batch: "record/recorded-pass", home: repo.root.appending(path: ".harness/home"),
+      capturedVideo: false)
+    let device = LiveAgentDevice(runner: runner)
+    let simulator = try FakeFlowSimulator(
+      batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: QARunFlowTests.marker(repo), agentDevice: device)
+
+    let report = await Self.run(
+      repo, simulator, finalPass: Self.finalPass(repo, device: device, runner: runner))
+
+    let flow = try #require(report.rows.first { $0.layer == .flow })
+    #expect(flow.result == .unverified)
+    #expect(
+      flow.message.hasPrefix("not judged: a check's screenshot is the video's frame, and after step 1"),
+      "\(flow.message)")
+    #expect(flow.message.contains("after step 3"), "\(flow.message)")
   }
 
   @Test(

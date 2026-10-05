@@ -34,6 +34,60 @@ struct BatchFlowPlanTests {
     }
   }
 
+  /// `data.results` of a batch `Fixtures/QA/short-state/` captured from a recorded `qa run`.
+  static func shortStateResults(_ name: String) throws -> [BatchStepOutcome] {
+    let object = try #require(
+      try JSONSerialization.jsonObject(
+        with: try Fixture.data("QA/short-state/\(name).batch.json")) as? [String: Any])
+    let data = try #require(object["data"] as? [String: Any])
+    return try #require(data["results"] as? [[String: Any]]).map { step in
+      BatchStepOutcome(
+        index: try #require(step["step"] as? Int),
+        command: try #require(step["command"] as? String),
+        ok: try #require(step["ok"] as? Bool), durationMs: try #require(step["durationMs"] as? Int))
+    }
+  }
+
+  static let recordedReadsVideo =
+    "/SCRATCH/app/.harness/runs/20261005T211436Z-8e3deac1/qa/"
+    + "01-slice-1-reset-after-increments-shows-zero.flow/video.mp4"
+
+  @Test(
+    "a batch that records takes 1 snapshot after each of its 3 back-to-back checks, with no screenshot or settle snapshot on the flow's clock, as the captured recorded run drove it — catches 1.1 s of qa run's captures between checks of a state that lasts 1 s"
+  )
+  func recordingBatchTakesOneSnapshotPerCheck() throws {
+    let steps = try FlowSteps.parse(try Fixture.data("QA/short-state/reads.flow.json"))
+
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"],
+      recordTo: Self.recordedReadsVideo)
+
+    #expect(
+      try FlowJSON.parse(plan.drivenJSON())
+        == FlowJSON.parse(try Fixture.data("QA/short-state/recorded-reads.steps.json")))
+    #expect(plan.evidence.map(\.snapshot) == [4, 6, 8])
+    #expect(plan.evidence.map(\.screenshot) == [nil, nil, nil])
+    #expect(plan.evidence.map(\.settle) == [nil, nil, nil])
+    #expect(plan.evidence.map(\.screenshotPath) == ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"])
+  }
+
+  @Test(
+    "each recorded check's frame is the video's moment its snapshot began: the captured run's snapshots began 417, 812 and 1209 ms into the video — catches a check's PNG taken from a frame before the check passed or after the screen moved on"
+  )
+  func frameTimesFollowTheVideoClock() throws {
+    let steps = try FlowSteps.parse(try Fixture.data("QA/short-state/reads.flow.json"))
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"],
+      recordTo: Self.recordedReadsVideo)
+
+    let times = plan.frameTimes(results: try Self.shortStateResults("recorded-reads"))
+
+    #expect(times == [2: 417, 3: 812, 4: 1209])
+    let unrecorded = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png", "/SCRATCH/3.png"])
+    #expect(unrecorded.frameTimes(results: try Self.shortStateResults("recorded-reads")) == [:])
+  }
+
   @Test(
     "the counter flow gets a snapshot, a screenshot and a settle snapshot after each assertion, every written step kept as written — catches an asserted step that leaves sim verify no tree"
   )

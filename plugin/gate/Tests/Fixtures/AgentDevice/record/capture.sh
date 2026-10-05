@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Captures what a final pass calls around 1 flow: the app log stream, SampleApp's driven counter
-# flow as a batch that starts with `record start`, once passing and once failing, the `record stop`
-# after each and the contact sheet of the passing video, a `record start` beside a recorder outside
-# the harness, the network dump, the unified log for the app's subsystem, and the app's data
-# container.
+# Captures what a final pass calls around 1 flow: the app log stream, a `record start` beside a
+# recorder outside the harness, the network dump, the unified log for the app's subsystem, and the
+# app's data container. `capture-frames.sh` captures the recorded batches, their `record stop`s and
+# the contact sheet.
 # Usage, from the repository root: capture.sh <swiftgate binary>
 # The device comes from `swiftgate sim up` in examples/SampleApp, a clone under the `sim` lock, and
 # `sim down` gives it back on exit, so no device another session uses is touched.
@@ -42,20 +41,7 @@ save() {
 
 target=(--udid "$udid" --session "$session" --json)
 
-batch() {
-  local name="$1"
-  sed -e "s#/SCRATCH#$work#g" "$here/$name.steps.json" >"$work/$name.steps.json"
-  save "$name" agent-device batch --steps-file "$work/$name.steps.json" --on-error stop \
-    "${target[@]}"
-}
-
 save logs-start agent-device logs start "${target[@]}"
-batch recorded-pass
-save record-stop agent-device record stop "${target[@]}"
-save contact-sheet agent-device record contact-sheet "$work/video.mp4" \
-  --out "$work/sheet.png" --json
-batch recorded-fail
-save record-stop-after-fail agent-device record stop "${target[@]}"
 
 # Another recorder on the Mac: simctl's own, as a session outside the harness would run it.
 xcrun simctl io "$udid" recordVideo "$work/outside.mp4" >/dev/null 2>&1 &

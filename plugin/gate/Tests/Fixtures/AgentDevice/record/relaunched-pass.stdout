@@ -1,9 +1,9 @@
 {
   "success": true,
   "data": {
-    "total": 12,
-    "executed": 12,
-    "totalDurationMs": 6488,
+    "total": 8,
+    "executed": 8,
+    "totalDurationMs": 4678,
     "results": [
       {
         "step": 1,
@@ -14,7 +14,7 @@
           "surface": "app",
           "sessionStateDir": "/HOME/.agent-device/sessions/SESSION",
           "runnerLogPath": "/HOME/.agent-device/sessions/SESSION/runner.log",
-          "requestLogPath": "/HOME/.agent-device/sessions/SESSION/requests/2d2fbb05bcd50dd2.ndjson",
+          "requestLogPath": "/HOME/.agent-device/sessions/SESSION/requests/7fc71e052bbddccc.ndjson",
           "eventLogPath": "/HOME/.agent-device/sessions/SESSION/events.ndjson",
           "sessionReused": true,
           "selection": {
@@ -26,8 +26,8 @@
           "appName": "com.example.SampleApp",
           "appBundleId": "com.example.SampleApp",
           "startup": {
-            "durationMs": 1070,
-            "measuredAt": "2026-10-05T14:12:30.240Z",
+            "durationMs": 985,
+            "measuredAt": "2026-10-05T21:24:58.282Z",
             "method": "open-command-roundtrip",
             "appTarget": "com.example.SampleApp",
             "appBundleId": "com.example.SampleApp"
@@ -36,23 +36,23 @@
             "runnerDemand": "required",
             "runnerPrewarmKind": "session",
             "runnerPrewarmScheduled": true,
-            "openDispatchDurationMs": 384,
+            "openDispatchDurationMs": 331,
             "launchUrlDurationMs": 0,
             "runnerPrewarmWaited": false,
             "postOpenObservation": "observable",
-            "postOpenSettleDurationMs": 670,
-            "totalDurationMs": 1070
+            "postOpenSettleDurationMs": 637,
+            "totalDurationMs": 986
           },
           "platform": "ios",
           "target": "mobile",
-          "device": "swift-harness-18825-04be9b0c",
+          "device": "swift-harness-85790-79ba699e",
           "id": "UDID",
           "kind": "simulator",
           "device_udid": "UDID",
           "ios_simulator_device_set": null,
           "message": "Opened: com.example.SampleApp"
         },
-        "durationMs": 1400
+        "durationMs": 1323
       },
       {
         "step": 2,
@@ -71,17 +71,17 @@
           },
           "showTouches": true
         },
-        "durationMs": 669
+        "durationMs": 628
       },
       {
         "step": 3,
         "command": "wait",
         "ok": true,
         "data": {
-          "waitedMs": 412,
+          "waitedMs": 399,
           "selector": "id=\"counter.value\""
         },
-        "durationMs": 415
+        "durationMs": 401
       },
       {
         "step": 4,
@@ -103,7 +103,7 @@
               },
               "enabled": true,
               "depth": 0,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": false,
               "ref": "e1",
               "kind": "other"
@@ -124,7 +124,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e2",
               "kind": "text"
@@ -145,7 +145,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e3",
               "kind": "button"
@@ -166,7 +166,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e4",
               "kind": "button"
@@ -187,7 +187,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e5",
               "kind": "button"
@@ -202,183 +202,32 @@
           },
           "snapshotDiagnostics": {
             "stats": {
-              "count": 3,
-              "p50Ms": 410,
-              "p95Ms": 457,
-              "maxMs": 457,
+              "count": 13,
+              "p50Ms": 399,
+              "p95Ms": 439,
+              "maxMs": 439,
               "slowThresholdMs": 1500,
               "platform": "ios",
               "backends": {
-                "xctest": 3
+                "xctest": 13
               }
             }
           },
           "appName": "com.example.SampleApp",
           "appBundleId": "com.example.SampleApp",
-          "refsGeneration": 995817
+          "refsGeneration": 300250
         },
-        "durationMs": 383
+        "durationMs": 389
       },
       {
         "step": 5,
-        "command": "screenshot",
-        "ok": true,
-        "data": {
-          "path": "/SCRATCH/1.png",
-          "message": "Saved screenshot: /SCRATCH/1.png",
-          "width": 402,
-          "height": 874,
-          "logicalWidth": 402,
-          "logicalHeight": 874,
-          "pixelDensity": 1
-        },
-        "durationMs": 543
-      },
-      {
-        "step": 6,
-        "command": "snapshot",
-        "ok": true,
-        "data": {
-          "nodes": [
-            {
-              "index": 0,
-              "type": "Other",
-              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
-              "subrole": "UIApplication",
-              "label": "SampleApp",
-              "rect": {
-                "x": 0,
-                "y": 0,
-                "width": 402,
-                "height": 874
-              },
-              "enabled": true,
-              "depth": 0,
-              "pid": 30157,
-              "hittable": false,
-              "ref": "e1",
-              "kind": "other"
-            },
-            {
-              "index": 1,
-              "parentIndex": 0,
-              "type": "StaticText",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "0",
-              "identifier": "counter.value",
-              "rect": {
-                "x": 180.16666666666669,
-                "y": 358.1666666666667,
-                "width": 41.66666666666666,
-                "height": 76.66666666666669
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e2",
-              "kind": "text"
-            },
-            {
-              "index": 2,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Decrement",
-              "identifier": "counter.decrement",
-              "rect": {
-                "x": 131.66666666666666,
-                "y": 469,
-                "width": 53.33333333333334,
-                "height": 20.666666666666686
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e3",
-              "kind": "button"
-            },
-            {
-              "index": 3,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Increment",
-              "identifier": "counter.increment",
-              "rect": {
-                "x": 217,
-                "y": 459,
-                "width": 53.333333333333314,
-                "height": 40.666666666666686
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e4",
-              "kind": "button"
-            },
-            {
-              "index": 4,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Cat fact",
-              "identifier": "counter.fact",
-              "rect": {
-                "x": 171,
-                "y": 523.6666666666666,
-                "width": 60.333333333333314,
-                "height": 20.33333333333337
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e5",
-              "kind": "button"
-            }
-          ],
-          "truncated": false,
-          "visibility": {
-            "partial": false,
-            "visibleNodeCount": 5,
-            "totalNodeCount": 5,
-            "reasons": []
-          },
-          "snapshotDiagnostics": {
-            "stats": {
-              "count": 4,
-              "p50Ms": 385,
-              "p95Ms": 457,
-              "maxMs": 457,
-              "slowThresholdMs": 1500,
-              "platform": "ios",
-              "backends": {
-                "xctest": 4
-              }
-            }
-          },
-          "appName": "com.example.SampleApp",
-          "appBundleId": "com.example.SampleApp",
-          "refsGeneration": 995818
-        },
-        "durationMs": 387
-      },
-      {
-        "step": 7,
         "command": "press",
         "ok": true,
         "data": {
           "x": 244,
           "y": 479,
-          "message": "Tapped id=\"counter.increment\" (244, 479)",
           "runnerMainThreadBusy": false,
+          "message": "Tapped id=\"counter.increment\" (244, 479)",
           "referenceWidth": 402,
           "referenceHeight": 874,
           "targetKind": "selector",
@@ -395,10 +244,10 @@
             "kind": "unique"
           }
         },
-        "durationMs": 706
+        "durationMs": 731
       },
       {
-        "step": 8,
+        "step": 6,
         "command": "is",
         "ok": true,
         "data": {
@@ -407,10 +256,10 @@
           "selector": "id=\"counter.value\"",
           "text": "1"
         },
-        "durationMs": 412
+        "durationMs": 443
       },
       {
-        "step": 9,
+        "step": 7,
         "command": "snapshot",
         "ok": true,
         "data": {
@@ -429,7 +278,7 @@
               },
               "enabled": true,
               "depth": 0,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": false,
               "ref": "e1",
               "kind": "other"
@@ -450,7 +299,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e2",
               "kind": "text"
@@ -471,7 +320,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e3",
               "kind": "button"
@@ -492,7 +341,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e4",
               "kind": "button"
@@ -513,7 +362,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e5",
               "kind": "button"
@@ -528,40 +377,25 @@
           },
           "snapshotDiagnostics": {
             "stats": {
-              "count": 7,
-              "p50Ms": 385,
-              "p95Ms": 457,
-              "maxMs": 457,
+              "count": 16,
+              "p50Ms": 398,
+              "p95Ms": 440,
+              "maxMs": 440,
               "slowThresholdMs": 1500,
               "platform": "ios",
               "backends": {
-                "xctest": 7
+                "xctest": 16
               }
             }
           },
           "appName": "com.example.SampleApp",
           "appBundleId": "com.example.SampleApp",
-          "refsGeneration": 995822
+          "refsGeneration": 300254
         },
-        "durationMs": 374
+        "durationMs": 385
       },
       {
-        "step": 10,
-        "command": "screenshot",
-        "ok": true,
-        "data": {
-          "path": "/SCRATCH/2.png",
-          "message": "Saved screenshot: /SCRATCH/2.png",
-          "width": 402,
-          "height": 874,
-          "logicalWidth": 402,
-          "logicalHeight": 874,
-          "pixelDensity": 1
-        },
-        "durationMs": 355
-      },
-      {
-        "step": 11,
+        "step": 8,
         "command": "snapshot",
         "ok": true,
         "data": {
@@ -580,7 +414,7 @@
               },
               "enabled": true,
               "depth": 0,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": false,
               "ref": "e1",
               "kind": "other"
@@ -601,7 +435,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e2",
               "kind": "text"
@@ -622,7 +456,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e3",
               "kind": "button"
@@ -643,7 +477,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e4",
               "kind": "button"
@@ -664,7 +498,7 @@
               },
               "enabled": true,
               "depth": 1,
-              "pid": 30157,
+              "pid": 90338,
               "hittable": true,
               "ref": "e5",
               "kind": "button"
@@ -679,158 +513,22 @@
           },
           "snapshotDiagnostics": {
             "stats": {
-              "count": 8,
-              "p50Ms": 385,
-              "p95Ms": 457,
-              "maxMs": 457,
+              "count": 17,
+              "p50Ms": 398,
+              "p95Ms": 440,
+              "maxMs": 440,
               "slowThresholdMs": 1500,
               "platform": "ios",
               "backends": {
-                "xctest": 8
+                "xctest": 17
               }
             }
           },
           "appName": "com.example.SampleApp",
           "appBundleId": "com.example.SampleApp",
-          "refsGeneration": 995823
+          "refsGeneration": 300255
         },
-        "durationMs": 419
-      },
-      {
-        "step": 12,
-        "command": "snapshot",
-        "ok": true,
-        "data": {
-          "nodes": [
-            {
-              "index": 0,
-              "type": "Other",
-              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
-              "subrole": "UIApplication",
-              "label": "SampleApp",
-              "rect": {
-                "x": 0,
-                "y": 0,
-                "width": 402,
-                "height": 874
-              },
-              "enabled": true,
-              "depth": 0,
-              "pid": 30157,
-              "hittable": false,
-              "ref": "e1",
-              "kind": "other"
-            },
-            {
-              "index": 1,
-              "parentIndex": 0,
-              "type": "StaticText",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "1",
-              "identifier": "counter.value",
-              "rect": {
-                "x": 180.16666666666669,
-                "y": 358.1666666666667,
-                "width": 41.66666666666666,
-                "height": 76.66666666666669
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e2",
-              "kind": "text"
-            },
-            {
-              "index": 2,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Decrement",
-              "identifier": "counter.decrement",
-              "rect": {
-                "x": 131.66666666666666,
-                "y": 469,
-                "width": 53.33333333333334,
-                "height": 20.666666666666686
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e3",
-              "kind": "button"
-            },
-            {
-              "index": 3,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Increment",
-              "identifier": "counter.increment",
-              "rect": {
-                "x": 217,
-                "y": 459,
-                "width": 53.333333333333314,
-                "height": 40.666666666666686
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e4",
-              "kind": "button"
-            },
-            {
-              "index": 4,
-              "parentIndex": 0,
-              "type": "Button",
-              "role": "SwiftUI.AccessibilityNode",
-              "subrole": "UIResponder",
-              "label": "Cat fact",
-              "identifier": "counter.fact",
-              "rect": {
-                "x": 171,
-                "y": 523.6666666666666,
-                "width": 60.333333333333314,
-                "height": 20.33333333333337
-              },
-              "enabled": true,
-              "depth": 1,
-              "pid": 30157,
-              "hittable": true,
-              "ref": "e5",
-              "kind": "button"
-            }
-          ],
-          "truncated": false,
-          "visibility": {
-            "partial": false,
-            "visibleNodeCount": 5,
-            "totalNodeCount": 5,
-            "reasons": []
-          },
-          "snapshotDiagnostics": {
-            "stats": {
-              "count": 9,
-              "p50Ms": 410,
-              "p95Ms": 457,
-              "maxMs": 457,
-              "slowThresholdMs": 1500,
-              "platform": "ios",
-              "backends": {
-                "xctest": 9
-              }
-            }
-          },
-          "appName": "com.example.SampleApp",
-          "appBundleId": "com.example.SampleApp",
-          "refsGeneration": 995824
-        },
-        "durationMs": 425
+        "durationMs": 378
       }
     ]
   }
