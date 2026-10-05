@@ -21,6 +21,9 @@ struct BuildGateWaitReport: Sendable, Equatable, Encodable {
   /// The gate's own verdict and run id, once ``action`` is `read`.
   let gateVerdict: Verdict?
   let gateRunId: String?
+  /// The task of each Workflow run that ended during the call, or its run id when it names none;
+  /// empty unless ``action`` is `worker-returned`.
+  let returned: [String]
   let message: String
 }
 
@@ -36,6 +39,7 @@ enum BuildGateWaitRun {
   static func run(
     slug: String, tier: CheckTier, output: URL, maxWait: Int, git: any Git,
     clock: any BuildClock, events: @Sendable () -> [HarnessEvent],
+    endedWorkflows: @Sendable () -> [String: String] = { [:] },
     sleep: @Sendable (Int) async -> Void
   ) async -> BuildLoopResult<BuildGateWaitReport> {
     guard (0...maxWaitLimit).contains(maxWait) else {
@@ -77,7 +81,8 @@ enum BuildGateWaitRun {
             output: output.path, action: watch.action, startedAt: startedAt,
             elapsedSeconds: watch.elapsedSeconds, deadlineAt: watch.deadlineAt,
             secondsToDeadline: watch.secondsToDeadline, budget: budget,
-            gateVerdict: verdict?.verdict, gateRunId: verdict?.runID, message: watch.reason),
+            gateVerdict: verdict?.verdict, gateRunId: verdict?.runID, returned: [],
+            message: watch.reason),
           holder: nil, message: watch.reason)
       }
       let step = max(1, min(pollSeconds, maxWait - waited, watch.secondsToDeadline))

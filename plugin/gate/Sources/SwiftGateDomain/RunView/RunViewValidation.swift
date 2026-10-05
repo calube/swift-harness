@@ -200,20 +200,37 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     }
   }
 
+  /// A requirement the plan leaves to its tasks' unit tests or a gate, with the reason it has no
+  /// check of its own, from the plan's `validation.json`.
+  public struct ReasonOnly: Sendable, Equatable, Encodable {
+    public var requirement: String
+    /// `nil` when the payload guard rejected it.
+    public var reason: String?
+
+    public init(requirement: String, reason: String?) {
+      self.requirement = requirement
+      self.reason = reason
+    }
+  }
+
   public var plan: String
   public var counts: Counts
   /// In row order.
   public var rows: [Row]
+  /// In the plan's order.
+  public var reasonOnly: [ReasonOnly]
   /// The newest record of each kept XCUITest flow the run's gate runs recorded, by `[[flows]]`
   /// entry, then test.
   public var keptFlows: [RunViewKeptFlow]
 
   public init(
-    plan: String, counts: Counts = Counts(), rows: [Row] = [], keptFlows: [RunViewKeptFlow] = []
+    plan: String, counts: Counts = Counts(), rows: [Row] = [], reasonOnly: [ReasonOnly] = [],
+    keptFlows: [RunViewKeptFlow] = []
   ) {
     self.plan = plan
     self.counts = counts
     self.rows = rows
+    self.reasonOnly = reasonOnly
     self.keptFlows = keptFlows
   }
 }

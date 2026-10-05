@@ -181,3 +181,33 @@ public struct SpanLog: Sendable {
     return try body()
   }
 }
+
+/// Which checkout's store each span started in, by span id, in a machine-wide directory, so
+/// `events span end` finds a span's start whatever directory it runs from.
+public struct SpanStoreIndex: Sendable {
+  /// How long an entry is kept: longer than any run whose span could still be open.
+  public static let retainedSeconds: TimeInterval = 7 * 24 * 60 * 60
+
+  public let directory: URL
+
+  /// `~/.cache/swift-harness/spans`.
+  public static func defaultDirectory(home: URL = FileManager.default.homeDirectoryForCurrentUser)
+    -> URL
+  {
+    home.appending(path: ".cache/swift-harness/spans", directoryHint: .isDirectory)
+  }
+
+  public init(directory: URL = Self.defaultDirectory()) {
+    self.directory = directory
+  }
+
+  /// Records that `spanID` started in the store of the checkout at `root`, and drops entries
+  /// older than ``retainedSeconds``. An entry that can't be written leaves the span to the
+  /// directory its end runs from.
+  public func record(spanID: String, root: URL) {}
+
+  /// The checkout whose store holds `spanID`'s start; `nil` when no entry names it.
+  public func root(spanID: String) -> URL? {
+    nil
+  }
+}

@@ -71,10 +71,11 @@ enum SpanRun {
     }
   }
 
-  /// `start` against the main checkout of the repository `directory` is in.
+  /// `start` against the main checkout of the repository `directory` is in, noting that
+  /// checkout in `index` under the new span's id.
   static func start(
     in directory: String, phase: String, buildRun: String, task: String?, role: String?,
-    parent: String?
+    parent: String?, index: SpanStoreIndex = SpanStoreIndex()
   ) async -> Output {
     switch await BuildHaltRun.store(command: "events span start", directory: directory) {
     case .refused(let output): output
@@ -85,8 +86,12 @@ enum SpanRun {
     }
   }
 
-  /// `end` against the main checkout of the repository `directory` is in.
-  static func end(in directory: String, spanID: String, outcome: String) async -> Output {
+  /// `end` against the checkout `index` says the span started in, else the main checkout of the
+  /// repository `directory` is in.
+  static func end(
+    in directory: String, spanID: String, outcome: String,
+    index: SpanStoreIndex = SpanStoreIndex()
+  ) async -> Output {
     switch await BuildHaltRun.store(command: "events span end", directory: directory) {
     case .refused(let output): output
     case .found(let root, let enabled):
