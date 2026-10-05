@@ -149,6 +149,18 @@ function bulletAt(text, marker) {
   return next < 0 ? rest : rest.slice(0, next)
 }
 
+/** Every way `text` runs a validation worker's proven rows a second time at the merge base: no
+ * word that the `--at-base` run takes them from the adopted `at-base-run.json`, that only a
+ * byte-identical check is taken, or that a taken row names its run in `reusedFrom`. */
+export function atBaseReuseProblems(text) {
+  const prose = text.replace(/\s+/g, ' ')
+  const problems = []
+  if (!/`at-base-run\.json`/.test(prose)) problems.push('never takes rows from the adopted `at-base-run.json`')
+  if (!/byte-identical/.test(prose)) problems.push('never limits reuse to a byte-identical check')
+  if (!/`reusedFrom`/.test(prose)) problems.push('never says a taken row names its run in `reusedFrom`')
+  return problems
+}
+
 /** Every way `text` lets a validation task's checks reach a merge with no red run behind them:
  * no `qa run --at-base` after `qa adopt`, an at-base run that reads as optional, or a task its
  * rows wait for that may merge before it. */
@@ -481,6 +493,23 @@ const tests = {
     assert.deepEqual(atBaseProblems(skill), [], 'skills/run/SKILL.md')
     const loop = read('skills/build/references/event-loop.md')
     assert.deepEqual(atBaseProblems(section(loop, 'Validation task') ?? ''), [], 'event-loop.md#validation-task')
+  },
+
+  'the run skill and the build loop take the rows a validation worker proved from its at-base-run.json while each check is byte-identical, and the worker runs its prepared run last — catches every at-base row driven twice'() {
+    assert.deepEqual(atBaseReuseProblems(read('skills/run/SKILL.md')), [], 'skills/run/SKILL.md')
+    const loop = read('skills/build/references/event-loop.md')
+    assert.deepEqual(atBaseReuseProblems(section(loop, 'Validation task') ?? ''), [], 'event-loop.md#validation-task')
+    const worker = read('skills/qa/references/validation-worker.md').replace(/\s+/g, ' ')
+    assert.match(worker, /Run it last, after your final edit/)
+    assert.match(worker, /`at-base-run\.json`/)
+  },
+
+  'the reuse check names each missing part — catches a checker that passes anything'() {
+    assert.deepEqual(atBaseReuseProblems('`"$SG" qa run --plan <slug> --at-base --json`'), [
+      'never takes rows from the adopted `at-base-run.json`',
+      'never limits reuse to a byte-identical check',
+      'never says a taken row names its run in `reusedFrom`',
+    ])
   },
 
   'the at-base check names a missing at-base run, one before the adopt, an optional one and an early merge — catches a checker that passes anything'() {

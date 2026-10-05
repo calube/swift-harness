@@ -137,7 +137,8 @@ public struct QARunPlan: Sendable, Equatable {
           row: entry.row, requirement: validation.requirement, layer: validation.layer,
           check: validation.check, runsAfter: validation.runsAfter, result: outcome.result,
           message: outcome.message, exitStatus: outcome.exitStatus,
-          milliseconds: outcome.milliseconds, evidence: outcome.evidence)
+          milliseconds: outcome.milliseconds, evidence: outcome.evidence,
+          reusedFrom: outcome.reusedFrom)
         if outcome.result == .red, reds[validation.requirement] == nil {
           reds[validation.requirement] = row
         }
@@ -196,15 +197,18 @@ public struct QACheckOutcome: Sendable, Equatable {
   public let exitStatus: Int?
   public let milliseconds: Int
   public let evidence: [String]
+  /// The prepared at-base run whose recorded result this is, for a row that didn't run again.
+  public let reusedFrom: String?
 
   public init(
     result: QAResult, message: String, exitStatus: Int? = nil, milliseconds: Int = 0,
-    evidence: [String] = []
+    evidence: [String] = [], reusedFrom: String? = nil
   ) {
     self.result = result
     self.message = message
     self.exitStatus = exitStatus
     self.milliseconds = milliseconds
     self.evidence = evidence
+    self.reusedFrom = reusedFrom
   }
 }

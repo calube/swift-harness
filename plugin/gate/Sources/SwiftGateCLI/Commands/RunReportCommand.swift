@@ -108,7 +108,10 @@ enum BrownfieldRunReportRun {
           ? QAFiles.newestWholeRun(
             plan: slug,
             runsDirectory: RunStore(worktreeRoot: root).state.url(
-              RunLayout.runsDirectory, directoryHint: .isDirectory)) : nil))
+              RunLayout.runsDirectory, directoryHint: .isDirectory)) : nil,
+        setAside: read(layout.committedConfigSetAside.path) {
+          try CommittedConfigSetAside.decode(Data($0.utf8))
+        }))
 
     let path = plan.directory + "/" + BrownfieldRunReport.fileName
     do {

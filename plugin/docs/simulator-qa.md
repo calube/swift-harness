@@ -51,10 +51,8 @@ no test ran is `red` at the merge base and `unverified` otherwise. A pass counts
 passed and lists them as evidence. A screenshot, tree or log never
 passes a row. A state row runs only after its requirement's flow rows all pass.
 
-`--at-base` runs every row, whatever its tasks, at the merge base of `HEAD` and `main` (a brownfield
-clone's plan branch) in a scratch worktree, with no layer stop, recording each failure's exit status. An `unverified` row there is a nit: no red run. With `--prepared-by <task>`,
-only `<task>`'s rows run, their `qa/<name>` checks and `QA_DIR` read from the checkout's
-`.harness/qa/<slug>/`: a validation worker's red run before `qa adopt`.
+`--at-base` runs every row at the merge base, and `--prepared-by` a validation worker's rows before
+`qa adopt`; see [`simulator-qa-at-base.md`](simulator-qa-at-base.md).
 
 `--final` runs every ready row and records each flow, with its logs (see
 [the final pass](simulator-qa-flows.md#the-final-pass)). It takes neither `--at-base` nor `--after`.

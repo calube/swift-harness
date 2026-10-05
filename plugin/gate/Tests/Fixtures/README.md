@@ -2533,6 +2533,17 @@ The `sed` replaces the trial clone's parent folder in each task's `worktree` wit
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-3`
 matched nothing.
 
+`at-base-report.json` is the orchestrator's `qa run --at-base` in that trial, after `qa adopt`: all
+4 rows red at `c1766cda`, the 2 flows on a device. `store.state.sh` is the state row's script the
+validation worker wrote. With `S` and `F` as above:
+
+```sh
+cp $S/qa-runs/20261004T235239Z-4acebe48/qa/report.json $F/at-base-report.json
+cp $S/qa/confirm-large-downloads-store.state.sh $F/store.state.sh
+```
+
+The same `grep` on both files matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
@@ -2888,6 +2899,33 @@ PY
 The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
 both files matched nothing.
 
+## Brownfield trial: a UI plan with no flow row, finished on a RED qa run
+
+The first tic-tac-toe trial ran `swiftgate run spec.md` on an iOS app starter with 1 `xcode`
+area rooted at `.`. `BrownfieldTrial/tic-tac-toe-1-PLAN.md` is its `PLAN.md`: the
+`ttt-screen` task writes `Packages/AppFeature/Sources/AppUI/` and `UITests/` and covers 3
+requirements whose only rows are acceptance rows naming 1 XCUITest class, with no `flow` row
+(finding 4). `tic-tac-toe-1-config.toml` is the clone's `config.toml`, and
+`tic-tac-toe-1-plan.json` and `tic-tac-toe-1-validation.json` are what `plan import` wrote from
+that plan. `tic-tac-toe-1-qa/<run>/qa/report.json` holds the 2 `qa run --plan spec` reports of
+step 8, both RED and neither `--final`; the orchestrator ran `build finish` before it read the
+second (finding 10). `S` is the trial folder, which kept the clone's plan state and each run's
+`qa/` folder. From the repository root:
+
+```sh
+S=<trial folder> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+mkdir -p $F/tic-tac-toe-1-qa
+cp $S/PLAN.md $F/tic-tac-toe-1-PLAN.md
+cp $S/config.toml $F/tic-tac-toe-1-config.toml
+cp $S/plan.json $F/tic-tac-toe-1-plan.json
+cp $S/validation.json $F/tic-tac-toe-1-validation.json
+for r in 20261005T010144Z-9350394a 20261005T010428Z-75c783e4; do
+  mkdir -p $F/tic-tac-toe-1-qa/$r/qa && cp $S/qa-runs/$r/report.json $F/tic-tac-toe-1-qa/$r/qa/
+done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-*` matched nothing.
+
 ## Brownfield trial: a flow row's sim run on an iOS clone
 
 `BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
@@ -3020,4 +3058,20 @@ The `sed` replaces the trial folder with `/TRIAL/`, the home folder with `/HOME/
 class and requirement names, and changes nothing else. The result bundle's only failing case is
 the runner's own "encountered an error", whose message is the launch failure.
 `grep -rniE '/Users|/private|/var/folders|caleb' QA/runner-launch Xcresult/runner-busy.*` matched
+nothing.
+
+## Brownfield trial: a clone that commits its own config
+
+`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A
+brownfield one-shot trial ran `swiftgate run spec.md` on a fresh copy of the starter, and its
+discovery wrote the common dir's `config.toml` beside this committed file, so every command in the
+user's checkout failed on the 2 configs. The copy in that trial's repository matched this file byte
+for byte. From the repository root:
+
+```sh
+cp evals/apps/interview-starter/.swiftgate.toml \
+  plugin/gate/Tests/Fixtures/BrownfieldTrial/starter-swiftgate.toml
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/starter-swiftgate.toml` matched
 nothing.

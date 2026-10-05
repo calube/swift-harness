@@ -1,0 +1,45 @@
+schema = 1
+xcode = "26.2"
+app_scheme = "InterviewStarter"
+packages = ["Packages/*"]
+
+[simulator]
+device = "iPhone 17"
+os = "26.2"
+
+[[flows]]
+name = "launch"
+reason = "the one end-to-end path: launch and load posts through the live API client"
+
+[clients]
+vendor_modules = []
+
+[[modules]]
+name = "AppCore"
+kind = "feature"
+reason = "the root TCA reducer; new screens join it as child features"
+
+[[modules]]
+name = "AppUI"
+kind = "feature"
+reason = "the root SwiftUI view over AppCore's store"
+
+[[modules]]
+name = "APIClient"
+kind = "client"
+reason = "interface for the JSONPlaceholder posts API: models, typed errors, test and preview values"
+
+[[modules]]
+name = "APIClientLive"
+kind = "client"
+reason = "URLSession transport for APIClient, linked by the app target only"
+
+[[modules]]
+name = "LogClient"
+kind = "client"
+reason = "structured, privacy-tagged logging interface every module logs through"
+
+[[modules]]
+name = "LogClientLive"
+kind = "client"
+reason = "OSLog backend for LogClient, linked by the app target only"

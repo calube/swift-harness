@@ -172,6 +172,34 @@ enum QARunRun {
           + "`\(writer)` writes ran")
     }
 
+    let digests = Dictionary(
+      uniqueKeysWithValues: runPlan.entries.map { entry in
+        let check = entry.validation.check
+        let file = Checks.checkFile(
+          check, preparedDirectory: prepared, planDirectory: plan.directory)
+        var isDirectory: ObjCBool = false
+        let bytes =
+          files.fileExists(atPath: file.path, isDirectory: &isDirectory) && !isDirectory.boolValue
+          ? files.contents(atPath: file.path) : nil
+        return (
+          entry.row, QAAtBaseRun.digest(layer: entry.validation.layer, check: check, file: bytes)
+        )
+      })
+    var reused: [Int: QACheckOutcome] = [:]
+    if options.atBase, prepared == nil {
+      let recordFile = "\(plan.directory)/\(QAReport.directory)/\(QAAtBaseRun.fileName)"
+      if let data = files.contents(atPath: recordFile) {
+        do {
+          let record = try QAAtBaseRunJSON.decode(data)
+          let reuse = record.reuse(in: runPlan, digests: digests)
+          reused = reuse.outcomes
+          notes += reuseNotes(record: record, reuse: reuse)
+        } catch {
+          notes.append("\(recordFile) doesn't read, so every row ran: \(error)")
+        }
+      }
+    }
+
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
     do {
@@ -184,7 +212,7 @@ enum QARunRun {
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
-      runID: runID, plan: runPlan, atBase: options.atBase,
+      runID: runID, plan: runPlan, atBase: options.atBase, reused: reused,
       areas: testAreas(root: root, common: common, table: table),
       testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
@@ -210,16 +238,38 @@ enum QARunRun {
       let scratch =
         dependencies.scratch
         ?? LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
-      do throws(ScratchWorktreeError) {
-        rows = try await scratch.withScratchTree(
-          ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
-        ) { tree in
-          await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+      if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
+        rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
+      } else {
+        do throws(ScratchWorktreeError) {
+          rows = try await scratch.withScratchTree(
+            ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
+          ) { tree in
+            await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+          }
+        } catch {
+          return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
         }
-      } catch {
-        return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
       }
       commit = base
+      if let writer = options.preparedBy, let prepared {
+        let record = QAAtBaseRun(
+          runID: runID, preparedBy: writer, commit: base, rows: rows, digests: digests)
+        let file = URL(filePath: prepared).appending(path: QAAtBaseRun.fileName)
+        do {
+          let data: Data
+          do {
+            data = try QAAtBaseRunJSON.encode(record)
+          } catch {
+            throw QAFilesError(path: file.path, reason: "encoding: \(error)")
+          }
+          try QAFiles.write(data, to: file)
+        } catch {
+          notes.append(
+            "\(QAAtBaseRun.fileName) not written, so the at-base run after qa adopt runs "
+              + "every row again: \(error)")
+        }
+      }
     } else {
       do {
         commit = try await git.revision("HEAD")
@@ -302,6 +352,23 @@ enum QARunRun {
     }
   }
 
+  /// 1 note naming the rows taken from `record`, and 1 per ready row that ran instead.
+  private static func reuseNotes(record: QAAtBaseRun, reuse: QAAtBaseRun.Reuse) -> [String] {
+    let taken = reuse.outcomes.keys.sorted()
+    let named = taken.map(String.init).joined(separator: ", ")
+    var notes: [String] = []
+    if !taken.isEmpty {
+      notes.append(
+        "\(taken.count) \(taken.count == 1 ? "row" : "rows") (\(named)) reused from qa run "
+          + "\(record.runID) by \(record.preparedBy): each check is byte-identical to the one "
+          + "it ran")
+    }
+    notes += reuse.reasons.keys.sorted().compactMap { row in
+      reuse.reasons[row].map { "row \(row) ran: \($0)" }
+    }
+    return notes
+  }
+
   /// The areas a `test:` acceptance row resolves in: the brownfield config's, read only when a
   /// row is in that form.
   private static func testAreas(root: URL, common: String, table: ValidationTable)
@@ -341,6 +408,8 @@ enum QARunRun {
     let runID: String
     let plan: QARunPlan
     let atBase: Bool
+    /// The recorded outcomes of the rows a prepared at-base run proved, by row.
+    let reused: [Int: QACheckOutcome]
     /// What a `test:` acceptance row resolves in.
     let areas: Result<[BrownfieldArea], AcceptanceTestUnresolved>
     /// The clones `test:` rows run on, held across the acceptance rows and given back before the
@@ -364,6 +433,12 @@ enum QARunRun {
 
     /// Where a row's `qa/<name>` check is read from.
     func checkFile(_ check: String) -> URL {
+      Self.checkFile(check, preparedDirectory: preparedDirectory, planDirectory: planDirectory)
+    }
+
+    static func checkFile(_ check: String, preparedDirectory: String?, planDirectory: String)
+      -> URL
+    {
       if let preparedDirectory, check.hasPrefix("qa/") {
         return URL(filePath: preparedDirectory).appending(path: String(check.dropFirst(3)))
       }
@@ -379,6 +454,7 @@ enum QARunRun {
     }
 
     func run(_ entry: QARunPlan.Entry, in workingDirectory: String) async -> QACheckOutcome {
+      if let outcome = reused[entry.row] { return outcome }
       let row = entry.validation
       if row.layer != .acceptance { await testDevices?.releaseAll() }
       if row.layer == .flow {
