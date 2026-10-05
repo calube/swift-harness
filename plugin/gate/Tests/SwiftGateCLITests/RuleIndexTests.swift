@@ -78,7 +78,8 @@ struct RuleIndexTests {
       CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
       "plugin-validate.summary", "plugin-validate.accepted-warning",
       PlanLintGraph.writeSetUnresolvedRuleID, ContractLanding.unlandedWriteRuleID,
-      ContractLanding.scenarioSeamRuleID, PluginVersionRule.pinnedRuleID,
+      ContractLanding.scenarioSeamRuleID, ContractLanding.refreshMarkerRuleID,
+      PluginVersionRule.pinnedRuleID,
       PluginVersionRule.malformedRuleID,
       PluginVersionRule.summaryRuleID,
     ]
@@ -99,7 +100,7 @@ struct RuleIndexTests {
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
       SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID, DirtyFileGuard.ruleID,
-      ReviewerBashGuard.ruleID, GateOutputGuard.ruleID,
+      ReviewerBashGuard.ruleID, GateOutputGuard.ruleID, UserCheckoutGuard.ruleID,
     ]
     let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     let brownfield = BrownfieldRuleID.allCases.map(\.rawValue)

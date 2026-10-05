@@ -101,6 +101,12 @@ enum PreToolUseHook {
     default:
       break
     }
+    if let brownfield, !writes.isEmpty,
+      let violation = await userCheckoutWrite(
+        writes, payload: payload, brownfield: brownfield, reads: reads, home: home)
+    {
+      return deny(violation, note: reads.note, tool: payload.toolName)
+    }
     guard payload.agentID != nil else {
       return joined(context, reads.note).map { HookOutput.context(.preToolUse, $0) }
     }
@@ -114,6 +120,35 @@ enum PreToolUseHook {
     return HookOutput.allow(
       "swiftgate: a background agent can't answer a permission prompt, so the hook decides",
       context: joined(context, reads.note))
+  }
+
+  /// A write landing in the user's checkout, outside its `.git`, from a session that holds a
+  /// plan's lock in a brownfield clone, where that session is a run. A path counts only when
+  /// every place it can land is there, so a link into the git dir stays plan state's to judge.
+  private static func userCheckoutWrite(
+    _ writes: [String], payload: HookPayload, brownfield: BrownfieldStateLayout,
+    reads: PlanStateReads, home: String?
+  ) async -> GuardViolation? {
+    let user = ToolPath.canonical(brownfield.commonDir.deletingLastPathComponent().path)
+    let git = user + "/.git"
+    let landing = writes.compactMap { path -> String? in
+      let forms = ToolPath.resolvedAbsolutes(path, cwd: payload.cwd, home: home)
+      guard
+        !forms.isEmpty,
+        forms.allSatisfy({ $0.hasPrefix(user + "/") && $0 != git && !$0.hasPrefix(git + "/") })
+      else { return nil }
+      return forms.first
+    }
+    guard !landing.isEmpty else { return nil }
+    let session = payload.sessionID
+    guard
+      let held = await PlanLocks.records(reads).first(where: {
+        $0.lock?.trimmingCharacters(in: .whitespacesAndNewlines) == session
+      })
+    else { return nil }
+    let checkout = try? TaskWorktree.planCheckout(
+      commonDirectory: brownfield.commonDir.path, plan: held.name)
+    return UserCheckoutGuard.evaluate(writes: landing, userCheckout: user, planCheckout: checkout)
   }
 
   private static func joined(_ context: String?, _ note: String?) -> String? {

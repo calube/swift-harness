@@ -1,0 +1,170 @@
+{
+  "after" : "spec-watchlist",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "e35b28585dde5b4f7da646fc90fb9073b06d781f",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-watchlist, flow) `qa/watchlist-launch.flow.json`: step 21 `wait` failed: Batch failed at step 78 (wait): wait timed out for selector: id=\"watchlist.loading\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-error-retry, flow) `qa/watchlist-retry.flow.json`: step 7 `wait` failed: Batch failed at step 19 (wait): wait timed out for selector: id=\"watchlist.error\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-detail-chart, flow) `qa/detail-chart.flow.json`: step 6 `wait` failed: Batch failed at step 15 (wait): wait timed out for selector: id=\"detail.chart.loading\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 8 rows verified (3 reason-only): 2 pass, 3 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-launch.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist.flow/steps.json",
+        "qa/01-req-watchlist.flow/batch.json",
+        "qa/01-req-watchlist.flow/flow.json",
+        "qa/01-req-watchlist.flow/sim/steps.ndjson",
+        "qa/01-req-watchlist.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 21 `wait` failed: Batch failed at step 78 (wait): wait timed out for selector: id=\"watchlist.loading\"",
+      "ms" : 59756,
+      "requirement" : "req-watchlist",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-refresh.flow.json",
+      "evidence" : [
+        "qa/02-req-refresh.flow/steps.json",
+        "qa/02-req-refresh.flow/batch.json",
+        "qa/02-req-refresh.flow/flow.json",
+        "qa/02-req-refresh.flow/sim/steps.ndjson",
+        "qa/02-req-refresh.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 5 steps; nit sim.a11y-untargeted: 40 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 15032,
+      "requirement" : "req-refresh",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-retry.flow.json",
+      "evidence" : [
+        "qa/03-req-error-retry.flow/steps.json",
+        "qa/03-req-error-retry.flow/batch.json",
+        "qa/03-req-error-retry.flow/flow.json",
+        "qa/03-req-error-retry.flow/sim/steps.ndjson",
+        "qa/03-req-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 7 `wait` failed: Batch failed at step 19 (wait): wait timed out for selector: id=\"watchlist.error\"",
+      "ms" : 25688,
+      "requirement" : "req-error-retry",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+        "qa/04-req-detail-chart.flow/steps.json",
+        "qa/04-req-detail-chart.flow/batch.json",
+        "qa/04-req-detail-chart.flow/flow.json",
+        "qa/04-req-detail-chart.flow/sim/steps.ndjson",
+        "qa/04-req-detail-chart.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 6 `wait` failed: Batch failed at step 15 (wait): wait timed out for selector: id=\"detail.chart.loading\"",
+      "ms" : 25710,
+      "requirement" : "req-detail-chart",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart-failure.flow.json",
+      "evidence" : [
+        "qa/05-req-chart-failure.flow/steps.json",
+        "qa/05-req-chart-failure.flow/batch.json",
+        "qa/05-req-chart-failure.flow/flow.json",
+        "qa/05-req-chart-failure.flow/sim/steps.ndjson",
+        "qa/05-req-chart-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 5 steps; nit sim.a11y-untargeted: 8 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 13280,
+      "requirement" : "req-chart-failure",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T094737Z-871120b2",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "bd260c86ad6ca20147c96028fd1aa3384f823c7d",
+    "branch" : "spec/fix-spec-watchlist",
+    "conflicts" : [
+
+    ],
+    "tip" : "e500035da5d6affe5e6d3a603e4fc07e1264c25c"
+  },
+  "verdict" : "RED"
+}

@@ -91,7 +91,7 @@ public struct FinalPassRecorder: Sendable {
       let detail =
         switch error {
         case .timedOut(let waited, _):
-          "another final pass held the \(Self.lockName) slot past \(waited)"
+          "another run's recording held the \(Self.lockName) slot past \(waited)"
         case .cancelled, .io: "the \(Self.lockName) slot couldn't be taken: \(error)"
         }
       return await unrecorded(.recordLockTimedOut, detail)

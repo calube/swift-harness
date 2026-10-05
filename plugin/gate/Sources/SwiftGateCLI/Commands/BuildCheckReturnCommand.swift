@@ -279,7 +279,7 @@ enum BuildCheckReturnRun {
       if let surfaceCommit = taskReturn.surfaceCommit {
         surface = try await state(of: surfaceCommit, onBranchAt: branchTip, git: git)
       }
-      changed = try await branchChanges(tip: branchTip, git: git)
+      changed = try await branchChanges(tip: branchTip, base: names.baseBranch, git: git)
       if let planSurface {
         manifests = try await surfaceManifests(
           changed, surface: planSurface, tip: branchTip, git: git)
@@ -287,7 +287,7 @@ enum BuildCheckReturnRun {
           testBuild = try await testsAtProofBases(
             plan: slug, planSurface: planSurface,
             stub: surface == .onBranch ? taskReturn.surfaceCommit : nil, tip: branchTip,
-            worktree: worktree, git: git, warnings: &warnings)
+            worktree: worktree, baseBranch: names.baseBranch, git: git, warnings: &warnings)
         }
       }
       if profile == .brownfield {
@@ -297,7 +297,8 @@ enum BuildCheckReturnRun {
       let writeSet =
         fix
         ? try await carriedWriteSet(
-          task, ledger: ledger, slug: slug, tip: branchTip, git: git, profile: profile)
+          task, ledger: ledger, slug: slug, tip: branchTip, base: names.baseBranch, git: git,
+          profile: profile)
         : task.writeSet
       outside = WriteSet.outsideChanges(changed, writeSet: writeSet)
       if !outside.isEmpty {
@@ -387,18 +388,18 @@ enum BuildCheckReturnRun {
   /// `nil` when the branch changes no host test or no production source.
   private static func testsAtProofBases(
     plan slug: String, planSurface: String, stub: String?, tip: String, worktree: URL,
-    git: any Git, warnings: inout [String]
+    baseBranch: String, git: any Git, warnings: inout [String]
   ) async throws(Blocked) -> ProofBaseTestBuild? {
     let worktreeGit = LiveGit(runner: LiveProcessRunner(), repositoryRoot: worktree.path)
     let head: String?
     let worktreeHead: String?
     do {
-      head = try await git.revision("HEAD")
+      head = try await git.revision("refs/heads/\(baseBranch)")
       worktreeHead = try await worktreeGit.revision("HEAD")
     } catch {
-      throw Blocked("reading HEAD: \(error)")
+      throw Blocked("reading \(baseBranch) and the task worktree's HEAD: \(error)")
     }
-    guard let head else { throw Blocked("this checkout has no HEAD to measure the task from") }
+    guard let head else { throw Blocked("\(baseBranch) names no commit to measure the task from") }
     guard worktreeHead == tip else {
       throw Blocked(
         "the task worktree \(worktree.path) is at \(worktreeHead ?? "no commit"), not its branch "
@@ -526,19 +527,17 @@ enum BuildCheckReturnRun {
       })
   }
 
-  /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
-  /// when the orchestrator runs this.
   /// `task`'s write set, joined by the write set of each other task whose branch tip the fix
-  /// branch at `tip` holds and the checkout's `HEAD` lacked when the fix left it: a fix worktree
-  /// cut for a RED run over several tasks takes their branches in, so its fixer may edit their
-  /// files.
+  /// branch at `tip` holds and `baseBranch`, the branch tasks merge into, lacked when the fix left
+  /// it: a fix worktree cut for a RED run over several tasks takes their branches in, so its fixer
+  /// may edit their files.
   private static func carriedWriteSet(
-    _ task: LedgerTask, ledger: Ledger, slug: String, tip: String, git: any Git,
-    profile: RepositoryProfile
+    _ task: LedgerTask, ledger: Ledger, slug: String, tip: String, base baseBranch: String,
+    git: any Git, profile: RepositoryProfile
   ) async throws(Blocked) -> [String] {
     var writeSet = task.writeSet
     do {
-      guard let head = try await git.revision("HEAD"),
+      guard let head = try await git.revision("refs/heads/\(baseBranch)"),
         let base = try await git.mergeBase(tip, head)
       else { return writeSet }
       let common = try await git.commonDirectory()
@@ -557,9 +556,13 @@ enum BuildCheckReturnRun {
     return writeSet
   }
 
-  private static func branchChanges(tip: String, git: any Git) async throws(Blocked) -> [String] {
+  /// Files the task branch changed since it forked from `baseBranch`, the branch tasks merge into:
+  /// `main`, or a brownfield run's plan branch, whichever checkout runs this.
+  private static func branchChanges(tip: String, base baseBranch: String, git: any Git)
+    async throws(Blocked) -> [String]
+  {
     do {
-      guard let head = try await git.revision("HEAD"),
+      guard let head = try await git.revision("refs/heads/\(baseBranch)"),
         let base = try await git.mergeBase(tip, head)
       else { return [] }
       return try await git.changedFiles(from: base, to: tip)

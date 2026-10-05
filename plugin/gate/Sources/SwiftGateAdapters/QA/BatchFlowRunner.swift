@@ -321,7 +321,8 @@ public actor QAFlowRunner {
   /// - Parameters:
   ///   - finalPass: set for `qa run --final`, which records each batch and saves its logs.
   ///   - recorder: without `finalPass`, records each batch's video and contact sheet and saves
-  ///     no logs; a recording it can't make leaves no gap, since only a final pass owes one.
+  ///     no logs; a recording it can't make leaves no gap, since only a final pass owes one, and
+  ///     the row's message says why it has no video.
   ///   - hold: the device every row borrows in turn, held until ``finish()``; `nil` brings a
   ///     device up for each row.
   public init(
@@ -411,6 +412,7 @@ public actor QAFlowRunner {
     let batch: BatchFlowOutcome
     var record: QAFlowRecord
     var finalFiles: [String] = []
+    var videoNote: String?
     if let finalPass {
       let recorded = await self.recorded(
         row, finalPass: finalPass, target: target, store: store, runner: runner)
@@ -429,6 +431,7 @@ public actor QAFlowRunner {
       }
       batch = outcome
       var made = recording
+      if made.video == nil, let gap = made.videoGap { videoNote = "no video: \(gap.detail)" }
       made.videoGap = nil
       made.sheetGap = nil
       record = outcome.record.recorded(made)
@@ -484,7 +487,7 @@ public actor QAFlowRunner {
     case nil:
       (result, message) = (verdict.result, verdict.message)
     }
-    return outcome(result, message + Self.suffix(notes))
+    return outcome(result, message + Self.suffix((videoNote.map { [$0] } ?? []) + notes))
   }
 
   /// The row's batch inside a recording and its logs: the outcome, the record with its video and

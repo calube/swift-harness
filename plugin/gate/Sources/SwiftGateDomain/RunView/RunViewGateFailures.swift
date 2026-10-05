@@ -56,7 +56,7 @@ enum RunViewGateFailures {
         stage: stages.stage(of: runID), roots: roots)
     }
     causes(&view)
-    haltGates(&view)
+    haltGates(&view, table: input.validation)
     blocks(
       &view, returns: Set(input.join?.returns.keys.map { $0 } ?? []),
       rejections: rejections(events))
@@ -187,18 +187,32 @@ enum RunViewGateFailures {
     }
   }
 
-  /// A `gate-red` halt takes the newest RED gate run of its task that ended by the halt; a halt
-  /// of the whole run takes the newest of any task.
-  private static func haltGates(_ view: inout RunView) {
-    let redGates = view.spans.filter { $0.phase == .gate && $0.outcome == .red && $0.end != nil }
+  /// A `gate-red` halt takes the newest RED run of its task that ended by the halt: a gate run,
+  /// or a `qa run` past the merge base with a red row that runs after the task, by the row or
+  /// the plan's table, since red flows halt a merge too. A halt of the whole run takes the newest
+  /// of any task.
+  private static func haltGates(_ view: inout RunView, table: ValidationTable?) {
+    var red: [(task: String?, end: Date, run: String)] = view.spans.compactMap { span in
+      guard span.phase == .gate, span.outcome == .red, let end = span.end,
+        let run = span.gateRun
+      else { return nil }
+      return (span.task, end, run)
+    }
+    for row in view.validation?.rows ?? [] {
+      var tasks = row.runsAfter
+      for listed in table?.rows ?? [] where listed.requirement == row.requirement {
+        tasks += listed.runsAfter.filter { !tasks.contains($0) }
+      }
+      for attempt in row.history where attempt.result == .red && attempt.stage != .atBase {
+        for task in tasks { red.append((task, attempt.at, attempt.qaRun)) }
+      }
+    }
     for index in view.halts.indices where view.halts[index].reason == .gateRed {
       let halt = view.halts[index]
-      let before = redGates.filter { gate in
-        (halt.task == nil || gate.task == halt.task) && gate.end.map { $0 <= halt.at } == true
+      let before = red.filter { candidate in
+        (halt.task == nil || candidate.task == halt.task) && candidate.end <= halt.at
       }
-      view.halts[index].gateRun =
-        before.max { ($0.end ?? $0.start) < ($1.end ?? $1.start) }?
-        .gateRun
+      view.halts[index].gateRun = before.max { ($0.end, $0.run) < ($1.end, $1.run) }?.run
     }
   }
 
