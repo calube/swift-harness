@@ -328,7 +328,7 @@ enum QARunRun {
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
     do {
-      qaDirectory = try RunStore(worktreeRoot: root).runDirectory(for: runID)
+      qaDirectory = try RunStore.qaRuns(worktree: root).runDirectory(for: runID)
         .appending(path: QAReport.directory, directoryHint: .isDirectory)
       try files.createDirectory(at: qaDirectory, withIntermediateDirectories: true)
     } catch {
@@ -1463,7 +1463,7 @@ struct QARunCommand: AsyncParsableCommand {
         running: await (try? GitTrackedTree(runner: runner, directory: root).stateLayout())
           .map { RunningGateRegistry(layout: $0) }))
     let reportFile = report.runID.flatMap { runID in
-      (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
+      (try? RunStore.qaRuns(worktree: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
     }.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
     let keptReportFile = report.runID.flatMap { QARunRun.keptReportFile(runID: $0, root: root) }

@@ -66,6 +66,13 @@ public enum StateRootResolver {
     return .gitDir(common)
   }
 
+  /// Where a `qa run` in `worktree` writes its run directory: the clone's
+  /// ``keptRuns(commonDir:)`` when it has them, so the report path a run prints still reads once
+  /// a slot or plan checkout is removed; else `worktree`'s own state root.
+  public static func qaRuns(worktree: URL) -> StateRoot {
+    resolve(worktree: worktree)
+  }
+
   /// Where a removed worktree's runs go: the clone's ``keptRuns(commonDir:)`` when it has them,
   /// else the state root of `mainCheckout`, the checkout its work merges into.
   public static func keptRuns(commonDir: URL, mainCheckout: URL) -> StateRoot {

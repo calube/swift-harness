@@ -55,6 +55,20 @@ public struct RunStore: Sendable {
     self.newEventID = newEventID
   }
 
+  /// A store over `state`, which needn't be `worktreeRoot`'s own, recording no events.
+  public init(worktreeRoot: URL, state: StateRoot) {
+    self.worktreeRoot = worktreeRoot
+    self.state = state
+    self.events = nil
+    self.newEventID = { "" }
+  }
+
+  /// The store a `qa run` in `worktree` writes its run directory in:
+  /// ``StateRootResolver/qaRuns(worktree:)``.
+  public static func qaRuns(worktree: URL) -> RunStore {
+    RunStore(worktreeRoot: worktree, state: StateRootResolver.qaRuns(worktree: worktree))
+  }
+
   public var historyFile: URL {
     state.url(RunLayout.historyFile, directoryHint: .notDirectory)
   }
