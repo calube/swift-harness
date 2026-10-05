@@ -30,7 +30,8 @@ struct FileCountingLockTests {
       _ = try await lock.acquire(timeout: .milliseconds(50))
     }
 
-    let waiter = Task { try await lock.acquire(timeout: .seconds(10)) }
+    // Freed just below: a bound a loaded machine could reach would time the waiter out first.
+    let waiter = Task { try await lock.acquire(timeout: .seconds(3600)) }
     second.release()
     let third = try await waiter.value
     #expect(third.slot == second.slot)
@@ -78,10 +79,12 @@ struct FileCountingLockTests {
     try #require(guardFD >= 0)
     defer { close(guardFD) }
     try #require(flock(guardFD, LOCK_EX | LOCK_NB) == 0)
-    // A blocked acquirer could only return once something lets go of the guard.
+    // A blocked acquirer could only return once something lets go of the guard. The bound is
+    // only that way out: a polling acquirer has timed out long before it, however busy the
+    // machine, and the test lets go of the guard itself.
     let released = DispatchSemaphore(value: 0)
     Thread {
-      _ = released.wait(timeout: .now() + 30)
+      _ = released.wait(timeout: .now() + 600)
       flock(guardFD, LOCK_UN)
     }.start()
 

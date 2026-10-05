@@ -49,7 +49,11 @@ private struct ProfileShell {
   func remove() { try? FileManager.default.removeItem(at: directory) }
 
   /// The command's output and exit status, or `nil` when it was still running after `seconds`.
-  func run(_ command: String, seconds: Double) async throws -> (output: String, status: Int32)? {
+  /// With no `seconds` it waits for the exit however long a loaded machine takes, and a command
+  /// that never exits is terminated once the suite's time limit cancels the wait.
+  func run(_ command: String, seconds: Double? = nil) async throws
+    -> (output: String, status: Int32)?
+  {
     let quoted = "'" + command.replacingOccurrences(of: "'", with: "'\\''") + "'"
     let process = Process()
     process.executableURL = URL(filePath: "/bin/zsh")
@@ -60,12 +64,23 @@ private struct ProfileShell {
     process.standardInput = input
     process.standardOutput = output
     process.standardError = output
+    let (exits, exited) = AsyncStream<Void>.makeStream()
+    process.terminationHandler = { _ in exited.finish() }
     try process.run()
+    defer { withExtendedLifetime(input) {} }
+    guard let seconds else {
+      await withTaskCancellationHandler {
+        for await _ in exits {}
+      } onCancel: {
+        process.terminate()
+      }
+      let data = output.fileHandleForReading.readDataToEndOfFile()
+      return (String(decoding: data, as: UTF8.self), process.terminationStatus)
+    }
     let deadline = Date().addingTimeInterval(seconds)
     while process.isRunning, Date() < deadline {
       try await Task.sleep(for: .milliseconds(20))
     }
-    defer { withExtendedLifetime(input) {} }
     guard !process.isRunning else {
       process.terminate()
       process.waitUntilExit()
@@ -80,7 +95,7 @@ private struct ProfileShell {
   }
 }
 
-@Suite("A run session's Bash call is rewritten before it runs")
+@Suite("A run session's Bash call is rewritten before it runs", .timeLimit(.minutes(5)))
 struct RunBashRewriteTests {
   @Test(
     "the trial's 2 hung calls, a cat aliased to a stdin reader and a cp aliased to cp -i, both hit the 600 s timeout, and each is rewritten to run isolated with its 600 s timeout kept since it runs swiftgate — catches the rewrite skipping a call or capping a harness wait"
@@ -177,7 +192,7 @@ struct RunBashRewriteTests {
     #expect(asWritten == nil, "\(asWritten?.output ?? "")")
 
     let run = try #require(
-      try await shell.run(RunBashRewrite.isolated(command), seconds: 20),
+      try await shell.run(RunBashRewrite.isolated(command)),
       "the isolated command still waited on stdin")
     #expect(run.output == "heredoc kept\nagain\n.\n", "\(run.output)")
     #expect(run.status == 0)
@@ -195,7 +210,7 @@ struct RunBashRewriteTests {
 
     let isolated = RunBashRewrite.isolated(command)
     #expect(isolated != command)
-    let run = try #require(try await shell.run(isolated, seconds: 20))
+    let run = try #require(try await shell.run(isolated))
     #expect(run.output == "it's\n$HOME\na b\nq's\n", "\(run.output)")
     #expect(run.status == 3)
   }

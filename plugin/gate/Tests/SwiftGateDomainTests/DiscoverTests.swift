@@ -346,21 +346,22 @@ struct DiscoverTests {
   @Test(
     "the largest captured fixture proposes in under 5 s with every reader and the miner — catches a discover that misses its budget on a large tree"
   )
-  func largestFixtureWithinBudget() throws {
+  func largestFixtureWithinBudget() async throws {
     let tree = try fixtureTree("ggml-org-llama.cpp")
     let readers =
       EcosystemReaders.all + [
         BuildFileReader(names: ["CMakeLists.txt", "pyproject.toml", "Package.swift"])
       ]
-    let clock = ContinuousClock()
 
-    let start = clock.now
-    let proposal = Discover.propose(tree: tree, head: "abc", dirty: [], readers: readers)
-    let elapsed = clock.now - start
+    // The budget is the proposal's own CPU time: wall time also counts the time a loaded machine
+    // kept it off the CPU.
+    let (proposal, milliseconds) = await Latency.threadCPUMilliseconds {
+      Discover.propose(tree: tree, head: "abc", dirty: [], readers: readers)
+    }
 
     #expect(tree.paths.count > 3_000)
     #expect(proposal.areas.count >= 3)
-    #expect(elapsed < .seconds(5), "proposed in \(elapsed)")
+    #expect(milliseconds < 5_000, "proposed in \(milliseconds) ms of CPU")
   }
 
   @Test(
