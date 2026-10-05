@@ -86,6 +86,31 @@ public enum GateReuse {
     return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
+  /// The key of 1 area's prove by the head it proved at rather than the tree it reverted to. A
+  /// prove's pass says each changed test passes at the head and fails with the head's source
+  /// changes since its merge base reverted. Another gate on the same head tree, whose changed
+  /// tests are the same files with the same bytes, run by the same command, binary and config,
+  /// asks the same question of the same code and tests, so the pass answers it even though that
+  /// gate measures from another merge base: a `final` on the tree its last `merge` proved. A
+  /// changed test the earlier gate didn't run, or any other head tree, keys apart.
+  /// - Parameters:
+  ///   - inputs: the head's tree, the binary and the clone's config; the merge base isn't read.
+  ///   - tests: the selectors the command runs.
+  ///   - copied: each changed test file, by path, as a digest of its bytes; `nil` for a file the
+  ///     head deleted.
+  public static func proveHeadKey(
+    _ inputs: Inputs, area: String, command: String, tests: [String], copied: [String: String?]
+  ) -> String {
+    var lines = [
+      "prove-head schema 1", "tree \(inputs.treeHash)", "binary \(inputs.sourceHash)",
+      "config \((inputs.stateFiles["config"] ?? nil) ?? "absent")", "area \(area)",
+      "command \(command)",
+    ]
+    lines += tests.sorted().map { "test \($0)" }
+    lines += copied.keys.sorted().map { "copied \($0) \((copied[$0] ?? nil) ?? "absent")" }
+    return digest(Data(lines.joined(separator: "\n").utf8))
+  }
+
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.
   public static func reusable(_ records: [RunHistoryRecord], command: String, key: String)
     -> RunHistoryRecord?

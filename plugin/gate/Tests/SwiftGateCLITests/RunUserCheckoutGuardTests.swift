@@ -131,6 +131,30 @@ struct RunUserCheckoutGuardTests {
   }
 
   @Test(
+    "the trial's `sed -i` of a relative glob after `C=<plan checkout>; cd $C &&` is not denied guard.run-user-checkout, and the same command assigning the user's checkout is — catches the guard reading a write after a cd to a variable the command assigned against the session's starting directory"
+  )
+  func capturedCdToAnAssignedVariable() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let captured = try JSONDecoder().decode(
+      CapturedBash.self, from: Fixture.data("Hooks/assigned-variable-cd-bash.json"))
+    try #require(captured.cwd == "/CLONE")
+    try #require(captured.command.hasPrefix("C=/CLONE-spec; cd $C && "))
+
+    func decision(_ directory: String) async throws -> String? {
+      try await scenario.orchestratorDecision(
+        fixture: "Hooks/pre-tool-use-bash-allowed.json", cwd: scenario.userRoot,
+        input: [
+          "command": captured.command.replacingOccurrences(of: "/CLONE-spec", with: directory)
+        ])
+    }
+
+    let plan = try await decision(scenario.checkout)
+    #expect(plan.map { !$0.hasPrefix("deny") } ?? true, "\(plan ?? "nil")")
+    #expect(try await decision(scenario.userRoot) == Self.denied)
+  }
+
+  @Test(
     "a session that holds no plan's lock writes the user's checkout of a brownfield clone as it likes — catches the guard stopping a person's own edits outside a run"
   )
   func noLockNoGuard() async throws {
