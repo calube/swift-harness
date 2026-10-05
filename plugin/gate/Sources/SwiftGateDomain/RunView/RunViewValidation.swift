@@ -334,7 +334,7 @@ extension RunViewFlow.Step {
 
 extension RunViewFlow {
   private enum CodingKeys: String, CodingKey {
-    case source, run, steps, video, sheet, videoUnverified, sheetUnverified
+    case source, run, steps, video, sheet, videoUnverified, sheetUnverified, launch
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -346,6 +346,7 @@ extension RunViewFlow {
     try c.encode(sheet, forKey: .sheet)
     try c.encode(videoUnverified, forKey: .videoUnverified)
     try c.encode(sheetUnverified, forKey: .sheetUnverified)
+    try c.encodeIfPresent(launch, forKey: .launch)
   }
 }
 
@@ -728,11 +729,12 @@ enum RunViewValidationFold {
         steps: flow.steps.enumerated().map { index, step in
           RunViewFlow.Step(
             n: step.n, label: keep(step.label, "steps[\(index)].label"),
-            offsetMs: step.offsetMs, ok: step.ok)
+            offsetMs: step.offsetMs, ok: step.ok, captureMs: step.captureMs)
         },
         video: flow.video.flatMap { path($0, "video") },
         sheet: flow.sheet.flatMap { path($0, "sheet") },
-        videoUnverified: flow.videoUnverified, sheetUnverified: flow.sheetUnverified)
+        videoUnverified: flow.videoUnverified, sheetUnverified: flow.sheetUnverified,
+        launch: flow.launch)
     }
   }
 
