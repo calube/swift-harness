@@ -252,7 +252,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      An acceptance test in the area's framework is never the validation task's: its row's
      `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's
      source reverted. The brownfield tiers refuse `--proof-base`, and that prove stands in for it.
-     At the cutoff, `TaskStop` a validation task still running and set it `abandoned`, which
+     At the cutoff, `TaskStop` a validation task still running, set it `abandoned` and
+     `worktree remove … --abandoned` it, which
      frees the merges waiting on item 3; its rows have no checks, so `qa run` reads them red and
      the report quotes them.
    - **Validate each merge**, as [the build loop's after-merge step](../build/references/event-loop.md#after-each-merge)
@@ -280,13 +281,16 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
      go on with the loop. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
-        already set it `abandoned`, with the reason the report quotes.
+        already set it `abandoned`, with the reason the report quotes. Then discard its
+        worktrees: `"$SG" worktree remove <slug> <task> --abandoned --session <session> --json`
+        removes the task's and its fixer's, merged or not, and keeps their branches.
      2. Merge each task in `finish`, in order, as the build loop's completion step does, from
         where it stands: a task already merged skips `build merge`, and one in `landed` skips
         its merge gate too, going straight to `qa run --after`, `ledger set … done` and
         `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
         gets no fixer at the cutoff: `build merge --undo`, then
-        `"$SG" ledger set <slug> <task> abandoned --session <session> --json`.
+        `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
+        `worktree remove … --abandoned` as item 1 says.
      3. Start nothing else, and go to step 8.
 
      `build cutoff` records the cutoff as `budget` halts it answers itself, so never run
