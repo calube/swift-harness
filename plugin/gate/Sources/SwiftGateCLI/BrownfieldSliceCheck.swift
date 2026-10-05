@@ -379,16 +379,34 @@ enum BrownfieldSliceCheck {
     let added = change.added.filter {
       BrownfieldMergeCheck.owner(of: $0.path, in: areas)?.name == area.name
     }
-    var result = AreaResult()
+    // The neutral rules wait on the judge for each test with no assertion the table knows, which
+    // took a minute in a trial; the area's own steps need none of their findings, so both run at
+    // once.
+    async let neutralChecked: AreaResult = {
+      let (checked, milliseconds) = await GateRun.timed {
+        await neutral(added, globs: area.testGlobs, root: root, dependencies: dependencies)
+      }
+      context.steps.record(
+        .neutral, tier: nil, milliseconds: milliseconds, verdict: verdict(of: checked),
+        area: area.name)
+      return checked
+    }()
+    var result = await ownSteps(
+      area, added: added, warm: warm, change: change, root: root, base: base, context: context,
+      dependencies: dependencies)
+    let checked = await neutralChecked
+    result.findings = checked.findings + result.findings
+    result.blocked = result.blocked || checked.blocked
+    return result
+  }
 
-    let (neutralResult, neutralMilliseconds) = await GateRun.timed {
-      await neutral(added, globs: area.testGlobs, root: root, dependencies: dependencies)
-    }
-    context.steps.record(
-      .neutral, tier: nil, milliseconds: neutralMilliseconds, verdict: verdict(of: neutralResult),
-      area: area.name)
-    result.findings += neutralResult.findings
-    result.blocked = result.blocked || neutralResult.blocked
+  /// 1 touched area's steps past the neutral rules: Xcode membership, lint, then its tests and
+  /// prove, or its build.
+  private static func ownSteps(
+    _ area: BrownfieldArea, added: [AddedLines], warm: WarmTestTime, change: Change, root: URL,
+    base: String, context: GateRun.Context, dependencies: Dependencies
+  ) async -> AreaResult {
+    var result = AreaResult()
 
     if let xcode = area.xcode {
       let newSwift = added.map(\.path).filter { change.new.contains($0) && $0.hasSuffix(".swift") }

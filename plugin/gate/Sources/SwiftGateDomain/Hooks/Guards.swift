@@ -709,7 +709,28 @@ public enum BrownfieldBuildGuard {
   public static let rawSwiftBuildRuleID = "guard.raw-swift-build"
 
   public static func evaluate(_ command: String, layout: BrownfieldStateLayout) -> GuardViolation? {
-    nil
+    for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
+      let simple = parsed.command
+      guard simple.name == "swift", let subcommand = simple.arguments.first,
+        ["build", "test"].contains(subcommand),
+        !simple.arguments.contains(where: namesBuildPath)
+      else { continue }
+      let scratch = ScratchTreeBuild.swiftPMScratchPath(area: "<area>", layout: layout)
+      return GuardViolation(
+        ruleID: rawSwiftBuildRuleID,
+        reason:
+          "`swift \(subcommand)` here builds cold in the package's own `.build`, while the warm-up "
+          + "and every gate build each swiftpm area in 1 scratch path the clone shares, which "
+          + "already holds its build. Gate the change with `\"$SG\" check --tier slice --base "
+          + "<base>`, which builds every area it touches warm, or run a test with `\"$SG\" "
+          + "test-only <Target>/<Class>`. To only build, add `--scratch-path \(scratch)`, with "
+          + "`<area>` the area's name in the run's config.")
+    }
+    return nil
+  }
+
+  private static func namesBuildPath(_ argument: String) -> Bool {
+    ["--scratch-path", "--build-path"].contains { argument == $0 || argument.hasPrefix($0 + "=") }
   }
 }
 

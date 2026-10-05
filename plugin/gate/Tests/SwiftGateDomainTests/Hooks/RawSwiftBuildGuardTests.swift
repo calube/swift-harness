@@ -30,7 +30,8 @@ struct RawSwiftBuildGuardTests {
       #expect(violation.reason.contains("--tier slice"), "\(violation.reason)")
       #expect(violation.reason.contains("test-only"), "\(violation.reason)")
       #expect(
-        violation.reason.contains("--scratch-path /CLONE/.git/swift-harness/caches/swiftpm-scratch/"),
+        violation.reason.contains(
+          "--scratch-path /CLONE/.git/swift-harness/caches/swiftpm-scratch/"),
         "\(violation.reason)")
     }
   }

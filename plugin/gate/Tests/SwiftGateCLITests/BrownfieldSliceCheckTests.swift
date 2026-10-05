@@ -1006,8 +1006,8 @@ extension BrownfieldSliceCheckTests {
       starter.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' ") },
       "\(starter.map(\.command))")
     #expect(
-      feature.count > 1 && feature.allSatisfy { $0.step == .testFiles },
-      "prove's reverted runs and the baseline's rerun at the base: \(feature.map(\.step))")
+      feature.map(\.step) == [.build, .testFiles],
+      "prove's failing build of the reverted tree, then the baseline's rerun at the base")
     #expect(
       feature.allSatisfy { $0.command.contains(" --scratch-path '\(shared)'") },
       "\(feature.map(\.command))")
@@ -1024,18 +1024,20 @@ extension BrownfieldSliceCheckTests {
     "Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift"
   private static let appFeatureTests =
     "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift"
+  /// The watchlist prove, run again by hand on the trial's repository.
+  private static let proveReverted = "BrownfieldTrial/price-tracker-5-prove-reverted"
 
   /// price-tracker-5's watchlist task: its reducer, its 9 new watchlist tests and the root
   /// test it rewrote, as its slice gated them.
   private static func watchlistChange() throws -> [Change] {
-    let root = try Fixture.text("BrownfieldTrial/price-tracker-5-prove-reverted/AppFeatureTests.swift")
+    let root = try Fixture.text("\(Self.proveReverted)/AppFeatureTests.swift")
     return [
       Change(
         path: "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
         text: "let watchlist = 1\n", added: [1...1]),
       Self.newFile(
         Self.watchlistTests,
-        try Fixture.text("BrownfieldTrial/price-tracker-5-prove-reverted/WatchlistFeatureTests.swift")),
+        try Fixture.text("\(Self.proveReverted)/WatchlistFeatureTests.swift")),
       Change(
         path: Self.appFeatureTests, text: root,
         added: [1...root.split(separator: "\n", omittingEmptySubsequences: false).count - 1]),
@@ -1050,8 +1052,8 @@ extension BrownfieldSliceCheckTests {
     defer { try? FileManager.default.removeItem(at: clone.base) }
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/price-tracker-5-config.toml"))
-    let build = try Fixture.text("BrownfieldTrial/price-tracker-5-prove-reverted/build.stdout")
-    let together = try Fixture.text("BrownfieldTrial/price-tracker-5-prove-reverted/together.stderr")
+    let build = try Fixture.text("\(Self.proveReverted)/build.stdout")
+    let together = try Fixture.text("\(Self.proveReverted)/together.stderr")
     let runner = FakeAreaCommandRunner { request in
       guard Self.inScratchTree(request, clone) else { return .passed }
       return request.command.hasPrefix("swift build")
@@ -1065,7 +1067,10 @@ extension BrownfieldSliceCheckTests {
 
     let scratch = runner.requests.filter { Self.inScratchTree($0, clone) }
     #expect(scratch.map(\.step) == [.build], "\(scratch.map(\.command))")
-    #expect(scratch.first?.command.hasPrefix("swift build --build-tests") == true)
+    let shared = ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout)
+    #expect(
+      scratch.first?.command == "swift build --scratch-path '\(shared)' --build-tests",
+      "\(scratch.map(\.command))")
     let proofs = context.proofs.results.filter { $0.target == "AppFeature" }
     #expect(proofs.count == 10, "\(proofs.map(\.test))")
     #expect(proofs.allSatisfy { $0.outcome == .proven })

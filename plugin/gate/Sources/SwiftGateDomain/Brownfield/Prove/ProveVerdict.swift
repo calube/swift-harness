@@ -34,7 +34,29 @@ public enum ProveVerdict {
   /// an id names its pass or failure, so only the ids it doesn't name run again alone. A crash
   /// may have cut the report short, so every id of a crashed run runs again.
   public static func attributed(_ outcome: AreaCommandOutcome, ids: [AreaTestID]) -> Attribution {
-    Attribution(outcomes: [:], rerun: ids)
+    guard case .failed(let exit, let tail, let junit?) = outcome,
+      let cases = JUnitReports.cases(junit)
+    else { return Attribution(outcomes: [:], rerun: ids) }
+    var outcomes: [AreaTestID: AreaCommandOutcome] = [:]
+    var rerun: [AreaTestID] = []
+    for id in ids {
+      // `Target.Suite/Inner/name()` is reported as class `Target.Suite.Inner` and name `name()`.
+      let named = id.name.replacingOccurrences(of: "/", with: ".")
+      let reported = cases.filter { "\($0.className).\($0.name)" == named }
+      let failures = reported.compactMap { testCase -> String? in
+        if case .failed(let message) = testCase.outcome { return message }
+        return nil
+      }
+      if !failures.isEmpty {
+        outcomes[id] = .failed(
+          exit: exit, tail: (failures + [tail]).joined(separator: "\n"), junit: junit)
+      } else if !reported.isEmpty, reported.allSatisfy({ $0.outcome == .passed }) {
+        outcomes[id] = .passed
+      } else {
+        rerun.append(id)
+      }
+    }
+    return Attribution(outcomes: outcomes, rerun: rerun)
   }
 
   /// What a reverted run that selected some changed tests says about them, once its report says

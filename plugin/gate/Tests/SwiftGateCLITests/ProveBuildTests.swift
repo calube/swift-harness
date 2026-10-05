@@ -70,7 +70,9 @@ struct ProveBuildTests {
       file: probeFile, line: line)
   }
 
-  static let ids = [id("doublesThree()", line: 5), id("doublesFour()", line: 6), id("keepsZero()", line: 7)]
+  static let ids = [
+    id("doublesThree()", line: 5), id("doublesFour()", line: 6), id("keepsZero()", line: 7),
+  ]
 
   static func report() throws -> Data {
     try #require(
