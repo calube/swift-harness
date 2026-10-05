@@ -5244,3 +5244,39 @@ head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-
 ```
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
+
+## Brownfield trial: a review blocked on a sibling task's stubbed behaviour
+
+`BuildReturn/sibling-stub/` holds a 2026-10-05 brownfield practice trial's screen task, which
+built in parallel with an engine task, both on the plan contract's stubs. `second-review.json` holds
+the test-quality reviewer's and its verifier's answers in the build-task workflow's second review
+pass. Its verified major asks for a test of behaviour only the engine task's write set built, so
+on the screen task's branch the test could only fail on the stub. `ledger-tasks.json` is the 2
+tasks' `id`, `deps` and `writeSet` from the plan's `ledger.json`. `W` is the screen task's first
+build-task workflow transcript directory, the one holding `journal.jsonl`. `L` is the trial
+clone's `.git/swift-harness/plans/spec/ledger.json`. `S` is a `sed` script renaming the app's
+domain words to generic ones (`Field…` types, entity, cut, count, charges, session, drag,
+finished), given here as placeholders:
+
+```sh
+S='s/<App type prefix>/Field/g; s/<domain noun>/entity/g; s/<action verb>/cut/g; s/<tally>/count/g; s/<allowance>/charges/g; s/<run word>/session/g; s/<gesture>/drag/g; s/<end state>/finished/g'
+F=BuildReturn/sibling-stub; mkdir -p $F
+python3 - $W/journal.jsonl review:test-quality verify:test-quality <<'PY' | sed "$S" > $F/second-review.json
+import json,sys
+labels,out={},{}
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    if d['type']=='started': labels[d['key']]=d['label']
+    elif d['type']=='result' and labels.get(d['key']) in sys.argv[2:]:
+        out[labels[d['key']].split(':')[0]]=d['result']
+print(json.dumps(out,indent=2,sort_keys=True))
+PY
+python3 - $L <<'PY' | sed "$S" > $F/ledger-tasks.json
+import json,sys
+d=json.load(open(sys.argv[1]))
+print(json.dumps([{k:t[k] for k in ('id','deps','writeSet')} for t in d['tasks'] if t['id'] in ('spec-engine','spec-screen')],indent=2))
+PY
+```
+
+The journal holds 2 review passes under the same labels, and the script keeps the last, the second.
+`grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
