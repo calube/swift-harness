@@ -154,7 +154,9 @@ public enum PlanLintValidation {
     table: ValidationTable?, tasks: [TaskWrites], appAreas: [AppArea], file: String,
     contractTask: String? = nil
   ) throws(ReportContractViolation) -> [Finding] {
-    []
+    try appFindings(
+      table: table, screenTasks: tasks.filter { $0.id != contractTask }, allTasks: tasks,
+      appAreas: appAreas, file: file, sectionLine: nil)
   }
 
   /// 1 finding per requirement, in plan order, that a task covers while writing a screen of an
@@ -207,7 +209,7 @@ public enum PlanLintValidation {
   /// runs after or covers the work of a task writing inside it. Reasons excuse single
   /// requirements, never a whole app.
   private static func appFindings(
-    table: ValidationTable, screenTasks: [TaskWrites], allTasks: [TaskWrites],
+    table: ValidationTable?, screenTasks: [TaskWrites], allTasks: [TaskWrites],
     appAreas: [AppArea], file: String, sectionLine: Int?
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
@@ -217,7 +219,7 @@ public enum PlanLintValidation {
           screenPath(task, [area]).map { (task.id, $0.path) }
         }).first
       else { continue }
-      let flowed = table.rows.contains { row in
+      let flowed = (table?.rows ?? []).contains { row in
         row.layer == .flow
           && allTasks.contains { task in
             (row.runsAfter.contains(task.id) || task.covers.contains(row.requirement))
@@ -230,8 +232,10 @@ public enum PlanLintValidation {
           ruleID: appWithoutFlowRuleID, severity: .major, file: file, line: sectionLine,
           message:
             "the xcode area `\(area.name)` gets screens (`\(task)` writes `\(path)`), but no "
-            + "flow row drives it; add at least 1 flow row for a journey through them: a "
-            + "Reason excuses 1 requirement, never the whole app",
+            + "flow row drives it"
+            + (table == nil ? " and the plan has no `## Validation` section" : "")
+            + "; add at least 1 flow row for a journey through them: a Reason excuses 1 "
+            + "requirement, never the whole app",
           failureScenario:
             "the app merges with no flow run, so no video is recorded, nothing runs red at the "
             + "base, and the Validation tab is empty"))

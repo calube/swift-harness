@@ -19,8 +19,9 @@ task and the line.
   `build-only` when that time exceeds `slice_budget_s`, or `unknown` while the warm-up hasn't
   reached it. The importer ignores this section; the report and the workers read it.
 - `## Validation`: the checks that prove each requirement once its tasks merge; see
-  [The validation table](#the-validation-table). A plan without it imports as before, with a note
-  that no checks will run after each merge.
+  [The validation table](#the-validation-table). A plan without it imports with a note that no
+  checks will run after each merge, unless its tasks write an `xcode` area's screens: then it
+  fails with `plan-lint.validation-app-without-flow`.
 - `## Assumptions`: 1 bullet per reading you made of an ambiguous spec, per halt you decided, and
   per explorer report you dropped. The importer keeps every bullet; the report lists them.
 - 1 `### <task-id>` section per task. A task id is lowercase letters, digits and `-`.

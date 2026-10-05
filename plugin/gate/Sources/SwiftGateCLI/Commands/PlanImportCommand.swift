@@ -152,6 +152,16 @@ enum PlanImportRun {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
           },
           contractTask: contract?.task)
+      } else {
+        findings += try PlanLintValidation.appWithoutFlowFindings(
+          table: nil,
+          tasks: livePlan.tasks.map {
+            PlanLintValidation.TaskWrites(id: $0.id, covers: $0.covers, writes: $0.writes)
+          },
+          appAreas: config.areas.filter { $0.kind == .xcode }.map {
+            PlanLintValidation.AppArea(name: $0.name, root: $0.root)
+          },
+          file: livePath, contractTask: contract?.task)
       }
       findings += try PlanLintCheckDependencies.findings(
         tasks: livePlan.tasks.map {
