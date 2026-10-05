@@ -196,6 +196,7 @@ extension RunCommand {
     let warmupLog = layout.worktreeRoot.appending(path: "logs/warmup-\(slug).log")
     let warmupPID: Int32?
     var branched = false
+    var setAside = false
     do throws(RunStartError) {
       // The session `claude` starts under holds the lock, so the plan-state guard lets that main
       // session, and none of its subagents, write the plan's files.
@@ -217,16 +218,19 @@ extension RunCommand {
       if source == .copied { try write(text, to: read) }
       try write(try encode(clock), to: planDirectory.appending(path: RunClock.fileName).path)
 
+      // Set aside before discovery, so its discover.run lands in the state root the run uses.
+      let recorded = files.fileExists(atPath: layout.committedConfigSetAside.path)
+      if let note = try await setAsideCommittedConfig(
+        root: rootPath, layout: layout, at: started, runner: runner)
+      {
+        notes.append(note)
+        setAside = !recorded
+      }
       do {
         discovered = try await DiscoverCommand.apply(
           directory: root, edits: [], dependencies: dependencies.discover)
       } catch {
         throw RunStartError(message: "discover --apply: \(describe(error))")
-      }
-      if let note = try await setAsideCommittedConfig(
-        root: rootPath, layout: layout, at: started, runner: runner)
-      {
-        notes.append(note)
       }
       // The box needs the preset discovery just wrote, so the clock is written again with it.
       let box = TimeBoxLimits.resolve(
@@ -255,6 +259,7 @@ extension RunCommand {
         _ = try? await git(
           ["update-ref", "-d", "refs/heads/\(planBranch)", base], root: rootPath, runner: runner)
       }
+      if setAside { try? files.removeItem(at: layout.committedConfigSetAside) }
       try? files.removeItem(at: planDirectory)
       throw error
     }

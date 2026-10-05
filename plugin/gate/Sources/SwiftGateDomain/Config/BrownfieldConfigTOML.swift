@@ -36,7 +36,9 @@ public enum BrownfieldConfigTOML {
         if let project = xcode.project { lines.append("project = \(quoted(project))") }
         lines.append("inclusion = \(quoted(xcode.inclusion.rawValue))")
         if let manifest = xcode.manifest { lines.append("manifest = \(quoted(manifest))") }
-        lines += ["schemes = \(array(xcode.schemes))", ""]
+        lines.append("schemes = \(array(xcode.schemes))")
+        if !xcode.packages.isEmpty { lines.append("packages = \(array(xcode.packages))") }
+        lines.append("")
       }
     }
     for entry in config.allow {

@@ -1741,6 +1741,17 @@ git clone -q --no-checkout <path to the trial's clone> "$R"
 git -C "$R" reset -q 533b9165147c54297ab09847d5a2aacc9b04c568
 ```
 
+A later trial's clone of the same starter, at its own first commit, gives a byte-identical `ls-files.txt` and
+`tree/` (checked with `diff` and `cmp` on 2026-10-04), so the fixture stands for both.
+
+`WezSieTato-ScanNow` (Swift, Ruby; MIT) came on 2026-10-04 from GitHub, from probing the results of
+`gh search code 'isa = XCLocalSwiftPackageReference'` for a local package that declares iOS and not macOS. Its
+workspace lists the app's project and the local package `App`, whose 1 test target the app's `ScanNow` scheme runs,
+so the package stays in the app's area. On that commit `swift build` in `App` fails on the Mac with `no such module
+'UIKit'`, and `xcodebuild build-for-testing -scheme ScanNowCore -destination 'generic/platform=iOS Simulator'` in
+`App` succeeds (Xcode 26.2), which is why such a package's own area runs `xcodebuild`. Capture it with the commands
+above and the commit `b2312304483b4f0d548ea35cd07a4eee33e8c1c9`.
+
 The 2 `after-build/` directories are the negative case: build output on disk that git ignores.
 After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
 or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
@@ -2964,6 +2975,39 @@ done
 ```
 
 `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-*` matched nothing.
+
+## Brownfield trial: a 4-screen plan whose every row is reason-only
+
+The first send-money trial ran `swiftgate run spec.md` on an iOS app starter with 1 `xcode` area
+rooted at `.`. `BrownfieldTrial/send-money-1-PLAN.md` is its `PLAN.md` at the run's end: 12
+requirements, each a reason-only row naming unit tests, and no `flow` row, though 4 tasks write
+`Packages/AppFeature/Sources/AppUI/` (findings 1 and 6: `root-flow`'s launch UI test needed
+`account-fake`'s fake, but `root-flow` depends on the contract alone). `send-money-1-config.toml`
+is the clone's `config.toml`, and `send-money-1-plan.json` and `send-money-1-validation.json` are
+what `plan import` wrote from that plan. `QA/send-money-1/final-report.json` is the last `qa run
+--plan spec`'s report, run after the final gate: no row, `settled`, "no validation row to run",
+GREEN (finding 4). `S` is the clone's plan state. From the repository root:
+
+```sh
+S=<clone>/.git/swift-harness F=plugin/gate/Tests/Fixtures
+cp $S/plans/spec/PLAN.md $F/BrownfieldTrial/send-money-1-PLAN.md
+cp $S/config.toml $F/BrownfieldTrial/send-money-1-config.toml
+cp $S/plans/spec/plan.json $F/BrownfieldTrial/send-money-1-plan.json
+cp $S/plans/spec/validation.json $F/BrownfieldTrial/send-money-1-validation.json
+mkdir -p $F/QA/send-money-1
+cp $S/runs/20261005T020255Z-74e7bef9/qa/report.json $F/QA/send-money-1/final-report.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
+
+`BrownfieldTrial/send-money-1-no-validation-PLAN.md` is the same `PLAN.md` with its
+`## Validation` section deleted, from its heading up to the next heading, and nothing else changed:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+awk '/^## Validation$/{skip=1; next} skip && /^#{2,3} /{skip=0} !skip' \
+  $F/send-money-1-PLAN.md > $F/send-money-1-no-validation-PLAN.md
+```
 
 ## Brownfield trial: a flow row's sim run on an iOS clone
 

@@ -160,7 +160,8 @@ extension RuleIndexTests {
       PlanLintCoverage.packOverBudgetRuleID, PlanLintValidation.uncoveredRuleID,
       PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
       PlanLintValidation.flowWithoutIOSRuleID, PlanLintValidation.checkSourceFileRuleID,
-      PlanLintValidation.screenWithoutFlowRuleID,
+      PlanLintValidation.screenWithoutFlowRuleID, PlanLintValidation.appWithoutFlowRuleID,
+      PlanLintCheckDependencies.ruleID,
     ]
     let build = [
       "build-next.unmerged-dependency", "build-next.missing-model", "build-next.write-set-overlap",
@@ -170,7 +171,8 @@ extension RuleIndexTests {
     let other = [
       CalibrationFreshness.wrongModelRuleID, EvidenceCacheContents.corruptLineRuleID,
       QAReport.checkFailedRuleID, QAReport.checkUnverifiedRuleID,
-      QAReport.checkPassesAtBaseRuleID, FlowRules.unparsedRuleID, FlowRules.refTargetRuleID,
+      QAReport.checkPassesAtBaseRuleID, QAReport.noVerifiableRowRuleID, FlowRules.unparsedRuleID,
+      FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
       FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
       QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,

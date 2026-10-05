@@ -145,6 +145,35 @@ import Testing
   }
 
   @Test(
+    "the send-money trial's final qa run, no row run, reads unverified on the validation line, and a run over its 12 reason-only rows counts them there — catches the trial's report line `0 of 0 rows verified (…, GREEN)` for a table nothing could verify"
+  )
+  func validationLineReadsUnverifiedWithNoRow() throws {
+    let captured = try QAReportJSON.decode(try Fixture.data("QA/send-money-1/final-report.json"))
+    let table = try ValidationTableJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-1-validation.json"))
+    let counted = QAReport(
+      runID: "20261005T020255Z-74e7bef9", plan: "spec", after: nil, atBase: false,
+      settled: true, commit: captured.commit, rows: [], reasonOnly: table.unitOnly.count,
+      checkableRows: table.rows.count)
+
+    let trial = BrownfieldRunReport.make(Self.inputs(validation: .read(captured)))
+    let now = BrownfieldRunReport.make(Self.inputs(validation: .read(counted)))
+
+    #expect(
+      trial.text.split(separator: "\n").dropFirst().first
+        == "validation: unverified, 0 of 0 rows verified (qa run 20261005T020255Z-74e7bef9, GREEN)",
+      "\(trial.text)")
+    #expect(
+      now.validation
+        == .init(
+          runID: "20261005T020255Z-74e7bef9", verdict: .red, rows: 0, verified: 0, reasonOnly: 12))
+    let line = now.text.split(separator: "\n").dropFirst().first.map(String.init)
+    #expect(
+      line == "validation: unverified, 0 of 12 rows verified, 12 reason-only "
+        + "(qa run 20261005T020255Z-74e7bef9, RED)")
+  }
+
+  @Test(
     "a plan with a validation table and no whole qa run says validation wasn't recorded, and a plan with no table has no validation line — catches a missing qa run read as nothing to verify"
   )
   func validationNotRecorded() {

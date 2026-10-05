@@ -1,5 +1,7 @@
+import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("brownfield config.toml")
@@ -12,6 +14,28 @@ struct BrownfieldConfigTOMLTests {
     #expect(BrownfieldConfigTOML.render(config) == BrownfieldConfigTOMLSample.text)
     #expect(config.areas.map(\.xcode?.inclusion) == [nil, .tuist])
     #expect(config.allow.map(\.reason) == ["the parser guarantees a value here"])
+  }
+
+  @Test(
+    "the local packages an Xcode area builds round-trip through config.toml — catches a config that forgets them and stops gating the app on a package change"
+  )
+  func xcodePackagesRoundTrip() throws {
+    let directory = Fixture.directory.appending(
+      path: "Discover/interview-starter", directoryHint: .isDirectory)
+    let listing = try String(
+      contentsOf: directory.appending(path: "ls-files.txt"), encoding: .utf8)
+    let tree = TrackedTreeSnapshot(
+      paths: listing.split(separator: "\n").map(String.init),
+      read: { try? Data(contentsOf: directory.appending(path: "tree/\($0)")) })
+    let config = Discover.config(
+      from: Discover.propose(tree: tree, head: "abc", dirty: []), keeping: nil)
+    let packages = config.areas.compactMap(\.xcode).flatMap(\.packages)
+    #expect(
+      packages == ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"])
+
+    let text = BrownfieldConfigTOML.render(config)
+    #expect(text.contains(#"packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]"#))
+    #expect(try TOMLConfigDecoder().decodeBrownfield(text) == config)
   }
 
   @Test("a value TOML must escape survives a round trip — catches unescaped quotes")
