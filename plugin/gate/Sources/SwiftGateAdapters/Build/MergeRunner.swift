@@ -180,6 +180,11 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case returnNotGreen = "return-not-green"
     /// The newest GREEN `build check-return` covered another commit than the branch tip.
     case returnStale = "return-stale"
+    /// A validation row runs after this task with every other task it waits on merged, and no
+    /// `qa run --before-merge` of the branch at its tip on `main`'s commit is GREEN or conflicted.
+    case flowsUnchecked = "flows-unchecked"
+    /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED.
+    case flowsRed = "flows-red"
   }
 
   /// Whether `main` was checked against the run's last merge.
@@ -286,6 +291,8 @@ public struct BuildMerge: Sendable {
     let fix: TaskWorktree
     /// The branch this call merges: the task's, or with `--fix` the fixer's.
     let branch: String
+    /// The git common dir, holding the plan's state.
+    let common: String
   }
 
   public func merge() async -> BuildMergeReport {
@@ -313,6 +320,7 @@ public struct BuildMerge: Sendable {
           reason: .alreadyMerged)
       }
       try await checkReturn(command, context)
+      try await checkFlows(command, context, main: pre)
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
         let subject = try await merger.subject(of: "refs/heads/\(branch)", in: main)
@@ -505,7 +513,7 @@ public struct BuildMerge: Sendable {
         command, .blocked, "plan `\(plan)` has no build run; run `swiftgate build start` first")
     }
     let branch = self.fix && command == Self.mergeCommand ? fix.branch : names.branch
-    let context = Context(run: run, names: names, fix: fix, branch: branch)
+    let context = Context(run: run, names: names, fix: fix, branch: branch, common: common)
     let exists = try await step(command, context, "reading \(branch)") {
       () async throws(GitWorkspaceError) in
       try await workspace.branchExists(branch)
@@ -601,6 +609,84 @@ public struct BuildMerge: Sendable {
           + "\(whose) was GREEN for commit \(check.commit ?? "none"), but \(branch) is at \(tip); "
           + "check the return that names \(tip) as its last commit before merging",
         reason: .returnStale)
+    }
+  }
+
+  /// Refuses while a validation row runs after this task with every other task it waits on
+  /// merged, unless the newest `qa run --after <task> --before-merge` of the branch at its tip on
+  /// `main`'s commit is GREEN, or conflicted, which the merge then shows. A RED one cuts the fix
+  /// worktree, as a conflict does, unless this merges the fixer's branch, whose worktree exists.
+  /// A plan with no table, or one whose state doesn't read, needs no run here: `qa run` itself
+  /// reports that table.
+  private func checkFlows(_ command: String, _ context: Context, main: String)
+    async throws(Stop)
+  {
+    let readiness: QAMergeReadiness
+    let tip: String
+    do {
+      let plan = try PlanStateLayout(commonDirectory: context.common).plan(self.plan)
+      guard
+        let data = FileManager.default.contents(
+          atPath: plan.directory + "/" + ValidationTable.fileName)
+      else { return }
+      let table = try ValidationTableJSON.decode(data)
+      let progress = try PlanStateStore(plan: plan).ledgerProgress()
+      let log = try context.run.events()
+      tip = try await merger.commit(
+        of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
+      readiness = QAMergeReadiness.of(
+        table: table, merged: progress.merged(per: log), plan: self.plan, task: task,
+        reports: beforeMergeReports(context), branch: context.branch, tip: tip, base: main)
+    } catch {
+      return
+    }
+    let run =
+      "`swiftgate qa run --plan \(plan) --after \(task) --before-merge\(fix ? " --fix" : "")`"
+    switch readiness {
+    case .notNeeded, .checked, .conflicts:
+      return
+    case .unchecked(let rows):
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.flowsUnchecked.rawValue): validation "
+          + "\(rows.count == 1 ? "row" : "rows") \(rows.map(String.init).joined(separator: ", ")) "
+          + "\(rows.count == 1 ? "runs" : "run") after `\(task)` with every other task "
+          + "\(rows.count == 1 ? "it waits" : "they wait") on merged, and no GREEN \(run) covers "
+          + "\(context.branch) at \(tip) on \(context.names.baseBranch) at \(main); run it in "
+          + "\(context.names.mainCheckout) and merge once it is GREEN",
+        reason: .flowsUnchecked)
+    case .red(let runID, let rows):
+      let red =
+        "build-merge.\(BuildMergeReport.Reason.flowsRed.rawValue): \(run) run \(runID) is RED "
+        + "at \(context.branch)'s tip \(tip) on \(context.names.baseBranch) at \(main), in "
+        + rows.map { "row \($0.row) (\($0.requirement)) `\($0.check)`: \($0.message)" }
+        .joined(separator: "; ") + "; main is untouched."
+      if fix {
+        throw stop(
+          command, context, .refused, red + " Fix it in \(context.fix.path) and run it again.",
+          reason: .flowsRed)
+      }
+      let (_, detail) = try await cutFix(command, context)
+      throw Stop(
+        report: report(
+          command, context, .refused, .red, reason: .flowsRed, pre: main, cut: true,
+          message: red + " " + detail))
+    }
+  }
+
+  /// The plan's `qa run --before-merge` reports in the main checkout's runs, where the build
+  /// skill runs them; a report that doesn't decode is passed over.
+  private func beforeMergeReports(_ context: Context) -> [QAReport] {
+    let runs = RunStore(
+      worktreeRoot: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory)
+    ).state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
+    let ids = (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []
+    return ids.filter(RunID.isValid).compactMap { id in
+      let file = runs.appending(path: "\(id)/\(QAReport.directory)/\(QAReport.fileName)")
+      guard let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data),
+        report.plan == plan, report.after == task, report.trialMerge != nil
+      else { return nil }
+      return report
     }
   }
 
@@ -798,9 +884,9 @@ public struct BuildMerge: Sendable {
     reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
     pre: String? = nil, post: String? = nil,
     conflicted: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
-    message: String
+    cut: Bool = false, message: String
   ) -> BuildMergeReport {
-    let cut = status == .conflicted || status == .undone
+    let cut = cut || status == .conflicted || status == .undone
     return BuildMergeReport(
       command: command, plan: plan, task: task, status: status, reason: reason, verdict: verdict,
       runId: context.run.runID, branch: context.branch,
