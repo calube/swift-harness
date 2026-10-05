@@ -21,9 +21,18 @@ and it took 0 ms.
 An `xcodebuild test` whose `-destination` names a simulator (`platform=iOS Simulator,name=<device>`)
 runs with `-destination 'id=<clone>'` instead, on a clone of that device: its `OS=`, or else the
 newest iOS runtime that has it. Clones come from the machine-wide `sim` slots that every simulator
-run shares. `qa run` holds 1 clone across its acceptance rows and gives it back before the first
-flow row brings its own device up. A brownfield gate's area commands lease 1 clone per command.
-With no clone to be had, the command runs as written; a row's message says why.
+run shares. `qa run` holds 1 clone across its acceptance rows and gives it back before its flow
+rows start. With no clone to be had, the command runs as written; a row's message says why.
+
+A brownfield gate leases each area's test clone as the area starts, so the clone boots while the
+area builds, and gives it back once the area is done.
+
+## 1 device for the flow rows
+
+A `qa run`'s flow rows share 1 device, held by a `sim hold --owner-pid` that ends after the last
+row or once the run exits. Each row borrows it under a lease of its own. Its `sim up` uninstalls
+the app and resets the keychain before installing, so no row starts on another's data, and builds
+the app while the device comes up. A row's state rows run before the next row's reset.
 
 ## A runner that never launched
 

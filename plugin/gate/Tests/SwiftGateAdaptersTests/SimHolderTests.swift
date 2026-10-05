@@ -51,14 +51,40 @@ struct SimHolderTests {
     _ simctl: FakeSimctl, agent: FakeAgentDevice = FakeAgentDevice(),
     ownerPID: Int32 = getpid(), timeout: Duration = Self.forever,
     lockTimeout: Duration = .seconds(30), clock: VirtualHoldClock = VirtualHoldClock(),
-    log: LogLines = LogLines()
+    log: LogLines = LogLines(), runOwner: Int32? = nil,
+    isAlive: @escaping @Sendable (Int32) -> Bool = { _ in true }
   ) -> SimHolder {
     let clones = SimulatorClones(
       simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2"),
       ownerPID: ownerPID, lockTimeout: lockTimeout)
     return SimHolder(
       devices: clones, leases: store, agentDevice: agent, worktree: Self.worktree,
-      holderPID: ownerPID, timeout: timeout, clock: clock.clock, log: { log.append($0) })
+      holderPID: ownerPID, owner: runOwner, isAlive: isAlive, timeout: timeout,
+      clock: clock.clock, log: { log.append($0) })
+  }
+
+  @Test(
+    "a hold owned by a process gives its device back once that process exits, with the lease kept until then — catches a qa run's shared device held after the run died"
+  )
+  func ownerExitReleases() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let simctl = FakeSimctl(devices: [Self.base])
+    let ownerAlive = Mutex(true)
+    let clock = VirtualHoldClock()
+    let holding = Task {
+      try await holder(
+        simctl, timeout: .seconds(600), clock: clock, runOwner: 7777,
+        isAlive: { pid in pid == 7777 ? ownerAlive.withLock { $0 } : true }
+      ).hold(runID: "shared")
+    }
+    let lease = try await lease("shared")
+    #expect(Self.harnessDevices(simctl) == [lease.udid])
+
+    ownerAlive.withLock { $0 = false }
+    #expect(
+      try await holding.value == SimHoldOutcome(udid: lease.udid, end: .ownerGone(pid: 7777)))
+    #expect(try store.read(runID: "shared") == nil)
+    #expect(Self.harnessDevices(simctl).isEmpty)
   }
 
   /// Waits, with a real deadline, until a lease names `runID`.

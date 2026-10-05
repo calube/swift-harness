@@ -21,16 +21,31 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
   public var scenario: String?
   /// Which controls `sim verify`'s accessibility rules judge.
   public var audit: SimAuditScope
+  /// The `qa run`'s device the row borrows; `nil` brings a device up for the row alone.
+  public var hold: QAFlowDeviceHold?
 
   public init(
     worktree: URL, runID: String, simDirectory: URL, scenario: String?,
-    audit: SimAuditScope = .everyControl
+    audit: SimAuditScope = .everyControl, hold: QAFlowDeviceHold? = nil
   ) {
     self.worktree = worktree
     self.runID = runID
     self.simDirectory = simDirectory
     self.scenario = scenario
     self.audit = audit
+    self.hold = hold
+  }
+}
+
+/// The 1 device a `qa run` holds for all its flow rows: its hold's run id, and the folder its
+/// holder logs to.
+public struct QAFlowDeviceHold: Sendable, Equatable {
+  public var runID: String
+  public var directory: URL
+
+  public init(runID: String, directory: URL) {
+    self.runID = runID
+    self.directory = directory
   }
 }
 
@@ -268,7 +283,8 @@ public struct QAFlowRow: Sendable, Equatable {
 }
 
 /// Runs flow rows 1 at a time: lint, `sim up`, 1 batch, the requirement's state rows on the
-/// device, `sim down`, then `sim verify`. `sim down` runs on every path once `sim up` was asked,
+/// device, `sim down`, then `sim verify`. With a hold, every row borrows the 1 device it keeps
+/// until ``finish()``, and its `sim up` resets the app before installing it. `sim down` runs on every path once `sim up` was asked,
 /// and `sim verify` runs after it, since crash reports reach the run's `sim/` folder only during
 /// `sim down`.
 public actor QAFlowRunner {
@@ -280,13 +296,37 @@ public actor QAFlowRunner {
 
   private let simulator: any QAFlowSimulating
   private let finalPass: QAFinalPass?
+  private let hold: QAFlowDeviceHold?
+  /// The tree whose rows have asked for the shared device, once 1 has.
+  private var heldIn: URL?
   private var flowRecords: [Int: QAFlowRecord] = [:]
   private var evidenceGaps: [QAEvidenceGap] = []
 
-  /// - Parameter finalPass: set for `qa run --final`, which records each batch and saves its logs.
-  public init(simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil) {
+  /// - Parameters:
+  ///   - finalPass: set for `qa run --final`, which records each batch and saves its logs.
+  ///   - hold: the device every row borrows in turn, held until ``finish()``; `nil` brings a
+  ///     device up for each row.
+  public init(
+    simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil, hold: QAFlowDeviceHold? = nil
+  ) {
     self.simulator = simulator
     self.finalPass = finalPass
+    self.hold = hold
+  }
+
+  /// Gives back the device the rows shared, in the tree they ran in. Returns what went wrong,
+  /// if anything; a run with no row that asked for the device gives nothing back.
+  public func finish() async -> [String] {
+    guard let hold, let worktree = heldIn else { return [] }
+    heldIn = nil
+    let request = QAFlowSimulatorRequest(
+      worktree: worktree, runID: hold.runID, simDirectory: hold.directory, scenario: nil,
+      hold: hold)
+    switch await simulator.down(request) {
+    case .success: return []
+    case .failure(let failure):
+      return ["the flow rows' shared device: sim down \(failure.rule.rawValue): \(failure.message)"]
+    }
   }
 
   /// The flow records of the rows that reached a batch, by row.
@@ -327,7 +367,8 @@ public actor QAFlowRunner {
     let simDirectory = row.directory.appending(path: "sim", directoryHint: .isDirectory)
     let request = QAFlowSimulatorRequest(
       worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil,
-      audit: Self.audit(row))
+      audit: Self.audit(row), hold: hold)
+    if hold != nil { heldIn = row.worktree }
     let started: SimUpStarted
     switch await simulator.up(request) {
     case .failure(let failure):
