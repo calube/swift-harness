@@ -187,4 +187,24 @@ struct BaselineEvidenceStoreTests {
         $0.arguments.contains("--path") && $0.arguments.contains(bundle.path)
       })
   }
+
+  @Test(
+    "a test step pointed at a leased clone still writes the result bundle its request names — catches the leased run dropping the bundle the baseline reads test ids from"
+  )
+  func leasedRunKeepsTheBundle() async throws {
+    let base = FakeAreaCommandRunner { _ in .passed }
+    let request = AreaCommandRequest(
+      area: "app", step: .test,
+      command:
+        "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 17' "
+        + "-resultBundlePath '/junit/app.test.xcresult'",
+      workingDirectory: "/work", deadline: .seconds(60), environment: [:], junitPath: nil,
+      resultBundlePath: "/junit/app.test.xcresult")
+
+    _ = await LeasedDeviceAreaRunner(base: base, leases: FakeTestDeviceLeases()).run(request)
+
+    let leased = try #require(base.requests.first)
+    #expect(leased.command.contains("id=\(FakeDevices.device.udid)"))
+    #expect(leased.resultBundlePath == "/junit/app.test.xcresult")
+  }
 }
