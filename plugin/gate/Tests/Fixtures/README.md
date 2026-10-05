@@ -2510,6 +2510,29 @@ cp $S/qa-runs/20261004T222811Z-0be8aeb0/report.json $F/after-report.json
 
 `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-2` matched nothing.
 
+## qa run: rows still waiting once the build ended
+
+`QA/aidoku-validation-3/` holds what the iOS validation trial's third attempt on `Aidoku/Aidoku`
+left (`evals/results/2026-10-04-brownfield-ios-validation-3/`, finding 1). `validation.json` is the
+plan's table: 2 flow rows and a state row after `confirm-downloads-setting`, and an acceptance row
+after `confirm-downloads-check`. `ledger.json` is the plan's ledger at the end, with
+`confirm-downloads-setting` `abandoned`. `build-events.jsonl` is the build run's
+`events.jsonl`: that task's merge, its GREEN merge gate, then the `final` gate.
+`final-report.json` is the plain `qa run` after `final`: 3 rows `waiting` and GREEN. From the
+repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/QA/aidoku-validation-3
+mkdir -p $F && cp $S/validation.json $F/validation.json
+sed -E 's#/Users/[^/]*/Developer/trials/#/TRIALS/#g' $S/ledger.json > $F/ledger.json
+cp $S/build-events.jsonl $F/build-events.jsonl
+cp $S/qa-runs/20261005T002359Z-7b81c6a7/qa/report.json $F/final-report.json
+```
+
+The `sed` replaces the trial clone's parent folder in each task's `worktree` with `/TRIALS/` and
+changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-3`
+matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
