@@ -1518,12 +1518,12 @@ struct BuildMergeFlowsTests {
     try Self.plan(scenario)
     let old = try await scenario.taskBranch("t1", "B.swift", "b\n")
     let pre = try await scenario.main()
-    try Self.atBaseReport(scenario, runID: "20261005T031853Z-00000000")
     try Self.report(scenario, runID: "20261005T031853Z-00000001", tip: old, base: pre, red: false)
     try await scenario.repo.git("switch", "-q", "search/t1")
     try scenario.repo.write("C.swift", "c\n")
     let tip = try await scenario.repo.commitAll("feat: t1 more work")
     try await scenario.repo.git("switch", "-q", "main")
+    try Self.atBaseReport(scenario, runID: "20261005T031853Z-00000000")
 
     let stale = await scenario.merge("t1")
     try Self.report(scenario, runID: "20261005T031853Z-00000002", tip: tip, base: pre, red: false)
