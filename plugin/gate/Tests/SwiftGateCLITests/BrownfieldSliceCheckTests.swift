@@ -285,7 +285,9 @@ struct BrownfieldSliceCheckTests {
     let head = runner.requests.filter { $0.area == "Aidoku" && $0.step != .lint }
     #expect(
       head.map(\.command)
-        == [test.replacingOccurrences(of: "xcodebuild test ", with: "xcodebuild build-for-testing ")],
+        == [
+          test.replacingOccurrences(of: "xcodebuild test ", with: "xcodebuild build-for-testing ")
+        ],
       "the build-only step compiles the test target on the scheme and destination its tests use")
     #expect(!runner.requests.contains { $0.step == .test || $0.step == .testFiles })
     #expect(context.steps.steps.contains { $0.step == .areaBuild && $0.area == "Aidoku" })

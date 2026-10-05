@@ -43,7 +43,8 @@ struct XcodeBuildForTestingTests {
   func trailingActionIsReplaced() {
     #expect(
       XcodeBuildForTesting.command(
-        fromTest: "xcodebuild -scheme SampleApp -destination 'platform=iOS Simulator,name=iPhone 17' test")
+        fromTest:
+          "xcodebuild -scheme SampleApp -destination 'platform=iOS Simulator,name=iPhone 17' test")
         == "xcodebuild -scheme SampleApp -destination 'platform=iOS Simulator,name=iPhone 17' "
         + "build-for-testing")
   }
@@ -81,7 +82,8 @@ struct XcodeBuildForTestingTests {
     #expect(swapped.name == xcode.name && swapped.root == xcode.root)
     #expect(
       XcodeBuildForTesting.area(
-        Self.area(kind: .swiftpm, test: try Self.trialCommand("test"), build: "swift build")) == nil)
+        Self.area(kind: .swiftpm, test: try Self.trialCommand("test"), build: "swift build")) == nil
+    )
     #expect(XcodeBuildForTesting.area(Self.area(kind: .xcode, test: nil, build: "x")) == nil)
   }
 }

@@ -139,7 +139,8 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
 - **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
   step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
-  `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`,
+  `<config>`'s `[brownfield]` builds only at `slice` (an `xcode` area's slice runs
+  `build-for-testing`, so its test targets compile); its tests and their proof run at `merge`,
   which proves only the tests that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
   running, is marked as unknown; `slice` measures it.
 
