@@ -66,7 +66,8 @@ public struct QACheckJudgement: Sendable, Equatable {
   /// Exit 0 passes, counting the tests a report or result bundle shows passed, unless it shows no
   /// test ran, which is the expected red run at the merge base and `unverified` after the merge.
   /// Any other end keeps its exit-status result, and a red one names its first meaningful failure
-  /// line.
+  /// line, except a failing exit because the simulator never launched the test runner, which is
+  /// `unverified` there and at the merge base alike.
   public static func judge(_ input: Input) -> QACheckJudgement {
     let status: String
     switch input.end {
@@ -83,10 +84,27 @@ public struct QACheckJudgement: Sendable, Equatable {
     case .launchFailed(let reason):
       return QACheckJudgement(result: .unverified, message: "not started: \(reason)")
     }
+    if case .exited = input.end, let launch = launchFailure(input) {
+      return QACheckJudgement(result: .unverified, message: "not verified: \(status): \(launch)")
+    }
     guard let reason = failureLine(input) else {
       return QACheckJudgement(result: .red, message: status)
     }
     return QACheckJudgement(result: .red, message: "\(status): \(reason)")
+  }
+
+  /// Why the test runner never launched, when the output says so and every failing case the
+  /// result bundle or report holds is that same launch failure; a failing test of the code under
+  /// test keeps the run red.
+  private static func launchFailure(_ input: Input) -> String? {
+    guard let reason = TestRunnerLaunchFailure.reason(in: input.stdout + "\n" + input.stderr)
+    else { return nil }
+    let cases = bundleCases(input) ?? input.report.flatMap(JUnitReports.cases) ?? []
+    let realFailure = cases.contains { testCase in
+      guard case .failed(let message) = testCase.outcome else { return false }
+      return TestRunnerLaunchFailure.reason(in: message) == nil
+    }
+    return realFailure ? nil : reason
   }
 
   /// Why the report or result bundle shows no test ran, or `nil` when there is neither or a

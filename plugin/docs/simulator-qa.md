@@ -39,9 +39,9 @@ Rows run in the checkout in layer order: acceptance, flow, state. A red row
 leaves only its own requirement's later-layer rows `unverified`. A requirement's state rows run straight after
 its last flow row, on that flow's device. An acceptance or state check is a shell command run by
 `/bin/sh -c`, or a file under the plan's state directory such as `qa/<name>.state.sh`, run as its own
-program when executable and by `/bin/sh` otherwise. An acceptance check `test: <id>` (or
-`test <area>: <id>`) runs the area's test command narrowed to that test: `-only-testing:<id>` for
-an `xcode` area, writing `qa/<NN>-<req>.acceptance.xcresult`, `test_files` with `{tests}` or `{files}` otherwise. Each gets `QA_PORT`, a loopback port the OS
+program when executable and by `/bin/sh` otherwise. For a `test: <id>` check see
+[`simulator-qa-test-rows.md`](simulator-qa-test-rows.md).
+Each gets `QA_PORT`, a loopback port the OS
 assigned that run, `QA_DIR`, the plan's `qa/` folder, and `QA_EVIDENCE_DIR`, the run's `qa/` folder.
 
 Exit 0 is `pass`; any other exit, a signal or the 10-minute timeout is `red`; a check that couldn't
