@@ -115,3 +115,54 @@ root.
 **Open.**
 - Brownfield telemetry writes no events until `brownfield-gates-record-and-judge` merges.
 - `prove.result` is recorded for owned repositories only until `brownfield-prove-records-results` merges.
+
+## The one-shot loop, up to the freeze
+
+What the self-healing loop over the practice apps added between `a4814182` and the freeze tag
+`harness-freeze-2026-10-05`. Results and open follow-ups: [the results page](2026-10-05-practice-app-results.md).
+
+**Commands.**
+- `swiftgate qa stage <worktree> --plan <plan> --requirement <requirement>` empties a checkout's `.harness/qa/` and
+  copies in the requirement's adopted checks from plan state, for a flow repair. The orchestrator never copies a
+  store file by hand.
+- `swiftgate build no-repair <plan> <task> --reply --qa-run --fix-return` decides a flow row whose repair worker
+  answered `no repair:`. It prints `amend-contract`, `merge-unverified`, `fix-again` or `continue`, and never
+  recommends stopping the build before the cutoff.
+- `build check-return` stores a task's GREEN return as `returns/<task>.json` in the plan's newest build run, where
+  dependents' context packs read its notes. It stores no fixer's or failing return.
+- `build halt --reason` accepts every reason the docs name: `question`, `stall`, `gate-red`, `merge-conflict`,
+  `amend`, `budget`, `permission`. A return's `review-blocked` records as `question` and `design-conflict` as
+  `amend`.
+- `build merge` lands each task on its own green rows, credits an earlier before-merge run only on the exact tree
+  it lands, and merges a task whose rows all wait on other tasks without the at-base run.
+
+**State.**
+- A `qa run` in any checkout of a clone writes to the shared store,
+  `<git common dir>/swift-harness/runs/<run id>/qa/`, so a cited report path outlives the checkout. Every qa run
+  lookup, `build no-repair`, `build merge` and `qa adopt --repair` read it first.
+- `prove` keeps a scratch tree per linked checkout in that checkout's git dir and updates it in place; the
+  warm-up pre-builds the plan checkout's tree. Removing a checkout, or the orphan sweep, removes its kept tree.
+- `prove` also stores a pass under its head tree and changed tests, so `final` reuses the last merge gate's
+  prove on the same head.
+- Flow records keep launch, settle and capture times. A recorded qa run takes 1 snapshot per check and fills
+  each check's image from the video's frame.
+- Review defers a verified finding whose test needs a sibling task's code to that sibling. The return names each
+  deferral, the owning task's pack quotes it, and `view.json` lists it.
+
+**Run sessions.** The PreToolUse hook runs each orchestrator Bash call with aliases cleared, `noclobber` off and
+stdin empty, and caps a foreground `timeout` at 120 s unless the call runs `swiftgate`. The write guard resolves a
+`cd` chain across lines, a `cd $NAME` to a literal set earlier, and a `cd` into a directory a literal `mkdir -p`
+made.
+
+**Rule ids** (each has a row in `plugin/docs/standards.md`):
+- `qa.flow-transient-state`: a warning, never gating, for a flow that waits for a state to appear and then checks
+  it under a scenario that doesn't hold it.
+- `a11y.input-label`: a text input with an accessibility identifier and no label, in lint and on a slice's changed
+  lines.
+- `test.yield-loop`: a counted `Task.yield` loop standing in for a clock.
+- `plan-lint.validation-clock-unheld`: a clock-driven screen checked by a flow while the contract names no held
+  scenario.
+- `plan-lint.validation-obstacle-seedable`: a requirement excused from a flow by a moving or random entity while a
+  brief gives the app a seed or a launch scenario.
+- `guard.foreground-timeout`: the 120 s foreground cap above.
+- `build-merge.at-base-unchecked`: `build merge` refused to credit a row's pass that the at-base run never took.

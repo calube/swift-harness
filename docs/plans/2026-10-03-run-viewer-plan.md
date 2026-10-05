@@ -1,13 +1,9 @@
 # Run viewer: implementation plan
 
 <!-- RESUME
-Status (2026-10-04, 03:45): waves 1-3 merged on local main (unpushed): page, fixtures, contract, reader, builder,
-report (`swiftgate report --html` ships), span events, prove results (owned repos), tool summaries, builder fold,
-skill and workflow spans, now strip; trailing board and plan graph merged early. In flight: view-serves-live-changes
-(live mode). Next: brownfield-runs-carry-spans-and-covers (must fold slug-tagged pre-build spans into the plan's
-build run), a follow-up so the build skill passes `buildRun` to build-task.js and span calls move into the
-workers' prompts (no extra haiku agents), span-run-is-captured, docs. Real report:
-https://claude.ai/artifact/U2Naqajhx33W3ypEakiqeM
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): the report, live mode (`swiftgate view`), span events, the brownfield spans and the
+docs merged; plugin/docs/run-viewer.md describes what shipped. The page doesn't yet render the deferred list.
 Spec: docs/designs/2026-10-03-run-viewer-design.md (approved 2026-10-03, 17 decisions in its §3, 15 of them the
 user's). Read its RESUME header, §3, §4, §6 and §7.
 Scope: `span.start`, `span.end`, `prove.result`, `agent.tools` and `gate.step.startMs`; `swiftgate events span
@@ -25,7 +21,7 @@ Resume: read this header, then "Wave map", then your task's section (grep for th
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan".
 Interfaces note: docs/handoffs/run-viewer-interfaces.md (the first wave's merge creates it; each wave appends).
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning

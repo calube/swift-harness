@@ -6,6 +6,9 @@ the procedure the orchestrator actually used for waves 1–5. Workers never read
 
 ## Kickoff prompt for a fresh orchestrator session
 
+The harness is frozen at the tag `harness-freeze-2026-10-05` with no wave queued; see
+[the practice-app results](2026-10-05-practice-app-results.md). Use this prompt only if work resumes.
+
 Start a NEW Claude Code session in the repo root, then paste:
 
 > You are the orchestrator for sub-project 2 of swift-harness. On a machine that has never run a wave, do the
@@ -45,7 +48,9 @@ The maintainer chose build speed until a cleanup on 2026-10-04. Until this secti
 ## Lessons from the brownfield one-shot loop (2026-10-04 to 2026-10-05)
 
 A self-healing loop ran practice apps as brownfield one-shots (`swiftgate run spec.md`, zero input, 40 min
-box). Each failing trial became one fix worker per finding, then another attempt. Four of seven apps passed.
+box). Each failing trial became one fix worker per finding, then another attempt. All seven apps passed; the
+[results page](2026-10-05-practice-app-results.md) has the numbers and the open follow-ups. The harness froze at the
+tag `harness-freeze-2026-10-05`.
 
 - **Run trials one at a time.** Two trials at once pushed load to 300–900, and both runs' devices took the
   machine's two `sim` slots, so gate tests and qa runs waited 600–800 s. The first two solo runs on the fixed
@@ -56,21 +61,35 @@ box). Each failing trial became one fix worker per finding, then another attempt
   rediscovering it. Reports name PASS/FAIL, measures, rows, the top 5 time sinks, and findings with a file and a
   generic fix.
 - **Send a trial's finding to a running worker that already owns the code** with SendMessage, rather than
-  starting a second worker on the same files. Tell running workers when main moves under them.
+  starting a second worker on the same files. Tell running workers when main moves under them, and only running
+  ones: a message to a finished subagent wakes it, and it spends a turn redoing work that already merged.
 - **Each failure moved further down the pipeline.** Rough order of what blocked passes: config clash, no flow
   rows, shared simulator, hung tests, cutoff estimates, stuck waits, task status vs merged code, flow step shape.
   Expect each attempt to find the next blocker, and judge progress by where the run stopped.
 - **After each batch of merges, run the full suite on main.** Individually green branches broke main about
-  once per batch: an unregistered rule id, a `.harness` literal outside `RunLayout`, a stale calibration record
-  after an agent prompt changed, or a test helper writing into the system temp folder. A main-red worker fixes
-  them; merge conflicts in shared files go back to the branch's own worker.
+  once per batch: an unregistered rule id, a rule name a check enumerates (such as the skill-commands list of
+  rules plan-lint can't report), a stale captured snapshot, a `.harness` literal outside `RunLayout`, a stale
+  calibration record after an agent prompt changed, or a test helper writing into the system temp folder. Expect
+  one such red per batch. A main-red worker fixes them; merge conflicts in shared files go back to the branch's
+  own worker.
+- **Require evidence before writing a rule from one failure.** A rule written from a single trial can
+  over-correct the next: telling the fixer to treat a moving state as a timing race hid a real app defect one
+  attempt later. Requiring the fixer to reproduce what the red row's frames show, in a unit test, before naming
+  a cause fixed both cases.
+- **Load-dependent flakes are one class: a test waiting on wall-clock time.** Every flake that only failed under
+  load waited on a deadline or a poll. Make the test wait on a signal or a clock it moves, and give suites with
+  unbounded waits a time limit. Don't rerun it at low load and call it fixed.
+- **Measure a speed change under comparable load** before merging it, against a baseline taken the same way.
+  Park a change with no reliable measured win as a `*-unmerged` branch and record the measurement, rather than
+  merging it on reasoning alone.
 - **Changing `build-worker.md` or `build-fixer.md` stales the build calibration.** The worker that changed it
   runs `swiftgate calibrate build` once (about $0.15) and commits `last-pass.json`.
 - **Never run a bare `ls` in this shell.** `ls` is an `eza` alias that, with no path, reads paths from the Bash
   tool's never-closing stdin and hangs until killed. Hung `eza` processes outlive their worker; kill them by PID.
   Every worker brief says to name the folder.
-- **Scan the unpushed diff as its own step before `git push`**, for home paths, emails, secrets and the trial
-  folder names, and read the result before pushing.
+- **Scan the unpushed diff as its own step before `git push`**, for home paths, emails, secrets, the trial
+  folder names, and any app name or domain word the maintainer hasn't cleared for the public repo, and read the
+  result before pushing. Fix briefs and commit messages use generic wording ("entities", "a swipe").
 - **Check fixtures for machine paths before merging a branch that captured trial data.**
 - **Remove merged worktrees.** 163 of them held 265 GB of build output.
 

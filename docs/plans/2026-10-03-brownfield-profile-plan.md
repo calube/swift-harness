@@ -1,13 +1,11 @@
 # Brownfield profile: implementation plan
 
 <!-- RESUME
-Status (2026-10-04, 03:45): waves 1 and 2 merged on local main (unpushed), plus merge-and-final, slice, warm-up and
-these fixes: one config writer, executor on the plan branch, CI mining and readers emit area-root commands, ingest
-of streamed usage. In flight: run-prepares-and-launches, brownfield-gates-record-and-judge (brownfield telemetry,
-live slice judge, `swiftgate judge diff-risk`, reader/halt layout), xcode-add-file-edits-explicit-projects,
-brownfield-prove-records-results. Next: the 3 trials (glean, memos, koel; memos first), then the docs task.
-Speed mode is on until the cleanup (worker brief). Merge procedure: union-merge list conflicts, resolve code by
-hand, then `swift build --package-path plugin/gate --build-tests` before the next merge.
+Status: FROZEN at the harness freeze (2026-10-05). main is at the freeze tag `harness-freeze-2026-10-05`, and all 7 practice apps pass the brownfield one-shot. Results and the open follow-ups, none started: docs/handoffs/2026-10-05-practice-app-results.md. No wave is in flight and none is next.
+History (before the freeze): `discover`, `run`, the `slice`, `merge` and `final` tiers, the warm-up and the run
+skill shipped, and the brownfield profile then ran the self-healing loop over the practice apps. Of the 3 planned trial
+repositories only memos ran (evals/results/2026-10-04-brownfield-*); git log is the record of which tasks merged.
+Interfaces up to the freeze: docs/handoffs/brownfield-interfaces.md.
 Spec: docs/designs/2026-10-03-brownfield-profile-design.md (approved 2026-10-03, 16 user decisions). Read its RESUME
 header, §3, §5, §8 and §17.
 Scope: the per-clone state root and config under the git common dir; `swiftgate discover` and `discover --apply`
@@ -25,7 +23,7 @@ Resume: read this header, then "Wave map", then your task's section (grep for th
 Orchestrator procedure: docs/handoffs/subproject-2-orchestrator-runbook.md, with the changes in "How to work this plan".
 Interfaces note: docs/handoffs/brownfield-interfaces.md (the first wave's merge creates it; each wave appends).
 Build for correctness (user decision): every task is surface-first, on opus, through the push + prove merge gate.
-Progress: git log. Update this header at every wave merge.
+Progress: git log. Update this header if work resumes after the freeze.
 -->
 
 ## Decisions made while planning
