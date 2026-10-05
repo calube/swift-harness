@@ -1,0 +1,76 @@
+schema = 1
+
+[harness]
+profile = "brownfield"
+
+[brownfield]
+discovered_at = "f6238752556cfe66ae486229a03ac6abfdb2a5dc"
+slice_budget_s = 30
+time_budget_min = 0
+sensitive = []
+
+[[areas]]
+name = "APIClient"
+root = "Packages/APIClient"
+language = "swift"
+kind = "swiftpm"
+test = "swift test --parallel --xunit-output {junit}"
+test_files = "swift test --parallel --xunit-output {junit} --filter {tests}"
+build = "swift build"
+test_globs = ["Packages/APIClient/Tests/**/*.swift"]
+packs = []
+
+[[areas]]
+name = "AppFeature"
+root = "Packages/AppFeature"
+language = "swift"
+kind = "swiftpm"
+test = "swift test --parallel --xunit-output {junit}"
+test_files = "swift test --parallel --xunit-output {junit} --filter {tests}"
+build = "swift build"
+test_globs = ["Packages/AppFeature/Tests/**/*.swift"]
+packs = []
+
+[[areas]]
+name = "LogClient"
+root = "Packages/LogClient"
+language = "swift"
+kind = "swiftpm"
+test = "swift test --parallel --xunit-output {junit}"
+test_files = "swift test --parallel --xunit-output {junit} --filter {tests}"
+build = "swift build"
+test_globs = ["Packages/LogClient/Tests/**/*.swift"]
+packs = []
+
+[[areas]]
+name = "InterviewStarter"
+root = "."
+language = "swift"
+kind = "xcode"
+test = "xcodebuild test -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation"
+build = "xcodebuild build -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
+test_globs = ["UITests/**/*.swift"]
+packs = []
+
+[areas.xcode]
+project = "InterviewStarter.xcodeproj"
+inclusion = "synchronized"
+schemes = ["InterviewStarter"]
+packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]
+
+[judge]
+backend = "claude"
+advisory_threshold = 0.6
+block_threshold = 0.9
+
+[build.presets.brownfield]
+design_tier = "none"
+max_parallel = 3
+review = "classified"
+task_gate = "slice"
+merge_gate = "merge"
+worker_model = "claude-sonnet-5-5"
+time_budget_min = 40
+stop_starts_before_min = 13
+on_design_conflict = "amend"
+task_proof = "prove"
