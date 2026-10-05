@@ -12,6 +12,8 @@ public struct DeferredFinding: Sendable, Equatable, Encodable {
   public let finding: String
 
   public static let linePrefix = "deferred to "
+  /// The heading a worker pack quotes the deferrals its task owns under.
+  public static let packHeading = "Review findings deferred to this task"
 
   public init(task: String, sibling: String, finding: String) {
     self.task = task

@@ -5407,3 +5407,22 @@ git -C $C log --reverse --format=%H eb3edcf..25bd815 > $F/branch-commits.txt
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
+
+## Build return: a deferred finding nobody owned
+
+`BuildReturn/deferral-owner/engine-return-and-ledger.json` holds a 2026-10-05 brownfield practice
+trial's engine task return's `review:` and `deferred to` notes lines, and each ledger task's id,
+deps and status at the run's end. The review deferred a verified major to a sibling that had
+already merged; no task wrote the test and the run report never named it. `T` is the trial's
+harness-runs folder and `SCRUB` a rename script outside this repository, since its pairs name the
+app:
+
+```sh
+python3 $SCRUB $T/state/build/<build run>/returns/engine-core.json $T/ledger.json \
+  > plugin/gate/Tests/Fixtures/BuildReturn/deferral-owner/engine-return-and-ledger.json
+```
+
+The script keeps only those 2 notes lines and renames the screen task's id and the app-specific
+words in the finding's path and title to generic ones (`screen-ui`, `EngineTests`,
+`SimulationTests`, `Spawning`, `spawns on`). The other ids, the severity and the line's shape are as
+captured. `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
