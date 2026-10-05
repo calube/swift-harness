@@ -19,6 +19,8 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let abandoned: [CutoffDecision]
   /// Tasks that never started and stay as they are.
   let notStarted: [String]
+  /// Every decision with the exact commands it leaves to run, in order: run them as written.
+  var steps: [CutoffStep] = []
   /// Where the decisions were written for the report.
   let path: String
   /// Gates that were still running in an abandoned task's worktree, each as `<tier> in <path>`.
