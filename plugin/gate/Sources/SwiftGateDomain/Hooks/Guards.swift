@@ -45,7 +45,7 @@ public enum BashGuard {
       if let violation = evaluate(simple) { return violation }
     }
     return processMatchWait(command, inSubagent: inSubagent) ?? bareListing(command)
-      ?? truncatedQARun(command) ?? timedQARun(command)
+      ?? bareReader(command) ?? truncatedQARun(command) ?? timedQARun(command)
   }
 
   /// A `swiftgate qa run` started under `timeout` or `gtimeout`. A kill leaves no report, and
@@ -181,6 +181,52 @@ public enum BashGuard {
           + "folder: `ls .` or `ls <dir>`.")
     }
     return nil
+  }
+
+  /// A stdin reader, such as `cat` or `grep pattern`, given no file and fed by no pipe, heredoc,
+  /// here-string or `<`, outside a loop whose input is fed. The Bash tool's stdin stays open
+  /// whenever the command holds a heredoc, so the reader waits until the tool's timeout. Heredoc
+  /// text is another program's input.
+  private static func bareReader(_ command: String) -> GuardViolation? {
+    let parsed = ShellSyntax.parse(command)
+    let fed = fedLoopCommands(parsed)
+    for (index, entry) in parsed.enumerated()
+    where !entry.isHeredocBody && !entry.hasInputRedirect && !entry.links.contains(.pipe)
+      && !fed.contains(index)
+    {
+      let words = Array(entry.words.drop(while: compoundPrefixes.contains))
+      let simple = ShellSyntax.normalize(words)
+      guard let name = simple.name, StdinReaders.waits(name, simple.arguments) else { continue }
+      let spelled = ([name] + simple.arguments).joined(separator: " ")
+      return GuardViolation(
+        ruleID: bareStdinReaderRuleID,
+        reason:
+          "`\(spelled)` names no file, and no pipe, heredoc or `<` feeds it, so it reads stdin. "
+          + "This Bash call's stdin never closes when the command holds a heredoc, and a shell "
+          + "alias can turn a command that reads a file into one that reads stdin, so it waits "
+          + "until the tool's timeout. Name the file it reads, feed it (`… | \(name)`, "
+          + "`<<'EOF'`), or drop it; bound a `read` with `-t <seconds>`.")
+    }
+    return nil
+  }
+
+  /// The indices of the commands inside a `while`, `until`, `for` or `select` loop whose input
+  /// a pipe or a `<` on its `done` feeds, from the loop's first command to its `done`.
+  private static func fedLoopCommands(_ parsed: [ParsedCommand]) -> Set<Int> {
+    var open: [(start: Int, piped: Bool)] = []
+    var fed: Set<Int> = []
+    for (index, entry) in parsed.enumerated() where !entry.isHeredocBody {
+      for word in entry.words {
+        if ["while", "until", "for", "select"].contains(word) {
+          open.append((index, entry.links.contains(.pipe)))
+        } else if !compoundPrefixes.contains(word) {
+          break
+        }
+      }
+      guard entry.words.first == "done", let loop = open.popLast() else { continue }
+      if loop.piped || entry.hasInputRedirect { fed.formUnion(loop.start...index) }
+    }
+    return fed
   }
 
   /// Reserved words that may stand before a command inside a compound command.

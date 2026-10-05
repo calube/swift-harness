@@ -1,0 +1,10 @@
+[
+  {
+    "tool_input": {
+      "command": "/CLONE/.git/swift-harness/plans/spec/out/complete.sh amount-rules w51ndw6tz wf_99f05379-160",
+      "description": "Ingest and check amount-rules return",
+      "timeout": 600000
+    },
+    "result": "  \"phase\" : \"normal\",\nevents ingest: 47 tool calls read, 13 windows new, 0 already stored, 1 paths outside the repository dropped\ncheck exit 0\n  \"verdict\" : \"GREEN\","
+  }
+]

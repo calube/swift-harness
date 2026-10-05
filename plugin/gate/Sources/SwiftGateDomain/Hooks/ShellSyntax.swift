@@ -34,6 +34,8 @@ struct ParsedCommand {
   let links: [ShellLink]
   /// Run by the line's own shell: not a substitution, heredoc text or a `sh -c`/`eval` script.
   let isTopLevel: Bool
+  /// Whether a redirection feeds its stdin: `<`, a heredoc, a here-string, `<&` or `<(…)`.
+  let hasInputRedirect: Bool
 }
 
 public enum ShellSyntax {
@@ -53,7 +55,8 @@ public enum ShellSyntax {
     var result = [
       ParsedCommand(
         command: command, isHeredocBody: parsed.isHeredocBody, words: parsed.words,
-        links: parsed.links, isTopLevel: depth == 0 && parsed.depth == 0 && !parsed.isHeredocBody)
+        links: parsed.links, isTopLevel: depth == 0 && parsed.depth == 0 && !parsed.isHeredocBody,
+        hasInputRedirect: parsed.hasInputRedirect)
     ]
     guard depth < maxDepth, let name = command.name else { return result }
     var script: String?
@@ -125,6 +128,7 @@ public enum ShellSyntax {
     var isHeredocBody: Bool
     var links: [ShellLink]
     var depth: Int
+    var hasInputRedirect: Bool
   }
 
   private static func words(in characters: [Character], depth: Int, isHeredocBody: Bool)
@@ -158,6 +162,7 @@ public enum ShellSyntax {
     private var operand: Operand?
     private var heredocs: [(delimiter: String, stripsTabs: Bool, quoted: Bool)] = []
     private var links: [ShellLink] = []
+    private var hasInputRedirect = false
     /// Whether the word being read had a quote or backslash, which makes a heredoc literal.
     private var wordQuoted = false
     /// The index in ``commands`` of the current line's first command.
@@ -294,6 +299,7 @@ public enum ShellSyntax {
         }
         return
       }
+      hasInputRedirect = true
       switch peek(0) {
       case "<" where peek(1) == "<":
         index += 2
@@ -457,11 +463,12 @@ public enum ShellSyntax {
         commands.append(
           Tokenized(
             words: words, redirectTargets: redirectTargets, isHeredocBody: isHeredocBody,
-            links: links, depth: depth))
+            links: links, depth: depth, hasInputRedirect: hasInputRedirect))
         links = []
       }
       words = []
       redirectTargets = []
+      hasInputRedirect = false
     }
   }
 }

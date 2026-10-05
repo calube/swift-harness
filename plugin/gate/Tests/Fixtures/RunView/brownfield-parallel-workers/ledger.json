@@ -1,0 +1,144 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-fake-client"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 450,
+      "gate" : "slice",
+      "id" : "chat-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-chat-contract",
+      "writeSet" : [
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/ChatClient/",
+        "Packages/AppFeature/Tests/ChatClientTests/",
+        "Packages/AppFeature/Sources/AppCore/",
+        "Packages/AppFeature/Sources/AppUI/",
+        "Packages/AppFeature/Tests/AppCoreTests/",
+        "App/InterviewStarterApp.swift",
+        ".swiftgate.toml"
+      ]
+    },
+    {
+      "branch" : "spec/chat-list",
+      "covers" : [
+        "req-list-launch",
+        "req-list-load-failure",
+        "req-unit-tests",
+        "req-existing-tests"
+      ],
+      "deps" : [
+        "chat-contract"
+      ],
+      "estLines" : 220,
+      "gate" : "slice",
+      "id" : "chat-list",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-chat-list",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/ConversationListFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/ConversationListView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ConversationListFeatureTests.swift",
+        "UITests/LaunchFlowUITests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/chat-thread",
+      "covers" : [
+        "req-send-confirm",
+        "req-send-retry",
+        "req-unit-tests"
+      ],
+      "deps" : [
+        "chat-contract"
+      ],
+      "estLines" : 280,
+      "gate" : "slice",
+      "id" : "chat-thread",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-chat-thread",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/ThreadFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/ThreadView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ThreadFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/chat-root",
+      "covers" : [
+        "req-thread-open",
+        "req-preview-update"
+      ],
+      "deps" : [
+        "chat-contract"
+      ],
+      "estLines" : 150,
+      "gate" : "slice",
+      "id" : "chat-root",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-chat-root",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/AppView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-list-launch",
+        "req-list-load-failure",
+        "req-thread-open",
+        "req-send-confirm",
+        "req-send-retry",
+        "req-preview-update"
+      ],
+      "deps" : [
+        "chat-contract"
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "chat-contract"
+    ],
+    [
+      "chat-list",
+      "chat-root",
+      "chat-thread"
+    ],
+    [
+      "spec-validation"
+    ]
+  ]
+}
