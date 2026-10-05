@@ -201,6 +201,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     /// A validation row runs after this task and another whose worker's gate passed at its
     /// branch's tip with its return not yet checked, so 1 trial merge of both is minutes away.
     case flowsPending = "flows-pending"
+    /// The fixer's branch holds another task's commits that task's own merge hasn't landed: the
+    /// fix worktree took its branch in for a RED run over both.
+    case fixCarriesUnmerged = "fix-carries-unmerged"
   }
 
   /// Whether `main` was checked against the run's last merge.

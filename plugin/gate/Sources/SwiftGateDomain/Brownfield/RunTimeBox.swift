@@ -175,17 +175,52 @@ public enum CutoffAction: String, Sendable, Equatable, Codable, CaseIterable {
   case notStarted = "not-started"
 }
 
+/// Where a gating task's `qa run --before-merge` stands when the cutoff prices its landing.
+public enum CutoffQA: Sendable, Equatable {
+  /// No validation row runs before its merge.
+  case notNeeded
+  /// A GREEN or conflicted run covers each of its own rows at its tip on the plan branch's head.
+  case green(runID: String)
+  /// A run is still owed: the newest run of its rows took this many whole seconds, or 0 when
+  /// none is recorded.
+  case owed(seconds: Int)
+  /// The newest run of its own rows is RED in 1 of them and its fixer's newest checked return is
+  /// `gate-red`: no run is left that could land it.
+  case redAfterFix(runID: String)
+
+  /// - Parameters:
+  ///   - reports: the plan's `qa run --before-merge` reports that merged `task`'s branch, first or
+  ///     alongside another.
+  ///   - latestCheck: the build run's newest `build check-return` of the task or its fixer.
+  public static func of(
+    table: ValidationTable, merged: Set<String>, plan: String, task: String,
+    reports: [QAReport], branch: String, tip: String, base: String,
+    latestCheck: BuildEvent.ReturnCheck?
+  ) -> CutoffQA {
+    .notNeeded
+  }
+}
+
 public struct CutoffTask: Sendable, Equatable {
   public let id: String
   public let stage: CutoffTaskStage
-  /// What a gating task's `qa run --before-merge` still costs, in whole seconds: 0 when a GREEN
-  /// run already covers its branch's tip on the plan branch's head, or no row needs one.
-  public let beforeMergeQASeconds: Int
+  /// Where a gating task's `qa run --before-merge` stands.
+  public let qa: CutoffQA
 
-  public init(id: String, stage: CutoffTaskStage, beforeMergeQASeconds: Int = 0) {
+  /// What a gating task's `qa run --before-merge` still costs, in whole seconds.
+  public var beforeMergeQASeconds: Int {
+    if case .owed(let seconds) = qa { return seconds }
+    return 0
+  }
+
+  public init(id: String, stage: CutoffTaskStage, qa: CutoffQA = .notNeeded) {
     self.id = id
     self.stage = stage
-    self.beforeMergeQASeconds = beforeMergeQASeconds
+    self.qa = qa
+  }
+
+  public init(id: String, stage: CutoffTaskStage, beforeMergeQASeconds: Int) {
+    self.init(id: id, stage: stage, qa: .owed(seconds: beforeMergeQASeconds))
   }
 }
 
