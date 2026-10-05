@@ -2,6 +2,9 @@
 
 A Claude Code plugin holding SwiftUI iOS work to a consistent bar. Full docs: [`docs/index.md`](docs/index.md).
 
+Status: frozen at `harness-freeze-2026-10-05`; see
+[`docs/handoffs/2026-10-05-practice-app-results.md`](docs/handoffs/2026-10-05-practice-app-results.md).
+
 This file is for contributors: people building the harness itself. The plugin that consumers
 install is [`plugin/`](plugin/): skills, agents, hooks, workflows, templates, the `swiftgate`
 source in `plugin/gate/`, and the reference docs skills read at runtime

@@ -3,6 +3,10 @@
 The one routing surface for this repo's docs. Every doc is reachable from here, by a link on this
 page or through an area index below.
 
+Status: the harness froze at the tag `harness-freeze-2026-10-05`, with all 7 practice apps passing the
+brownfield one-shot. The [practice-app results](handoffs/2026-10-05-practice-app-results.md) list the open
+follow-ups.
+
 ## If you're… → Read
 
 | If you're… | Read |
@@ -23,7 +27,7 @@ page or through an area index below.
 | Researching why `/swift-harness:ship` is too slow for a coding interview (trial run 2 evidence) | [`handoffs/2026-09-27-interview-trial-run-2.md`](handoffs/2026-09-27-interview-trial-run-2.md) |
 | Looking up why a review-severity rule exists | [`adrs/README.md`](adrs/README.md) |
 | Reading or extending a design (Foundation, design & plan workflows, …) | [`designs/README.md`](designs/README.md) |
-| Picking up mid-build, or handing work to the next session | [`handoffs/2026-09-25-subproject-2.md`](handoffs/2026-09-25-subproject-2.md), today's queue [`handoffs/2026-09-28-day-queue.md`](handoffs/2026-09-28-day-queue.md), [`handoffs/2026-09-25-subproject-2-brainstorm-decisions.md`](handoffs/2026-09-25-subproject-2-brainstorm-decisions.md), [`handoffs/worker-brief.md`](handoffs/worker-brief.md), [`handoffs/subproject-2-interfaces.md`](handoffs/subproject-2-interfaces.md), [`handoffs/subproject-2-orchestrator-runbook.md`](handoffs/subproject-2-orchestrator-runbook.md), the sign-off review and its fix waves [`handoffs/subproject-2-review.md`](handoffs/subproject-2-review.md) |
+| Picking up after the freeze, or handing work to the next session | [`handoffs/2026-09-25-subproject-2.md`](handoffs/2026-09-25-subproject-2.md) (frozen RESUME), the old day queue [`handoffs/2026-09-28-day-queue.md`](handoffs/2026-09-28-day-queue.md), [`handoffs/2026-09-25-subproject-2-brainstorm-decisions.md`](handoffs/2026-09-25-subproject-2-brainstorm-decisions.md), [`handoffs/worker-brief.md`](handoffs/worker-brief.md), [`handoffs/subproject-2-interfaces.md`](handoffs/subproject-2-interfaces.md), [`handoffs/subproject-2-orchestrator-runbook.md`](handoffs/subproject-2-orchestrator-runbook.md), the sign-off review and its fix waves [`handoffs/subproject-2-review.md`](handoffs/subproject-2-review.md) |
 | Building sub-project 2 (design & plan workflows): tasks, waves, merge points | [`plans/2026-09-25-design-plan-workflows-plan.md`](plans/2026-09-25-design-plan-workflows-plan.md) |
 | Building sub-project 5 (the build executor, `/build` and `/ship`): tasks, waves, merge points | [`plans/2026-09-26-build-executor-plan.md`](plans/2026-09-26-build-executor-plan.md), design [`designs/2026-09-26-build-executor-design.md`](designs/2026-09-26-build-executor-design.md), interfaces [`handoffs/subproject-5-interfaces.md`](handoffs/subproject-5-interfaces.md) |
 | Building the fast modes (`surface-check`, `/sprint`): tasks, waves, merge points | [`plans/2026-09-27-fast-modes-plan.md`](plans/2026-09-27-fast-modes-plan.md), design [`designs/2026-09-27-fast-modes-design.md`](designs/2026-09-27-fast-modes-design.md), [ADR 0003](adrs/0003-ship-may-skip-the-design-step.md) |
