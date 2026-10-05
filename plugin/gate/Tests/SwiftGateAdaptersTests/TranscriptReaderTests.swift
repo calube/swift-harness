@@ -72,6 +72,34 @@ struct TranscriptReaderTests {
   }
 
   @Test(
+    "each subagent carries the agent type its .meta.json names, and a Workflow agent the task of its Workflow once the Workflow's record says it ended, whether completed or killed — catches a fixer or a killed worker the session's ingest can't tag"
+  )
+  func subagentsCarryTheirTypeAndEndedWorkflowTask() throws {
+    let directory = try Self.copy()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let session = "cb039a0d-04f4-428a-b575-e73a1e11d628"
+    let workflow = directory.appending(path: "\(session)/workflows/wf_b303df48-6fa.json")
+
+    let files = try TranscriptReader().session(at: directory.appending(path: "\(session).jsonl"))
+    func file(_ id: String) throws -> TranscriptFile {
+      try #require(files.first { $0.agentID == id })
+    }
+
+    #expect(try file("ac257d99cb5b5a4ef").agentType == "swift-harness:build-fixer")
+    #expect(try file("ac257d99cb5b5a4ef").endedWorkflowTask == nil)
+    #expect(try file("a5db10195f7f6c10e").agentType == "general-purpose")
+    #expect(try file("a441498174c3ea0c9").agentType == "swift-harness:build-worker")
+    #expect(try file("a441498174c3ea0c9").endedWorkflowTask == "detail-screen")
+    #expect(try file("a9be2609f6cf3af37").endedWorkflowTask == "watchlist-screen")
+
+    let running = try String(contentsOf: workflow, encoding: .utf8)
+      .replacingOccurrences(of: "\"killed\"", with: "\"running\"")
+    try Data(running.utf8).write(to: workflow)
+    let live = try TranscriptReader().session(at: directory.appending(path: "\(session).jsonl"))
+    #expect(live.first { $0.agentID == "a441498174c3ea0c9" }?.endedWorkflowTask == nil)
+  }
+
+  @Test(
     "a missing transcript or directory fails without naming its path — catches a path leaking into a message"
   )
   func missingFilesFailWithoutPaths() throws {

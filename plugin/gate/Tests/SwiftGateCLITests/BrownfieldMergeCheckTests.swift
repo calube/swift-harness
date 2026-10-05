@@ -247,6 +247,44 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "on the third price-tracker trial's areas, after a merge gate that touched the client and feature packages, the cutoff's price of final names LogClient's build and test as the only steps left, exactly the steps final then runs — catches a price whose keys drift from the ones final looks up"
+  )
+  func finalPriceNamesTheStepsFinalRuns() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-3-config.toml"))
+    let changed = [
+      "Packages/APIClient/Sources/APIClientLive/CoinGeckoLive.swift",
+      "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+    ]
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+    _ = try await Self.run(
+      clone, tier: .merge, areas: config.areas, changed: changed,
+      runner: FakeAreaCommandRunner { _ in .passed },
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+
+    let priced = FinalGateReuse.areas(
+      config.areas, inputs: GateReuse.Inputs(
+        tier: .final, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+        stateFiles: ["config": "c1"]),
+      repositoryRoot: clone.root.path(percentEncoded: false), layout: clone.layout,
+      passed: { store.pass($0) != nil })
+    let final = FakeAreaCommandRunner { _ in .passed }
+    _ = try await Self.run(
+      clone, tier: .final, areas: config.areas, changed: changed, runner: final,
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+
+    #expect(priced.map(\.name) == config.areas.map(\.name))
+    let left = Set(priced.flatMap { area in area.unreused.map { "\(area.name) \($0.rawValue)" } })
+    #expect(left == ["LogClient build", "LogClient test"])
+    #expect(left == Set(final.requests.map { "\($0.area) \($0.step.rawValue)" }))
+  }
+
+  @Test(
     "each gate step is labelled by what it built: final's reused area steps read reused, a prove that ran nothing reads none, and a prove whose reverted SwiftPM run builds in a fresh scratch tree reads cold — catches 0 s steps labelled cold or none, which skew warm and cold gate times"
   )
   func stepsAreLabelledByWhatTheyBuilt() async throws {

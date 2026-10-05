@@ -1,0 +1,8 @@
+{
+  "agentType": "swift-harness:build-fixer",
+  "description": "Fix red watchlist flows",
+  "model": null,
+  "requestShape": "background",
+  "spawnDepth": 1,
+  "workflowPhase": null
+}

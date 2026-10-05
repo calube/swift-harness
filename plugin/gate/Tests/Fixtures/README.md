@@ -3871,3 +3871,68 @@ task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`.
 leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
 differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans, fixer and reasons
+
+The third price-tracker trial (2026-10-05) priced its unrun `final` at the cutoff as its 227 s
+merge gate plus 60 s, while the real `final` took 35 s with 6 of its 8 area steps reused; its
+validation agent waited on `pgrep -f` through the Monitor tool after the guard denied the same
+wait in Bash; its run-end ingest filed the fixer as the orchestrator and the worker of the
+Workflow the cutoff killed with no role; 3 spans never ended; `build next` kept the refused
+watchlist-screen ready to merge while its fixer worked; and plan import took a reason-only row
+with no obstacle. `T` is the trial folder under the practice-trial runs folder, its clone's state
+copied as `state/` and its transcripts as `transcripts/`. From the repository root:
+
+```sh
+S=$T/state R=$S/plans/spec/build/20261005T055727Z-2fbf5ab4 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $R/events.jsonl $F/price-tracker-3-build-events.jsonl
+cp $R/cutoff.json $F/price-tracker-3-cutoff.json
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/price-tracker-3-gate-runs.jsonl
+grep '"runID":"20261005T062852Z-66a265fc"' $S/events/gate.jsonl | grep '"kind":"gate.step"' \
+  > $F/price-tracker-3-final-steps.jsonl
+cp $S/warmup/f0bd7c247ed6a4afd220dfad6893cc719ca66bfa.json $F/price-tracker-3-warmup.json
+cp $S/config.toml $F/price-tracker-3-config.toml
+cp $S/events/build.jsonl $F/price-tracker-3-halts.jsonl
+cp $S/events/span.jsonl $F/price-tracker-3-spans.jsonl
+cp $S/plans/spec/validation.json $F/price-tracker-3-validation.json
+```
+
+`Hooks/price-tracker-3-monitor-pgrep-wait.json` is the validation agent's Monitor call, its name
+and input, with the task output folder cut to `/TMP/`:
+
+```sh
+T=$T/transcripts/cb039a0d-04f4-428a-b575-e73a1e11d628 F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+T, F = os.environ["T"], os.environ["F"]
+for line in open(f"{T}/subagents/agent-a5db10195f7f6c10e.jsonl"):
+    content = (json.loads(line).get("message") or {}).get("content")
+    for c in content if isinstance(content, list) else []:
+        if c.get("type") == "tool_use" and c.get("name") == "Monitor":
+            text = json.dumps({"name": c["name"], "input": c["input"]}, indent=2, ensure_ascii=False)
+            text = re.sub(r"/private/tmp/claude-\d+/[^/\"]+/", "/TMP/", text)
+            open(f"{F}/Hooks/price-tracker-3-monitor-pgrep-wait.json", "w").write(text + "\n")
+PY
+```
+
+`Transcripts/cb039a0d-…` holds the orchestrator's transcripts with the usage filter of the
+brownfield run section above, plus each agent's `.meta.json` cut to its type and launch fields,
+and each Workflow's record cut to its id, name, status and `task` and `plan` arguments. With `P`
+the trial's `transcripts` folder and `S` the session id:
+
+```sh
+F='select(.type=="assistant") | {type, timestamp, isSidechain, message: (.message | {id, model, usage})}'
+jq -c "$F" "$P/$S.jsonl" > "Transcripts/$S.jsonl"
+(cd "$P" && find "$S/subagents" -name 'agent-*.jsonl') | while read -r f; do
+  mkdir -p "Transcripts/$(dirname "$f")" && jq -c "$F" "$P/$f" > "Transcripts/$f"; done
+(cd "$P" && find "$S/subagents" -name 'agent-*.meta.json') | while read -r f; do
+  jq -S '{agentType, description, workflowPhase, spawnDepth, requestShape, model}' "$P/$f" \
+    > "Transcripts/$f"; done
+mkdir -p "Transcripts/$S/workflows"
+for f in "$P/$S"/workflows/wf_*.json; do
+  jq -S '{runId, workflowName, status, args: {task: .args.task, plan: .args.plan}}' "$f" \
+    > "Transcripts/$S/workflows/$(basename "$f")"; done
+```
+
+The orchestrator has 51 distinct messages, the fixer `ac257d99…` 68 and the killed worker
+`a441498…` 14. `grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in any of
+these files.

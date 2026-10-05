@@ -1,0 +1,9 @@
+{
+  "args": {
+    "plan": "spec",
+    "task": "coingecko-client"
+  },
+  "runId": "wf_f9943c40-68e",
+  "status": "completed",
+  "workflowName": "swift-harness-build-task"
+}

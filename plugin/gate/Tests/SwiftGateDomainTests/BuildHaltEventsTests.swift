@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("build halt events")
@@ -49,5 +50,65 @@ struct BuildHaltEventsTests {
         == 2_001)
     #expect(
       BuildHalts.waitMilliseconds(from: Self.start, to: Self.start.addingTimeInterval(-5)) == 0)
+  }
+}
+
+/// The third price-tracker trial: watchlist-screen's return was checked GREEN, its merge was
+/// refused for red flows, and the gate-red halt was answered retry, which sent it to a fixer
+/// that was still working at the cutoff.
+@Suite("a task sent to its fixer isn't ready to merge")
+struct FixingMergeQueueTests {
+  static let buildRun = "20261005T055727Z-2fbf5ab4"
+
+  static func time(_ text: String) throws -> Date { try Date(text, strategy: .iso8601) }
+
+  static func queue(at text: String, extra: [BuildEvent] = []) throws -> MergeQueue {
+    let cut = try time(text)
+    let log = BuildEventJSON.decode(
+      try Fixture.data("BrownfieldTrial/price-tracker-3-build-events.jsonl"))
+    let halts = try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-halts.jsonl")
+    ).events.filter { $0.time <= cut }
+    let events = log.events.filter { $0.at <= cut } + extra
+    return BuildEventLog(events: events, damage: []).mergeQueue(
+      running: ["watchlist-screen", "detail-screen"],
+      retried: BuildHalts.retried(in: halts, buildRun: buildRun))
+  }
+
+  @Test(
+    "watchlist-screen reads ready before its halt, fixing and not ready after the retry that sent it to the fixer, and ready again as the fixer's once a fixer return is checked GREEN — catches build next offering a refused merge while its fixer works"
+  )
+  func refusedTaskReadsFixing() throws {
+    #expect(
+      try Self.queue(at: "2026-10-05T06:08:00Z")
+        == MergeQueue(
+          ready: [MergeQueue.Ready(task: "watchlist-screen", fix: false)], merging: nil))
+    #expect(
+      try Self.queue(at: "2026-10-05T06:15:00Z")
+        == MergeQueue(ready: [], merging: nil, fixing: ["watchlist-screen"]))
+    let fixed = BuildEvent.returnCheck(
+      BuildEvent.ReturnCheck(
+        task: "watchlist-screen", fix: true, verdict: .green, commit: nil, checkID: "fixer",
+        rules: [], at: try Self.time("2026-10-05T06:16:00Z"), outcome: .readyToMerge))
+    #expect(
+      try Self.queue(at: "2026-10-05T06:16:00Z", extra: [fixed])
+        == MergeQueue(ready: [MergeQueue.Ready(task: "watchlist-screen", fix: true)], merging: nil))
+  }
+
+  @Test(
+    "of the trial's halts only watchlist-screen's gate-red was answered retry: the budget halts were answered continue and abandon — catches a cutoff or a question read as a fixer launch"
+  )
+  func onlyRetriesCount() throws {
+    let halts = try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-halts.jsonl")
+    ).events
+
+    let retried = BuildHalts.retried(in: halts, buildRun: Self.buildRun)
+
+    #expect(Array(retried.keys) == ["watchlist-screen"])
+    let resumed = try Date(
+      "2026-10-05T06:10:09.077Z", strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+    #expect(abs((retried["watchlist-screen"] ?? .distantPast).timeIntervalSince(resumed)) < 0.001)
+    #expect(BuildHalts.retried(in: halts, buildRun: "20261005T000000Z-00000000").isEmpty)
   }
 }

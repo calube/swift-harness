@@ -125,3 +125,42 @@ struct SpanLogTests {
     #expect(try Self.spanLines(root).count == 2)
   }
 }
+
+@Suite("ending a build run's open spans")
+struct SpanLogEndOpenTests {
+  static let buildRun = "20261005T055727Z-2fbf5ab4"
+
+  @Test(
+    "on the third price-tracker trial's spans, the cutoff ends its abandoned tasks' open spans as abandoned, the finish ends the last task span, and the run's own spans are never touched — catches a killed worker's or a forgotten review's span left open forever"
+  )
+  func endsOpenSpansByTask() throws {
+    let root = SpanLogTests.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let captured = try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-spans.jsonl")
+    ).events
+    for event in captured { try HarnessEventFiles(root: root).append(event) }
+    let at = try #require(ISO8601DateFormatter().date(from: "2026-10-05T06:28:20Z"))
+    let log = SpanLog(root: root, now: { at })
+
+    let abandoned: Set<String> = ["watchlist-screen", "detail-screen"]
+    let cutoff = try log.endOpen(buildRun: Self.buildRun, outcome: .abandoned) {
+      $0.task.map(abandoned.contains) ?? false
+    }
+    let finish = try log.endOpen(buildRun: Self.buildRun, outcome: .abandoned) { $0.task != nil }
+    let again = try log.endOpen(buildRun: Self.buildRun, outcome: .abandoned) { _ in true }
+
+    func ended(_ events: [HarnessEvent]) -> [String] {
+      events.compactMap { if case .spanEnd(let end) = $0.payload { end.spanID } else { nil } }
+    }
+    #expect(ended(cutoff) == ["f4102dced11585b9", "dd827de42d1b55e5"])
+    #expect(ended(finish) == ["b5bd65c39f79bed5"])
+    #expect(ended(again).isEmpty)
+    let worker = try #require(cutoff.first)
+    #expect(
+      worker.payload
+        == .spanEnd(
+          SpanEndEvent(spanID: "f4102dced11585b9", outcome: .abandoned, milliseconds: 1_830_376)))
+    #expect(OpenSpans.of(try SpanLogTests.spanLines(root), buildRun: Self.buildRun).isEmpty)
+  }
+}
