@@ -8,6 +8,7 @@ public enum PlanLintValidation {
   public static let checkSourceFileRuleID = "plan-lint.validation-check-source-file"
   public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
   public static let appWithoutFlowRuleID = "plan-lint.validation-app-without-flow"
+  public static let obstacleFakeableRuleID = "plan-lint.validation-obstacle-fakeable"
 
   /// What may stop a flow checking a screen requirement. A screen requirement's `Reason` opens
   /// with 1 of these and a colon, such as `data: needs a source with 50 chapters`, or it doesn't
@@ -23,6 +24,16 @@ public enum PlanLintValidation {
       !text[text.index(after: colon)...].trimmingCharacters(in: .whitespaces).isEmpty
     else { return nil }
     return kind
+  }
+
+  /// Obstacle kinds a dependency client's fake removes: with a client module in the app's area, a
+  /// fake chosen at launch serves the failure, the retry or the slow response the flow needs.
+  public static let fakeableObstacleKinds = ["network"]
+
+  /// The dependency-client modules among `paths`, repository-relative files: each outermost
+  /// folder named `…Client` that holds a Swift file, such as `Packages/APIClient`, in path order.
+  public static func clientModules(in paths: [String]) -> [String] {
+    []
   }
 
   /// A task as the screen check reads it: the requirements it covers and the paths it writes.
@@ -65,10 +76,12 @@ public enum PlanLintValidation {
   ///   - tasks: each task's covers and writes, for the screen check; empty skips it.
   ///   - appAreas: the repository's `xcode` areas, whose screens a task can touch.
   ///   - contractTask: the contract task, whose stub screens carry no behaviour a flow can check.
+  ///   - clientModules: the repository's dependency-client modules, from ``clientModules(in:)``;
+  ///     1 inside an app's area stops a ``fakeableObstacleKinds`` reason excusing its screens.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
     file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
-    appAreas: [AppArea] = [], contractTask: String? = nil
+    appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = []
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))

@@ -162,6 +162,7 @@ extension RuleIndexTests {
       PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
       PlanLintValidation.flowWithoutIOSRuleID, PlanLintValidation.checkSourceFileRuleID,
       PlanLintValidation.screenWithoutFlowRuleID, PlanLintValidation.appWithoutFlowRuleID,
+      PlanLintValidation.obstacleFakeableRuleID,
       PlanLintCheckDependencies.ruleID,
     ]
     let build = [
