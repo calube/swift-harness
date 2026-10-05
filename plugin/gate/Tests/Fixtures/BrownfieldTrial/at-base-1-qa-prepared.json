@@ -1,0 +1,192 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : "<slot>/.harness/qa/spec/at-base-run.json",
+  "commit" : "d200fc752208fcb4300e04ac7c0a0423743afb6b",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "7 of 10 rows verified (3 reason-only): 0 pass, 7 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "checks read from .harness/qa/spec/ before qa adopt: only the 7 rows `spec-validation` writes ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "evidence" : [
+        "qa/01-req-launch-list.flow/steps.json",
+        "qa/01-req-launch-list.flow/batch.json",
+        "qa/01-req-launch-list.flow/flow.json",
+        "qa/01-req-launch-list.flow/sim/steps.ndjson",
+        "qa/01-req-launch-list.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 3 `wait` failed: Batch failed at step 6 (wait): wait timed out for selector: id=\"list.row.ada\". Current surface: <base screen>.",
+      "ms" : 74391,
+      "requirement" : "req-launch-list",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-loading.flow.json",
+      "evidence" : [
+        "qa/02-req-list-loading.flow/steps.json",
+        "qa/02-req-list-loading.flow/batch.json",
+        "qa/02-req-list-loading.flow/flow.json",
+        "qa/02-req-list-loading.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.loading\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 9683,
+      "requirement" : "req-list-loading",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-retry.flow.json",
+      "evidence" : [
+        "qa/03-req-list-retry.flow/steps.json",
+        "qa/03-req-list-retry.flow/batch.json",
+        "qa/03-req-list-retry.flow/flow.json",
+        "qa/03-req-list-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.error\". Current surface: <base screen>.; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 20223,
+      "requirement" : "req-list-retry",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/thread-open.flow.json",
+      "evidence" : [
+        "qa/04-req-thread-open.flow/steps.json",
+        "qa/04-req-thread-open.flow/batch.json",
+        "qa/04-req-thread-open.flow/flow.json",
+        "qa/04-req-thread-open.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 19422,
+      "requirement" : "req-thread-open",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-sending.flow.json",
+      "evidence" : [
+        "qa/05-req-send-sending.flow/steps.json",
+        "qa/05-req-send-sending.flow/batch.json",
+        "qa/05-req-send-sending.flow/flow.json",
+        "qa/05-req-send-sending.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 20183,
+      "requirement" : "req-send-sending",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-retry.flow.json",
+      "evidence" : [
+        "qa/06-req-send-retry.flow/steps.json",
+        "qa/06-req-send-retry.flow/batch.json",
+        "qa/06-req-send-retry.flow/flow.json",
+        "qa/06-req-send-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\". Current surface: <base screen>.; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 19611,
+      "requirement" : "req-send-retry",
+      "result" : "red",
+      "row" : 6,
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "evidence" : [
+        "qa/07-req-preview-update.flow/steps.json",
+        "qa/07-req-preview-update.flow/batch.json",
+        "qa/07-req-preview-update.flow/flow.json",
+        "qa/07-req-preview-update.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"list.row.ada\"; sim verify RED: sim.no-steps: run 20261005T161747Z-268dd01a-row7 recorded no step: run sim snap at each checked point",
+      "ms" : 18953,
+      "requirement" : "req-preview-update",
+      "result" : "red",
+      "row" : 7,
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T161747Z-268dd01a",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

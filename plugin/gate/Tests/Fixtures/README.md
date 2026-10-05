@@ -5111,3 +5111,22 @@ git -C $R merge-tree --write-tree 3f48493d7a2624df62cf4d05545ff7b55eee9745 \
 tip merged into the moved plan branch. It equals both the first run's `merged-tree-run.json` tree
 and the tree of the merge commit `build merge` then made. `grep -niE '/Users|/private|caleb'` on
 the fixtures matched nothing.
+
+## Brownfield trial: at-base-1's validation rows and its at-base runs
+
+`BrownfieldTrial/at-base-1-*` come from a brownfield one-shot trial (harness `62e24cbb`) whose 7
+flow rows each ran after a fake client task, a screen task and the root task. The validation
+worker's `qa run --at-base --prepared-by` read every row red at the contract commit; the
+orchestrator's `qa run --at-base` after `qa adopt` took all 7 from it. `$T` is the trial's kept
+folder and `$R` its repository's `.git/swift-harness`. The `sed` below renames the trial's 4 task
+names, its accessibility-id prefix, its app word and the base screen's text, given here as
+placeholders, and the prepared run's slot path; it changes nothing else:
+
+```sh
+S='s/<list task>/list-ui/g; s/<thread task>/thread-ui/g; s/<fake task>/fake-client/g; s/<root task>/root-ui/g; s/<id prefix>/list/g; s/<item word>/item/g; s/<app word>/app/g; s/<App word>/App/g; s|/Users/[^"]*/<slot folder>/|<slot>/|g; s/<base screen text>/<base screen>/g'
+sed "$S" $T/validation.json > at-base-1-validation.json
+sed "$S" $R/runs/20261005T161747Z-268dd01a/qa/report.json > at-base-1-qa-prepared.json
+sed "$S" $R/runs/20261005T162135Z-bd20614a/qa/report.json > at-base-1-qa-at-base.json
+```
+
+`grep -niE '/Users|/private|caleb'` on the fixtures matched nothing.

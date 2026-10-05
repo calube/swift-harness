@@ -928,6 +928,53 @@ struct BuildMergeFlowsTests {
     try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
   }
 
+  /// Writes the orchestrator's `qa run --at-base` report in the main checkout's runs, taking each
+  /// row of the plan's table as red with the captured at-base run's first message.
+  fileprivate static func atBaseReport(_ scenario: MergeScenario, runID: String) throws {
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/at-base-1-qa-at-base.json"))
+    let red = try #require(captured.rows.first)
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    let table = try ValidationTableJSON.decode(
+      try Data(contentsOf: URL(filePath: plan.directory + "/" + ValidationTable.fileName)))
+    let report = QAReport(
+      runID: runID, plan: MergeScenario.plan, after: nil, atBase: true, commit: nil,
+      rows: table.rows.enumerated().map { index, row in
+        QARow(
+          row: index + 1, requirement: row.requirement, layer: row.layer, check: row.check,
+          runsAfter: row.runsAfter, result: red.result, message: red.message,
+          exitStatus: red.exitStatus)
+      })
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
+  }
+
+  @Test(
+    "a GREEN qa run --before-merge of the tip is refused at-base-unchecked, main unchanged, while no qa run --at-base has taken the row, and merges once one has — catches a row's pass credited with nothing showing it read red at the merge base"
+  )
+  func greenRunWaitsForTheAtBaseRun() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.plan(scenario)
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    try Self.report(scenario, runID: "20261005T031853Z-00000003", tip: tip, base: pre, red: false)
+
+    let early = await scenario.merge("t1")
+    try Self.atBaseReport(scenario, runID: "20261005T031853Z-00000004")
+    let merged = await scenario.merge("t1")
+
+    #expect(early.status == .refused, "\(early.message)")
+    #expect(early.reason == .atBaseUnchecked, "\(early.message)")
+    #expect(early.message.contains("qa run --plan search --at-base"), "\(early.message)")
+    #expect(early.fixWorktree == nil)
+    #expect(merged.status == .merged, "\(merged.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
+  }
+
   @Test(
     "a task whose row is ready, merged with no qa run --before-merge of its tip, is refused flows-unchecked with main unchanged — catches a screen task landing with its flows unrun"
   )
@@ -1134,6 +1181,7 @@ struct BuildMergeFlowsTests {
     try Self.treeRecord(
       scenario, runID: runID,
       tree: try await Self.trialTree(scenario, base: pre, tasks: ["t1", "t2"]))
+    try Self.atBaseReport(scenario, runID: "20261005T151237Z-00000000")
 
     let first = await scenario.merge("t1")
     let second = await scenario.merge("t2")
@@ -1418,6 +1466,7 @@ struct BuildMergeFlowsTests {
       .plan(MergeScenario.plan)
     try await LedgerWriter(plan: plan).update(task: "t2", .status(.abandoned))
 
+    try Self.atBaseReport(scenario, runID: "20261005T080000Z-00000000")
     let unchecked = await scenario.merge("t1", fix: true)
     try Self.fixReport(
       scenario, runID: "20261005T095459Z-322909d3", fixTip: fixTip, t2: t2, base: pre)
@@ -1469,6 +1518,7 @@ struct BuildMergeFlowsTests {
     try Self.plan(scenario)
     let old = try await scenario.taskBranch("t1", "B.swift", "b\n")
     let pre = try await scenario.main()
+    try Self.atBaseReport(scenario, runID: "20261005T031853Z-00000000")
     try Self.report(scenario, runID: "20261005T031853Z-00000001", tip: old, base: pre, red: false)
     try await scenario.repo.git("switch", "-q", "search/t1")
     try scenario.repo.write("C.swift", "c\n")
