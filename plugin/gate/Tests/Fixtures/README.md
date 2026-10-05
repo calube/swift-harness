@@ -3953,3 +3953,27 @@ text, written by a python script over the transcript that looked up tool use
 `toolu_01RENaH9WZdjTUSwczgVdKrs` and its `tool_result`, and replaced the plan checkout's path with
 `/REPO-spec`. `grep -rniE '/Users|/private|/var/folders|caleb'` on every file named here matched
 nothing.
+
+## Brownfield trial: a changed test that spins, and the warm-up its bounds read
+
+`BrownfieldTrial/price-tracker-3-DetailFeatureTests-spin.swift` is the detail test file a
+price-tracker-3 worker committed: its `dismissCancelsChart` spins twice on
+`while !flag.value { await Task.yield() }`, and `test-only` then `slice --prove` ran it for about
+1700 s. `price-tracker-3-DetailFeatureTests.swift` is the same file after the worker bounded the
+test with `store.finish()`. `price-tracker-3-warmup.json` is the warm-up times file that run wrote
+at its base tree (AppFeature: 11.3 s warm test, 161.4 s cold), and `price-tracker-3-clock.json`
+is its launch clock, with its absolute spec paths cut to `/trial/repo/`. The run's `config.toml`
+differs from `price-tracker-1-config.toml` only in `discovered_at`, so the tests use that one.
+`T` is the trial clone and `S` the run's copied state directory:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+P=Packages/AppFeature/Tests/AppCoreTests/DetailFeatureTests.swift
+git -C $T show 765d143:$P > $F/price-tracker-3-DetailFeatureTests-spin.swift
+git -C $T show 4dca7a5:$P > $F/price-tracker-3-DetailFeatureTests.swift
+cp $S/warmup/f0bd7c247ed6a4afd220dfad6893cc719ca66bfa.json $F/price-tracker-3-warmup.json
+sed -E 's#"/[^"]*/price-tracker-3/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
+  > $F/price-tracker-3-clock.json
+```
+
+`grep -laE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-3-*` matched nothing.
