@@ -116,24 +116,37 @@ private struct SurfaceReturnScenario {
   /// Commits `files` on the task branch, records a GREEN push gate that ran every task gate
   /// step, and checks an honest ready-to-merge return citing both.
   func checkTask(files: [String: String]) async throws -> BuildCheckReturnReport {
-    let commit = try await Self.commit(files, "task work", in: worktree, runner: runner)
+    try await checkTask(commits: [files]).report
+  }
+
+  /// Commits each of `commits` in turn, gates the tip as ``checkTask(files:)`` does, and checks a
+  /// return listing them in `listed`'s order; returns the report and the return file as stored.
+  func checkTask(
+    commits batches: [[String: String]], listed: ([String]) -> [String] = { $0 }
+  ) async throws -> (report: BuildCheckReturnReport, written: TaskReturn, made: [String]) {
+    var made: [String] = []
+    for (i, files) in batches.enumerated() {
+      made.append(try await Self.commit(files, "task work \(i + 1)", in: worktree, runner: runner))
+    }
+    let commit = try #require(made.last)
     let runID = RunID.make(startedAt: Self.finishedAt, suffix: 7)
-    let report = try RunReport(
+    let gateReport = try RunReport(
       runID: runID, durationMilliseconds: 1200,
       tiers: [TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)],
       findings: [])
     try RunStore(worktreeRoot: worktree).record(
-      report, finishedAt: Self.finishedAt, command: "check push",
+      gateReport, finishedAt: Self.finishedAt, command: "check push",
       steps: ["prove", "mutate", "impact", "coverage", "app-build"], proofBases: [surface],
       headCommit: commit, dirty: false)
     let taskReturn = TaskReturn(
-      task: Self.task, outcome: .readyToMerge, commits: [commit],
+      task: Self.task, outcome: .readyToMerge, commits: listed(made),
       gate: .init(tier: .push, verdict: .green, runID: runID),
       review: .init(mode: .gate, findings: []), testsAdded: ["slice-1-profile-loads"],
       notes: "ProfileClient loads a profile", designConflict: nil)
     let file = base.appending(path: "return-\(UUID().uuidString).json")
     try TaskReturnJSON.encode(taskReturn).write(to: file)
-    return await BuildCheckReturnRun.run(file: file.path, plan: Self.plan, git: git)
+    let report = await BuildCheckReturnRun.run(file: file.path, plan: Self.plan, git: git)
+    return (report, try TaskReturnJSON.decode(try Data(contentsOf: file)), made)
   }
 
   /// A sprint rehearsal's `Packages/<package>/Package.swift`, as its surface or slice 4
@@ -257,6 +270,24 @@ struct BuildCheckReturnCommandTests {
           == (state == .missing),
         "\(state): \(report.warnings)")
     }
+  }
+
+  @Test(
+    "a return listing the branch's 3 commits newest first, its gate at the tip, passes, and the return file is rewritten oldest first with a notes line saying so — catches build-return.stale-gate read off the list's last entry and a return hand-edited to pass"
+  )
+  func commitsListedNewestFirstAreReordered() async throws {
+    let scenario = try await SurfaceReturnScenario(
+      surfaceFiles: try SurfaceReturnScenario.manifests("surface", "ProfileClient"))
+    defer { scenario.remove() }
+
+    let (report, written, made) = try await scenario.checkTask(
+      commits: (1...3).map { ["Packages/ProfileClient/notes-\($0).txt": "step \($0)\n"] },
+      listed: { Array($0.reversed()) })
+
+    #expect(report.verdict == .green, "\(report.message) \(report.findings)")
+    #expect(report.commit == made.last)
+    #expect(written.commits == made)
+    #expect(written.notes.contains("listed out of order"), "\(written.notes)")
   }
 
   @Test(
