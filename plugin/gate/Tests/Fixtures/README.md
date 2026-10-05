@@ -2989,3 +2989,19 @@ cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
 nothing.
+
+## Brownfield trial: a clone that commits its own config
+
+`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A
+brownfield one-shot trial ran `swiftgate run spec.md` on a fresh copy of the starter, and its
+discovery wrote the common dir's `config.toml` beside this committed file, so every command in the
+user's checkout failed on the 2 configs. The copy in that trial's repository matched this file byte
+for byte. From the repository root:
+
+```sh
+cp evals/apps/interview-starter/.swiftgate.toml \
+  plugin/gate/Tests/Fixtures/BrownfieldTrial/starter-swiftgate.toml
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/starter-swiftgate.toml` matched
+nothing.

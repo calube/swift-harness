@@ -774,4 +774,63 @@ struct RunCommandTests {
     #expect(error?.message.contains(brokenShim) == true, "\(String(describing: error))")
     #expect(error?.message.contains("build broke in") == true, "\(String(describing: error))")
   }
+
+  @Test(
+    "run in a clone that commits a .swiftgate.toml sets it aside: the checkout, a plan worktree, the hooks and the report all run the brownfield profile on 1 state root, and the tree is untouched — catches every command failing on 2 configs and events split across 2 state roots"
+  )
+  func committedConfigIsSetAside() async throws {
+    let committed = try Fixture.text("BrownfieldTrial/starter-swiftgate.toml")
+    let clone = try await RunClone(files: [
+      "Package.swift": "// swift-tools-version:6.0\n", Config.fileName: committed,
+    ])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let blob = try await clone.git("hash-object", "--", Config.fileName)
+    let started = Date(timeIntervalSince1970: 1_800_000_000)
+
+    let prepared = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(
+        warmup: FakeWarmup(steps: Steps(), config: clone.layout.config), now: { started }))
+
+    #expect(try await clone.git("status", "--porcelain", "--ignored") == "")
+    #expect(
+      try String(contentsOf: clone.root.appending(path: Config.fileName), encoding: .utf8)
+        == committed)
+    let record = try CommittedConfigSetAside.decode(
+      Data(contentsOf: clone.layout.committedConfigSetAside))
+    #expect(record == CommittedConfigSetAside(blob: blob, setAsideAt: started))
+    #expect(
+      prepared.notes.contains { $0.contains(Config.fileName) && $0.contains("set aside") },
+      "\(prepared.notes)")
+
+    let worktree = clone.base.appending(path: "plan-worktree", directoryHint: .isDirectory)
+    try await clone.git("worktree", "add", "-q", worktree.path, prepared.clock.planBranch)
+    for checkout in [clone.root, worktree] {
+      guard case .brownfield? = try ConfigLoader().loadProfile(repositoryRoot: checkout) else {
+        Issue.record("\(checkout.path) didn't load the brownfield profile")
+        continue
+      }
+      #expect(try ConfigLoader().load(repositoryRoot: checkout) == nil)
+      #expect(StateRootResolver.profile(worktree: checkout) == .brownfield)
+      #expect(
+        StateRootResolver.eventStore(worktree: checkout)
+          == StateRootResolver.eventStore(worktree: clone.root))
+      guard case .brownfield? = ProjectRoot.locateProfile(from: checkout) else {
+        Issue.record("a hook in \(checkout.path) ran the owned profile")
+        continue
+      }
+    }
+    #expect(
+      StateRootResolver.resolve(worktree: clone.root)
+        == .gitDir(clone.root.appending(path: ".git", directoryHint: .isDirectory)))
+
+    let outcome = await BrownfieldRunReportRun.write(
+      slug: prepared.slug, planBranch: nil, base: prepared.clock.base, root: clone.root,
+      runner: clone.runner)
+    let report = try #require(outcome.report, "\(outcome.message)")
+    #expect(report.committedConfig?.items == [record.reportLine])
+    #expect(report.text.contains("## Committed config"))
+  }
 }
