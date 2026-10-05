@@ -167,4 +167,92 @@ struct RunTimeBoxTests {
       now: Self.minutes(40), required: .empty, timeBox: Self.box())
     #expect(started.toStart.isEmpty)
   }
+
+  @Test(
+    "a task already merged is never abandoned at the cutoff: with no time left its merge finishes, and one merged with a GREEN gate takes no merge gate's time from a gating task behind it — catches a cutoff that strands a merge it can't take back"
+  )
+  func mergedTaskFinishes() throws {
+    let tasks = [
+      CutoffTask(id: "store", stage: .landed), CutoffTask(id: "api", stage: .gating),
+      CutoffTask(id: "web", stage: .merged),
+    ]
+
+    let early = CutoffRule.decide(tasks: tasks, timeBox: Self.box(), now: Self.minutes(40))
+    let late = CutoffRule.decide(tasks: tasks, timeBox: Self.box(), now: Self.minutes(44))
+
+    try #require(early.map(\.task) == ["store", "api", "web"])
+    #expect(early.map(\.action) == [.finishMerge, .abandon, .finishMerge])
+    #expect(early[1].reason.contains("180 s left"), "\(early[1].reason)")
+    #expect(late.map(\.action) == [.finishMerge, .abandon, .finishMerge])
+  }
+}
+
+@Suite("the cutoff in the third iOS validation trial")
+struct CapturedCutoffTests {
+  static let fixtures = URL(filePath: #filePath)
+    .deletingLastPathComponent().deletingLastPathComponent()
+    .appending(path: "Fixtures/BrownfieldTrial")
+  static let task = "confirm-downloads-setting"
+
+  /// The run's events up to the cutoff's own `abandoned` transition: what `build cutoff` read.
+  static func eventsBeforeCutoff() throws -> [BuildEvent] {
+    let log = BuildEventJSON.decode(
+      try Data(contentsOf: fixtures.appending(path: "aidoku-validation-3-build-events.jsonl")))
+    try #require(log.damage.isEmpty)
+    let abandon = log.events.firstIndex {
+      guard case .transition(let transition) = $0 else { return false }
+      return transition.to == .abandoned
+    }
+    let cut = try #require(abandon)
+    return Array(log.events[..<cut])
+  }
+
+  static func stage(after count: Int, of events: [BuildEvent]) -> CutoffTaskStage? {
+    BuildEventLog(events: Array(events.prefix(count)), damage: []).mergeStage(task: task)
+  }
+
+  @Test(
+    "the task whose fix merged and whose GREEN merge gate was recorded just before the cutoff reads landed and finishes, though its merge gate no longer fits the box — catches the cutoff abandoning a merged, gated task"
+  )
+  func landedTaskFinishes() throws {
+    let events = try Self.eventsBeforeCutoff()
+    let record = try CutoffRecord.decode(
+      Data(contentsOf: Self.fixtures.appending(path: "aidoku-validation-3-cutoff.json")))
+    let log = BuildEventLog(events: events, damage: [])
+
+    #expect(log.mergeStage(task: Self.task) == .landed)
+    let decisions = CutoffRule.decide(
+      tasks: [CutoffTask(id: Self.task, stage: .landed)], timeBox: record.timeBox, now: record.at)
+    #expect(decisions.map(\.action) == [.finishMerge])
+    #expect(record.decisions.map(\.action) == [.abandon])
+  }
+
+  @Test(
+    "the setting task reads merged after each merge until its GREEN gate, and not merged once its RED merge was undone — catches a gate from an undone merge counting for the next, or an undo left on main"
+  )
+  func stageFollowsMergesAndUndo() throws {
+    let events = try Self.eventsBeforeCutoff()
+    func index(_ match: (BuildEvent) -> Bool) throws -> Int {
+      let found = events.firstIndex(where: match)
+      return try #require(found)
+    }
+    let firstMerge = try index {
+      if case .merge(let merge) = $0 { return merge.task == Self.task }
+      return false
+    }
+    let undo = try index {
+      if case .undo(let undo) = $0 { return undo.task == Self.task }
+      return false
+    }
+    let gate = try index {
+      if case .gate(let gate) = $0, case .merge(let task) = gate.stage { return task == Self.task }
+      return false
+    }
+
+    #expect(Self.stage(after: firstMerge, of: events) == nil)
+    #expect(Self.stage(after: firstMerge + 1, of: events) == .merged)
+    #expect(Self.stage(after: undo + 1, of: events) == nil)
+    #expect(Self.stage(after: gate, of: events) == .merged)
+    #expect(Self.stage(after: gate + 1, of: events) == .landed)
+  }
 }
