@@ -1,0 +1,138 @@
+{
+  "success": true,
+  "data": {
+    "total": 5,
+    "executed": 5,
+    "totalDurationMs": 5785,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-swipe",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-swipe",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/requests/cc2397ca01fed494.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/events.ndjson",
+          "sessionReused": true,
+          "selection": {
+            "reason": "existing-session",
+            "source": "session",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.SwipeProbe",
+          "appBundleId": "com.example.SwipeProbe",
+          "startup": {
+            "durationMs": 2012,
+            "measuredAt": "2026-10-05T17:24:37.674Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.SwipeProbe",
+            "appBundleId": "com.example.SwipeProbe"
+          },
+          "timing": {
+            "runnerDemand": "required",
+            "runnerPrewarmKind": "session",
+            "runnerPrewarmScheduled": true,
+            "openDispatchDurationMs": 948,
+            "launchUrlDurationMs": 0,
+            "runnerPrewarmWaited": false,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 1026,
+            "totalDurationMs": 2012
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-51189",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.SwipeProbe"
+        },
+        "durationMs": 3015
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 506,
+          "selector": "id=\"probe.count\" label=\"Swipes 0\""
+        },
+        "durationMs": 508
+      },
+      {
+        "step": 3,
+        "command": "gesture",
+        "ok": true,
+        "data": {
+          "kind": "fling",
+          "durationMs": 100,
+          "pointerCount": 1,
+          "from": {
+            "x": 341,
+            "y": 437
+          },
+          "to": {
+            "x": 60,
+            "y": 437
+          },
+          "message": "Flung",
+          "currentUptimeMs": 372105944.9943334,
+          "runnerMainThreadBusy": false,
+          "gestureStartUptimeMs": 372105523.5611667,
+          "gestureEndUptimeMs": 372105944.5329584,
+          "executionProfile": "endpoint-hold",
+          "timing": {
+            "executionProfile": "endpoint-hold",
+            "gestureDurationMs": 100
+          }
+        },
+        "durationMs": 702
+      },
+      {
+        "step": 4,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 1555,
+          "selector": "id=\"probe.direction\" label=\"left\""
+        },
+        "durationMs": 1559
+      },
+      {
+        "step": 5,
+        "command": "get",
+        "ok": true,
+        "data": {
+          "selector": "id=\"probe.path\"",
+          "node": {
+            "index": 2,
+            "parentIndex": 0,
+            "type": "StaticText",
+            "role": "SwiftUI.AccessibilityNode",
+            "subrole": "UIResponder",
+            "label": "from 341,437 to 60,437",
+            "identifier": "probe.path",
+            "rect": {
+              "x": 111.16666666666667,
+              "y": 254.33333333333334,
+              "width": 179.66666666666663,
+              "height": 20.333333333333343
+            },
+            "enabled": true,
+            "depth": 1,
+            "pid": 73581,
+            "hittable": true,
+            "ref": "e3",
+            "kind": "text"
+          }
+        },
+        "durationMs": 1
+      }
+    ]
+  }
+}

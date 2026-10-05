@@ -77,6 +77,18 @@ exists and fails for the reason the feature is missing.
   refresh row, `"destination": "id=\"<bottom id>\""`; the contract pins it with
   `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`.
   When the contract has none, return it as a missing contract name.
+  A swipe is 1 step, `{"command": "gesture", "input": {"kind": "swipe", "preset": "<preset>"}}`,
+  with `left`, `right`, `left-edge` or `right-edge`: a fling across the middle of the screen at
+  half its height, from 15% to 85% of the width for `right`, or from the left edge for
+  `right-edge`. It takes no element, so the screen's recognizer covers that line, which the
+  contract places on its whole area; a recognizer on a smaller view misses the swipe, and when
+  the contract has none on the whole area, return it as a missing contract name.
+  For an app whose state advances on a clock, such as a repeating timer effect, write at least 1
+  flow under the real scenario, never a rigged test scenario that ends in 1 clock step. It waits
+  for a state only several clock steps can produce, read from the step counter or an entity's
+  position the contract exposes as an accessibility value, so the `wait` sees it change with no
+  sleep or `duration` wait. When the contract exposes neither, return it as a missing contract
+  name.
   A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
   {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
   `fill` or `press` on the list's id. Check the result by the ids of the count and rows.

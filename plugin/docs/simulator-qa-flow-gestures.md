@@ -4,7 +4,7 @@ The flow steps for gestures that a selector alone doesn't drive, each proven on 
 the pinned `agent-device`. The rules a flow file meets are in
 [`simulator-qa.md`](simulator-qa.md#qa-lint), and how `qa run` drives a flow in
 [`simulator-qa-flows.md`](simulator-qa-flows.md). The captured runs are under
-`gate/Tests/Fixtures/AgentDevice/pull-to-refresh/` and `gate/Tests/Fixtures/AgentDevice/searchable/`.
+`gate/Tests/Fixtures/AgentDevice/`: `pull-to-refresh/`, `searchable/` and `swipe/`.
 
 ## Pull to refresh
 
@@ -63,3 +63,17 @@ coordinates to clear". So the flow selects the field by its role, whatever its p
 - The flow checks what the search changes by ids: a count, a row that stays, a row that goes.
 - A wait for a row to go puts the row under `absent`, as
   [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) says.
+
+## A swipe
+
+A swipe is a 100 ms fling across the middle of the screen, at half its height:
+
+`{"command": "gesture", "input": {"kind": "swipe", "preset": "<preset>"}}`
+
+- `right` moves from 15% to 85% of the width, and `left` back. `right-edge` starts at the left
+  edge and moves right; `left-edge` starts at the right edge and moves left.
+- The step takes no element and no other key: `qa lint` refuses a swipe with no `preset` as
+  `qa.flow-kind-key`, and an unknown preset as `qa.flow-schema`.
+- The recognizer must cover that mid-height line: on the captured probe, a recognizer on a
+  120 pt band at the top never saw the swipe. The contract puts a swipe-driven screen's
+  recognizer on its whole area.

@@ -54,9 +54,18 @@ public struct LiveGitWorkspace: GitWorkspace {
     try await succeed(["worktree", "add", "--quiet", "--", path, branch])
   }
 
+  /// A tree kept in the checkout's git dir, as prove keeps one per linked checkout, is removed
+  /// first: the checkout's removal deletes that git dir and would leave the tree registered.
   public func removeWorktree(at path: String, force: Bool) async throws(GitWorkspaceError) {
+    let checkout =
+      path.hasPrefix("/")
+      ? path
+      : URL(filePath: repositoryRoot, directoryHint: .isDirectory).appending(path: path).path
+    let nested = await LiveScratchWorktrees(runner: runner, repositoryRoot: repositoryRoot)
+      .removeTrees(inGitDirectoryOf: checkout)
     try await succeed(
       ["worktree", "remove"] + (force ? ["--force", "--force"] : []) + ["--", path])
+    if !nested.failures.isEmpty { _ = try? await git(["worktree", "prune"]) }
   }
 
   public func switchWorktree(at path: String, toNewBranch branch: String, from base: String)

@@ -318,44 +318,133 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     }
   }
 
-  /// Removes every scratch tree registered with this repository whose owning process no longer
-  /// exists, whichever of its checkouts made it: a tree made from a linked worktree that has since
-  /// been removed is never beside a toplevel the per-run sweep looks in.
-  public func sweepRegisteredOrphans() async throws(ScratchWorktreeError) -> ScratchWorktreeSweep {
-    let listed = try await git(["worktree", "list", "--porcelain"], in: repositoryRoot)
-    let trees = listed.split(separator: "\n").compactMap { line -> String? in
-      guard line.hasPrefix("worktree ") else { return nil }
-      return String(line.dropFirst("worktree ".count))
-    }
+  /// Removes every worktree registered inside `checkout`'s own git dir, as a linked checkout's
+  /// kept tree is: removing the checkout deletes that git dir and would leave each such tree
+  /// registered with no directory. Nothing for the main checkout, whose git dir holds them all.
+  public func removeTrees(inGitDirectoryOf checkout: String) async -> ScratchWorktreeSweep {
     var sweep = ScratchWorktreeSweep()
-    for tree in trees {
-      guard let owner = Self.owner(of: URL(filePath: tree).lastPathComponent), !Self.isAlive(owner)
-      else { continue }
-      await OffPool.run {
-        TemporaryDirectories.removeSwiftPMLocks(
-          under: URL(filePath: tree, directoryHint: .isDirectory))
+    guard
+      let directories = try? await git(
+        ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], in: checkout),
+      case let lines = directories.split(separator: "\n").map({ Self.resolved(String($0)) }),
+      lines.count == 2, lines[0] != lines[1],
+      let listed = try? await git(["worktree", "list", "--porcelain"], in: checkout)
+    else { return sweep }
+    for entry in Self.registered(listed) where Self.resolved(entry.path).hasPrefix(lines[0] + "/") {
+      if let failure = await removeRegistered(entry.path, in: checkout) {
+        sweep.failures.append(failure)
+      } else {
+        sweep.removed.append(entry.path)
       }
-      do throws(ScratchWorktreeError) {
-        _ = try await git(["worktree", "remove", "--force", "--force", tree], in: repositoryRoot)
-        sweep.removed.append(tree)
-      } catch {
-        let removal = await OffPool.run {
-          Result {
-            if FileManager.default.fileExists(atPath: tree) {
-              try FileManager.default.removeItem(atPath: tree)
-            }
+    }
+    if !sweep.removed.isEmpty { _ = try? await git(["worktree", "prune"], in: checkout) }
+    return sweep
+  }
+
+  /// `git worktree list --porcelain`'s entries: each tree's path, and whether git sees its
+  /// directory gone.
+  static func registered(_ listed: String) -> [(path: String, prunable: Bool)] {
+    var entries: [(path: String, prunable: Bool)] = []
+    for line in listed.split(separator: "\n") {
+      if line.hasPrefix("worktree ") {
+        entries.append((String(line.dropFirst("worktree ".count)), false))
+      } else if line.hasPrefix("prunable"), !entries.isEmpty {
+        entries[entries.count - 1].prunable = true
+      }
+    }
+    return entries
+  }
+
+  private static func resolved(_ path: String) -> String {
+    URL(filePath: path, directoryHint: .isDirectory).resolvingSymlinksInPath().path
+  }
+
+  /// Unregisters and deletes `tree`; a description of what failed, or `nil`.
+  private func removeRegistered(_ tree: String, in directory: String) async -> String? {
+    await OffPool.run {
+      TemporaryDirectories.removeSwiftPMLocks(
+        under: URL(filePath: tree, directoryHint: .isDirectory))
+    }
+    do throws(ScratchWorktreeError) {
+      _ = try await git(["worktree", "remove", "--force", "--force", tree], in: directory)
+      return nil
+    } catch {
+      let removal = await OffPool.run {
+        Result {
+          if FileManager.default.fileExists(atPath: tree) {
+            try FileManager.default.removeItem(atPath: tree)
           }
         }
-        switch removal {
-        case .success: sweep.removed.append(tree)
-        case .failure(let removal): sweep.failures.append("\(tree): \(error); \(removal)")
-        }
+      }
+      switch removal {
+      case .success: return nil
+      case .failure(let removal): return "\(tree): \(error); \(removal)"
+      }
+    }
+  }
+
+  /// Whether `tree` is a kept tree in a linked checkout's git dir whose checkout is gone, so
+  /// pruning that git dir would delete the tree's directory and leave it registered.
+  private static func keptTreeLostItsCheckout(_ tree: String, commonDirectory: String) -> Bool {
+    let path = resolved(tree)
+    let linked = commonDirectory + "/worktrees/"
+    guard path.hasPrefix(linked),
+      let id = path.dropFirst(linked.count).split(separator: "/").first
+    else { return false }
+    let administration = URL(filePath: linked + id, directoryHint: .isDirectory)
+    guard
+      let target = try? String(
+        contentsOf: administration.appending(path: "gitdir"), encoding: .utf8)
+    else { return true }
+    // `worktree.useRelativePaths` writes the pointer relative to the administrative directory.
+    let checkout = URL(
+      filePath: target.trimmingCharacters(in: .whitespacesAndNewlines), relativeTo: administration)
+    return !FileManager.default.fileExists(atPath: checkout.standardizedFileURL.path)
+  }
+
+  /// Removes every scratch tree registered with this repository whose owning process no longer
+  /// exists, whichever of its checkouts made it: a tree made from a linked worktree that has since
+  /// been removed is never beside a toplevel the per-run sweep looks in. A kept tree has no owning
+  /// process; it goes once its directory is gone or the linked checkout whose git dir holds it is.
+  public func sweepRegisteredOrphans() async throws(ScratchWorktreeError) -> ScratchWorktreeSweep {
+    let listed = try await git(["worktree", "list", "--porcelain"], in: repositoryRoot)
+    let trees = Self.registered(listed)
+    let commonDirectory: String? =
+      if trees.contains(where: { Self.isKept($0.path) }) {
+        (try? await git(
+          ["rev-parse", "--path-format=absolute", "--git-common-dir"], in: repositoryRoot))
+          .map { Self.resolved($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+      } else { nil }
+    var sweep = ScratchWorktreeSweep()
+    for (tree, prunable) in trees {
+      let name = URL(filePath: tree).lastPathComponent
+      let orphaned: Bool
+      if let owner = Self.owner(of: name) {
+        orphaned = !Self.isAlive(owner)
+      } else if Self.isKept(tree) {
+        orphaned =
+          prunable
+          || commonDirectory.map { Self.keptTreeLostItsCheckout(tree, commonDirectory: $0) }
+            ?? false
+      } else {
+        orphaned = false
+      }
+      guard orphaned else { continue }
+      if let failure = await removeRegistered(tree, in: repositoryRoot) {
+        sweep.failures.append(failure)
+      } else {
+        sweep.removed.append(tree)
       }
     }
     if !sweep.removed.isEmpty {
       _ = try await git(["worktree", "prune"], in: repositoryRoot)
     }
     return sweep
+  }
+
+  private static func isKept(_ tree: String) -> Bool {
+    let name = URL(filePath: tree).lastPathComponent
+    return name.hasPrefix(".") && name.hasSuffix("\(nameMarker)\(keptMarker)")
   }
 
   /// The owning process id in a scratch tree's name, `.<checkout>-swiftgate-prove-<pid>-<token>`.
