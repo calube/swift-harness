@@ -1,28 +1,35 @@
 # Simulator QA flow repair
 
-How a flow row that stays red because of its flow file, not the app, gets rewritten and taken back
-into plan state with `swiftgate qa adopt --repair`. The flags of
-`qa run` are in [`simulator-qa.md`](simulator-qa.md#qa-run), the prepared at-base run in
-[`simulator-qa-at-base.md`](simulator-qa-at-base.md), and the steps a gesture needs in
+This page covers a flow row that stays red because of its flow file, not the app: how the build
+loop sends it to a repair, and what `swiftgate qa adopt --repair` checks before it takes the
+rewritten flow into plan state. Read it when `qa adopt --repair` refuses.
+
+The flags of `qa run` are in [`simulator-qa.md`](simulator-qa.md#qa-run), the prepared at-base
+run in [`simulator-qa-at-base.md`](simulator-qa-at-base.md), and the steps a gesture needs in
 [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md). Rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index).
 
 ## When the build loop repairs a row
 
 A merge fixer that reads 1 flow row red in 2 `qa run`s stops and names the row in its `gate-red`
-notes, which `build check-return` accepts beside a GREEN gate once a `flow row:` line names
-the red `qa run`s. It says whether the failing step is the flow's fault: a step the pinned tool can't drive as
-written, such as a `scroll` where a pull to refresh needs a `gesture` drag. A selector that names
-the wrong element, or a step the app can't satisfy as written, counts too. The build loop then sends that row
-alone to a validation worker in repair mode. The fixer itself never edits a flow file: they live in
-plan state, which only `qa adopt` writes.
+notes. `build check-return` accepts those notes beside a GREEN gate once a `flow row:` line names
+the red `qa run`s. The fixer says whether the failing step is the flow's fault:
+
+- a step the pinned tool can't drive as written, such as a `scroll` where a pull to refresh needs
+  a `gesture` drag;
+- a selector that names the wrong element;
+- a step the app can't satisfy as written.
+
+The build loop then sends that row alone to a validation worker in repair mode. The fixer itself
+never edits a flow file: flow files live in plan state, which only `qa adopt` writes.
 
 ## The repair worker's red run
 
-The worker rewrites only that requirement's check files in its checkout's `.harness/qa/<plan>/`,
-which `qa stage <worktree> --plan <plan> --requirement <requirement>` empties and fills with
-those adopted checks alone, and proves them red at the merge base itself. The build loop repairs several rows 1 requirement at a time, each in its
-own folder:
+`qa stage <worktree> --plan <plan> --requirement <requirement>` empties the checkout's
+`.harness/qa/` and fills `.harness/qa/<plan>/` with that requirement's adopted checks alone.
+
+The worker rewrites only those check files, then proves them red at the merge base itself. The
+build loop repairs several rows 1 requirement at a time, each in its own folder:
 
 ```bash
 "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json
@@ -39,11 +46,16 @@ writes. Its `at-base-run.json` holds those rows alone. Its `qa.check` events car
   --reason "<why>" --red-run <run id> --red-run <run id> --json
 ```
 
-It reads the requirement's rows from `validation.json`, the adopted checks and record in plan
-state, the worktree's prepared folder and record, each red run's `qa/report.json` from the
-clone's shared store under the git common dir, where a `qa run` in any checkout writes, else from
-the worktree's or the main checkout's runs, and plan state's `qa/repairs.json`. It copies nothing when
-any rule fails, and exits 1 naming each finding:
+It reads:
+
+- the requirement's rows from `validation.json`;
+- the adopted checks and at-base record in plan state;
+- the worktree's prepared folder and record;
+- each red run's `qa/report.json`, from the clone's shared store under the git common dir, where a
+  `qa run` in any checkout writes, else from the worktree's or the main checkout's runs;
+- plan state's `qa/repairs.json`.
+
+It copies nothing when any rule fails, and exits 1 naming each finding:
 
 - `qa.repair-cap`: 2 repairs of the requirement already landed in this build run, or 1 did and
   the run's no-new-starts time has passed, or the run has no box. A row still red then goes to

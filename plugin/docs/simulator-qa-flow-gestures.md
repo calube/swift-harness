@@ -1,7 +1,9 @@
 # Simulator QA flow gestures
 
-The flow steps for gestures that a selector alone doesn't drive, each proven on a simulator with
-the pinned `agent-device`. The rules a flow file meets are in
+This page gives the flow steps for gestures a selector alone doesn't drive: pull to refresh, a
+search field and a swipe. Each was proven on a simulator with the pinned `agent-device`. Read it
+when a flow needs one of these gestures, or when a row stays red on one. The rules a flow file
+meets are in
 [`simulator-qa.md`](simulator-qa.md#qa-lint), and how `qa run` drives a flow in
 [`simulator-qa-flows.md`](simulator-qa-flows.md). The captured runs are under
 `gate/Tests/Fixtures/AgentDevice/`: `pull-to-refresh/`, `searchable/` and `swipe/`.
@@ -9,7 +11,7 @@ the pinned `agent-device`. The rules a flow file meets are in
 ## Pull to refresh
 
 A SwiftUI `.refreshable` list or scroll view refreshes only when a finger drags its content down
-from the top, far enough and slowly enough. The step drags from the list's top row to an element at
+from the top, far enough and at a slow enough pace. The step drags from the list's top row to an element at
 least 350 pt lower on screen, then the flow waits for what the refresh changes:
 
 `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`

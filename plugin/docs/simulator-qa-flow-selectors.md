@@ -1,7 +1,8 @@
 # Simulator QA flow selectors
 
-The selector grammar the pinned `agent-device` reads in a flow step's `selector`, `absent` or
-`target.selector`, so a flow names an element without reading the tool's source. How to write
+This page gives the selector grammar the pinned `agent-device` reads in a flow step's
+`selector`, `absent` or `target.selector`. Read it when a flow step names an element, so you
+never have to read the tool's source. How to write
 `wait` and `is` steps is in [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md), and
 gestures in [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md).
 

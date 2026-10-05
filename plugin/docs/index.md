@@ -1,7 +1,7 @@
 # swift-harness reference docs
 
-The docs the swift-harness plugin ships for app repositories that use it. Skills, agents and hooks
-read them at runtime. In a session, the SessionStart context names this directory's absolute path
+The reference docs the swift-harness plugin ships for the app repositories that use it. Find the
+page for your question in the table below. Skills, agents and hooks read these pages at runtime. In a session, the SessionStart context names this directory's absolute path
 for the current install. The path changes between machines and plugin versions, so never write it
 into a committed file.
 
@@ -13,6 +13,7 @@ into a committed file.
 | Testing a reducer's repeating timer effect on a `TestClock`, and the shapes of such a test that can't fail | [`testing-clock-effects.md`](testing-clock-effects.md) |
 | Reading what a reviewer or verifier returned, or why a finding was dropped | [`review-contract.md`](review-contract.md) |
 | Working out why a Claude Code hook denied, blocked or added context | [`hooks.md`](hooks.md) |
+| Checking a run's judge calls and decisions, or why the judge blocked a change | [`judge-audit.md`](judge-audit.md) |
 | Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |
 | Checking flow files with `swiftgate qa lint`, or running a plan's validation rows with `qa run` and `qa adopt` | [`simulator-qa.md`](simulator-qa.md) |
 | How `qa run` runs a `test:` row, once per check on a leased clone, and reads a runner that never launched | [`simulator-qa-test-rows.md`](simulator-qa-test-rows.md) |
@@ -28,5 +29,7 @@ into a committed file.
 | Which controls `sim verify`'s accessibility rules judge, in an owned repository or a brownfield clone | [`simulator-qa-audit.md`](simulator-qa-audit.md) |
 | Seeing a build run as 1 page (`swiftgate report --html`, `swiftgate view`), or emitting a span with `swiftgate events span` | [`run-viewer.md`](run-viewer.md) |
 | Knowing when a saved report is final, or what a live page polls and calls not written yet | [`run-viewer-live.md`](run-viewer-live.md) |
+| Finding where the run viewer's reason for a red span, stopped task or halted build comes from | [`run-viewer-failures.md`](run-viewer-failures.md) |
+| Reading the run viewer's Validation tab: which `qa run` results it keeps and how it links evidence | [`run-viewer-validation.md`](run-viewer-validation.md) |
 
 Your repository's `docs/index.md` routes its own docs (designs, plans, ADRs); this page doesn't.
