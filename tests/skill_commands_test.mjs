@@ -1080,8 +1080,8 @@ const runValidationFiles = () => Object.fromEntries(runValidationFileNames.map(n
   [name, existsSync(join(root, name)) ? readFileSync(join(root, name), 'utf8') : '']))
 
 // Where the brownfield run falls short of validating each merge: `qa adopt` copies the validation
-// worker's checks into plan state before `qa run --at-base` reads them there, every merge runs
-// `qa run --after <task>` and a red one undoes the merge, `final` runs every merged row, flow rows
+// worker's checks into plan state before `qa run --at-base` reads them there, every merge first runs
+// `qa run --after <task> --before-merge` and a red one goes to the fixer, `final` runs every merged row, flow rows
 // stay with `xcode` areas, the contract names what the checks target, and the validation task
 // follows the shared worker brief but writes only `.harness/qa/`, since no commit carries that
 // folder and its task never merges.
@@ -1094,6 +1094,7 @@ function runValidationProblems(files) {
   const qaCalls = text => extractInvocations(text).filter(inv => inv.words[0] === 'qa')
   const isRun = inv => inv.words[1] === 'run'
   const afterTask = inv => isRun(inv) && inv.words[inv.words.indexOf('--after') + 1] === '<task>'
+    && inv.words.includes('--before-merge')
 
   const skillCalls = qaCalls(skill)
   const adopt = skillCalls.find(inv => inv.words[1] === 'adopt')
@@ -1104,7 +1105,7 @@ function runValidationProblems(files) {
     problems.push('the run skill runs `qa run --at-base` before `qa adopt` copies the checks it reads')
   }
   if (!qaCalls(h2Section(skill, '7. ')).some(afterTask)) {
-    problems.push('step 7 never runs `swiftgate qa run --after <task>` after a merge')
+    problems.push('step 7 never runs `swiftgate qa run --after <task> --before-merge` before a merge')
   }
   const finalCalls = qaCalls(h2Section(skill, '8. ')).filter(isRun)
   if (!finalCalls.some(inv => !inv.words.includes('--after') && !inv.words.includes('--at-base'))) {
@@ -1118,12 +1119,12 @@ function runValidationProblems(files) {
     if (!contract.includes(target)) problems.push(`the contract step never names a check's ${target}s`)
   }
 
-  const after = h2Section(loop, 'After each merge')
-  if (!after) problems.push('the build loop has no `## After each merge` step')
+  const before = h2Section(loop, 'Before each merge')
+  if (!before) problems.push('the build loop has no `## Before each merge` step')
   else {
-    if (!qaCalls(after).some(afterTask)) problems.push('the after-merge step never runs `swiftgate qa run --after <task>`')
-    if (!extractInvocations(after).some(inv => inv.words.join(' ').startsWith('build merge <slug> <task> --undo'))) {
-      problems.push('the after-merge step never undoes a merge whose rows read red')
+    if (!qaCalls(before).some(afterTask)) problems.push('the before-merge step never runs `swiftgate qa run --after <task> --before-merge`')
+    if (!/`flows-red`[^.]*fix worktree/.test(before.replace(/\s+/g, ' '))) {
+      problems.push('the before-merge step never sends a `flows-red` refusal to the fix worktree')
     }
   }
 
@@ -1215,8 +1216,8 @@ function callerQAProblems(files, keys) {
   if (!skillAt) problems.push('the build\'s validate stage never runs `/swift-harness:qa`')
   else if (final && final.line > skillAt) problems.push('the build\'s validate stage runs `/swift-harness:qa` before `qa run --final`')
   if (!finish.includes('`validate: sim_qa off`')) problems.push('the build\'s validate stage never prints `validate: sim_qa off`')
-  if (!text('skills/build/SKILL.md').includes('references/event-loop.md#after-each-merge')) {
-    problems.push('the build skill\'s completion step never links the after-merge step')
+  if (!text('skills/build/SKILL.md').includes('references/event-loop.md#before-each-merge')) {
+    problems.push('the build skill\'s completion step never links the before-merge step')
   }
   const loop = text('skills/build/references/event-loop.md')
   if (!h2Section(loop, 'Validate stage')) problems.push('the build loop has no `## Validate stage` section')
@@ -1329,6 +1330,8 @@ const tests = {
       ['qa run', '--after', 'skills/run/SKILL.md'], ['qa run', '--plan', 'skills/run/SKILL.md'],
       ['qa run', '--json', 'skills/run/SKILL.md'],
       ['qa run', '--after', 'skills/build/references/event-loop.md'],
+      ['qa run', '--before-merge', 'skills/run/SKILL.md'],
+      ['qa run', '--before-merge', 'skills/build/references/event-loop.md'],
     ]) assert.ok(has(path, flag, file), `${file} never runs \`swiftgate ${path} ${flag}\``)
   },
 
@@ -1372,7 +1375,7 @@ const tests = {
       'skills/build/SKILL.md still prints `validate: not configured`',
       'the build\'s validate stage runs `/swift-harness:qa` before `qa run --final`',
       'the build\'s validate stage never prints `validate: sim_qa off`',
-      'the build skill\'s completion step never links the after-merge step',
+      'the build skill\'s completion step never links the before-merge step',
       'the build loop has no `## Validate stage` section',
       'the build loop never hands a plan\'s validation task the shared validation worker brief',
       'the sprint never runs `/swift-harness:qa` after `sprint finish`',
@@ -1388,7 +1391,7 @@ const tests = {
       'the build\'s validate stage never runs `swiftgate qa run --plan <slug> --final`',
       'the build\'s validate stage never runs `/swift-harness:qa`',
       'the build\'s validate stage never prints `validate: sim_qa off`',
-      'the build skill\'s completion step never links the after-merge step',
+      'the build skill\'s completion step never links the before-merge step',
       'the build loop has no `## Validate stage` section',
       'the build loop never hands a plan\'s validation task the shared validation worker brief',
       'the sprint never runs `/swift-harness:qa` after `sprint finish`',
@@ -1411,19 +1414,19 @@ const tests = {
       ].join('\n'),
       'skills/run/references/plan-shape.md': ['```markdown', '### demo-validation', '- Writes: .harness/qa/demo/, Tests/DemoTests.swift', '```'].join('\n'),
       'skills/qa/references/validation-worker.md': 'Write the checks under `.harness/qa/`, then commit them.\n',
-      'skills/build/references/event-loop.md': '## After each merge\n\n`"$SG" qa run --json`.\n',
+      'skills/build/references/event-loop.md': '## Before each merge\n\n`"$SG" qa run --json`.\n',
     }
     assert.deepEqual(runValidationProblems(files), [
       'the run skill runs `qa run --at-base` before `qa adopt` copies the checks it reads',
-      'step 7 never runs `swiftgate qa run --after <task>` after a merge',
+      'step 7 never runs `swiftgate qa run --after <task> --before-merge` before a merge',
       'step 8 never runs `swiftgate qa run` over every merged row',
       'the run skill never keeps `flow` rows to `xcode` areas',
       'the contract step never names a check\'s identifiers',
       'the contract step never names a check\'s routes',
       'the contract step never names a check\'s storage keys',
       'the contract step never names a check\'s log lines',
-      'the after-merge step never runs `swiftgate qa run --after <task>`',
-      'the after-merge step never undoes a merge whose rows read red',
+      'the before-merge step never runs `swiftgate qa run --after <task> --before-merge`',
+      'the before-merge step never sends a `flows-red` refusal to the fix worktree',
       'the validation task example writes `Tests/DemoTests.swift`, outside `.harness/qa/`',
       'the run skill never hands its validation task the shared validation worker brief',
       'step 7 never says the validation task commits nothing',
@@ -1431,14 +1434,14 @@ const tests = {
     assert.deepEqual(runValidationProblems({}), [
       'the run skill never runs `swiftgate qa adopt`',
       'the run skill never runs `swiftgate qa run --at-base`',
-      'step 7 never runs `swiftgate qa run --after <task>` after a merge',
+      'step 7 never runs `swiftgate qa run --after <task> --before-merge` before a merge',
       'step 8 never runs `swiftgate qa run` over every merged row',
       'the run skill never keeps `flow` rows to `xcode` areas',
       'the contract step never names a check\'s identifiers',
       'the contract step never names a check\'s routes',
       'the contract step never names a check\'s storage keys',
       'the contract step never names a check\'s log lines',
-      'the build loop has no `## After each merge` step',
+      'the build loop has no `## Before each merge` step',
       'the plan shape has no `### <slug>-validation` task example',
       'no validation worker brief',
       'the run skill never hands its validation task the shared validation worker brief',
