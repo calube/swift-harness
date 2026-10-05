@@ -4388,3 +4388,80 @@ PY
 ```
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-5's device wait, prove runs and raw swift builds
+
+The fifth price-tracker trial (2026-10-05) ran a `qa run --after spec-client-live --before-merge`
+that no row runs after: it waited 190 s for the build run's device, then reported no validation row
+to run. Its watchlist slice's prove took 92 s, and its detail slice's 154 s. Its orchestrator ran a
+raw `swift build` in 2 packages during the contract, cold in each package's own `.build`. `T` is the
+trial's folder under the practice-trial runs, with the clone's state copied to `$T/state` and the
+orchestrator's transcript in `$T/transcripts`:
+
+```sh
+T=<price-tracker-5 run folder> S=$T/state F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/plans/spec/validation.json $F/price-tracker-5-validation.json
+cp $S/runs/20261005T093520Z-51af3e9a/qa/report.json $F/price-tracker-5-qa-no-rows.json
+cp $S/config.toml $F/price-tracker-5-config.toml
+python3 - $T/transcripts/8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9.jsonl \
+  > plugin/gate/Tests/Fixtures/Hooks/price-tracker-5-raw-swift-build-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/price-tracker-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-price-tracker-5','/HARNESS',c)
+calls=[]
+for l in open(sys.argv[1]):
+    c=json.loads(l).get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')=='tool_use' and b.get('name')=='Bash':
+            cmd=b['input'].get('command','')
+            if re.search(r'\bswift (build|test)\b', cmd): calls.append({'command':scrub(cmd)})
+print(json.dumps(calls,indent=2,ensure_ascii=False))
+PY
+```
+
+`BrownfieldTrial/price-tracker-5-prove-reverted/` is the watchlist slice's prove run again by hand
+on a clone of the trial's repository: its 2 changed test files at the watchlist tip `f14b834`, the
+output of `swift build --build-tests` once the tip's 4 source files were reverted to the merge base
+`e2868a9` (the build fails: the tests call API the contract never stubbed), and the output of the
+`test_files` run of the 10 changed tests on that tree, which fails the same build. With `R` a clone
+of the trial's repository:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-5-prove-reverted; O=<scratch folder>
+git -C $R checkout -q f14b834; mkdir -p $F
+for t in AppFeatureTests WatchlistFeatureTests; do
+  git -C $R show f14b834:Packages/AppFeature/Tests/AppCoreTests/$t.swift > $F/$t.swift; done
+(cd $R/Packages/AppFeature && swift build --build-tests)
+git -C $R checkout -q e2868a9 -- Packages/AppFeature/Sources/AppCore/AppFeature.swift \
+  Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift \
+  Packages/AppFeature/Sources/AppUI/AppView.swift Packages/AppFeature/Sources/AppUI/WatchlistView.swift
+cd $R/Packages/AppFeature
+swift build --build-tests > $O/build.stdout 2> $O/build.stderr; echo $? > $O/build.status
+swift test --parallel --xunit-output $O/together.xml --filter "<the 10 ids' --filter, as prove joins them>" \
+  > $O/together.stdout 2> $O/together.stderr; echo $? > $O/together.status
+for f in build together; do for x in stdout stderr status; do
+  sed "s#$R#/CLONE#g; s#$O#/OUT#g" $O/$f.$x > $F/$f.$x; done; done
+```
+
+The reverted build took 9.1 s and the failing test run 3.8 s at a load average near 100; the trial
+ran that failing build once per test, 11 times.
+
+`SwiftTest/prove-together.{xml,-swift-testing.xml,stdout,stderr,status}` is 1 `swift test` run of 3
+Swift Testing tests, 2 of which fail, as a prove run of several changed tests with the source
+reverted reads. `SwiftTest/prove-together-DoubleTests.swift` is its test file. The package is a
+`Lib` target whose `double(_:)` returns its argument and a `LibTests` target holding that file; with
+`P` the package:
+
+```sh
+cd $P && swift test --parallel --xunit-output $P/together.xml \
+  --filter '(LibTests.DoubleTests/doublesThree\(\)|LibTests.DoubleTests/doublesFour\(\)|LibTests.DoubleTests/keepsZero\(\))' \
+  > together.stdout 2> together.stderr; echo $? > together.status
+F=plugin/gate/Tests/Fixtures/SwiftTest
+cp together.xml $F/prove-together.xml; cp together-swift-testing.xml $F/prove-together-swift-testing.xml
+cp together.status $F/prove-together.status; cp Tests/LibTests/DoubleTests.swift $F/prove-together-DoubleTests.swift
+for x in stdout stderr; do sed "s#$P#/FIXTURE#g" together.$x > $F/prove-together.$x; done
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

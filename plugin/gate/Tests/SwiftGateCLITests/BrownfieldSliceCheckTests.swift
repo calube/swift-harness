@@ -1006,8 +1006,8 @@ extension BrownfieldSliceCheckTests {
       starter.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' ") },
       "\(starter.map(\.command))")
     #expect(
-      feature.count > 1 && feature.allSatisfy { $0.step == .testFiles },
-      "prove's reverted runs and the baseline's rerun at the base: \(feature.map(\.step))")
+      feature.map(\.step) == [.build, .testFiles],
+      "prove's failing build of the reverted tree, then the baseline's rerun at the base")
     #expect(
       feature.allSatisfy { $0.command.contains(" --scratch-path '\(shared)'") },
       "\(feature.map(\.command))")
@@ -1016,5 +1016,204 @@ extension BrownfieldSliceCheckTests {
     let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
     #expect(labels.contains("AppFeature prove \(label)"), "\(labels)")
     #expect(labels.contains("- baseline \(label)"), "\(labels)")
+  }
+}
+
+extension BrownfieldSliceCheckTests {
+  private static let watchlistTests =
+    "Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift"
+  private static let appFeatureTests =
+    "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift"
+  /// The watchlist prove, run again by hand on the trial's repository.
+  private static let proveReverted = "BrownfieldTrial/price-tracker-5-prove-reverted"
+
+  /// price-tracker-5's watchlist task: its reducer, its 9 new watchlist tests and the root
+  /// test it rewrote, as its slice gated them.
+  private static func watchlistChange() throws -> [Change] {
+    let root = try Fixture.text("\(Self.proveReverted)/AppFeatureTests.swift")
+    return [
+      Change(
+        path: "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+        text: "let watchlist = 1\n", added: [1...1]),
+      Self.newFile(
+        Self.watchlistTests,
+        try Fixture.text("\(Self.proveReverted)/WatchlistFeatureTests.swift")),
+      Change(
+        path: Self.appFeatureTests, text: root,
+        added: [1...root.split(separator: "\n", omittingEmptySubsequences: false).count - 1]),
+    ]
+  }
+
+  @Test(
+    "price-tracker-5's watchlist prove, whose reverted source doesn't compile its tests, builds the tests once in the scratch tree, proves all 10 changed tests on that build failure and runs no test command there, timing the build as prove-build — catches the 92 s prove that ran 1 failing build per test, 11 in all"
+  )
+  func failingProveBuildProvesEveryTestOnce() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-5-config.toml"))
+    let build = try Fixture.text("\(Self.proveReverted)/build.stdout")
+    let together = try Fixture.text("\(Self.proveReverted)/together.stderr")
+    let runner = FakeAreaCommandRunner { request in
+      guard Self.inScratchTree(request, clone) else { return .passed }
+      return request.command.hasPrefix("swift build")
+        ? .failed(exit: 1, tail: build, junit: nil) : .failed(exit: 1, tail: together, junit: nil)
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    _ = try await Self.run(
+      clone, areas: config.areas, changes: try Self.watchlistChange(), runner: runner,
+      warm: ["AppFeature": 22_600], context: context)
+
+    let scratch = runner.requests.filter { Self.inScratchTree($0, clone) }
+    #expect(scratch.map(\.step) == [.build], "\(scratch.map(\.command))")
+    let shared = ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout)
+    #expect(
+      scratch.first?.command == "swift build --scratch-path '\(shared)' --build-tests",
+      "\(scratch.map(\.command))")
+    let proofs = context.proofs.results.filter { $0.target == "AppFeature" }
+    #expect(proofs.count == 10, "\(proofs.map(\.test))")
+    #expect(proofs.allSatisfy { $0.outcome == .proven })
+    #expect(
+      proofs.first { $0.test.hasSuffix("hostsWatchlist()") }?.assertion?.file
+        == Self.appFeatureTests)
+    let steps = context.steps.steps.filter { $0.area == "AppFeature" }
+    #expect(
+      steps.filter { [.proveBuild, .proveTest].contains($0.step) }.map(\.step) == [.proveBuild])
+    #expect(steps.first { $0.step == .proveBuild }?.verdict == .red)
+  }
+
+  @Test(
+    "a captured swift test run of 3 changed tests that failed 2 and passed 1 with the source reverted is read from its report: the 2 are proven, the third neutral.not-proven, and no test runs again alone — catches prove rerunning every test of a failed run 1 at a time when the report already names each"
+  )
+  func failedRunIsReadFromItsReport() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let probe = BrownfieldArea(
+      name: "Probe", root: "Probe", language: .swift, kind: .swiftpm,
+      test: "swift test --parallel --xunit-output {junit}",
+      testFiles: "swift test --parallel --xunit-output {junit} --filter {tests}", lint: nil,
+      build: "swift build", e2e: nil, testGlobs: ["Probe/Tests/**"], packs: [], xcode: nil)
+    let report = try #require(
+      JUnitReports.combined([
+        try Fixture.data("SwiftTest/prove-together.xml"),
+        try Fixture.data("SwiftTest/prove-together-swift-testing.xml"),
+      ]))
+    let stdout = try Fixture.text("SwiftTest/prove-together.stdout")
+    let runner = FakeAreaCommandRunner { request in
+      guard Self.inScratchTree(request, clone), request.step == .testFiles else { return .passed }
+      return .failed(exit: 1, tail: stdout, junit: report)
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+    let tests = "Probe/Tests/LibTests/DoubleTests.swift"
+
+    let parts = try await Self.run(
+      clone, areas: [probe],
+      changes: [
+        Change(
+          path: "Probe/Sources/Lib/Lib.swift",
+          text: "public func double(_ value: Int) -> Int { value * 2 }\n", added: [1...1]),
+        Self.newFile(tests, try Fixture.text("SwiftTest/prove-together-DoubleTests.swift")),
+      ],
+      runner: runner, warm: ["Probe": 1_000], context: context)
+
+    let runs = runner.requests.filter { Self.inScratchTree($0, clone) && $0.step == .testFiles }
+    #expect(runs.count == 1, "\(runs.map(\.command))")
+    #expect(Self.gating(parts) == ["neutral.not-proven \(tests)"])
+    let outcomes = Dictionary(
+      uniqueKeysWithValues: context.proofs.results.map { ($0.test, $0.outcome) })
+    #expect(
+      outcomes == [
+        "LibTests.DoubleTests/doublesThree()": .proven,
+        "LibTests.DoubleTests/doublesFour()": .proven,
+        "LibTests.DoubleTests/keepsZero()": .passesReverted,
+      ])
+    #expect(
+      context.steps.steps.filter { $0.area == "Probe" && $0.step == .proveTest }.map(\.verdict)
+        == [.red])
+  }
+}
+
+/// Fired once; a waiter learns whether it fired before its time ran out.
+final class OnceSignal: Sendable {
+  private struct State {
+    var fired = false
+    var waiters: [UUID: CheckedContinuation<Void, Never>] = [:]
+    var cancelled: Set<UUID> = []
+  }
+
+  private let state = Mutex(State())
+
+  var fired: Bool { state.withLock { $0.fired } }
+
+  func fire() {
+    let waiting = state.withLock { state in
+      state.fired = true
+      defer { state.waiters = [:] }
+      return state.waiters
+    }
+    for continuation in waiting.values { continuation.resume() }
+  }
+
+  /// Whether the signal fired before `limit` passed.
+  func wait(upTo limit: Duration) async -> Bool {
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { await self.untilFired() }
+      group.addTask { try? await Task.sleep(for: limit) }
+      await group.next()
+      group.cancelAll()
+    }
+    return fired
+  }
+
+  private func untilFired() async {
+    let id = UUID()
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        let done = state.withLock { state in
+          if state.fired || state.cancelled.contains(id) { return true }
+          state.waiters[id] = continuation
+          return false
+        }
+        if done { continuation.resume() }
+      }
+    } onCancel: {
+      let waiting = state.withLock { state in
+        state.cancelled.insert(id)
+        return state.waiters.removeValue(forKey: id)
+      }
+      waiting?.resume()
+    }
+  }
+}
+
+extension BrownfieldSliceCheckTests {
+  @Test(
+    "price-tracker-5's watchlist slice asks the judge about its TestStore tests while AppFeature's build and tests already run, rather than before them — catches the 61 s neutral step that held AppFeature's build back until every judge call had answered"
+  )
+  func judgeCallsOverlapTheAreaBuild() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-5-config.toml"))
+    let started = OnceSignal()
+    let runner = FakeAreaCommandRunner { request in
+      if request.area == "AppFeature" { started.fire() }
+      return Self.inScratchTree(request, clone)
+        ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
+    }
+    let answers = RecordedStrings()
+
+    _ = try await Self.run(
+      clone, areas: config.areas, changes: try Self.watchlistChange(), runner: runner,
+      warm: ["AppFeature": 22_600],
+      judge: { _, _ in
+        guard !answers.all.contains("before") else { return .asserts }
+        answers.append(await started.wait(upTo: .seconds(5)) ? "during" : "before")
+        return .asserts
+      })
+
+    #expect(!answers.all.isEmpty, "the watchlist tests reached no judge")
+    #expect(!answers.all.contains("before"), "\(answers.all)")
   }
 }

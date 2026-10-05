@@ -109,6 +109,16 @@ enum BrownfieldProve {
     case unproven
   }
 
+  /// 1 timed part of an area's prove, its build or its test runs, as it ends.
+  struct StepTime: Sendable, Equatable {
+    let area: String
+    let step: GateStep
+    let milliseconds: Int
+    let verdict: Verdict
+    /// Whether the area's scratch build directories held a build as the prove started.
+    let derivedData: GateDerivedData
+  }
+
   /// What a prove decided, and how its reverted runs built: `none` when it ran none.
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
@@ -122,10 +132,12 @@ enum BrownfieldProve {
   /// - Parameters:
   ///   - layout: the clone's state the label reads; `nil` reads `dependencies`'.
   ///   - outOfTime: what an area the box leaves too little time becomes.
+  ///   - timed: takes each area's prove build and test runs as each ends, so a slow prove says
+  ///     which of the 2 took its time.
   static func prove(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
     proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil,
-    outOfTime: OutOfTime = .blocks
+    outOfTime: OutOfTime = .blocks, timed: @escaping @Sendable (StepTime) -> Void = { _ in }
   ) async -> Outcome {
     func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
       Outcome(judgement: judgement, derivedData: .none)
@@ -213,7 +225,8 @@ enum BrownfieldProve {
           total =
             total
             + (await execute(
-              plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies))
+              plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies,
+              derivedData: built, timed: timed))
         }
         return total
       }
@@ -313,9 +326,13 @@ enum BrownfieldProve {
     return ChangedTestDiscovery.tests(in: unit, target: target, added: file.added)
   }
 
+  /// - Parameters:
+  ///   - derivedData: whether the scratch build directories held a build as the prove started.
+  ///   - timed: takes the area's prove build, and its test runs together, as each ends.
   private static func execute(
     _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, proofBase: String,
-    _ dependencies: Dependencies
+    _ dependencies: Dependencies, derivedData: GateDerivedData,
+    timed: @Sendable (StepTime) -> Void
   ) async -> AreaRun {
     let area = plan.area
     let directory = area.root == "." ? toplevel : toplevel.appending(path: area.root)
@@ -352,6 +369,45 @@ enum BrownfieldProve {
       let outcome = await dependencies.runner.run(placed)
       return (outcome, await dependencies.testCounts.counts(of: placed)?.tests)
     }
+    /// The build `template`'s tests need, run alone and timed; `nil` when the area has none to
+    /// run apart from its tests.
+    func build(_ template: String) async -> AreaCommandOutcome? {
+      guard let command = ProveBuild.command(fromTestFiles: template, kind: area.kind) else {
+        return nil
+      }
+      let request = AreaCommandRequest(
+        area: area.name, step: .build, command: command, workingDirectory: directory.path,
+        deadline: dependencies.bound?(area.name, .build).duration ?? dependencies.deadline,
+        environment: [:], junitPath: nil)
+      let placed =
+        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+        ?? request
+      let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(placed) }
+      timed(
+        StepTime(
+          area: area.name, step: .proveBuild, milliseconds: milliseconds,
+          verdict: outcome == .passed ? .green : .red, derivedData: derivedData))
+      return outcome
+    }
+    /// The changed tests run together, and alone only where the run's report doesn't say how
+    /// each did.
+    func selected(_ template: String) async -> [(AreaTestID, AreaCommandOutcome)] {
+      let together = await run(template, step: .testFiles, ids: plan.ids)
+      guard
+        ProveVerdict.needsRerunAlone(
+          together.outcome, idCount: plan.ids.count, executed: together.executed)
+      else {
+        let outcome = ProveVerdict.reading(together.outcome, executed: together.executed)
+        return plan.ids.map { ($0, outcome) }
+      }
+      let attribution = ProveVerdict.attributed(together.outcome, ids: plan.ids)
+      var settled = attribution.outcomes
+      for id in attribution.rerun {
+        let ran = await run(template, step: .testFiles, ids: [id])
+        settled[id] = ProveVerdict.reading(ran.outcome, executed: ran.executed)
+      }
+      return plan.ids.map { ($0, settled[$0] ?? together.outcome) }
+    }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement
     let whole: Bool
@@ -364,19 +420,16 @@ enum BrownfieldProve {
         area: area.name, ids: plan.ids, outcome: outcome, bound: bound)
     case .selected(let template):
       whole = false
-      let together = await run(template, step: .testFiles, ids: plan.ids)
-      if ProveVerdict.needsRerunAlone(
-        together.outcome, idCount: plan.ids.count, executed: together.executed)
-      {
-        var alone: [(AreaTestID, AreaCommandOutcome)] = []
-        for id in plan.ids {
-          let ran = await run(template, step: .testFiles, ids: [id])
-          alone.append((id, ProveVerdict.reading(ran.outcome, executed: ran.executed)))
-        }
-        outcomes = alone
+      if let built = await build(template), case .failed = built {
+        outcomes = plan.ids.map { ($0, built) }
       } else {
-        let outcome = ProveVerdict.reading(together.outcome, executed: together.executed)
-        outcomes = plan.ids.map { ($0, outcome) }
+        let (ran, milliseconds) = await GateRun.timed { await selected(template) }
+        timed(
+          StepTime(
+            area: area.name, step: .proveTest, milliseconds: milliseconds,
+            verdict: ran.allSatisfy { $0.1 == .passed } ? .green : .red,
+            derivedData: derivedData))
+        outcomes = ran
       }
       judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes, bound: bound)
     }

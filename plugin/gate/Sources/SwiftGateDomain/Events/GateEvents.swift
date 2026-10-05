@@ -16,6 +16,10 @@ public enum GateStep: String, Sendable, Codable, CaseIterable {
   case reach
   case stress
   case prove
+  /// Prove building an area's tests in its scratch tree with the change's source reverted.
+  case proveBuild = "prove-build"
+  /// Prove running an area's changed tests on that build.
+  case proveTest = "prove-test"
   case mutate
   case judge
   /// `xcodebuild test` on a simulator: T2 or T3.
