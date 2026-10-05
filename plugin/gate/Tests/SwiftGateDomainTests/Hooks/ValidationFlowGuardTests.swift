@@ -12,16 +12,20 @@ struct ValidationFlowGuardTests {
   }
 
   @Test(
-    "the trial's validation worker's 2 agent-device batch runs of its prepared flows are denied as guard.validation-flow-by-hand, naming qa run --at-base --prepared-by, and its other 16 calls pass — catches a red proven by hand instead of through qa run"
+    "the trial's validation worker's 2 agent-device batch runs of its prepared flows are denied as guard.validation-flow-by-hand, naming qa run --at-base --prepared-by, its 3 bare ls calls as guard.bare-stdin-reader, and its other 13 calls pass — catches a red proven by hand instead of through qa run"
   )
   func capturedWorkerBatchesDenied() throws {
     let calls = try Self.workerCalls()
     try #require(calls.count == 18)
 
     let denied = calls.indices.filter { BashGuard.evaluate(calls[$0]) != nil }
+    let flows = denied.filter {
+      BashGuard.evaluate(calls[$0])?.ruleID != BashGuard.bareStdinReaderRuleID
+    }
 
-    #expect(denied == [14, 17])
-    for index in denied {
+    #expect(denied == [1, 6, 7, 14, 17])
+    #expect(flows == [14, 17])
+    for index in flows {
       let violation = try #require(BashGuard.evaluate(calls[index]))
       #expect(violation.ruleID == BashGuard.validationFlowByHandRuleID)
       #expect(violation.reason.contains("qa run"), "\(violation.reason)")

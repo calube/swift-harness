@@ -19,12 +19,13 @@ public enum BashGuard {
   public static let snapshotRecordRuleID = "guard.snapshot-record"
   public static let globalDerivedDataRuleID = "guard.global-derived-data"
   public static let validationFlowByHandRuleID = "guard.validation-flow-by-hand"
+  public static let bareStdinReaderRuleID = "guard.bare-stdin-reader"
 
   public static func evaluate(_ command: String) -> GuardViolation? {
     for simple in ShellSyntax.simpleCommands(in: command) {
       if let violation = evaluate(simple) { return violation }
     }
-    return nil
+    return bareListing(command)
   }
 
   /// Whether the command line runs `git commit` (in any simple command of it).
@@ -73,6 +74,40 @@ public enum BashGuard {
     default:
       return nil
     }
+  }
+
+  /// Words that may stand before a command name the shell still expands aliases in.
+  private static let aliasExpandingPrefixes: Set<String> = ["time", "!", "{"]
+
+  /// An `ls` given no path, as the line's shell reads it. A shell alias can run it as a lister,
+  /// such as `eza`, that reads paths from stdin when given none, and the Bash tool's stdin never
+  /// closes. `/bin/ls`, `command ls` and `env ls` skip the alias; heredoc text is another
+  /// program's input.
+  private static func bareListing(_ command: String) -> GuardViolation? {
+    for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
+      var words = parsed.words.drop(while: ShellSyntax.isAssignment)
+      while let first = words.first, aliasExpandingPrefixes.contains(first) {
+        words = words.dropFirst().drop { $0.hasPrefix("-") }
+      }
+      guard words.first == "ls", !namesOperand(words.dropFirst()) else { continue }
+      return GuardViolation(
+        ruleID: bareStdinReaderRuleID,
+        reason:
+          "`\(words.joined(separator: " "))` names no folder. Where `ls` is a shell alias for a "
+          + "lister such as `eza`, that lister reads paths from stdin when given none, and this "
+          + "Bash call's stdin never closes, so it waits until the tool's timeout. Name the "
+          + "folder: `ls .` or `ls <dir>`.")
+    }
+    return nil
+  }
+
+  private static func namesOperand(_ arguments: ArraySlice<String>) -> Bool {
+    var optionsEnded = false
+    for argument in arguments {
+      if optionsEnded || argument == "-" || !argument.hasPrefix("-") { return true }
+      if argument == "--" { optionsEnded = true }
+    }
+    return false
   }
 
   /// The value of `--steps-file`, spelled as 2 words or with `=`.
