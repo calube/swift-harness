@@ -205,12 +205,15 @@ enum GateRun {
       + Int(duration.components.attoseconds / 1_000_000_000_000_000)
   }
 
-  /// Times `body` on a continuous clock.
+  /// The clock ``timed(_:)`` reads: the continuous clock, unless a test binds one it moves
+  /// itself, so a step can take longer than a budget without the test waiting it out.
+  @TaskLocal static var now: @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }
+
+  /// Times `body` on ``now``.
   static func timed<T>(_ body: () async throws -> T) async rethrows -> (T, Int) {
-    let clock = ContinuousClock()
-    let start = clock.now
+    let start = now()
     let value = try await body()
-    return (value, milliseconds(clock.now - start))
+    return (value, milliseconds(now() - start))
   }
 }
 
