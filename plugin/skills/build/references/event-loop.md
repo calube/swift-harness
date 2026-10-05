@@ -275,16 +275,18 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - both returns: this task's, and that of the task it collides with, read from `<returns>`. For a
   conflict, that's the merged task whose `writeSet` holds a conflicted file; otherwise, or when none
   does, the task merged last;
-- the merge gate tier, and `--base <surfaceCommit>` for a plan with a surface, so its gate in the
-  fix worktree measures from where `main`'s gates do;
+- the tier its return must meet: the merge gate in an owned project, the task gate in a
+  brownfield clone, where its branch tip lacks every task merged since and the merge gate after
+  `build merge --fix` gates the merged tree; and `--base <surfaceCommit>` for a plan with a
+  surface, so its gate in the fix worktree measures from where `main`'s gates do;
 - the absolute path `$SG` holds, the plugin under test's `bin/swiftgate`, to run its gate and every
   other `swiftgate` command through: a `swiftgate` on `PATH` may be another install, whose runs no
   store of this build holds;
 - that the gate run it returns must start at its last commit on a clean tree: commit first, then
   gate. `check-return --fix` rejects any other run as `build-return.stale-gate`;
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
-  or `"$SG" check --tier fast` in an owned project, and runs the merge gate only to confirm a fix
-  that passes there. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
+  or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
+  passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
   (`guard.fixer-gate-cap`).
 
 Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
@@ -333,7 +335,9 @@ It runs only the rows whose `Runs after` names `<task>` and whose other tasks ar
 order: acceptance, then flow, then state, on 1 held device. `main` doesn't move. A red row stops
 its own requirement's later layers, never another requirement's (simulator QA amendment §6).
 `build merge` refuses `flows-unchecked` while a ready row has no such run GREEN at the branch's
-tip on `main`'s commit, so run it again after any commit to either.
+tip on `main`'s commit, so run it again after any commit to either. A run whose trial merge makes
+the same tree as an earlier one takes the rows that passed there with byte-identical checks,
+naming that run in `reusedFrom`, so repeating a fixer's passing run costs seconds.
 
 - GREEN: merge. Rows that read `unverified` or `waiting` go in the report with their messages.
   A branch that conflicts with `main` runs no row and names the files: merge, and the conflict

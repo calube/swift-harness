@@ -3768,3 +3768,28 @@ The reverted run exits 0 and warns that no test case matched, and both of its re
 `tests="0"`; the head run exits 0 with the 4 tests passing in its Swift Testing report. Both
 built the package from no `.build`. `grep -rniE '/Users|/private|/var/folders|caleb'` over
 these files matched nothing.
+
+## Brownfield trial: a task the cutoff abandoned after its merged tree passed every flow
+
+`BrownfieldTrial/price-tracker-2-*` is what a brownfield run's state held when `build cutoff`
+abandoned a gating task with 293 s left, charging 300 s. `price-tracker-2-build-events.jsonl` is the
+build run's `events.jsonl`, with 2 merge gates recorded; `price-tracker-2-gate-runs.jsonl` is every
+`gate.run` line of `events/gate.jsonl`, where those merge gates took 50.9 s and 66.5 s and the fixer's
+own merge-tier gate on its branch tip took 240.0 s; `price-tracker-2-cutoff.json` is the cutoff's
+record. `price-tracker-2-validation.json` is the plan's validation table, and the 2
+`price-tracker-2-qa-*-before-merge.json` files are the `qa run --before-merge --fix` reports the
+fixer and then the orchestrator wrote for the same branch tip on the same plan-branch head, both
+GREEN. From the trial's copied state directory `S`, with `R` the build run's id:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/plans/spec/build/$R/events.jsonl $F/price-tracker-2-build-events.jsonl
+cp $S/plans/spec/build/$R/cutoff.json $F/price-tracker-2-cutoff.json
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/price-tracker-2-gate-runs.jsonl
+cp $S/plans/spec/validation.json $F/price-tracker-2-validation.json
+cp $S/runs/20261005T044436Z-15d88b8c/qa/report.json $F/price-tracker-2-qa-fixer-before-merge.json
+cp $S/runs/20261005T045133Z-a9767900/qa/report.json \
+  $F/price-tracker-2-qa-orchestrator-before-merge.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-2-*` matched nothing.

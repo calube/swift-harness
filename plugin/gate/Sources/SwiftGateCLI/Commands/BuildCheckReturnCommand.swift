@@ -234,7 +234,7 @@ enum BuildCheckReturnRun {
       throw Blocked("plan `\(slug)` has no task `\(taskReturn.task)`")
     }
     let (taskGate, taskProof) = try await taskGate(
-      of: task, plan: store.plan, slug: slug, fix: fix, git: git)
+      of: task, plan: store.plan, slug: slug, fix: fix, profile: profile, git: git)
     let names: TaskWorktree
     do {
       names = try TaskWorktree(
@@ -533,11 +533,14 @@ enum BuildCheckReturnRun {
     }
   }
 
-  /// The preset's fixed tier, or the ledger's own when the preset defers to it. A fix is merged
-  /// straight after, so it meets the preset's merge gate instead. Also the run preset's
-  /// `taskProof`, which says whether the task gate had to prove and mutate.
+  /// The preset's fixed tier, or the ledger's own when the preset defers to it. An owned fix is
+  /// merged straight after, so it meets the preset's merge gate instead. A brownfield fix meets
+  /// the task gate: its branch tip lacks whatever merged after it was cut, so a merge tier there
+  /// gates a tree that never lands, and the plan branch's merge gate runs on the merged tree.
+  /// Also the run preset's `taskProof`, which says whether the task gate had to prove and mutate.
   private static func taskGate(
-    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool, git: any Git
+    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool,
+    profile: RepositoryProfile, git: any Git
   ) async throws(Blocked) -> (CheckTier, BuildPreset.TaskProof) {
     let store: BuildRunStore?
     do {
@@ -553,7 +556,7 @@ enum BuildCheckReturnRun {
       throw Blocked("reading build run \(store.runID): \(error)")
     }
     let proof = record.preset.taskProof
-    if fix { return (record.preset.mergeGate, proof) }
+    if fix, profile == .owned { return (record.preset.mergeGate, proof) }
     switch record.preset.taskGate {
     case .ledger: return (task.gate, proof)
     case .tier(let tier): return (tier, proof)

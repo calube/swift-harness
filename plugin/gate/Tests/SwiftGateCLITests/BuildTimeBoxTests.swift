@@ -108,13 +108,14 @@ private struct BoxScenario {
   }
 
   func cutoff(
-    atMinute minute: Double, leftovers: (any RunLeftovers)? = nil, finalSeconds: Int? = nil
+    atMinute minute: Double, leftovers: (any RunLeftovers)? = nil, finalSeconds: Int? = nil,
+    history: CutoffHistory = CutoffHistory()
   ) async -> BuildLoopResult<BuildCutoffReport> {
     await BuildCutoffRun.run(
       slug: Self.plan, session: Self.session, git: git,
       clock: BoxClock(date: Self.launch.addingTimeInterval(minute * 60)),
       telemetry: BuildCutoffTelemetry(log: BuildHaltLog(root: telemetryRoot), enabled: true),
-      leftovers: leftovers, finalSeconds: finalSeconds)
+      leftovers: leftovers, finalSeconds: finalSeconds, history: history)
   }
 
   func ledger() throws -> [String: TaskStatus] {
@@ -172,6 +173,66 @@ struct BuildTimeBoxTests {
     let measured = await scenario.cutoff(atMinute: 38, finalSeconds: 400)
     #expect(measured.verdict == .green, "\(measured.message)")
     #expect(measured.report?.abandoned.map(\.task) == ["web"])
+  }
+
+  /// `features` merged under a recorded 50 s merge gate, and `ui` returned ready to merge.
+  private static func gatingAfterAMeasuredMerge(_ scenario: BoxScenario) async throws {
+    try scenario.claimPlanned([("features", .done), ("ui", .inProgress)])
+    try scenario.writeClock()
+    let record = try await scenario.start(.brownfield)
+    try scenario.writeReturn("ui", runID: record.runID, outcome: .readyToMerge)
+    let store = try await BuildRunStore.open(
+      plan: BoxScenario.plan, runID: record.runID, git: scenario.git)
+    let merged = BoxScenario.launch.addingTimeInterval(30 * 60)
+    try await store.append(
+      .merge(.init(task: "features", preCommit: "base", postCommit: "merged", at: merged)))
+    try await store.append(
+      .gate(
+        .init(
+          stage: .merge(task: "features"), tier: .merge, verdict: .green,
+          runID: Self.featuresGate, at: merged.addingTimeInterval(50))))
+  }
+
+  private static let featuresGate = "20261004T100000Z-00000002"
+
+  @Test(
+    "with 210 s left a gating task finishes on the run's measured 50 s merge gate where the fixed 300 s estimate would abandon it, and its reason names the measured seconds — catches the cutoff ignoring the gate history it was given"
+  )
+  func measuredMergeGateLandsTheTask() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try await Self.gatingAfterAMeasuredMerge(scenario)
+
+    let result = await scenario.cutoff(
+      atMinute: 41.5, history: CutoffHistory(gateMilliseconds: [Self.featuresGate: 49_400]))
+
+    let report = try #require(result.report, "\(result.message)")
+    #expect(report.finish == ["ui"], "\(report.abandoned.map(\.reason))")
+    let saved = try CutoffRecord.decode(Data(contentsOf: URL(filePath: report.path)))
+    #expect(saved.decisions.first?.reason.contains("50 s") == true, "\(saved.decisions)")
+  }
+
+  @Test(
+    "a gating task with flow rows and no GREEN before-merge run at its tip is charged its newest before-merge run's 132 s of rows, so with 210 s left it is abandoned — catches the cutoff landing a task whose flows still have to run"
+  )
+  func unrunFlowsCountAgainstTheBox() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try await Self.gatingAfterAMeasuredMerge(scenario)
+    try scenario.write(
+      URL(filePath: try scenario.layout().directory).appending(path: ValidationTable.fileName),
+      try Fixture.data("BrownfieldTrial/price-tracker-2-validation.json"))
+    let report = try QAReportJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-2-qa-fixer-before-merge.json"))
+
+    let result = await scenario.cutoff(
+      atMinute: 41.5,
+      history: CutoffHistory(
+        gateMilliseconds: [Self.featuresGate: 49_400], beforeMergeReports: [report]))
+
+    let cut = try #require(result.report, "\(result.message)")
+    #expect(cut.abandoned.map(\.task) == ["ui"])
+    #expect(cut.abandoned.first?.reason.contains("132 s") == true, "\(cut.abandoned)")
   }
 
   @Test(

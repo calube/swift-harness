@@ -96,10 +96,12 @@ public struct QAAtBaseRun: Sendable, Equatable {
   }
 
   /// The ready rows of `plan` this record proves: a row whose requirement, layer, check text and
-  /// digest in `digests` match a recorded row that read `pass` or `red`. A flow row and the state
-  /// rows that run on its device are reused together or not at all, since a state check reads
-  /// what its flow left on a device that only a run of that flow brings up.
-  public func reuse(in plan: QARunPlan, digests: [Int: String]) -> Reuse {
+  /// digest in `digests` match a recorded row whose result is in `results`. A flow row and the
+  /// state rows that run on its device are reused together or not at all, since a state check
+  /// reads what its flow left on a device that only a run of that flow brings up.
+  public func reuse(
+    in plan: QARunPlan, digests: [Int: String], results: Set<QAResult> = [.pass, .red]
+  ) -> Reuse {
     var outcomes: [Int: QACheckOutcome] = [:]
     var reasons: [Int: String] = [:]
     let ready = plan.entries.filter { $0.waitingOn.isEmpty }

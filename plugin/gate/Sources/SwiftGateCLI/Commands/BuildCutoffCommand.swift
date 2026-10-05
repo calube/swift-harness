@@ -29,6 +29,14 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let notes: [String]
 }
 
+/// What `build cutoff` reads of the run's past to price landing each task.
+struct CutoffHistory: Sendable {
+  /// Each recorded gate run's duration in milliseconds, by run id.
+  var gateMilliseconds: [String: Int] = [:]
+  /// The plan's `qa run --before-merge` reports.
+  var beforeMergeReports: [QAReport] = []
+}
+
 /// `build cutoff`: the brownfield run's answer to the time box's cutoff, decided by
 /// ``CutoffRule`` with no one asked.
 enum BuildCutoffRun {
@@ -42,10 +50,11 @@ enum BuildCutoffRun {
   ///     leaves both alone.
   ///   - finalSeconds: how long the clone's `final` gate takes, which grows the final reserve and
   ///     brings the cutoff earlier.
+  ///   - history: the gates and before-merge qa runs that price each task's landing.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock,
     telemetry: BuildCutoffTelemetry?, leftovers: (any RunLeftovers)? = nil,
-    finalSeconds: Int? = nil
+    finalSeconds: Int? = nil, history: CutoffHistory = CutoffHistory()
   ) async -> BuildLoopResult<BuildCutoffReport> {
     if let refusal: BuildLoopResult<BuildCutoffReport> = await BuildLoop.authorize(
       command, slug: slug, session: session, git: git)
@@ -91,21 +100,31 @@ enum BuildCutoffRun {
           "the cutoff comes in \(wait) s, at \(box.deadlines.cutoffAt.formatted(.iso8601)); "
             + "running tasks keep going until then")
       }
-      let tasks = ledger.tasks.compactMap { task -> CutoffTask? in
+      var tasks: [CutoffTask] = []
+      for task in ledger.tasks {
         switch task.status {
         case .inProgress:
           // The ledger reads `done` only after a merge's post-merge steps, so the run's events
           // say whether its merge and merge gate already happened.
           if let stage = log.mergeStage(task: task.id) {
-            return CutoffTask(id: task.id, stage: stage)
+            tasks.append(CutoffTask(id: task.id, stage: stage))
+          } else if readyToMerge(task.id, run: store.layout.directory) {
+            tasks.append(
+              CutoffTask(
+                id: task.id, stage: .gating,
+                beforeMergeQASeconds: await beforeMergeQASeconds(
+                  task.id, slug: slug, plan: plan, ledger: ledger, log: log,
+                  reports: history.beforeMergeReports, git: git)))
+          } else {
+            tasks.append(CutoffTask(id: task.id, stage: .working))
           }
-          let gating = readyToMerge(task.id, run: store.layout.directory)
-          return CutoffTask(id: task.id, stage: gating ? .gating : .working)
-        case .pending, .blocked: return CutoffTask(id: task.id, stage: .notStarted)
-        case .done, .abandoned, .needsReplan: return nil
+        case .pending, .blocked: tasks.append(CutoffTask(id: task.id, stage: .notStarted))
+        case .done, .abandoned, .needsReplan: continue
         }
       }
-      let decisions = CutoffRule.decide(tasks: tasks, timeBox: box, now: now)
+      let decisions = CutoffRule.decide(
+        tasks: tasks, timeBox: box, now: now,
+        costs: CutoffCosts.measured(log: log, milliseconds: history.gateMilliseconds))
       let path = store.layout.directory + "/" + CutoffRecord.fileName
       do {
         try CutoffRecord(at: now, timeBox: box, decisions: decisions).encoded()
@@ -148,6 +167,54 @@ enum BuildCutoffRun {
         message: "cut off build run \(record.runID): \(abandoned.count) task(s) abandoned")
     } catch {
       return .blocked(command, slug, error.message)
+    }
+  }
+
+  /// What `task`'s `qa run --before-merge` still costs: 0 when its merge makes no row ready, or
+  /// when a GREEN or conflicted run covers the branch it merges (its fixer's, when its newest
+  /// checked return is the fixer's) at its tip on the plan branch's head. Otherwise the newest
+  /// such run's rows, whatever tip it ran, in whole seconds rounded up, or 0 with none recorded.
+  private static func beforeMergeQASeconds(
+    _ task: String, slug: String, plan: PlanStateLayout.Plan, ledger: Ledger, log: BuildEventLog,
+    reports: [QAReport], git: any Git
+  ) async -> Int {
+    guard
+      let data = FileManager.default.contents(
+        atPath: plan.directory + "/" + ValidationTable.fileName),
+      let table = try? ValidationTableJSON.decode(data)
+    else { return 0 }
+    let fix =
+      log.events.last { event in
+        if case .returnCheck(let check) = event { return check.task == task }
+        return false
+      }.map { event in
+        if case .returnCheck(let check) = event { return check.fix }
+        return false
+      } ?? false
+    var branch = "\(slug)/\(fix ? "fix-\(task)" : task)"
+    var tip: String?
+    var base: String?
+    if let common = try? await git.commonDirectory(),
+      let names = try? TaskWorktree(
+        commonDirectory: common, plan: slug, task: fix ? "fix-\(task)" : task,
+        profile: .brownfield)
+    {
+      branch = names.branch
+      tip = try? await git.revision("refs/heads/\(names.branch)")
+      base = try? await git.revision("refs/heads/\(names.baseBranch)")
+    }
+    let own = reports.filter { $0.after == task }
+    let merged = LedgerProgress(tasks: ledger.tasks.map { .init(id: $0.id, status: $0.status) })
+      .merged(per: log)
+    switch QAMergeReadiness.of(
+      table: table, merged: merged, plan: slug, task: task, reports: own, branch: branch,
+      tip: tip ?? "", base: base ?? "")
+    {
+    case .notNeeded, .checked, .conflicts:
+      return 0
+    case .unchecked, .red:
+      guard let newest = own.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }) else { return 0 }
+      return (newest.rows.reduce(0) { $0 + $1.milliseconds } + 999) / 1000
     }
   }
 
@@ -209,8 +276,11 @@ struct BuildCutoffCommand: AsyncParsableCommand {
     abstract: "Decide a brownfield run's in-flight tasks at its time box's cutoff, asking no one.",
     discussion:
       "Brownfield runs only: an owned build halts and asks at its cutoff. Lets each task "
-      + "already gating finish its merge while that merge, `final` and the report still fit "
-      + "in the box, sets every other running task `abandoned` with the reason, and writes "
+      + "already gating finish its merge while its before-merge qa (none when a GREEN run "
+      + "covers its tip), that merge gate, `final` and the report still fit before the box "
+      + "ends, each priced from this run's recorded merge and final gates and the fixed "
+      + "estimates only before any, sets every other running task `abandoned` with the reason, "
+      + "and writes "
       + "the decisions to the run's cutoff.json. It also acts once starts have stopped with "
       + "nothing running, naming the tasks that never started. It stops any gate still running "
       + "in an abandoned task's worktree and prunes the scratch trees of gates that ended "
@@ -244,7 +314,10 @@ struct BuildCutoffCommand: AsyncParsableCommand {
       slug: plan, session: session, git: BuildLoop.git(), clock: LiveBuildClock(),
       telemetry: telemetry,
       leftovers: LiveRunLeftovers(directory: root),
-      finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
+      finalSeconds: MeasuredFinalGateReader.seconds(worktree: root),
+      history: CutoffHistory(
+        gateMilliseconds: MeasuredFinalGateReader.milliseconds(worktree: root),
+        beforeMergeReports: QARunHistory.beforeMergeReports(worktree: root, plan: plan)))
     Console.write(BuildCutoffRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }
