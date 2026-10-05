@@ -251,7 +251,11 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      task's worktree and id, `<slug>` as its plan, its rows from `## Validation`, the contract
      commit's sha, and says to work in that worktree and follow
      `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Its write set names no
-     test file, so it writes `.harness/qa/<slug>/` alone. When it returns:
+     test file, so it writes `.harness/qa/<slug>/` alone. When it returns, first record its usage
+     under its task, `"$SG" events ingest --session <session> --agent-id <agent> --role qa --task <task> --build-run <run>`,
+     with the `<agent>` of the `agentId: <agent>` line its launch printed: each task's completion
+     ingest leaves it untagged. An exit 2 that says `telemetry is off` means say nothing, and any
+     other non-zero exit prints 1 line for the report and the step goes on. Then:
      1. From `<checkout>`, `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into
         `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN adopt is 1 report line.
      2. `/bin/rm -rf <worktree>/.harness/qa`, then
@@ -385,6 +389,12 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 
 ## 9. Report
 
+First record every message the session and its agents wrote since their last ingest:
+`"$SG" events ingest --session <session> --role orchestrator --build-run <run>`. It reads the
+session's transcript, its Agent-tool subagents' and every Workflow agent's, so the build run's
+cost is whole. An exit 2 that says `telemetry is off` means say nothing, and any other non-zero
+exit prints 1 line for the report and the step goes on.
+
 `"$SG" run report <slug>` writes the report to `<plan-dir>`, rewrites the run's report page, whose path
 its JSON names as `runReport`, and prints the report: the assumptions, the
 baseline failures, the build-only areas, the dropped steps, each task's review depth, the review
@@ -394,7 +404,9 @@ or pending leads with `run: INCOMPLETE` and names each one, and its `final` verd
 line, covers only what merged. A plan with a validation table adds `validation: <n> of <m> rows
 verified` after it, from the newest `qa run` over every row: after `final`, a row that never
 verified makes it RED. Print it as your last message as written, then 1 line per row of
-step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`. Merging
+step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`, then the
+cost section's `total` and `total with judge` lines of `"$SG" events summary --build-run <run>`;
+a failed summary prints 1 line. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 
 ## Rules

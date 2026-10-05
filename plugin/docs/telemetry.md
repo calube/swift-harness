@@ -73,10 +73,10 @@ decisions can block a merge. `events ingest` then exits 2 naming `telemetry.enab
 - `swiftgate events summary [--since <same forms>] [--run <gate run id>] [--build-run <build run id>] [--json]`
   prints the sections below. `--since` defaults to `7d`.
 - `swiftgate events ingest --session <id> [--workflow-transcripts <dir> | --agent-id <id>] [--role <role>] [--task <id>]
-  [--build-run <id>]` reads token counts offline from the session's transcript, its subagents' transcripts and,
+  [--build-run <id>]` reads token counts offline from the session's transcript, its subagents' (Workflow agents too) and,
   with `--workflow-transcripts`, every `agent-*.jsonl` in that directory. With `--agent-id`, the id the Agent
   tool printed, it reads only that subagent of the session and tags it with `--role`, which it then requires:
-  the build skill's merge fixer, which the session launches itself. It keeps message ids, model ids,
+  the merge fixer or the validation worker. It keeps message ids, model ids,
   counts and times, and never the text. It also writes 1 `agent.tools` per agent per 60 s window of tool calls,
   keeping only repository-relative file-tool paths. Ingesting again adds nothing. Ingest stores a message
   the price table can't price without a cost, and names its model in the output. Roles: `orchestrator`, `design`, `plan`,
@@ -92,8 +92,8 @@ decisions can block a merge. `events ingest` then exits 2 naming `telemetry.enab
   last event is older, here and in every imported or unkept store. It never touches an active file.
 
 `events list` and `summary` exit 0 even with damage, and 2 for a bad flag value. The build skill runs `events ingest` as each
-worker completes, and the merge fixer's with `--agent-id`, and calls `build halt` and `resume`; the ship skill
-ingests its own session and prints `events summary --build-run <id>`.
+worker completes, and the merge fixer's with `--agent-id`, and calls `build halt` and `resume`; the ship and run skills
+ingest their session and print `events summary --build-run <id>`.
 
 ## What the summary answers
 

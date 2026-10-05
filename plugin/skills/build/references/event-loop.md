@@ -242,8 +242,8 @@ else `"$SG" events span end <span> --outcome red`.
 Then record its usage under the task it fixed:
 `"$SG" events ingest --session <session> --agent-id <agent> --role build-worker --task <task> --build-run <run>`,
 with the `<agent>` its launch named. The fixer is
-this session's own subagent, which every other ingest files as the orchestrator's, so run this one
-first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
+this session's own subagent, which the session's own ingest files as the orchestrator's, so run this
+one first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
 other non-zero exit prints 1 line for the report and the step goes on.
 
 Write its reply, the notice's `<result>`, to `.harness/build/<run>/fix-<task>.json` and check it.
