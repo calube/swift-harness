@@ -205,9 +205,20 @@ public enum FlowRules {
     return []
   }
 
-  /// Why a `gesture` step's input lacks the key its `kind` reads.
+  /// Why a `swipe` gesture lacks the `preset` the pinned tool requires. A `direction` of `left`
+  /// or `right`, the key a `fling` reads, names the preset to write instead.
   private static func gestureProblems(_ input: [String: FlowJSON]) -> [String] {
-    []
+    guard case .string("swipe")? = input["kind"], input["preset"] == nil else { return [] }
+    let presets = swipePresets.joined(separator: ", ")
+    var problem =
+      "`kind` `swipe` reads its direction from `preset`, 1 of \(presets), which this step "
+      + "lacks; the pinned tool refuses the step at run time"
+    if case .string(let direction)? = input["direction"], swipePresets.contains(direction) {
+      var fixed = input
+      fixed["preset"] = fixed.removeValue(forKey: "direction")
+      problem += ". Write \(FlowJSON.object(fixed).jsonText)"
+    }
+    return [problem]
   }
 
   /// Commands that read the screen and leave the app as it is.
