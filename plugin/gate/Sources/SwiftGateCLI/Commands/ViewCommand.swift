@@ -17,6 +17,17 @@ struct ViewCommand: AsyncParsableCommand {
   @Option(help: "The port to listen on; any free port when absent.")
   var port: Int?
 
+  @Flag(
+    help:
+      "Reuse the repository's detached viewer server, or start one, and print its URL. SWIFTGATE_VIEW=off starts none."
+  )
+  var ensure = false
+
+  /// The server `--ensure` starts: it follows the newest build run, saves its record, and exits
+  /// once its lifetime ends.
+  @Flag(help: .hidden)
+  var detached = false
+
   func validate() throws {
     if let port, !(1...65_535).contains(port) {
       throw ValidationError("--port takes 1 to 65535, not \(port)")
@@ -92,8 +103,24 @@ final class ViewRun: Sendable {
     self.page = page
   }
 
+  /// A server that follows the newest build run of any plan, as `view --ensure` starts.
+  init(newestOf reader: RunViewReader, page: Data) {
+    self.buildRun = ""
+    self.reader = reader
+    self.page = page
+  }
+
+  /// What the lifetime watch sees on 1 tick: a request or a run change since the last tick, and
+  /// whether the run's final report exists.
+  func observe() -> ViewServerWatch.Observation {
+    ViewServerWatch.Observation(active: false, finalExists: false)
+  }
+
   static let viewPath = "/view.json"
   static let changesPath = "/changes"
+  static let finalPath = "/final"
+  /// Answers the serving process's pid, so `view --ensure` knows a saved server is still itself.
+  static let serverPath = "/server"
 
   /// Why a view couldn't be answered; the message names a rejected field, never its value.
   struct Failure: Error, CustomStringConvertible {

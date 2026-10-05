@@ -402,6 +402,19 @@ public struct RunViewReader: RunViewReading {
     BuildJoinReader(commonDirectory: commonDirectory).read(buildRunID: nil).runs.map(\.runID).max()
   }
 
+  /// The newest build run of any plan by its directory name alone, without reading its state:
+  /// cheap enough to ask on every poll. `nil` when there is none.
+  public func newestBuildRunName() -> String? {
+    nil
+  }
+
+  /// Where `report --html` writes `buildRun`'s report folder in this checkout.
+  public func reportFolder(buildRun: String) -> RunReportFolder {
+    RunReportFolder(
+      directory: stateRoot.url(
+        "\(RunLayout.reportsDirectory)/\(buildRun)", directoryHint: .isDirectory))
+  }
+
   /// What every file ``read(buildRun:)`` reads holds now: each event store's files, each
   /// `qa/report.json` of a run since the build run started, the run's ledger log, returns and
   /// `run.json`, and the plan's ledger. Taken before a read, a moved

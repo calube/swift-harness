@@ -1,7 +1,7 @@
 import Foundation
 
 /// What a run viewer page draws: 1 build run's spans, gates, proofs, tokens and halts. The same
-/// shape is embedded in a report and streamed to a live page, which merges each array by id.
+/// shape is embedded in a report and served whole to a live page on each change.
 /// Every string comes from a guarded event, a ledger id or write set, a commit sha or a
 /// requirement title.
 public struct RunView: Sendable, Equatable, Encodable {
@@ -401,7 +401,7 @@ public struct RunView: Sendable, Equatable, Encodable {
   public static let maxBriefBytes = 480
 
   public var schemaVersion: Int { Self.schemaVersion }
-  /// Where a live page's next poll starts; `nil` in a report.
+  /// What a live page's next poll names, so an unchanged run answers nothing; `nil` in a report.
   public var cursor: String?
   public var run: Run
   public var spec: [SpecRow]
@@ -422,6 +422,9 @@ public struct RunView: Sendable, Equatable, Encodable {
   /// folder holds copies under `runs/`. `nil` for a live page, which reaches them through
   /// `../runs/`.
   public var evidenceBase: String?
+  /// Where a live page reaches the run's final report once it exists; `nil` in a report and
+  /// until then.
+  public var finalReport: String?
 
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
@@ -446,7 +449,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, validation
-    case damage, unwritten, evidenceBase
+    case damage, unwritten, evidenceBase, finalReport
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -465,6 +468,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(damage, forKey: .damage)
     try c.encode(unwritten, forKey: .unwritten)
     try c.encode(evidenceBase, forKey: .evidenceBase)
+    try c.encode(finalReport, forKey: .finalReport)
   }
 }
 

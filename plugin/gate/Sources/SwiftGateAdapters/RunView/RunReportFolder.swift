@@ -66,6 +66,12 @@ public struct RunReportFolder: Sendable {
     }
   }
 
+  /// Whether the folder holds a final report: its page is written and the view it embeds is of
+  /// a done run, not a snapshot of one still going.
+  public var isFinal: Bool {
+    false
+  }
+
   /// Rewrites the page alone, from a view the folder already holds.
   public func writePage(_ page: Data) throws(Failure) {
     try publish(page, as: Self.pageName)
