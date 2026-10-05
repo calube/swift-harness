@@ -1,0 +1,14 @@
+[
+  {"command": "open", "input": {"app": "com.example.App", "relaunch": true, "launchArgs": ["-harness-scenario", "scenario-1"]}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el14\"", "timeoutMs": 15000}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "id=\"el14\""}}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el15\"", "timeoutMs": 10000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el16\" label=\"text6\"", "timeoutMs": 10000}},
+  {"command": "fill", "input": {"target": {"kind": "selector", "selector": "id=\"el15\""}, "text": "text12"}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "id=\"el17\""}}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el18\" label=\"text9\"", "timeoutMs": 2000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el16\" label=\"text12\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "absent", "absent": "id=\"el18\" label=\"text9\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "absent", "selector": "id=\"el18\" label=\"text11\""}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"el18\" label=\"text13\""}}
+]

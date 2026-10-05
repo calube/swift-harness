@@ -211,7 +211,7 @@ public enum CutoffQA: Sendable, Equatable {
     }
     switch QAMergeReadiness.of(
       table: table, merged: merged, plan: plan, task: task, reports: own, branch: branch,
-      tip: tip, base: base, waiting: carried)
+      tip: tip, base: base, carried: carried)
     {
     case .notNeeded: return .notNeeded
     case .checked(let runID): return .green(runID: runID)

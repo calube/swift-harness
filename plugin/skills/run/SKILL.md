@@ -210,7 +210,9 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   against a fake of that client chosen by the `-harness-scenario <name>` launch argument, never
   the live service; `network:` excuses none of its journeys. The contract adds that seam when the
   app has none, and a task or the contract gives the fake 1 scenario per journey: loading, error,
-  retry and refresh are flow rows. The reference's "Network-fed screens" has the shape.
+  retry and refresh are flow rows. Each state shown only while a call runs, such as sending or
+  saving, that a requirement names also gets a scenario named with the word `held` whose call
+  holds it 5 s, so its flow sees the state. The reference's "Network-fed screens" has the shape.
 - A task whose own check exercises another task's work depends on that task: an acceptance row's
   `Writer` on every other `Runs after` task, a task on any task whose files its `Acceptance`
   names, and a UI test's writer on every task whose behaviour the test shows, such as a fake's
@@ -235,7 +237,9 @@ Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, k
    behaviour unchanged. It also fixes every name a `## Validation` check targets, so the check can
    exist before the code. Those names are each element identifier and label a flow drives, each
    route with its request and response shapes, each storage key and table, and each log line with
-   its subsystem. An identifier goes in the repository's typed accessibility-id module when
+   its subsystem. They also include each fake scenario a flow launches with, and a `held`
+   scenario for every in-flight state a requirement names: a flow repair may not add a contract
+   name later. An identifier goes in the repository's typed accessibility-id module when
    `[qa] accessibility_ids` names one. It must build in every touched area, and step 4's `slice`
    gate is what builds it: warm, in the scratch path the warm-up filled. Don't build by hand
    first. A raw `swift build` or `swift test` in the clone builds cold in the package's own
@@ -324,12 +328,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `"$SG" qa run --plan <slug> --after <task> --before-merge --json --output <out>/qa-<task>.json`
      in `<checkout>`, in the background under the qa run watch, runs the rows that merge makes ready, acceptance, then flow, then state, on
      the task's branch merged into `<plan-branch>` in a scratch tree; `<plan-branch>` doesn't
-     move. `build merge` refuses `flows-unchecked` until that run is GREEN at the branch's tip.
-     A row whose other tasks all have checked returns waiting to merge runs before the first of
-     them lands, on 1 trial merge of all their branches: the refusal names the command,
-     `--after <task>,<other>,…`. A RED run there goes to the fixer of the task that owns the red
-     behaviour: run `build merge` for that task first, so it cuts that task's fix worktree, then
-     merge the others, which no longer wait on it.
+     move. `build merge` refuses `flows-unchecked` until that run is GREEN at the branch's tip,
+     or a run's trial merge made the very tree this merge lands. Merge each task as soon as its
+     own rows are GREEN: a row over tasks that haven't merged runs on the last one's trial
+     merge, so never hold a ready task for another's return or batch tasks into 1 run.
      A RED run is a red merge gate before the merge: `build merge` refuses `flows-red` and cuts
      the fix worktree, then `"$SG" build halt --run <run> --task <task> --reason gate-red`,
      `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer, given the red
