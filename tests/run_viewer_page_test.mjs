@@ -75,13 +75,13 @@ const view = {
   damage: [{ source: 'events/usage.jsonl', reason: 'line 3 is not JSON' }],
 }
 
-function writePage(extraScript) {
+function writePage(extraScript, data = view) {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-page-'))
   for (const name of PAGE_FILES) copyFileSync(new URL(name, viewer), join(dir, name))
   let html = readFileSync(join(dir, 'run-viewer.html'), 'utf8')
-  const data = JSON.stringify(view).replace(/</g, '\\u003c')
+  const embedded = JSON.stringify(data).replace(/</g, '\\u003c')
   assert.ok(html.includes('<script type="application/json" id="run-view"></script>'), 'the page has no empty run-view script')
-  html = html.replace('<script type="application/json" id="run-view"></script>', `<script type="application/json" id="run-view">${data}</script>`)
+  html = html.replace('<script type="application/json" id="run-view"></script>', `<script type="application/json" id="run-view">${embedded}</script>`)
   if (extraScript) {
     writeFileSync(join(dir, 'run-viewer-zz-test.js'), extraScript)
     html = html.replace('<script src="run-viewer.js"></script>', '<script src="run-viewer.js"></script>\n<script src="run-viewer-zz-test.js"></script>')
@@ -220,6 +220,12 @@ if (!findChrome()) {
 const { page, close } = await launch({ deadlineMs: 45000 })
 const main = writePage()
 const throwing = writePage("window.runViewer.register('board', { render() { throw new Error('board exploded') }, apply() {} })")
+// A report written while its run was still going: before the first ledger event, with no spec page yet.
+const snapshot = writePage(null, {
+  ...view, spec: [], damage: [],
+  run: { ...view.run, state: 'running', endedAt: null, snapshotAt: '2026-10-03T14:41:00.000Z' },
+  unwritten: [{ source: 'swift-harness/plans/sample-notes/build/20261003T140000Z-0a1b2c3d/events.jsonl', reason: 'not written yet' }],
+})
 
 const tests = {
   async 'the page draws every region from a test-built RunView with 0 console errors — catches a key the page does not read'() {
@@ -397,6 +403,28 @@ const tests = {
     assert.deepEqual(page.errors, [])
   },
 
+  async 'a report of a run still going says when it was taken in its header, its unwritten files read not written yet without counting as damage, and its empty Spec tab says the plan has no spec page — catches a mid-run snapshot read as a damaged final report'() {
+    await page.viewport(1280, 900)
+    await page.load(snapshot.url)
+    const read = await page.evaluate(`(() => {
+      document.querySelector('[role=tab][data-tab="spec"]').click()
+      return { banner: document.getElementById('snapshot')?.textContent ?? null, bannerHidden: document.getElementById('snapshot')?.hidden ?? null,
+        foot: document.getElementById('foot').textContent, damage: document.querySelectorAll('#foot .damage-line').length,
+        unwritten: [...document.querySelectorAll('#foot .unwritten-line')].map((l) => l.textContent),
+        spec: document.querySelector('.tab-panel[data-tab="spec"]').innerText, errors: document.body.dataset.errors }
+    })()`)
+    assert.equal(read.banner, 'Snapshot at 2026-10-03 14:41 UTC, run still running')
+    assert.equal(read.bannerHidden, false)
+    assert.equal(read.damage, 0)
+    assert.match(read.foot, /damage: none/)
+    assert.deepEqual(read.unwritten, ['swift-harness/plans/sample-notes/build/20261003T140000Z-0a1b2c3d/events.jsonl: not written yet'])
+    assert.match(read.spec, /no spec page/i)
+    assert.equal(read.errors, '0')
+    assert.deepEqual(page.errors, [])
+    await page.load(main.url)
+    assert.equal(await page.evaluate("document.getElementById('snapshot')?.hidden ?? null"), true, 'a final report shows a snapshot banner')
+  },
+
   async 'a module whose render throws leaves every core region drawn and adds 1 damage line — catches a module able to blank the page'() {
     await page.viewport(1280, 900)
     await page.load(throwing.url)
@@ -506,6 +534,7 @@ try {
   await close()
   rmSync(main.dir, { recursive: true, force: true })
   rmSync(throwing.dir, { recursive: true, force: true })
+  rmSync(snapshot.dir, { recursive: true, force: true })
 }
 if (failed) {
   console.log(`${failed} failed`)
