@@ -55,8 +55,11 @@ exists and fails for the reason the feature is missing.
   A pull to refresh is 1 step, `{"command": "gesture", "input": {"kind": "drag", "source":
   "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`, from the list's top row to an
   element at least 350 pt lower on screen, then a `wait` for what the refresh changes. A `scroll`
-  step is never a pull to refresh: it leaves the row red on a gesture that didn't refresh. When no
-  element sits that far below the top row, return the one you need as a missing contract name.
+  step is never a pull to refresh: it leaves the row red on a gesture that didn't refresh. On a
+  list too short for that, end the drag on the bottom-pinned id the contract adds for each
+  refresh row, `"destination": "id=\"<bottom id>\""`; the contract pins it with
+  `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`.
+  When the contract has none, return it as a missing contract name.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its

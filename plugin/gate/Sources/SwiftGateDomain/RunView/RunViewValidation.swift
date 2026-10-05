@@ -200,20 +200,45 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     }
   }
 
+  /// A requirement the plan leaves to its tasks' unit tests or a gate, with the reason it has no
+  /// check of its own, from the plan's `validation.json`.
+  public struct ReasonOnly: Sendable, Equatable, Encodable {
+    public var requirement: String
+    /// `nil` when the payload guard rejected it.
+    public var reason: String?
+
+    public init(requirement: String, reason: String?) {
+      self.requirement = requirement
+      self.reason = reason
+    }
+
+    private enum CodingKeys: String, CodingKey { case requirement, reason }
+
+    public func encode(to encoder: any Encoder) throws {
+      var c = encoder.container(keyedBy: CodingKeys.self)
+      try c.encode(requirement, forKey: .requirement)
+      try c.encode(reason, forKey: .reason)
+    }
+  }
+
   public var plan: String
   public var counts: Counts
   /// In row order.
   public var rows: [Row]
+  /// In the plan's order.
+  public var reasonOnly: [ReasonOnly]
   /// The newest record of each kept XCUITest flow the run's gate runs recorded, by `[[flows]]`
   /// entry, then test.
   public var keptFlows: [RunViewKeptFlow]
 
   public init(
-    plan: String, counts: Counts = Counts(), rows: [Row] = [], keptFlows: [RunViewKeptFlow] = []
+    plan: String, counts: Counts = Counts(), rows: [Row] = [], reasonOnly: [ReasonOnly] = [],
+    keptFlows: [RunViewKeptFlow] = []
   ) {
     self.plan = plan
     self.counts = counts
     self.rows = rows
+    self.reasonOnly = reasonOnly
     self.keptFlows = keptFlows
   }
 }
@@ -420,18 +445,23 @@ public struct RunViewQARun: Sendable, Equatable {
 /// Folds the run's `qa.check` and `qa.flow` events and the reports they name into the view's
 /// validation section and its `qa.check` spans.
 ///
-/// Every `qa run`'s check of a row joins the row's history, newest first. A run at the merge base
-/// is expected to fail every row, so it sets a row's result only when no other run checked the
-/// row, and draws no span. A `qa.flow` with a row joins that row's check in the same `qa run`; one
-/// with no row is a kept XCUITest flow of the gate run it hangs off.
+/// Every `qa run`'s check of a row joins the row's history, newest first; a re-import can renumber
+/// the rows, so a check joins the row the plan's table holds for it now. A run at the merge base is
+/// expected to fail every row, so it sets a row's result only when no other run checked the row,
+/// and draws no span. A `qa.flow` with a row joins that row's check in the same `qa run`; one with
+/// no row is a kept XCUITest flow of the gate run it hangs off.
 enum RunViewValidationFold {
   private typealias Entry = (event: HarnessEvent, check: QACheckEvent)
 
-  /// - Parameter taskOfGateRun: the task each gate run belongs to, as the ledger and returns
-  ///   name it.
+  /// - Parameters:
+  ///   - taskOfGateRun: the task each gate run belongs to, as the ledger and returns name it.
+  ///   - table: the plan's `validation.json` as it stands now. With it, each row is numbered as
+  ///     the table numbers it, a check of a row it no longer has is left out, and its reason-only
+  ///     requirements are listed; without it, each check counts under the number it carries.
   static func fold(
     _ events: [HarnessEvent], qaRuns: [String: RunViewQARun], roots: [String],
-    taskOfGateRun: [String: String] = [:], into view: inout RunView
+    taskOfGateRun: [String: String] = [:], table: ValidationTable? = nil,
+    into view: inout RunView
   ) {
     let checks = events.compactMap { event -> Entry? in
       guard case .qaCheck(let check) = event.payload else { return nil }
@@ -451,10 +481,15 @@ enum RunViewValidationFold {
       view.damage += damage
       return
     }
-    guard !checks.isEmpty || !kept.isEmpty else { return }
+    let unitOnly = table?.unitOnly ?? []
+    guard !checks.isEmpty || !kept.isEmpty || !unitOnly.isEmpty else { return }
     let scrubRoots = RunViewGateFailures.Scrub.roots(roots)
+    // A re-import renumbers the rows, so with the table each check joins the row it checks now.
     var byRow: [Int: [Entry]] = [:]
-    for entry in checks { byRow[entry.check.row, default: []].append(entry) }
+    for entry in checks {
+      guard let number = position(entry, in: table, qaRuns: qaRuns) else { continue }
+      byRow[number, default: []].append(entry)
+    }
     let repairs = repairNotes(events, plan: plan)
     let rows = byRow.keys.sorted().compactMap { number -> RunViewValidation.Row? in
       // Newest first; checks of 1 `qa run` share its time, so a later run id breaks a tie.
@@ -466,7 +501,8 @@ enum RunViewValidationFold {
         var attempt = attempt(
           entry.check, at: entry.event.time, qaRun: qaRun, read: qaRuns[qaRun],
           roots: scrubRoots, damage: &damage)
-        attempt.flow = flows[FlowKey(qaRun: qaRun, row: number, atBase: entry.check.atBase)]
+        attempt.flow =
+          flows[FlowKey(qaRun: qaRun, row: entry.check.row, atBase: entry.check.atBase)]
         return attempt
       }
       guard let index = entries.firstIndex(where: { !$0.check.atBase }) ?? entries.indices.first
@@ -474,10 +510,22 @@ enum RunViewValidationFold {
       var shown = row(
         entries[index].check, shown: history[index], history: history,
         read: qaRuns[history[index].qaRun], damage: &damage)
+      shown.row = number
       shown.lastPass = lastPass(
         shown: history[index], history: history, qaRuns: qaRuns, damage: &damage)
-      shown.repairs = repairs[number] ?? []
+      shown.repairs = repairs[entries[index].check.row] ?? []
       return shown
+    }
+    let reasonOnly = unitOnly.map { row in
+      var reason: String? = row.reason
+      if let rejected = EventPayloadGuard.rejection(inJSON: row.reason) {
+        damage.append(
+          RunView.Damage(
+            source: "validation.json \(row.requirement)",
+            reason: "reason: \(rejected.rawValue)"))
+        reason = nil
+      }
+      return RunViewValidation.ReasonOnly(requirement: row.requirement, reason: reason)
     }
     var counts = RunViewValidation.Counts()
     for row in rows {
@@ -493,7 +541,8 @@ enum RunViewValidationFold {
       case .abandoned: counts.abandoned += 1
       }
     }
-    view.validation = RunViewValidation(plan: plan, counts: counts, rows: rows, keptFlows: kept)
+    view.validation = RunViewValidation(
+      plan: plan, counts: counts, rows: rows, reasonOnly: reasonOnly, keptFlows: kept)
     view.damage += damage
     let parent =
       view.spans.contains { $0.id == RunViewSpans.runSpanID } ? RunViewSpans.runSpanID : nil
@@ -506,6 +555,26 @@ enum RunViewValidationFold {
     }
     view.spans = (view.spans + spans).enumerated()
       .sorted { ($0.element.start, $0.offset) < ($1.element.start, $1.offset) }.map(\.element)
+  }
+
+  /// The 1-based row of `table` that `entry` checked: the 1 row with its requirement and layer,
+  /// or, when several have both, the 1 whose check its `qa run`'s report names. Without a table,
+  /// the row number the check carries; `nil` for a check of a row the table no longer has.
+  private static func position(
+    _ entry: Entry, in table: ValidationTable?, qaRuns: [String: RunViewQARun]
+  ) -> Int? {
+    guard let table else { return entry.check.row }
+    let candidates = table.rows.indices.filter {
+      table.rows[$0].requirement == entry.check.requirement
+        && table.rows[$0].layer == entry.check.layer
+    }
+    if candidates.count <= 1 { return candidates.first.map { $0 + 1 } }
+    let report = qaRuns[entry.event.runID ?? ""]?.report
+    guard let check = report?.rows.first(where: { $0.row == entry.check.row })?.check else {
+      return nil
+    }
+    let matched = candidates.filter { table.rows[$0].check == check }
+    return matched.count == 1 ? matched[0] + 1 : nil
   }
 
   /// Each row's repairs from the plan's `qa.repair` events, newest first.
@@ -701,11 +770,20 @@ enum RunViewValidationFold {
       }
     return RunViewValidation.Attempt(
       qaRun: qaRun, stage: stage, after: report?.after.flatMap { keep($0, "after") },
-      result: check.result, message: reported.flatMap { keep(shown($0.message), "message") },
+      result: check.result,
+      message: reported.flatMap { keep(scrubbed($0.message, roots: roots), "message") },
       exitStatus: check.exitStatus, milliseconds: check.milliseconds, evidence: evidence,
       waitingOn: check.waitingOn,
       reusedFrom: check.reusedFrom.flatMap { keep($0, "reusedFrom") }, at: time, output: output,
       outputCut: cut)
+  }
+
+  /// `message` with each path under a root relative to it and every other machine path as
+  /// `<path>`, as ``shown(_:)`` shows it.
+  static func scrubbed(_ message: String, roots: [String]) -> String {
+    let (text, cut) = RunViewGateFailures.Scrub.message(message, roots: roots)
+    // A cut text ends at the byte limit: 1 more character makes `shown` mark the cut.
+    return shown(cut && !text.hasPrefix("message withheld") ? text + "…" : text)
   }
 
   /// `message` on 1 line, cut to ``RunView/maxFailureMessageBytes`` with `…` marking a cut, so a

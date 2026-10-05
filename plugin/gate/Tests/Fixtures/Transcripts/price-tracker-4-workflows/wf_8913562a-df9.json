@@ -1,0 +1,9 @@
+{
+  "args": {
+    "plan": "spec",
+    "task": "tracker-watchlist"
+  },
+  "runId": "wf_8913562a-df9",
+  "status": "completed",
+  "workflowName": "swift-harness-build-task"
+}

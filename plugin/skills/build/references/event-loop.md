@@ -220,7 +220,7 @@ A merge gate can hang, so it never runs as a foreground call with no deadline. A
    `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json > <plans>/<slug>/out/merge-<task>.json`.
    Step 2's `"$SG" build gate-wait` holds the turn in the foreground while it runs.
 2. In the foreground, with the Bash tool's `timeout` at 600000:
-   `"$SG" build gate-wait <slug> --tier <mergeGate> --output <plans>/<slug>/out/merge-<task>.json --json`.
+   `"$SG" build gate-wait <slug> --tier <mergeGate> --output <plans>/<slug>/out/merge-<task>.json --session <session> --json`.
    It budgets the gate from the tier's recent runs, or from the warm-up's build and test times
    before the first one, waits up to 2 minutes and prints an `action`:
 
@@ -230,6 +230,9 @@ A merge gate can hang, so it never runs as a foreground call with no deadline. A
   its return so it joins the queue, then run `build gate-wait` again. Never end the turn while the
   gate runs, and never wait on it another way, such as a sleep: a headless session that ends its
   turn kills the gate.
+- `worker-returned`: a Workflow run of this session ended while the gate ran; `returned` names
+  its task. Its completion notice arrives with this result: check its return so it joins the
+  queue, then run `build gate-wait` again.
 - `overrun`: the gate passed its deadline, 3 times its expected time. `TaskStop` its Bash task and
   treat it as a RED merge gate whose finding is the watch's `message`:
   `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
@@ -256,7 +259,8 @@ is a red gate, and the fixer gets only the new findings.
 | What happened | Next |
 |---|---|
 | `build merge` exits 1 with `status` `conflicted` | `main` is untouched, and the fix worktree is cut |
-| the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main`, records that gate run as the task's merge gate (`gateRunId`) when `build record-gate` hasn't, and cuts the fix worktree |
+| the merge gate is RED | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main`, records that gate run as the task's merge gate (`gateRunId`) when `build record-gate` hasn't, and cuts the fix worktree |
+| the merge gate is BLOCKED | it couldn't finish, such as a prove the time left couldn't hold, so nothing proved the merge red: run it again once, as the [merge gate watch](#merge-gate-watch) says. A second BLOCKED is a RED gate, except for a task `build cutoff` said to finish: `--undo` refuses it, so leave it merged and name the gate in the report |
 | `build merge` exits 1 with another `reason` | halt: `main-moved`, `dirty-checkout` and `not-on-main` need the user; `already-merged` means the ledger lags, so run `ledger set … done` and go on |
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
 | `build merge` exits 1 with `review-blocked-unanswered` | the return is `review-blocked`: halt the task as [Task halts](#task-halts) says. Only the person's **merge as is** lets it merge |
@@ -299,7 +303,8 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   `agent-device`'s source and never writes probe tests to learn why a step fails. Its `gate-red`
   return then takes the path below like any other, quoting the row's evidence;
 - in a `swiftgate run`, the `cutoffAt` time `run clock` reports, as its deadline: it starts no
-  gate or `qa run` it can't finish by then, and at that time returns what it has.
+  gate or `qa run` it can't finish by then, and at that time returns what it has, with `gate`
+  `null` when no gate ran on its last commit.
 
 Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
 end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `ready-to-merge`,
@@ -332,6 +337,21 @@ read the output file the notice names, which is the fixer's whole transcript:
 - `outcome` `gate-red` with a `flow row:` line in its notes, whatever `build check-return`
   said: [flow repair](#flow-repair) first. It halts as below only when `qa adopt --repair`
   refuses the repair, the row's 1 repair already ran, or the worker answers `no repair:`.
+- `outcome` `gate-red` with commits but no gate verdict is an unconfirmed fix: `haltAdvice.answer`
+  `verify`, a `gate` that is `null` or BLOCKED, or notes saying the fixer ran out of time to
+  confirm it. Nothing proved it red, so it gets no halt, and it is never set `blocked` on time
+  grounds. Verify it yourself in its fix worktree:
+  1. `"$SG" check --tier <taskGate> --base main --json > <plans>/<slug>/out/fix-<task>-gate.json`
+     on its clean tip, in the foreground with the Bash tool's `timeout` at 600000.
+  2. Write the return again with that run as its `gate`, and `outcome` `ready-to-merge` for a GREEN
+     run or `gate-red` for a RED one, then check it:
+     `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
+  3. A GREEN check goes on as the `ready-to-merge` bullet says, from
+     `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json`. A RED gate, or a
+     second BLOCKED one, takes the bullet below.
+
+  Verifying starts no task, so no new starts doesn't stop it. When the cutoff comes first,
+  `build cutoff` decides the task as it decides any other.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
@@ -483,7 +503,8 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
    recommended the option `check-return`'s `haltAdvice.answer` names, and quote its `why`: `retry`
    for a finding a fix pass resolves (a gate to run again, a missing reason, a formatting fix, a
    flaky launch) while a retry as long as the first run fits before the cutoff and no new starts
-   hasn't begun; `continue` for a design conflict or a retry the box can't hold. Options:
+   hasn't begun; `continue` for a design conflict or a retry the box can't hold. `verify` is no
+   halt: an unconfirmed fix is checked as the fixer's return says. Options:
    - **Retry**: `ledger set … pending`, then let `build next` start it again, its brief quoting
      every finding. Its worktree and branch still exist, so skip `worktree create` and launch into
      the same worktree.

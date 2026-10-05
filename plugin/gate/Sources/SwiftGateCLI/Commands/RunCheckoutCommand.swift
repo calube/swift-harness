@@ -76,10 +76,13 @@ enum RunCheckoutRun {
   /// Copies the checkout's gate and `qa run` directories into the clone's kept runs, where the run
   /// viewer reads them, and any events it kept itself into the user's checkout first, so they
   /// outlive it. The plan branch stays: it holds the run.
-  /// - Parameter leases: where the build run's shared device's lease is, which removing releases.
+  /// - Parameters:
+  ///   - leases: where the build run's shared device's lease is, which removing releases.
+  ///   - running: the clone's gates and `qa run`s in flight; `nil` reads the clone's own.
   static func remove(
     slug: String, session: String?, root: URL, runner: any ProcessRunner,
-    leases: SimLeaseStore = SimLeaseStore(directory: SimLeaseStore.defaultDirectory())
+    leases: SimLeaseStore = SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+    running: RunningGateRegistry? = nil
   ) async -> WorktreeReport {
     let context: Context
     switch await Context.resolve(
@@ -90,6 +93,26 @@ enum RunCheckoutRun {
     }
     guard FileManager.default.fileExists(atPath: context.path) else {
       return context.report(.refused, .red, "no plan checkout at \(context.path)")
+    }
+    // A gate or qa run still live in a tree would go on writing its record into a deleted folder,
+    // so each stops before anything goes, and its run is kept with the tree's.
+    let registry: RunningGateRegistry?
+    if let running {
+      registry = running
+    } else {
+      registry = (try? await GitTrackedTree(runner: runner, directory: root).stateLayout())
+        .map { RunningGateRegistry(layout: $0) }
+    }
+    let stopped = await registry?.stop(in: trees(context)) ?? []
+    let survivors = stopped.filter { registry?.isRunning($0) == true }
+    guard survivors.isEmpty else {
+      var report = context.report(
+        .blocked, .blocked,
+        "nothing was removed: "
+          + survivors.map { "PID \($0.pid) (\($0.tier) in \($0.toplevel))" }
+          .joined(separator: ", ") + " didn't stop")
+      report.stoppedRuns = Self.named(stopped)
+      return report
     }
     // The build run's shared device first, while the tree its holder started in still exists; its
     // holder deletes it once its lease goes.
@@ -126,7 +149,35 @@ enum RunCheckoutRun {
     report.discarded = left.discarded
     report.keptBranches = left.keptBranches
     report.device = device
+    report.stoppedRuns = stopped.isEmpty ? nil : Self.named(stopped)
     return report
+  }
+
+  private static func named(_ runs: [RunningGate]) -> [String] {
+    runs.map { "\($0.tier) in \($0.toplevel)" }
+  }
+
+  /// Every tree the removal deletes: the checkout, each task's and fixer's worktree, and the
+  /// pooled slots.
+  private static func trees(_ context: Context) -> [String] {
+    var trees = [context.path]
+    if let plan = try? PlanStateLayout(commonDirectory: context.common).plan(context.slug),
+      let tasks = try? PlanStateStore(plan: plan).ledger().tasks
+    {
+      for task in tasks {
+        for name in [task.id, "fix-\(task.id)"] {
+          if let names = try? TaskWorktree(
+            commonDirectory: context.common, plan: context.slug, task: name, profile: .brownfield)
+          {
+            trees.append(names.path)
+          }
+        }
+      }
+    }
+    if let pool = try? WorktreePool(commonDirectory: context.common, plan: context.slug).state() {
+      trees += pool.slots.map(\.path)
+    }
+    return trees
   }
 
   /// Releases the plan's newest build run's shared device; `nil` when none was held.

@@ -53,4 +53,25 @@ struct BoundedWaitTests {
     for await value in AsyncStream<Int> { $0.finish() } { #expect(value > 0) }
     #expect(index == 3)
   }
+
+  @Test("takes a stream's first element inside a timeout — catches an effect that never starts")
+  func firstElementWithinTimeout() async throws {
+    let started = AsyncStream<Void>.makeStream()
+    started.continuation.yield()
+    try await withTimeout(.seconds(5)) {
+      for await _ in started.stream { break }
+    }
+  }
+
+  @Test("races a stream's first element against a sleep — catches a stream that never yields")
+  func firstElementRacesASleep() async {
+    let started = AsyncStream<Void>.makeStream()
+    started.continuation.yield()
+    await withTaskGroup(of: Void.self) { group in
+      group.addTask { for await _ in started.stream { break } }
+      group.addTask { try? await Task.sleep(for: .seconds(5)) }
+      await group.next()
+      group.cancelAll()
+    }
+  }
 }

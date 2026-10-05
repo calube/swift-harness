@@ -251,4 +251,31 @@ struct BuildHaltCommandTests {
     #expect(halted.stderr.split(separator: "\n").count == 1, "\(halted)")
     #expect(halted.stderr.contains(".harness"), "\(halted)")
   }
+
+  @Test(
+    "the fifth send-money trial's budget halt 215 s before its cutoff exits 1 naming build cutoff and records nothing, and at the cutoff it records — catches a time halt taken by hand"
+  )
+  func budgetHaltBeforeTheCutoffIsRefused() throws {
+    let root = Self.temporaryRoot()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let record = try BuildRunJSON.decode(Fixture.data("BuildReturn/send-money-5/run.json"))
+    let cutoffAt = try #require(record.timeBox).deadlines.cutoffAt
+    let clock = try Fixture.text("BuildReturn/send-money-5/clock-and-cutoff-at-return.txt")
+    let match = try #require(clock.firstMatch(of: /"now" : "([^"]+)"/))
+    let now = try Date(String(match.1), strategy: .iso8601)
+    func halt(at time: Date, id: String) -> BuildHaltRun.Output {
+      BuildHaltRun.halt(
+        log: BuildHaltLog(root: root, now: { time }, newEventID: { id }), enabled: true,
+        buildRun: record.runID, task: nil, reason: .budget, json: false, cutoffAt: cutoffAt)
+    }
+
+    let early = halt(at: now, id: "halt-early")
+    #expect(early.status == 1, "\(early)")
+    #expect(early.stderr.contains("build cutoff"), "\(early)")
+    #expect(try Self.events(root).isEmpty)
+
+    let atCutoff = halt(at: cutoffAt, id: "halt-cutoff")
+    #expect(atCutoff.status == 0, "\(atCutoff)")
+    #expect(try Self.events(root).map(\.eventID) == ["halt-cutoff"])
+  }
 }

@@ -181,3 +181,52 @@ public struct SpanLog: Sendable {
     return try body()
   }
 }
+
+/// Which checkout's store each span started in, by span id, in a machine-wide directory, so
+/// `events span end` finds a span's start whatever directory it runs from.
+public struct SpanStoreIndex: Sendable {
+  /// How long an entry is kept: longer than any run whose span could still be open.
+  public static let retainedSeconds: TimeInterval = 7 * 24 * 60 * 60
+
+  public let directory: URL
+
+  /// `~/.cache/swift-harness/spans`.
+  public static func defaultDirectory(home: URL = FileManager.default.homeDirectoryForCurrentUser)
+    -> URL
+  {
+    home.appending(path: ".cache/swift-harness/spans", directoryHint: .isDirectory)
+  }
+
+  public init(directory: URL = Self.defaultDirectory()) {
+    self.directory = directory
+  }
+
+  /// Records that `spanID` started in the store of the checkout at `root`, and drops entries
+  /// older than ``retainedSeconds``. An entry that can't be written leaves the span to the
+  /// directory its end runs from.
+  public func record(spanID: String, root: URL) {
+    guard SpanStartEvent.isValidID(spanID) else { return }
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try? Data(root.standardizedFileURL.path.utf8).write(
+      to: directory.appending(path: spanID), options: .atomic)
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    let oldest = Date(timeIntervalSinceNow: -Self.retainedSeconds)
+    for name in names where name != spanID {
+      let file = directory.appending(path: name)
+      let modified =
+        (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate]
+        as? Date
+      if let modified, modified < oldest { try? FileManager.default.removeItem(at: file) }
+    }
+  }
+
+  /// The checkout whose store holds `spanID`'s start; `nil` when no entry names it.
+  public func root(spanID: String) -> URL? {
+    guard SpanStartEvent.isValidID(spanID),
+      let data = try? Data(contentsOf: directory.appending(path: spanID))
+    else { return nil }
+    let path = String(decoding: data, as: UTF8.self)
+    guard path.hasPrefix("/") else { return nil }
+    return URL(filePath: path, directoryHint: .isDirectory)
+  }
+}

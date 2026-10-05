@@ -164,7 +164,7 @@ SwiftSyntax over test files. Every rule is RED.
 | `test.misplaced-t2` | T2 test that should be T1 |
 | `test.testclock-serialized` | A Swift Testing test using `TestClock` or `withMainSerialExecutor` outside a `.serialized` suite (P6) |
 | `test.hang-without-deadline` | A string literal that waits forever with no deadline (P12) |
-| `test.unbounded-wait` | A loop in a test that awaits with no deadline, attempt cap or exit (P12) |
+| `test.unbounded-wait` | A loop in a test that awaits with no deadline, attempt cap or exit, or a `for await` that leaves after its first element with no timeout around it (P12) |
 
 Run it on a path relative to the repository root, e.g. `swiftgate testlint Packages/CounterFeature/Tests` in an app repository. With no argument it checks everything.
 

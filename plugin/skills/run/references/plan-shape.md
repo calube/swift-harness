@@ -147,6 +147,12 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
 - A task, or the contract's stubs, gives the fake 1 scenario per journey, such as `success`,
   `load-failure` and `detail-failure`, each with fixed data. Every flow row's `Runs after` names
   that task.
+- A refresh journey's flow drags from the list's top row to a 1 pt id pinned to the bottom of the
+  screen's safe area, so a list of 3 rows refreshes as a long one does. The contract adds that
+  bottom id for each screen a refresh row drives, after any identifier on the list itself:
+  `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`,
+  and the flow's step is `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top
+  row>\"", "destination": "id=\"<bottom id>\""}}`.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 

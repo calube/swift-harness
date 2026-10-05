@@ -45,6 +45,8 @@ public struct RunViewInput: Sendable, Equatable {
   public var warmupBaselines: [String: BaselineStepResult]
   /// What the reader read of each `qa run` a kept `qa.check` names, by its run id.
   public var qaRuns: [String: RunViewQARun]
+  /// The plan's `validation.json` as it stands now; `nil` when it is missing or didn't read.
+  public var validation: ValidationTable?
 
   public init(
     buildRun: String, events: [HarnessEvent] = [], join: BuildJoin.Run? = nil,
@@ -53,7 +55,8 @@ public struct RunViewInput: Sendable, Equatable {
     briefs: [String: RunView.Brief] = [:],
     workerGateRuns: [String: String] = [:], launchedAt: Date? = nil,
     gateReports: [String: RunViewGateReport] = [:], checkoutRoots: [String] = [],
-    warmupBaselines: [String: BaselineStepResult] = [:], qaRuns: [String: RunViewQARun] = [:]
+    warmupBaselines: [String: BaselineStepResult] = [:], qaRuns: [String: RunViewQARun] = [:],
+    validation: ValidationTable? = nil
   ) {
     self.buildRun = buildRun
     self.events = events
@@ -69,5 +72,6 @@ public struct RunViewInput: Sendable, Equatable {
     self.checkoutRoots = checkoutRoots
     self.warmupBaselines = warmupBaselines
     self.qaRuns = qaRuns
+    self.validation = validation
   }
 }

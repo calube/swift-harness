@@ -1,0 +1,124 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : null,
+  "commit" : "5be7fd5d87fa23131e06bb2f398da9d80e0f1590",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "5 of 9 rows verified (4 reason-only): 0 pass, 5 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "5 rows (1, 2, 3, 4, 5) reused from qa run 20261005T074901Z-090098cf by spec-validation: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 4,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T074901Z-090098cf by spec-validation at 562e50679a13: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-watchlist",
+      "result" : "red",
+      "reusedFrom" : "20261005T074901Z-090098cf",
+      "row" : 1,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T074901Z-090098cf by spec-validation at 562e50679a13: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.loading\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-first-load-spinner",
+      "result" : "red",
+      "reusedFrom" : "20261005T074901Z-090098cf",
+      "row" : 2,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T074901Z-090098cf by spec-validation at 562e50679a13: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.error\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-error-retry",
+      "result" : "red",
+      "reusedFrom" : "20261005T074901Z-090098cf",
+      "row" : 3,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T074901Z-090098cf by spec-validation at 562e50679a13: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-detail",
+      "result" : "red",
+      "reusedFrom" : "20261005T074901Z-090098cf",
+      "row" : 4,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T074901Z-090098cf by spec-validation at 562e50679a13: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-chart-failure",
+      "result" : "red",
+      "reusedFrom" : "20261005T074901Z-090098cf",
+      "row" : 5,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T075618Z-1cf3ff64",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}
