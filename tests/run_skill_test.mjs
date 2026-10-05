@@ -180,26 +180,26 @@ export function atBaseProblems(text) {
   return problems
 }
 
-/** Every way the `qa run --after` step `text` lets a RED validation row stand: no recorded
- * `gate-red` halt, no undo, no fixer, or a merge kept on judgement without `--at-base` evidence. */
+/** Every way the `qa run --before-merge` step `text` lets a RED validation row land: no run on
+ * the branch before `build merge`, no recorded `gate-red` halt, no fixer for the `flows-red`
+ * refusal, or a merge kept on judgement. */
 export function validationRedProblems(text) {
-  if (!text) return ['no step runs `qa run --after`']
+  if (!text) return ['no step runs `qa run --before-merge`']
   const problems = []
   const calls = extractInvocations(text).map(inv => inv.words.join(' '))
-  if (!calls.some(call => call.startsWith('qa run --plan <slug> --after <task>'))) problems.push('never runs `swiftgate qa run --after`')
-  if (!calls.some(call => call.startsWith('build halt --run <run> --task <task> --reason gate-red'))) {
-    problems.push('a RED `qa run --after` records no `gate-red` halt')
+  if (!calls.some(call => call.startsWith('qa run --plan <slug> --after <task> --before-merge'))) {
+    problems.push('never runs `swiftgate qa run --after <task> --before-merge`')
   }
-  if (!calls.some(call => /^build merge <slug> <task> --undo\b/.test(call))) problems.push('a RED `qa run --after` never undoes the merge')
+  if (!calls.some(call => call.startsWith('build halt --run <run> --task <task> --reason gate-red'))) {
+    problems.push('a RED `qa run --before-merge` records no `gate-red` halt')
+  }
   if (!calls.some(call => call.startsWith('build resume --run <run> --task <task> --answer retry'))) {
     problems.push('the `gate-red` halt is never resumed with `retry`')
   }
   const prose = text.replace(/\s+/g, ' ')
-  if (!/\bfixer\b/.test(prose)) problems.push('a RED `qa run --after` queues no fixer')
-  if (!/never keep the merge on (?:your|its) own judgement/i.test(prose)) problems.push('never forbids keeping the merge on judgement')
-  if (!/pre-existing[^.]*`--at-base`|`--at-base`[^.]*pre-existing/i.test(prose)) {
-    problems.push('the pre-existing-issue exception never needs `--at-base` evidence')
-  }
+  if (!/`flows-red`[^.]*fix worktree/.test(prose)) problems.push('never says `build merge` refuses `flows-red` and cuts the fix worktree')
+  if (!/\bfixer\b/.test(prose)) problems.push('a RED `qa run --before-merge` queues no fixer')
+  if (!/never merge on (?:your|its) own judgement/i.test(prose)) problems.push('never forbids merging on judgement')
   return problems
 }
 
@@ -556,27 +556,27 @@ const tests = {
     assert.deepEqual(atBaseProblems('no adopt'), ['never runs `swiftgate qa adopt`'])
   },
 
-  'a RED qa run --after records a gate-red halt, undoes the merge and queues the fixer, with no override but at-base evidence — catches a validation red kept on judgement'() {
+  'a RED qa run --before-merge records a gate-red halt and queues the fixer on the fix worktree build merge cut, with no override — catches screen rows run only after main moved'() {
     const skill = read('skills/run/SKILL.md')
-    assert.deepEqual(validationRedProblems(bulletAt(skill, '**Validate each merge**')), [], 'skills/run/SKILL.md')
+    assert.deepEqual(validationRedProblems(bulletAt(skill, '**Validate before each merge**')), [], 'skills/run/SKILL.md')
     const loop = read('skills/build/references/event-loop.md')
-    assert.deepEqual(validationRedProblems(section(loop, 'After each merge')), [], 'event-loop.md#after-each-merge')
+    assert.deepEqual(validationRedProblems(section(loop, 'Before each merge')), [], 'event-loop.md#before-each-merge')
     const halts = section(loop, 'Recording halts') ?? ''
-    assert.ok(halts.split('\n').some(line => line.startsWith('|') && line.includes('`qa run --after`') && line.includes('`gate-red`')),
-      'the halt table has no `gate-red` row for a RED `qa run --after`')
+    assert.ok(halts.split('\n').some(line => line.startsWith('|') && line.includes('`qa run --before-merge`') && line.includes('`gate-red`')),
+      'the halt table has no `gate-red` row for a RED `qa run --before-merge`')
   },
 
-  'the validation-red check names each missing duty of the trial\'s rule, a RED that only counts as a red merge gate — catches a checker that passes anything'() {
+  'the validation-red check names each missing duty of the trial\'s rule, a run only after the merge — catches a checker that passes anything'() {
     const before = '- **Validate each merge**: `"$SG" qa run --plan <slug> --after <task> --json` in `<checkout>`. A RED\n  verdict counts as a red merge gate, wherever the loop or the cutoff handles one.\n'
     assert.deepEqual(validationRedProblems(bulletAt(before, '**Validate each merge**')), [
-      'a RED `qa run --after` records no `gate-red` halt',
-      'a RED `qa run --after` never undoes the merge',
+      'never runs `swiftgate qa run --after <task> --before-merge`',
+      'a RED `qa run --before-merge` records no `gate-red` halt',
       'the `gate-red` halt is never resumed with `retry`',
-      'a RED `qa run --after` queues no fixer',
-      'never forbids keeping the merge on judgement',
-      'the pre-existing-issue exception never needs `--at-base` evidence',
+      'never says `build merge` refuses `flows-red` and cuts the fix worktree',
+      'a RED `qa run --before-merge` queues no fixer',
+      'never forbids merging on judgement',
     ])
-    assert.deepEqual(validationRedProblems(null), ['no step runs `qa run --after`'])
+    assert.deepEqual(validationRedProblems(null), ['no step runs `qa run --before-merge`'])
   },
 
   'a brownfield design conflict recommends a retry with a widened write set, not stop — catches a brownfield write-set conflict recommending stop'() {
