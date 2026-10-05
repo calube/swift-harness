@@ -70,7 +70,9 @@ public enum StateRootResolver {
   /// ``keptRuns(commonDir:)`` when it has them, so the report path a run prints still reads once
   /// a slot or plan checkout is removed; else `worktree`'s own state root.
   public static func qaRuns(worktree: URL) -> StateRoot {
-    resolve(worktree: worktree)
+    let own = resolve(worktree: worktree)
+    guard case .gitDir(let gitDir) = own else { return own }
+    return keptRuns(commonDir: commonDirectory(of: gitDir)) ?? own
   }
 
   /// Where a removed worktree's runs go: the clone's ``keptRuns(commonDir:)`` when it has them,

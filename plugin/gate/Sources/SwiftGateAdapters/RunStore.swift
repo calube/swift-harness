@@ -212,8 +212,9 @@ public struct RunStore: Sendable {
   /// The run history file of each checkout of `worktree`'s clone, `worktree`'s own first: a gate
   /// run in the plan checkout is in its history, not the user's checkout's.
   public static func historyFiles(sharing worktree: URL) -> [URL] {
-    QARunHistory.stateRoots(sharing: worktree).map {
-      $0.url(RunLayout.historyFile, directoryHint: .notDirectory).standardizedFileURL
+    let roots = QARunHistory.stateRoots(sharing: worktree)
+    return [RunLayout.historyFile, RunLayout.keptHistoryFile].flatMap { file in
+      roots.map { $0.url(file, directoryHint: .notDirectory).standardizedFileURL }
     }
   }
 
@@ -231,9 +232,12 @@ public struct RunStore: Sendable {
   }
 
   /// Copies every run directory under this store into `destination`'s runs, so a worktree's gate
-  /// reports outlive it. The history file stays behind: the destination's own history counts only
-  /// its own runs. A run already in `destination` counts as kept, since run ids are unique.
-  /// - Throws: when this store's runs directory exists but can't be listed.
+  /// and qa reports outlive it. A run directory `destination` already holds part of, such as the
+  /// events a command elsewhere wrote for the run, gets each file it lacks; a file it has stays as
+  /// it was. History lines go to `destination`'s ``RunLayout/keptHistoryFile``, each line once,
+  /// since the destination's own history counts only its own runs.
+  /// - Throws: when this store's runs directory exists but can't be listed, or its history lines
+  ///   can't be kept.
   public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
     try keepRuns(into: destination.state)
   }
@@ -258,23 +262,59 @@ public struct RunStore: Sendable {
       guard files.fileExists(atPath: from.path, isDirectory: &isDirectory), isDirectory.boolValue
       else { continue }
       let to = destination.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
-      var destinationIsDirectory: ObjCBool = false
-      if files.fileExists(atPath: to.path, isDirectory: &destinationIsDirectory),
-        destinationIsDirectory.boolValue
-      {
-        kept.append(runID)
-        continue
-      }
       do {
         try files.createDirectory(
           at: to.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try files.copyItem(at: from, to: to)
+        try Self.copyMissing(from: from, to: to)
         kept.append(runID)
       } catch {
         unkept.append(.init(runID: runID, reason: error.localizedDescription))
       }
     }
+    try keepHistory(into: destination)
     return RunKeepOutcome(kept: kept, unkept: unkept)
+  }
+
+  /// Copies `from` to `to` when `to` doesn't exist; into an existing directory, each entry `to`
+  /// lacks, at any depth.
+  private static func copyMissing(from: URL, to: URL) throws {
+    let files = FileManager.default
+    var isDirectory: ObjCBool = false
+    guard files.fileExists(atPath: to.path, isDirectory: &isDirectory) else {
+      try files.copyItem(at: from, to: to)
+      return
+    }
+    var fromIsDirectory: ObjCBool = false
+    _ = files.fileExists(atPath: from.path, isDirectory: &fromIsDirectory)
+    guard isDirectory.boolValue == fromIsDirectory.boolValue else {
+      throw CocoaError(.fileWriteFileExists, userInfo: [NSFilePathErrorKey: to.path])
+    }
+    guard isDirectory.boolValue else { return }
+    for name in try files.contentsOfDirectory(atPath: from.path) {
+      try copyMissing(from: from.appending(path: name), to: to.appending(path: name))
+    }
+  }
+
+  /// Appends each line of this store's history that `destination`'s kept history lacks.
+  private func keepHistory(into destination: StateRoot) throws(RunStoreError) {
+    guard destination.directory.standardizedFileURL != state.directory.standardizedFileURL,
+      let data = FileManager.default.contents(atPath: historyFile.path)
+    else { return }
+    let kept = destination.url(RunLayout.keptHistoryFile, directoryHint: .notDirectory)
+    let keptFile = kept.path
+    do {
+      try FileManager.default.createDirectory(
+        at: kept.deletingLastPathComponent(), withIntermediateDirectories: true)
+    } catch {
+      throw .io(
+        operation: "mkdir", path: kept.deletingLastPathComponent().path,
+        reason: error.localizedDescription)
+    }
+    var seen = Set(
+      (FileManager.default.contents(atPath: keptFile) ?? Data()).split(separator: 0x0A))
+    for line in data.split(separator: 0x0A) where seen.insert(line).inserted {
+      try append(Data(line) + Data([0x0A]), to: keptFile)
+    }
   }
 
   /// Several sessions can share a worktree, so each record is 1 append-only line.
