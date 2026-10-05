@@ -227,8 +227,11 @@ Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, k
    exist before the code. Those names are each element identifier and label a flow drives, each
    route with its request and response shapes, each storage key and table, and each log line with
    its subsystem. An identifier goes in the repository's typed accessibility-id module when
-   `[qa] accessibility_ids` names one. It builds in every touched area: run each touched area's
-   `build` command from `<config>` in `<checkout>`.
+   `[qa] accessibility_ids` names one. It must build in every touched area, and step 4's `slice`
+   gate is what builds it: warm, in the scratch path the warm-up filled. Don't build by hand
+   first. A raw `swift build` or `swift test` in the clone builds cold in the package's own
+   `.build`, and the hook denies it (`guard.raw-swift-build`), as it denies a raw `xcodebuild`.
+   To only build a `swiftpm` area, add the `--scratch-path` that denial names.
 3. Commit on `<plan-branch>` with a message in the repository's own style. The repository's git
    hooks run on every commit of the run; a failing hook is a finding to fix, never one to bypass.
 4. With the tree clean, `"$SG" check --tier slice --base <base> --json` in `<checkout>`. Fix any

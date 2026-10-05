@@ -338,9 +338,10 @@ enum QARunRun {
     defer { if let record { running?.unregister(record) } }
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
     // A build run's device stays booted across its qa runs, each queueing for it in turn; a run
-    // outside a build holds its own for its rows.
+    // outside a build holds its own for its rows. A run no flow row of which drives the device
+    // never queues behind another run's rows for it.
     let loan: QADeviceLoan =
-      dependencies.flows == nil
+      dependencies.flows == nil || !runPlan.drivesDevice(reused: Set(reused.keys))
       ? .own
       : await dependencies.devices?.borrow(
         plan: slug, until: dependencies.deadline,

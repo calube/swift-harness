@@ -333,7 +333,7 @@ extension BrownfieldProveTests {
     #expect(
       Self.gating(judgement).isEmpty == (outcome == .proven), "\(judgement.findings)")
     #expect(
-      runner.requests.withLock { $0.count } == 1,
+      runner.requests.withLock { $0.filter { $0.step == .testFiles }.count } == 1,
       "a run that found none of its tests isn't rerun test by test")
   }
 

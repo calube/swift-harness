@@ -1,0 +1,31 @@
+{
+  "after" : "spec-client-live",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "de34d24051ad3c8b28b9e3ab049e0d5a1483e82f",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "no validation row to run",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+
+  ],
+  "runID" : "20261005T093520Z-51af3e9a",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "e2868a924b37bb88b844d3d448412aecf57e204e",
+    "branch" : "spec/spec-client-live",
+    "conflicts" : [
+
+    ],
+    "tip" : "1856d268fe1f750ea3d8f76005874a13d950a632"
+  },
+  "verdict" : "GREEN"
+}

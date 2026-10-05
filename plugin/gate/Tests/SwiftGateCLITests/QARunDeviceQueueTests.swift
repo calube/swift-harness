@@ -60,10 +60,11 @@ struct QARunDeviceQueueTests {
 
   static func run(
     _ repo: QARepo, _ simulator: FakeFlowSimulator, events: MemoryEventLog,
-    devices: any QADeviceLending, deadline: QARunDeadline?, running: RunningGateRegistry? = nil
+    devices: any QADeviceLending, deadline: QARunDeadline?, running: RunningGateRegistry? = nil,
+    options: QARunRun.Options = QARunRun.Options()
   ) async -> QAReport {
     await QARunRun.run(
-      root: repo.root, options: QARunRun.Options(),
+      root: repo.root, options: options,
       git: LiveGit(runner: repo.runner, repositoryRoot: repo.root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: repo.runner), ports: LiveQAPorts(),
@@ -136,6 +137,50 @@ struct QARunDeviceQueueTests {
     #expect(report.verdict == .blocked)
     #expect(report.message.contains(reason), "\(report.message)")
     #expect(Self.deviceWaits(events).map(\.milliseconds) == [0, 900_000])
+  }
+
+  /// price-tracker-5's validation table: 5 flow rows, each after the watchlist task, 2 also after
+  /// the detail task, with the ledger as it stood when client-live and then detail were ready.
+  static func priceTracker5(_ repo: QARepo) throws {
+    let table = try ValidationTableJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-5-validation.json"))
+    try repo.plan(
+      table.rows,
+      tasks: [
+        "spec-contract": .done, "spec-client-live": .done, "spec-watchlist": .pending,
+        "spec-detail": .pending, "spec-validation": .done,
+      ])
+  }
+
+  @Test(
+    "price-tracker-5's qa run after client-live, which no row runs after, and its run after detail, whose 2 rows still wait on watchlist, never ask for the build run's device and write no device-wait — catches the run that waited 190 s for the device to report no validation row to run, holding client-live's merge"
+  )
+  func runWithNoDeviceRowNeverBorrows() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.priceTracker5(repo)
+    let simulator = try await QARunFlowTests.simulator(repo, batch: "pass")
+    let captured = try QAReportJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-5-qa-no-rows.json"))
+
+    for (after, results) in [
+      ("spec-client-live", [QAResult]()), ("spec-detail", [.waiting, .waiting]),
+    ] {
+      let events = MemoryEventLog()
+      let lender = QueuedDeviceLender(
+        hold: Self.hold(repo), answer: .lent(waitedMilliseconds: 190_179), events: events)
+      var options = QARunRun.Options()
+      options.after = after
+
+      let report = await Self.run(
+        repo, simulator, events: events, devices: lender, deadline: nil, options: options)
+
+      #expect(report.rows.map(\.result) == results, "\(after): \(report.rows.map(\.message))")
+      #expect(lender.deadlines.isEmpty, "\(after) asked for the device")
+      #expect(Self.deviceWaits(events).isEmpty, "\(after)")
+      if results.isEmpty { #expect(report.message == captured.message) }
+    }
+    #expect(simulator.calls.isEmpty)
   }
 
   @Test(

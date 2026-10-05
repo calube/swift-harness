@@ -1,0 +1,192 @@
+[0/1] Planning build
+Building for debugging...
+[0/7] Write swift-version--58304C5D6DBC2206.txt
+[2/8] Compiling SwiftNavigationMacros CaseBindableMacro.swift
+[3/8] Compiling SwiftNavigationMacros Support.swift
+[4/8] Compiling SwiftNavigationMacros TransactionEntryMacro.swift
+[5/8] Compiling SwiftNavigationMacros Plugin.swift
+[6/8] Emitting module SwiftNavigationMacros
+[7/37] Compiling SwiftNavigation AlertState.swift
+[8/37] Compiling SwiftNavigation Bind.swift
+[9/37] Compiling SwiftNavigation AnyHashableSendable.swift
+[10/37] Compiling SwiftNavigation AssumeIsolated.swift
+[11/38] Compiling SwiftNavigation UINavigationPath.swift
+[12/38] Compiling SwiftNavigation IssueReporting.swift
+[13/38] Compiling SwiftNavigation Perception.swift
+[14/38] Compiling SwiftNavigation Exports.swift
+[15/38] Compiling SwiftNavigation HashableStaticString.swift
+[16/38] Emitting module SwiftNavigation
+[17/38] Compiling SwiftNavigation CasePaths.swift
+[18/38] Compiling SwiftNavigation CustomDump.swift
+[19/38] Compiling SwiftNavigation ConfirmationDialogState.swift
+[20/38] Compiling SwiftNavigation HashableObject.swift
+[21/38] Compiling SwiftNavigation UIBindable.swift
+[22/38] Compiling SwiftNavigation UIBinding.swift
+[23/38] Compiling SwiftNavigation KeyPath+Sendable.swift
+[24/38] Compiling SwiftNavigation LockIsolated.swift
+[25/38] Compiling SwiftNavigation Binding.swift
+[26/38] Compiling SwiftNavigation ButtonState.swift
+[27/38] Compiling SwiftNavigation Deprecations.swift
+[28/38] Compiling SwiftNavigation ErrorMechanism.swift
+[29/38] Compiling SwiftNavigation Sharing.swift
+[30/38] Compiling SwiftNavigation TransactionEntry.swift
+[31/38] Compiling SwiftNavigation ButtonStateBuilder.swift
+[32/38] Compiling SwiftNavigation CaseBindable.swift
+[33/38] Compiling SwiftNavigation ToOptionalUnit.swift
+[34/38] Compiling SwiftNavigation NSObject+Observe.swift
+[35/38] Compiling SwiftNavigation Observe.swift
+[36/38] Compiling SwiftNavigation TextState.swift
+[37/38] Compiling SwiftNavigation UITransaction.swift
+[38/54] Compiling SwiftUINavigation Binding+Internal.swift
+[39/54] Compiling SwiftUINavigation Popover.swift
+[40/54] Compiling SwiftUINavigation NavigationLink.swift
+[41/54] Compiling SwiftUINavigation CasePaths.swift
+[42/54] Compiling SwiftUINavigation Sheet.swift
+[43/54] Compiling SwiftUINavigation FullScreenCover.swift
+[44/54] Compiling SwiftUINavigation Alert.swift
+[45/54] Compiling SwiftUINavigation ConfirmationDialog.swift
+[46/54] Compiling SwiftUINavigation NavigationDestination.swift
+[47/54] Compiling SwiftUINavigation Identified.swift
+[48/54] Compiling SwiftUINavigation Exports.swift
+[49/54] Compiling SwiftUINavigation Binding.swift
+[50/54] Compiling SwiftUINavigation Deprecations.swift
+[51/54] Emitting module SwiftUINavigation
+[52/54] Compiling SwiftUINavigation Alert+State.swift
+[53/54] Compiling SwiftUINavigation ConfirmationDialog+State.swift
+[54/55] Compiling SwiftUINavigation WithState.swift
+[55/76] Compiling UIKitNavigation NavigationStackController.swift
+[56/76] Compiling UIKitNavigation UISegmentedControl.swift
+[57/76] Compiling UIKitNavigation UISlider.swift
+[58/76] Compiling UIKitNavigation Presentation.swift
+[59/76] Compiling UIKitNavigation Exports.swift
+[60/76] Compiling UIKitNavigation UIStepper.swift
+[61/76] Compiling UIKitNavigation UISwitch.swift
+[62/76] Compiling UIKitNavigation UIKitAnimation.swift
+[63/76] Compiling UIKitNavigation UITabBarController.swift
+[64/76] Compiling UIKitNavigation UITextField.swift
+[65/76] Compiling UIKitNavigation Push.swift
+[66/77] Compiling UIKitNavigation UIBinding.swift
+[67/77] Compiling UIKitNavigation Dismiss.swift
+[68/77] Compiling UIKitNavigation Representable.swift
+[69/77] Compiling UIKitNavigation PopFromViewController.swift
+[70/77] Compiling UIKitNavigation UIDatePicker.swift
+[71/77] Compiling UIKitNavigation UIPageControl.swift
+[72/77] Emitting module UIKitNavigation
+[73/77] Compiling UIKitNavigation UIColorWell.swift
+[74/77] Compiling UIKitNavigation UIControl.swift
+[75/77] Compiling UIKitNavigation UIAlertController.swift
+[76/77] Compiling UIKitNavigation UITransaction.swift
+[77/81] Emitting module AppCoreTests
+[78/81] Compiling AppCoreTests WatchlistFeatureTests.swift
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:137:13: error: cannot find 'WatchlistFormat' in scope
+135 |   @Test("prices read as USD — catches a missing grouping or cents")
+136 |   func priceText() {
+137 |     #expect(WatchlistFormat.priceText(64_000.12) == "$64,000.12")
+    |             `- error: cannot find 'WatchlistFormat' in scope
+138 |     #expect(WatchlistFormat.priceText(145.3) == "$145.30")
+139 |   }
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:138:13: error: cannot find 'WatchlistFormat' in scope
+136 |   func priceText() {
+137 |     #expect(WatchlistFormat.priceText(64_000.12) == "$64,000.12")
+138 |     #expect(WatchlistFormat.priceText(145.3) == "$145.30")
+    |             `- error: cannot find 'WatchlistFormat' in scope
+139 |   }
+140 | 
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:143:13: error: cannot find 'WatchlistFormat' in scope
+141 |   @Test("changes carry a sign and zero counts as up — catches a lost minus or a red zero")
+142 |   func changeText() {
+143 |     #expect(WatchlistFormat.changeText(2.5) == "+2.50%")
+    |             `- error: cannot find 'WatchlistFormat' in scope
+144 |     #expect(WatchlistFormat.changeText(-1.25) == "-1.25%")
+145 |     #expect(WatchlistFormat.changeText(0) == "+0.00%")
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:144:13: error: cannot find 'WatchlistFormat' in scope
+142 |   func changeText() {
+143 |     #expect(WatchlistFormat.changeText(2.5) == "+2.50%")
+144 |     #expect(WatchlistFormat.changeText(-1.25) == "-1.25%")
+    |             `- error: cannot find 'WatchlistFormat' in scope
+145 |     #expect(WatchlistFormat.changeText(0) == "+0.00%")
+146 |     #expect(WatchlistFormat.isUp(0))
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:145:13: error: cannot find 'WatchlistFormat' in scope
+143 |     #expect(WatchlistFormat.changeText(2.5) == "+2.50%")
+144 |     #expect(WatchlistFormat.changeText(-1.25) == "-1.25%")
+145 |     #expect(WatchlistFormat.changeText(0) == "+0.00%")
+    |             `- error: cannot find 'WatchlistFormat' in scope
+146 |     #expect(WatchlistFormat.isUp(0))
+147 |     #expect(WatchlistFormat.isUp(2.5))
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:146:13: error: cannot find 'WatchlistFormat' in scope
+144 |     #expect(WatchlistFormat.changeText(-1.25) == "-1.25%")
+145 |     #expect(WatchlistFormat.changeText(0) == "+0.00%")
+146 |     #expect(WatchlistFormat.isUp(0))
+    |             `- error: cannot find 'WatchlistFormat' in scope
+147 |     #expect(WatchlistFormat.isUp(2.5))
+148 |     #expect(!WatchlistFormat.isUp(-0.01))
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:147:13: error: cannot find 'WatchlistFormat' in scope
+145 |     #expect(WatchlistFormat.changeText(0) == "+0.00%")
+146 |     #expect(WatchlistFormat.isUp(0))
+147 |     #expect(WatchlistFormat.isUp(2.5))
+    |             `- error: cannot find 'WatchlistFormat' in scope
+148 |     #expect(!WatchlistFormat.isUp(-0.01))
+149 |   }
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift:148:14: error: cannot find 'WatchlistFormat' in scope
+146 |     #expect(WatchlistFormat.isUp(0))
+147 |     #expect(WatchlistFormat.isUp(2.5))
+148 |     #expect(!WatchlistFormat.isUp(-0.01))
+    |              `- error: cannot find 'WatchlistFormat' in scope
+149 |   }
+150 | }
+[79/81] Compiling AppCoreTests AppFeatureTests.swift
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:20:23: error: type 'AppFeature.Action' has no member 'watchlist'
+18 |     }
+19 | 
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+   |                       `- error: type 'AppFeature.Action' has no member 'watchlist'
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+22 |       $0.watchlist.isLoading = false
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:20:34: error: cannot infer contextual base in reference to member 'task'
+18 |     }
+19 | 
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+   |                                  `- error: cannot infer contextual base in reference to member 'task'
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+22 |       $0.watchlist.isLoading = false
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:20:46: error: value of type 'AppFeature.State' has no member 'watchlist'
+18 |     }
+19 | 
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+   |                                              `- error: value of type 'AppFeature.State' has no member 'watchlist'
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+22 |       $0.watchlist.isLoading = false
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:21:25: error: cannot convert value of type 'KeyPath<Root, Value>' to expected argument type 'AppFeature.Action'
+19 | 
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+   |                         `- error: cannot convert value of type 'KeyPath<Root, Value>' to expected argument type 'AppFeature.Action'
+22 |       $0.watchlist.isLoading = false
+23 |       $0.watchlist.lastUpdated = now
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:21:25: error: cannot infer key path type from context; consider explicitly specifying a root type
+19 | 
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+   |                         `- error: cannot infer key path type from context; consider explicitly specifying a root type
+22 |       $0.watchlist.isLoading = false
+23 |       $0.watchlist.lastUpdated = now
+
+/CLONE/Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift:22:10: error: value of type 'AppFeature.State' has no member 'watchlist'
+20 |     await store.send(.watchlist(.task)) { $0.watchlist.isLoading = true }
+21 |     await store.receive(\.watchlist.quotesResponse.success) {
+22 |       $0.watchlist.isLoading = false
+   |          `- error: value of type 'AppFeature.State' has no member 'watchlist'
+23 |       $0.watchlist.lastUpdated = now
+24 |       $0.watchlist.quotes = ["bitcoin": quotes[0]]
+error: fatalError

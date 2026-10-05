@@ -331,7 +331,12 @@ enum BrownfieldMergeCheck {
             path: "junit", directoryHint: .isDirectory),
           proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout,
           outOfTime: tier == .final && !outcome.blocked && !gatingFailure(outcome.findings)
-            ? .unproven : .blocks)
+            ? .unproven : .blocks,
+          timed: { part in
+            context.steps.record(
+              part.step, tier: nil, milliseconds: part.milliseconds, verdict: part.verdict,
+              derivedData: part.derivedData, area: part.area)
+          })
       }
       let judgement = ran.judgement
       context.steps.record(
