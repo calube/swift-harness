@@ -90,7 +90,7 @@ extension BuildRunRecord: Codable {
     try container.encode(presetName, forKey: .presetName)
     try container.encode(preset, forKey: .preset)
     try container.encodeIfPresent(timeBox, forKey: .timeBox)
-    try container.encode(endsAtFinish, forKey: .endsAtFinish)
+    if endsAtFinish { try container.encode(endsAtFinish, forKey: .endsAtFinish) }
   }
 }
 
