@@ -62,6 +62,14 @@ enum PreToolUseHook {
       if brownfield == nil, BashGuard.isGitCommit(command) {
         context = joined(context, await commitContext(root: root, dependencies: dependencies))
       }
+    case "Agent"?:
+      // Only the launch guard reads an Agent call; the rest goes to the normal permission flow.
+      if let violation = BuildAgentLaunchGuard.evaluate(
+        subagentType: payload.subagentType, runInBackground: payload.runInBackground)
+      {
+        return deny(violation)
+      }
+      return nil
     case let tool? where fileTools.contains(tool):
       guard let path = payload.filePath else { break }
       if let violation = await writeViolation(

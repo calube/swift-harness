@@ -30,6 +30,32 @@ public enum WriteSet {
     paths.filter { path in !writeSet.contains { entriesOverlap($0, path) } }
   }
 
+  /// A file a tool writes for a Swift package or an Xcode project rather than a person: the
+  /// `Package.resolved` lockfile beside a package manifest or in a project's or workspace's
+  /// `xcshareddata/swiftpm/`, a shared scheme, or a project's own workspace files.
+  public struct GeneratedFile: Sendable, Equatable {
+    public let path: String
+    /// The `/`-terminated package, `.xcodeproj` or `.xcworkspace` directory it belongs to, or
+    /// `""` for the lockfile of a package at the repository root.
+    public let owner: String
+
+    public init(path: String, owner: String) {
+      self.path = path
+      self.owner = owner
+    }
+  }
+
+  /// `path` as a ``GeneratedFile``, or `nil` when a person writes it.
+  public static func generated(_ path: String) -> GeneratedFile? {
+    nil
+  }
+
+  /// ``outside(_:writeSet:)`` without the generated files that belong to a package or project
+  /// the write set writes in: running its tests or opening it in Xcode rewrites them.
+  public static func outsideChanges(_ paths: [String], writeSet: [String]) -> [String] {
+    outside(paths, writeSet: writeSet)
+  }
+
   /// Whether any entry of `lhs` collides with any entry of `rhs` — the check `plan-lint` runs
   /// pairwise across a wave's tasks.
   public static func overlaps(_ lhs: [String], _ rhs: [String]) -> Bool {

@@ -905,9 +905,18 @@ struct CheckCommand: AsyncParsableCommand {
         toplevel = .failure(error)
       }
       let gated = (try? toplevel.get()) ?? root
+      var reuseKey: String?
+      if case .success = toplevel, ownedOnlyOptions.isEmpty,
+        let reader = await BrownfieldGateReuseReader.live(
+          root: gated, runner: LiveProcessRunner(),
+          sourceHash: GateBinaryScope.current?.sourceHash),
+        let inputs = await reader.inputs(tier: tier, base: base)
+      {
+        reuseKey = GateReuse.key(inputs)
+      }
       try await GateRun.execute(
         root: gated, format: output.format, command: "check \(tier.rawValue)", base: base,
-        checkTier: tier
+        checkTier: tier, reuseKey: reuseKey
       ) { context in
         if case .failure(let error) = toplevel {
           return try BrownfieldCheck.notRun(

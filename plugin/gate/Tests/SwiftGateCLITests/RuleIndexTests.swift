@@ -60,6 +60,7 @@ struct RuleIndexTests {
     let harness = [
       FormatCheck.parseRuleID, RuleEngine.allowMissingReasonRuleID, BudgetCheck.ruleID,
       StaticCheckReport.configRuleID, StaticCheckReport.environmentRuleID, CheckRun.notRunRuleID,
+      GateReuse.ruleID,
       // A literal, not `ResolvedFileGuard.rewrittenRuleID`: `prove` reverts every production file
       // to the merge base for every changed test in the same run, and a symbolic reference here
       // would make this file fail to compile on that revert, taking every other changed test's
@@ -89,6 +90,7 @@ struct RuleIndexTests {
       BashGuard.simctlAllRuleID, SimulatorSelection.baseAmbiguousRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       BashGuard.validationFlowByHandRuleID, FixerGateCapGuard.ruleID,
+      BuildAgentLaunchGuard.ruleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
       SubagentScopeGuard.protectedPathRuleID,

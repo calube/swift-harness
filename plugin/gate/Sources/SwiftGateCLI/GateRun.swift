@@ -39,11 +39,12 @@ enum GateRun {
   ///   - checkTier: the `check` tier this run gates at, as its events' source.
   ///   - events: where the run's events go; `nil` asks `.swiftgate.toml`'s `[telemetry]`.
   ///   - workingTree: reads the tree the run starts on; `nil` asks git in `root`.
+  ///   - reuseKey: the ``GateReuse`` key of a brownfield tier's inputs; `nil` always runs.
   static func execute(
     root: URL, format: OutputFormat, command: String, steps: [String]? = nil,
     proofBases: [String]? = nil, base: String? = nil, git: (any Git)? = nil,
     checkTier: CheckTier? = nil, events: (any HarnessEventWriting)? = nil,
-    workingTree: (any WorkingTreeReading)? = nil,
+    workingTree: (any WorkingTreeReading)? = nil, reuseKey: String? = nil,
     body: (Context) async throws -> GateRunParts
   ) async throws {
     let git = git ?? LiveGit(runner: LiveProcessRunner(), repositoryRoot: root.path)

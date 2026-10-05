@@ -41,12 +41,17 @@ public struct HookPayload: Sendable, Equatable {
   public let source: String?
   /// The session's transcript file, as Claude Code names it; `nil` when absent.
   public let transcriptPath: String?
+  /// `tool_input.subagent_type` for the Agent tool.
+  public let subagentType: String?
+  /// `tool_input.run_in_background` for the Agent tool; `nil` when the call leaves it out.
+  public let runInBackground: Bool?
 
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
     agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil,
-    agentType: String? = nil, transcriptPath: String? = nil
+    agentType: String? = nil, transcriptPath: String? = nil, subagentType: String? = nil,
+    runInBackground: Bool? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -60,6 +65,8 @@ public struct HookPayload: Sendable, Equatable {
     self.source = source
     self.fileWrite = fileWrite
     self.transcriptPath = transcriptPath
+    self.subagentType = subagentType
+    self.runInBackground = runInBackground
   }
 
   public static func decode(_ data: Data) throws(HookPayloadError) -> HookPayload {
@@ -75,7 +82,8 @@ public struct HookPayload: Sendable, Equatable {
       filePath: wire.toolInput?.filePath ?? wire.toolInput?.notebookPath,
       stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
       fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType,
-      transcriptPath: wire.transcriptPath)
+      transcriptPath: wire.transcriptPath, subagentType: wire.toolInput?.subagentType,
+      runInBackground: wire.toolInput?.runInBackground)
   }
 
   private struct Wire: Decodable {
@@ -105,6 +113,8 @@ public struct HookPayload: Sendable, Equatable {
       let newString: String?
       let replaceAll: Bool?
       let edits: [Edit]?
+      let subagentType: String?
+      let runInBackground: Bool?
 
       enum CodingKeys: String, CodingKey {
         case command
@@ -115,6 +125,8 @@ public struct HookPayload: Sendable, Equatable {
         case newString = "new_string"
         case replaceAll = "replace_all"
         case edits
+        case subagentType = "subagent_type"
+        case runInBackground = "run_in_background"
       }
 
       var fileWrite: FileWrite? {
