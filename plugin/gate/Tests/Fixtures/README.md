@@ -3455,3 +3455,40 @@ git -C $S ls-tree -r --name-only fe7f9f7b7802d43ba8990d2582d5e50f96c6e1dd \
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
+
+## Brownfield trial: a re-import after the contract landed
+
+The second send-money trial imported its plan with `--contract send-money-contract`, then
+re-imported it without the flag to add an assumption. That re-import linted the done contract as a
+screen task, since it writes `UITests/LaunchFlowUITests.swift`.
+`BrownfieldTrial/send-money-2-reimport-PLAN.md` is the plan that re-import read: the plan the
+orchestrator's transcript wrote with a heredoc, with the assumption its next call inserted.
+`send-money-2-contract-return.json` is the return the first import wrote for the landed contract,
+and `send-money-2-config.toml` the clone's `config.toml`. `T` is the orchestrator's transcript and
+`S` the clone's state. From the repository root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+python3 - "$T" > $F/send-money-2-reimport-PLAN.md <<'PY'
+import json, sys
+calls = []
+for line in open(sys.argv[1]):
+    entry = json.loads(line)
+    content = entry.get('message', {}).get('content')
+    if isinstance(content, list):
+        calls += [(entry['timestamp'], c['input']['command']) for c in content
+                  if c.get('type') == 'tool_use' and c['name'] == 'Bash']
+first = dict(calls)['2026-10-05T02:52:02.253Z']
+start = first.index("PLAN.md <<'EOF'\n") + len("PLAN.md <<'EOF'\n")
+plan = first[start:first.index("\nEOF\n", start)] + "\n"
+added = ("- The 3 running tasks all appear in a validation row's Runs after, so none may merge "
+         "before the at-base qa run, and build next offered no slot for spec-validation while "
+         "they held all 3: spec-validation started outside build next, with worktree create and "
+         "ledger set, to break that wait.\n")
+sys.stdout.write(plan.replace("- Currency formatting uses", added + "- Currency formatting uses"))
+PY
+cp $S/config.toml $F/send-money-2-config.toml
+cp $S/plans/spec/returns/send-money-contract.json $F/send-money-2-contract-return.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.

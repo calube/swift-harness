@@ -294,6 +294,34 @@ struct PlanImportValidationTests {
   }
 
   @Test(
+    "the second send-money trial's re-import, with no --contract but the landed contract's return in the plan's returns, lints exactly as an import naming the contract does, and no finding names the done contract's UITests write — catches a re-import that reads the contract as a screen task, which the orchestrator then hid by editing its Writes"
+  )
+  func reimportExcludesLandedContract() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-2-reimport-PLAN.md"),
+      encoding: .utf8)
+    let clone = try await ValidationClone(plan: captured, config: "send-money-2-config.toml")
+    defer { clone.remove() }
+    let returns = clone.planDirectory.appending(path: "returns", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: returns, withIntermediateDirectories: true)
+    try Data(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-2-contract-return.json")
+    ).write(to: returns.appending(path: "send-money-contract.json"))
+    let git = LiveGit(runner: clone.runner, repositoryRoot: clone.root.path)
+
+    let named = await PlanImportRun.run(
+      slug: ValidationClone.slug, root: clone.root, git: git,
+      contract: .init(task: "send-money-contract", runID: "20261005T024943Z-c1163c48"))
+    let reimported = await PlanImportRun.run(slug: ValidationClone.slug, root: clone.root, git: git)
+
+    #expect(!reimported.message.contains("`send-money-contract` writes"), "\(reimported.message)")
+    #expect(reimported.status == named.status, "\(reimported.message)")
+    if named.status == .invalid {
+      #expect(reimported.message == named.message)
+    }
+  }
+
+  @Test(
     "the send-money plan with its Validation section deleted fails the import with 1 app-without-flow naming the InterviewStarter area and the missing section, and writes nothing — catches a screen plan that skips every flow rule by leaving the section out"
   )
   func sendMoneyWithoutSectionFailsImport() async throws {
