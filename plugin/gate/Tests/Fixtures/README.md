@@ -4792,3 +4792,94 @@ cp $R/sim/steps/*.tree.json $D/sim/steps/
 The return is the build-task workflow's own result, before the orchestrator patched its file with
 `sed`. `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/pos-checkout-1-*` matched
 nothing.
+
+## Brownfield trial: orchestrator Bash calls hung by the user's shell aliases
+
+In a practice brownfield trial (2026-10-05) the orchestrator lost 2 calls of 600 s each. One began
+`cat >> /dev/null;` with `cat` aliased to `bat --paging=never`; the other ran `cp` aliased to
+`cp -i` over a file that existed and waited on its overwrite prompt. Both held a heredoc, and the
+Bash tool runs a command holding a heredoc without its usual `< /dev/null`, so stdin stayed open.
+`Hooks/practice-trials-alias-hang-bash.json` holds those 2 calls' `tool_input`, tool result and
+background output; `Hooks/practice-trials-long-foreground-bash.json` holds another trial's
+orchestrator call, a script it wrote, run in the foreground at a 600 s timeout with no `swiftgate`
+on its line. `R` is the harness-runs folder, each trial's `run.jsonl` its `claude -p` stream. From
+the repository root:
+
+```sh
+R=<harness runs folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+R, F = os.environ["R"], os.environ["F"]
+calls = [
+    ("<trial A>", "toolu_01Rx5Ja7tEY6P2tEe5ETdmBE", "alias-hang"),
+    ("<trial A>", "toolu_01GoHCQRpzHsvsv2K1JogSpw", "alias-hang"),
+    ("<trial B>", "toolu_01HB8HEhnu9Fs6Gsa7RmH8Gm", "long-foreground"),
+]
+scrubs = [
+    (r"/private/tmp/claude-\d+/[^/\s]+/[0-9a-f-]{36}/tasks", "/TASKS"),
+    (r"/Users/[^/]+/\.claude/projects/[^/\s]+", "/HOME/.claude/projects/-CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/\s\"]+/plugin", "/PLUGIN"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec(?=[/\s;\"]|$)", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;\"]|$)", "/CLONE"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+out = {"alias-hang": [], "long-foreground": []}
+for trial, use, kind in calls:
+    tool_input, result = None, None
+    for line in open(f"{R}/{trial}/run.jsonl"):
+        record = json.loads(line)
+        content = (record.get("message") or {}).get("content")
+        if not isinstance(content, list): continue
+        for block in content:
+            if block.get("type") == "tool_use" and block.get("id") == use: tool_input = block["input"]
+            if block.get("type") == "tool_result" and block.get("tool_use_id") == use: result = block["content"]
+    text = result if isinstance(result, str) else json.dumps(result)
+    entry = {"tool_input": json.loads(scrub(json.dumps(tool_input))), "result": scrub(text)}
+    moved = re.search(r"Output is being written to: (\S+\.output)", text)
+    if moved and os.path.exists(moved.group(1)):
+        entry["background_output"] = scrub(open(moved.group(1)).read())
+    out[kind].append(entry)
+for kind, entries in out.items():
+    open(f"{F}/Hooks/practice-trials-{kind}-bash.json", "w").write(json.dumps(entries, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on both fixtures matched nothing.
+
+`Hooks/pre-tool-use-bash-bypass-heredoc.json` and `Hooks/pre-tool-use-bash-bypass-long.json` are
+the PreToolUse payloads Claude Code 2.1.288 sent (2026-10-05) in a scratch git repository holding
+`src.txt` and `dst.txt`, with this `settings.json` hook recording each payload and returning it as
+`updatedInput` with the command wrapped in `unalias -a` and an inner `eval` reading
+`/dev/null`, and the `sleep` call's timeout set to 5 s:
+
+```sh
+claude -p $'Use the Bash tool exactly twice, verbatim, then reply with each output and nothing else.\nCall 1, with timeout 300000:\ncp src.txt dst.txt; cat <<\'EOF\'\nheredoc-probe\nEOF\ncat dst.txt\nCall 2, with timeout 300000:\nsleep 15; echo slept' \
+  --model haiku --settings settings.json --setting-sources local --dangerously-skip-permissions \
+  --output-format stream-json --verbose > run.jsonl
+```
+
+```python
+import json, sys, os
+raw = sys.stdin.read()
+d = json.loads(raw)
+n = len([f for f in os.listdir('.') if f.startswith('payload-')])
+open(f'payload-{n}.json', 'w').write(raw)
+ti = dict(d.get('tool_input') or {})
+if d.get('tool_name') != 'Bash':
+    sys.exit(0)
+cmd = ti['command']
+q = cmd.replace("'", "'\\''")
+ti['command'] = "\\builtin unalias -a 2>/dev/null; \\builtin eval '" + q + "' </dev/null"
+if 'sleep' in cmd:
+    ti['timeout'] = 5000
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}))
+```
+
+The run, in a zsh whose profile aliases `cp` to `cp -i`, showed what the rewrite relies on: with no
+`permissionDecision`, Claude Code ran the returned input in place of the model's (call 1 printed
+`heredoc-probe` and `dst.txt`'s new text with no overwrite prompt; call 2 moved to the background
+at 5 s), and the payload carries `permission_mode: "bypassPermissions"`. Scrubbing: the cwd
+becomes `/REPO`, the transcript `/HOME/.claude/projects/-REPO/`, and `session_id` the fixed
+`8f2c1d7e-…`; nothing else changed.
