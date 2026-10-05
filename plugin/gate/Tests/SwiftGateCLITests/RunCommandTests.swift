@@ -136,6 +136,13 @@ private struct RunClone {
     if !branches.isEmpty { left.append("branch \(branches)") }
     let running = Set(warmup.spawns.indices).subtracting(warmup.stops.indices)
     if !running.isEmpty { left.append("\(running.count) warm-up") }
+    let checkout = try TaskWorktree.planCheckout(
+      commonDirectory: layout.commonDir.path(percentEncoded: false), plan: slug)
+    if FileManager.default.fileExists(atPath: checkout) { left.append("checkout \(checkout)") }
+    let worktrees = try await git("worktree", "list", "--porcelain")
+    if worktrees.components(separatedBy: "worktree ").count != 2 {
+      left.append("worktrees \(worktrees)")
+    }
     return left
   }
 }
@@ -165,6 +172,9 @@ private final class FakeWarmup: WarmupSpawning {
   let config: URL
   private let calls = Mutex<[(directory: URL, log: URL, configExisted: Bool)]>([])
   var spawns: [(directory: URL, log: URL, configExisted: Bool)] { calls.withLock { $0 } }
+  private let seeds = Mutex<[(checkout: URL?, existed: Bool)]>([])
+  /// Each spawn's seed checkout, and whether it was on disk when the warm-up started.
+  var seedCheckouts: [(checkout: URL?, existed: Bool)] { seeds.withLock { $0 } }
   private let stopped = Mutex<[Int32]>([])
   var stops: [Int32] { stopped.withLock { $0 } }
 
@@ -176,6 +186,8 @@ private final class FakeWarmup: WarmupSpawning {
   func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
     let existed = FileManager.default.fileExists(atPath: config.path)
     calls.withLock { $0.append((directory, log, existed)) }
+    let seeded = seedCheckout.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
+    seeds.withLock { $0.append((seedCheckout, seeded)) }
     steps.append("warmup")
     return 4242
   }
@@ -430,6 +442,35 @@ struct RunCommandTests {
     for name in ["spec", prepared.clock.spec, "swift-harness/spec"] {
       #expect(prompt.contains(name), "\(prompt) names \(name)")
     }
+  }
+
+  @Test(
+    "run checks the plan branch out beside the clone before the warm-up starts and hands that checkout to the warm-up, so the run's first builds there start warm — catches the warm-up warming only the user's checkout"
+  )
+  func warmupSeedsThePlanCheckout() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let warmup = FakeWarmup(steps: Steps(), config: clone.layout.config)
+
+    let prepared = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(warmup: warmup))
+
+    let expected = try TaskWorktree.planCheckout(
+      commonDirectory: clone.layout.commonDir.path(percentEncoded: false), plan: prepared.slug)
+    #expect(prepared.checkout == expected)
+    #expect(warmup.seedCheckouts.map { $0.checkout?.path(percentEncoded: false) } == [expected])
+    #expect(warmup.seedCheckouts.map(\.existed) == [true])
+    let output = try await clone.runner.run(
+      ProcessInvocation(
+        executable: "git", arguments: ["symbolic-ref", "--short", "HEAD"],
+        workingDirectory: expected, timeout: .seconds(30)))
+    #expect(
+      output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        == prepared.clock.planBranch)
+    #expect(try await clone.git("symbolic-ref", "HEAD") == "refs/heads/main")
   }
 
   @Test(
@@ -809,8 +850,7 @@ struct RunCommandTests {
       guard case .gitDir(let directory) = root else { return "the tree \(root)" }
       return directory.resolvingSymlinksInPath().standardizedFileURL.path
     }
-    let worktree = clone.base.appending(path: "plan-worktree", directoryHint: .isDirectory)
-    try await clone.git("worktree", "add", "-q", worktree.path, prepared.clock.planBranch)
+    let worktree = URL(filePath: try #require(prepared.checkout), directoryHint: .isDirectory)
     for checkout in [clone.root, worktree] {
       guard case .brownfield? = try ConfigLoader().loadProfile(repositoryRoot: checkout) else {
         Issue.record("\(checkout.path) didn't load the brownfield profile")

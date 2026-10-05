@@ -3448,6 +3448,11 @@ F=plugin/gate/Tests/Fixtures/BrownfieldTrial
 cp $S/validation.json $F/send-money-2-validation.json
 cp $S/build/20261005T025212Z-65cdde10/events.jsonl $F/send-money-2-build-events.jsonl
 cp $S/out/qa-after-send-ui.json $F/send-money-2-qa-after-send-ui.json
+cp $S/../../config.toml $F/send-money-2-config.toml
 ```
 
-`grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.
+`send-money-2-config.toml` is that clone's applied `config.toml`: 3 `swiftpm` areas and 1 `xcode`
+area. The warm-up built the 3 packages in the user's checkout, so the contract's first
+`swift build` in the plan checkout was cold.
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 4 files matched nothing.

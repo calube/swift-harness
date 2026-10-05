@@ -80,18 +80,35 @@ struct RunCheckoutCommandTests {
   }
 
   @Test(
-    "create refuses when the checkout already exists — catches a second checkout over the first"
+    "create takes the plan branch's checkout run made at launch, and refuses a path holding anything else — catches a second checkout over the first, or a run that can't go on in the checkout its warm-up warmed"
   )
-  func createRefusesAnExistingCheckout() async throws {
+  func createTakesTheRunsCheckout() async throws {
     let scenario = try await PlanBranchScenario()
     defer { scenario.remove() }
+    let other = try await Self.withoutCheckout()
+    defer { other.remove() }
+    try FileManager.default.createDirectory(
+      atPath: other.checkout, withIntermediateDirectories: true)
+    try Data("stray\n".utf8).write(to: URL(filePath: other.checkout + "/stray.txt"))
 
-    let report = await RunCheckoutRun.create(
+    let existing = await RunCheckoutRun.create(
       slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
       runner: scenario.runner)
+    let stray = await RunCheckoutRun.create(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: other.user,
+      runner: other.runner)
 
-    #expect(report.status == .refused, "\(report.message)")
-    #expect(report.verdict == .red)
+    #expect(existing.status == .created, "\(existing.message)")
+    #expect(existing.verdict == .green)
+    #expect(
+      existing.worktree
+        == (try TaskWorktree.planCheckout(
+          commonDirectory: scenario.common, plan: PlanBranchScenario.slug)))
+    #expect(
+      try await scenario.git("symbolic-ref", "--short", "HEAD", in: scenario.checkout)
+        == scenario.planBranch)
+    #expect(stray.status == .refused, "\(stray.message)")
+    #expect(stray.verdict == .red)
   }
 
   @Test(

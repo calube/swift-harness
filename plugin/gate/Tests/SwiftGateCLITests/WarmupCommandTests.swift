@@ -257,6 +257,60 @@ struct WarmupCommandTests {
   }
 }
 
+/// The warm-up of the second send-money trial's clone, whose 3 `swiftpm` areas warmed only the
+/// user's checkout while the contract's first build ran cold in the plan checkout.
+@Suite("swiftgate warmup --seed-checkout")
+struct WarmupSeedCheckoutTests {
+  static let packages = ["APIClient", "AppFeature", "LogClient"]
+
+  /// A clone holding the trial's package folders and its applied config.
+  private static func clone() async throws -> WarmupClone {
+    let clone = try await WarmupClone(areas: nil)
+    for package in packages {
+      let directory = clone.root.appending(
+        path: "Packages/\(package)", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      try Data("// swift-tools-version:6.0\n".utf8)
+        .write(to: directory.appending(path: "Package.swift"))
+    }
+    try await clone.git("add", "-A")
+    try await clone.git("commit", "-q", "-m", "packages")
+    try FileManager.default.createDirectory(
+      at: clone.layout.cloneRoot, withIntermediateDirectories: true)
+    try Fixture.data("BrownfieldTrial/send-money-2-config.toml").write(to: clone.layout.config)
+    return clone
+  }
+
+  @Test(
+    "each swiftpm area's build also runs in the plan checkout, and nothing else does, while the times and baseline come from the base tree's run alone — catches a contract's first swift build running cold in the checkout the run builds in"
+  )
+  func buildsEachPackageInThePlanCheckout() async throws {
+    let clone = try await Self.clone()
+    defer { clone.remove() }
+    let checkout = clone.root.appending(path: "plan-checkout", directoryHint: .isDirectory)
+    let runner = FakeAreaCommandRunner { _ in .passed }
+
+    let outcome = try await WarmupCommand.warm(
+      directory: clone.root, areaNames: nil, seedCheckout: checkout,
+      dependencies: clone.dependencies(runner: runner))
+
+    let inCheckout = runner.requests.filter {
+      $0.workingDirectory.hasPrefix(checkout.path(percentEncoded: false))
+    }
+    #expect(
+      Set(inCheckout.map(\.workingDirectory))
+        == Set(Self.packages.map { checkout.appending(path: "Packages/\($0)").path }),
+      "\(inCheckout.map(\.workingDirectory))")
+    #expect(inCheckout.allSatisfy { $0.step == .build && $0.command == "swift build" })
+    #expect(outcome.seeded.map(\.area).sorted() == Self.packages)
+    #expect(outcome.seeded.allSatisfy { $0.outcome == .passed })
+    let tree = try await clone.tree()
+    let times = try WarmupTimesFile.decode(
+      Data(contentsOf: clone.layout.warmup(tree: tree)), tree: tree)
+    #expect(times.areas["APIClient"]?.steps == [.build: .passed, .test: .passed])
+  }
+}
+
 @Suite("Warm-up times feed the tiers")
 struct WarmupTimesFeedTheTiersTests {
   /// `web`'s warm tests take 45 s and `api`'s 10 s at the clone's base tree.
