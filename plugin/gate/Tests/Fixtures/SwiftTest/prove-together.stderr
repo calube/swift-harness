@@ -1,0 +1,14 @@
+Building for debugging...
+[0/7] Write sources
+[2/7] /FIXTURE/.build/arm64-apple-macosx/debug/ProbePackageTests.derived/runner.swift
+[3/7] Write sources
+[4/7] Write swift-version--58304C5D6DBC2206.txt
+[6/9] Emitting module Lib
+[7/9] Compiling Lib Lib.swift
+[8/11] Compiling LibTests DoubleTests.swift
+[9/11] Emitting module LibTests
+[10/13] Compiling ProbePackageTests runner.swift
+[11/13] Emitting module ProbePackageTests
+[11/13] Write Objects.LinkFileList
+[12/13] Linking ProbePackageTests
+Build complete! (2.70s)
