@@ -236,6 +236,64 @@ struct PlanImportValidationTests {
   }
 
   @Test(
+    "a plan whose screen runs on a timer, in a clone holding the starter's tracked files, fails the import with clock-unheld at its launch flow row and obstacle-seedable for the 3 requirements excused as random or moving, and imports once the contract reads `-harness-scenario` with a held scenario and those 3 are flow rows — catches the brief text never reaching the clock and seed checks"
+  )
+  func clockScreenFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "clock-screen-1-PLAN.md"),
+      encoding: .utf8)
+    let files = try String(
+      contentsOf: ValidationClone.trial.appending(path: "price-tracker-1-base-files.txt"),
+      encoding: .utf8
+    ).split(separator: "\n").map(String.init)
+    let clone = try await ValidationClone(
+      plan: captured, config: "price-tracker-1-config.toml", files: files)
+    defer { clone.remove() }
+    func run() async -> PlanImportReport {
+      await PlanImportRun.run(
+        slug: ValidationClone.slug, root: clone.root,
+        git: LiveGit(runner: clone.runner, repositoryRoot: clone.root.path),
+        contract: .init(task: "spec-contract", runID: "20261005T172719Z-1b7863f6"))
+    }
+
+    let report = await run()
+
+    #expect(report.status == .invalid, "\(report.message)")
+    let launch = try #require(line(of: "| req-launch | flow |", in: captured))
+    #expect(
+      report.message.contains("line \(launch): \(PlanLintValidation.clockUnheldRuleID): "),
+      "\(report.message)")
+    let section = try #require(line(of: "## Validation", in: captured))
+    for requirement in ["req-motion", "req-cut-target", "req-hazard"] {
+      #expect(
+        report.message.contains(
+          "line \(section): \(PlanLintValidation.obstacleSeedableRuleID): \(requirement) "),
+        "\(report.message)")
+    }
+    #expect(!clone.exists("ledger.json"))
+
+    let stub = try #require(
+      captured.split(separator: "\n").first { $0.hasPrefix("  - `TargetFeature` reducer stub") })
+    var fixed = try replacing(
+      String(stub),
+      with: stub + "\n  - the composition root reads `-harness-scenario`: `launch-held` holds "
+        + "the clock until the first input, and `entity-center` seeds 1 entity at the centre",
+      in: captured)
+    for requirement in ["req-motion", "req-cut-target", "req-hazard"] {
+      let old = try #require(
+        captured.split(separator: "\n").first { $0.hasPrefix("| \(requirement) |") })
+      fixed = try replacing(
+        String(old),
+        with: "| \(requirement) | flow | `qa/\(requirement).flow.json` | spec-screen | "
+          + "spec-validation | |",
+        in: fixed)
+    }
+    try clone.write(plan: fixed)
+    let imported = await run()
+    #expect(imported.status == .imported, "\(imported.message)")
+  }
+
+  @Test(
     "the price-tracker trial's plan, in a clone holding the starter's tracked files, fails the import with screen-without-flow for req-refresh, which only the reducer task covers, and obstacle-fakeable for req-load-states and req-chart-states at the Validation heading, and imports once those 3 are flow rows — catches the trial's plan that excused journeys a fake APIClient could drive"
   )
   func priceTrackerNetworkReasonsFailImport() async throws {

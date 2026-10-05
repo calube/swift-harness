@@ -154,7 +154,9 @@ enum PlanImportRun {
           hasIOSArea: config.areas.contains { $0.kind == .xcode }, file: livePath,
           rowLines: validation.rowLines, sectionLine: validation.headingLine,
           tasks: livePlan.tasks.map {
-            PlanLintValidation.TaskWrites(id: $0.id, covers: $0.covers, writes: $0.writes)
+            PlanLintValidation.TaskWrites(
+              id: $0.id, covers: $0.covers, writes: $0.writes,
+              text: PlanLintValidation.briefText($0.brief))
           },
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
@@ -167,7 +169,9 @@ enum PlanImportRun {
         findings += try PlanLintValidation.appWithoutFlowFindings(
           table: nil,
           tasks: livePlan.tasks.map {
-            PlanLintValidation.TaskWrites(id: $0.id, covers: $0.covers, writes: $0.writes)
+            PlanLintValidation.TaskWrites(
+              id: $0.id, covers: $0.covers, writes: $0.writes,
+              text: PlanLintValidation.briefText($0.brief))
           },
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)

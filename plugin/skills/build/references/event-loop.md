@@ -546,7 +546,9 @@ the build. Its `action`:
 
 - `amend-contract`: a contract gap with time before `noNewStartsAt` for the repair's proof and
   the fixer's run. No halt. In the fix worktree, add the name to the contract, a `held` scenario
-  for an in-flight state, as the contract step shapes it, and commit it on the fix branch. Then
+  for an in-flight state, or for a screen whose state advances on a clock a `held` scenario whose
+  clock starts at the first input or a seeded one that places an entity, as the contract step
+  shapes it, and commit it on the fix branch. Then
   take the requirement's [flow repair](#flow-repair) round again from step 1, its prompt naming
   the new name, and launch the fixer again once it adopts; its brief says to name each file that
   commit changed in its notes, since `check-return --fix` passes a fixer's edit outside its write

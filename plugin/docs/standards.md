@@ -795,6 +795,8 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes an `xcode` area's screen or feature, with no `flow` row and no `Reason` naming an obstacle kind |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.validation-obstacle-fakeable` | a screen requirement excused only by `network:` while its `xcode` area holds a `…Client` module a launch-selected fake can serve |
+| `plan-lint.validation-clock-unheld` | a task whose brief drives an `xcode` screen on a timer or clock, checked by a `flow` row, while the contract reads no `-harness-scenario` with a `held` scenario |
+| `plan-lint.validation-obstacle-seedable` | a requirement with no `flow` row excused by a moving or random entity while a brief gives the app a seed or a launch scenario |
 | `plan-lint.check-missing-dependency` | a task's row or acceptance exercising another task's work without depending on it |
 | `plan-import.contract-write-unlanded`, `plan-import.scenario-seam-missing` | why `plan import --contract` kept a GREEN contract pending: a literal file its `Writes` names that the contract commit left as at its gate's base, or flows launched with `-harness-scenario` while no Swift source outside a `…Tests` folder in an `xcode` area reads that argument outside a comment |
 | `plan-import.refresh-marker-unplaced` | why `plan import --contract` kept a GREEN contract pending: a flow row's requirement names a refresh, and no app source pins an identified element with `.safeAreaInset(edge: .bottom…)` for its drag to end on |

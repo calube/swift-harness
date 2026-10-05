@@ -88,7 +88,14 @@ exists and fails for the reason the feature is missing.
   for a state only several clock steps can produce, read from the step counter or an entity's
   position the contract exposes as an accessibility value, so the `wait` sees it change with no
   sleep or `duration` wait. When the contract exposes neither, return it as a missing contract
-  name.
+  name. A flow that checks such a screen's starting state launches under the contract's `held`
+  scenario, whose clock starts at the first input; under the real scenario the clock moves the
+  state before the `is` reads it. A flow for an interaction with an entity launches under the
+  contract's seeded scenario that places it, motionless, and drags from the entity's id:
+  `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<entity>\"", "destination":
+  "id=\"<id across the screen>\""}}`, then waits for what the interaction changes. A random or
+  moving position never excuses it. When the contract has no such scenario or id, return it as a
+  missing contract name.
   A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
   {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
   `fill` or `press` on the list's id. Check the result by the ids of the count and rows.
@@ -203,4 +210,7 @@ no repair: <requirement>: contract gap: <name>: <why>
 Return `no repair` when the flow already drives what the requirement needs and the app is at
 fault, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
 A `held` scenario for a state the fake ends before the `wait` sees it is such a name: name the
-one the flow would launch with.
+one the flow would launch with. So is a `held` or seeded scenario for a screen whose state
+advances on a clock, when the red step read a state the clock had already moved: a fixer's
+`flow row:` line that says `contract gap: held` names that case. Return it at once when the
+contract has no such scenario; no rewrite of the flow wins a race with the clock.
