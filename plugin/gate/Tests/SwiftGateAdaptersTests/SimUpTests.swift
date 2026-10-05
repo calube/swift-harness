@@ -65,6 +65,12 @@ final class InstallRecordingSimctl: Simctl {
     if let installFailure { throw installFailure }
     installed.withLock { $0.append(appPath) }
   }
+  func uninstall(_ udid: String, bundleID: String) async throws(SimctlError) {
+    try await base.uninstall(udid, bundleID: bundleID)
+  }
+  func resetKeychain(_ udid: String) async throws(SimctlError) {
+    try await base.resetKeychain(udid)
+  }
   func launch(_ udid: String, bundleID: String, arguments: [String]) async throws(SimctlError)
     -> Int32
   { try await base.launch(udid, bundleID: bundleID, arguments: arguments) }

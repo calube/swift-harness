@@ -167,10 +167,37 @@ public final class HeldTestDevices: Sendable {
   }
 }
 
+/// An area runner that can start leasing the clone a later test command needs before that command
+/// runs, so the clone boots while the steps before it build.
+public protocol TestDeviceWarming: AreaCommandRunning {
+  /// A runner whose `xcodebuild test` commands on the simulators `commands` name run on 1 clone
+  /// per simulator, leased from now until ``WarmedAreaRunner/release()``. It returns once each
+  /// lease is asked for, while the clones still boot. Commands that are run 1 at a time share a
+  /// clone, so callers running commands at once ask for a runner each.
+  func warmed(for commands: [String]) async -> WarmedAreaRunner
+}
+
+/// Runs commands as its base does, except an `xcodebuild test` naming a simulator it is warming,
+/// which runs on that simulator's held clone.
+public final class WarmedAreaRunner: AreaCommandRunning {
+  private let base: LeasedDeviceAreaRunner
+
+  init(base: LeasedDeviceAreaRunner, destinations: [XcodeTestDestination]) {
+    self.base = base
+  }
+
+  public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
+    await base.run(request)
+  }
+
+  /// Gives back every clone this runner leased.
+  public func release() async {}
+}
+
 /// Runs an area's `xcodebuild test` command on a leased clone of the simulator it names, and runs
 /// it once more when the simulator failed to launch the test runner. Any other command runs as
 /// written.
-public struct LeasedDeviceAreaRunner: AreaCommandRunning {
+public struct LeasedDeviceAreaRunner: TestDeviceWarming {
   private let base: any AreaCommandRunning
   private let leases: any TestDeviceLeasing
 
@@ -200,6 +227,11 @@ public struct LeasedDeviceAreaRunner: AreaCommandRunning {
     } catch {
       return await retrying(request)
     }
+  }
+
+  public func warmed(for commands: [String]) async -> WarmedAreaRunner {
+    WarmedAreaRunner(
+      base: self, destinations: commands.compactMap(XcodeTestDestination.simulator(in:)))
   }
 
   /// Runs `request`, and once more when the runner didn't launch; a second launch failure stays

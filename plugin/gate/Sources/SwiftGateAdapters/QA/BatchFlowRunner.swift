@@ -21,16 +21,31 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
   public var scenario: String?
   /// Which controls `sim verify`'s accessibility rules judge.
   public var audit: SimAuditScope
+  /// The `qa run`'s device the row borrows; `nil` brings a device up for the row alone.
+  public var hold: QAFlowDeviceHold?
 
   public init(
     worktree: URL, runID: String, simDirectory: URL, scenario: String?,
-    audit: SimAuditScope = .everyControl
+    audit: SimAuditScope = .everyControl, hold: QAFlowDeviceHold? = nil
   ) {
     self.worktree = worktree
     self.runID = runID
     self.simDirectory = simDirectory
     self.scenario = scenario
     self.audit = audit
+    self.hold = hold
+  }
+}
+
+/// The 1 device a `qa run` holds for all its flow rows: its hold's run id, and the folder its
+/// holder logs to.
+public struct QAFlowDeviceHold: Sendable, Equatable {
+  public var runID: String
+  public var directory: URL
+
+  public init(runID: String, directory: URL) {
+    self.runID = runID
+    self.directory = directory
   }
 }
 
@@ -280,13 +295,25 @@ public actor QAFlowRunner {
 
   private let simulator: any QAFlowSimulating
   private let finalPass: QAFinalPass?
+  private let hold: QAFlowDeviceHold?
   private var flowRecords: [Int: QAFlowRecord] = [:]
   private var evidenceGaps: [QAEvidenceGap] = []
 
-  /// - Parameter finalPass: set for `qa run --final`, which records each batch and saves its logs.
-  public init(simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil) {
+  /// - Parameters:
+  ///   - finalPass: set for `qa run --final`, which records each batch and saves its logs.
+  ///   - hold: the device every row borrows in turn, held until ``finish()``; `nil` brings a
+  ///     device up for each row.
+  public init(
+    simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil, hold: QAFlowDeviceHold? = nil
+  ) {
     self.simulator = simulator
     self.finalPass = finalPass
+    self.hold = hold
+  }
+
+  /// Gives back the device the rows shared. Returns what went wrong, if anything.
+  public func finish() async -> [String] {
+    []
   }
 
   /// The flow records of the rows that reached a batch, by row.

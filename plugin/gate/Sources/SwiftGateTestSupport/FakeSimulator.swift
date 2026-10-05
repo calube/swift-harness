@@ -141,6 +141,8 @@ public final class FakeSimctl: Simctl {
     case shutdown(String)
     case delete(String)
     case install(String)
+    case uninstall(String, bundleID: String)
+    case resetKeychain(String)
     case launch(String)
   }
 
@@ -204,6 +206,14 @@ public final class FakeSimctl: Simctl {
 
   public func install(_ udid: String, appPath: String) async throws(SimctlError) {
     state.withLock { $0.calls.append(.install(udid)) }
+  }
+
+  public func uninstall(_ udid: String, bundleID: String) async throws(SimctlError) {
+    state.withLock { $0.calls.append(.uninstall(udid, bundleID: bundleID)) }
+  }
+
+  public func resetKeychain(_ udid: String) async throws(SimctlError) {
+    state.withLock { $0.calls.append(.resetKeychain(udid)) }
   }
 
   public func launch(_ udid: String, bundleID: String, arguments: [String])

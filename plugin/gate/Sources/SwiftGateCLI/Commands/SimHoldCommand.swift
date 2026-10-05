@@ -16,6 +16,11 @@ struct SimHoldCommand: AsyncParsableCommand {
   @Option(name: .customLong("run"), help: "The run id the lease is written under.")
   var runID: String
 
+  @Option(
+    name: .customLong("owner-pid"),
+    help: "Give the device back once this process exits: a qa run holding 1 device for its rows.")
+  var ownerPID: Int32?
+
   func validate() throws {
     guard SimLease.isValidRunID(runID) else {
       throw ValidationError(
@@ -49,8 +54,8 @@ struct SimHoldCommand: AsyncParsableCommand {
         sweepLeases: { await Self.sweepDeadHolders(SimDown.live(runner: runner)) }),
       leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
       agentDevice: LiveAgentDevice(runner: runner), worktree: CanonicalPath.of(root),
-      holderPID: getpid(), timeout: .seconds(target.sessionTimeoutMinutes * 60),
-      log: Self.log)
+      holderPID: getpid(), owner: ownerPID,
+      timeout: .seconds(target.sessionTimeoutMinutes * 60), log: Self.log)
     do {
       _ = try await holder.hold(runID: runID)
     } catch let error as SimulatorCloneError {

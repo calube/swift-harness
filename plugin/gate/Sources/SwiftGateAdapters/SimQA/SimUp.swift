@@ -2,6 +2,30 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
+/// The device a `sim up` run uses.
+public enum SimUpDevice: Sendable, Equatable {
+  /// A `sim hold` of the run's own, which `sim down` gives back with its device.
+  case own
+  /// The device a hold that outlives the run holds, borrowed under the run's own lease.
+  case shared(SimSharedHold)
+}
+
+/// A hold 1 `qa run` keeps for all its flow rows, each row borrowing its device in turn.
+public struct SimSharedHold: Sendable, Equatable {
+  /// The hold's own lease's run id.
+  public var runID: String
+  /// The process the hold lasts no longer than.
+  public var ownerPID: Int32
+  /// Where the holder logs, when this run starts it.
+  public var logFile: URL
+
+  public init(runID: String, ownerPID: Int32, logFile: URL) {
+    self.runID = runID
+    self.ownerPID = ownerPID
+    self.logFile = logFile
+  }
+}
+
 /// What `swiftgate sim up` does: check the pinned `agent-device`, check the scenario, start a
 /// `sim hold` for the run and wait for its lease, build and install the app scheme on the leased
 /// device, open it in the scenario through `agent-device`, record the session in the lease, and
@@ -22,10 +46,11 @@ public struct SimUp: Sendable {
     public var derivedDataPath: String
     /// The `swiftgate` binary the holder runs as.
     public var swiftgateExecutable: String
+    public var device: SimUpDevice
 
     public init(
       worktree: URL, target: SimTarget, scenario: String?, runID: String, simDirectory: URL,
-      derivedDataPath: String, swiftgateExecutable: String
+      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own
     ) {
       self.worktree = worktree
       self.target = target
@@ -34,6 +59,7 @@ public struct SimUp: Sendable {
       self.simDirectory = simDirectory
       self.derivedDataPath = derivedDataPath
       self.swiftgateExecutable = swiftgateExecutable
+      self.device = device
     }
 
     /// An owned repository's request, from its `.swiftgate.toml`.

@@ -124,12 +124,16 @@ public enum SimHoldEnd: Sendable, Equatable {
   case sessionGone(session: String)
   /// `[qa] session_timeout_minutes` passed.
   case timedOut(after: Duration)
+  /// The process the hold was started for, a `qa run` holding 1 device for all its flow rows,
+  /// exited.
+  case ownerGone(pid: Int32)
 
   public var message: String {
     switch self {
     case .released: "the lease was removed"
     case .sessionGone(let session): "agent-device session \"\(session)\" is gone"
     case .timedOut(let after): "the session timeout of \(after.components.seconds / 60) min passed"
+    case .ownerGone(let pid): "its owner, PID \(pid), exited"
     }
   }
 }
@@ -140,9 +144,12 @@ public enum SimHoldWatch {
   ///   - lease: the lease as read now; `nil` once removed.
   ///   - liveSessions: session names `agent-device` lists now; `nil` when not asked this round
   ///     or the listing failed, which never ends the hold on its own.
+  ///   - owner: the PID the hold lasts no longer than, and whether it is alive now; `nil` for a
+  ///     hold with no owner.
   ///   - elapsed: time since the lease was written.
   public static func end(
-    lease: SimLease?, liveSessions: Set<String>?, elapsed: Duration, timeout: Duration
+    lease: SimLease?, liveSessions: Set<String>?, owner: (pid: Int32, alive: Bool)? = nil,
+    elapsed: Duration, timeout: Duration
   ) -> SimHoldEnd? {
     guard let lease else { return .released }
     if let session = lease.session, let liveSessions, !liveSessions.contains(session) {
