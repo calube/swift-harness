@@ -82,6 +82,22 @@ const tests = {
     }
   },
 
+  'the contract, the verifier and the build reviewers state when a finding defers to a sibling task, and that a standards violation or the task\'s own behaviour never does — catches a build task review-blocked for a test only a parallel task\'s code could make pass'() {
+    assert.match(contract, /## Deferred to a sibling task/, 'the contract has no deferral section')
+    assert.match(contract, /`deferred_to`/, 'the contract never names deferred_to')
+    assert.match(contract, /never blocks/, 'the contract does not say a deferral never blocks')
+    const verifier = read('agents/verifier.md')
+    assert.match(verifier, /`deferred_to`/, 'verifier.md never names deferred_to')
+    assert.match(verifier, /could pass only once that sibling merges/, 'verifier.md lacks the deferral test')
+    assert.match(verifier, /[Nn]ever defer a standards violation/, 'verifier.md lets a standards violation defer')
+    assert.match(verifier, /this task's own (write set|code)/, 'verifier.md lets the task\'s own behaviour defer')
+    for (const name of ['test-quality', 'architecture']) {
+      const body = read(`agents/${name}.md`)
+      assert.match(body, /sibling tasks/i, `${name}: never mentions sibling tasks`)
+      assert.match(body, /name that sibling in its `evidence`/, `${name}: not told to name the sibling`)
+    }
+  },
+
   'the review skill saves the workflow result and hands it to review-synth — catches the telemetry file never getting the token counts'() {
     const skill = read('skills/review/SKILL.md')
     assert.match(skill, /review-workflow\.json/)
