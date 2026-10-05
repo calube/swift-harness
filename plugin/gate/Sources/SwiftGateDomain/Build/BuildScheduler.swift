@@ -121,9 +121,13 @@ public enum BuildScheduler {
   ///   slot and overlap rules, so the budget never skips a task the app target needs to compile.
   ///   In `.cutoff` phase nothing starts.
   /// - A `timeBox` sets the phase in place of the preset's budget, measured from its own start.
+  /// - A task in `idle`, a running task whose worker already handed back and that only waits on
+  ///   its merge, holds no slot; its write set stays reserved until it merges. The validation
+  ///   task, which writes only validation checks, starts ahead of every other ready task, since
+  ///   tasks its checks run after can't merge until its at-base run is done.
   public static func next(
     ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
-    required: RequiredTasks, timeBox: RunTimeBox? = nil
+    required: RequiredTasks, timeBox: RunTimeBox? = nil, idle: Set<String> = []
   ) -> Result {
     let byID = Dictionary(uniqueKeysWithValues: ledger.tasks.map { ($0.id, $0) })
     let phase =
