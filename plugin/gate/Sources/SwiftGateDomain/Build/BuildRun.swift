@@ -8,6 +8,11 @@ public struct BuildRunLayout: Sendable, Equatable {
 
   public var runFile: String { directory + "/run.json" }
   public var eventsFile: String { directory + "/events.jsonl" }
+  /// `returns/`, each checked task return, which dependents' context packs read notes from.
+  public var returnsDirectory: String { directory + "/returns" }
+
+  /// `returns/<task>.json`; `task` must be a single safe path component.
+  public func returnFile(task: String) -> String { returnsDirectory + "/\(task).json" }
 }
 
 public enum BuildRunLayoutError: Error, Sendable, Equatable {

@@ -149,8 +149,8 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
 1. A null or thrown workflow halts that task. Otherwise write the return and check it:
    `"$SG" build check-return <file> --plan <slug> --session <session> --json`. Exit 0 passes; any
    other exit halts that task.
-2. Write the checked return, byte for byte, to `<returns><task>.json`: dependent tasks' packs read
-   its `notes` from there.
+2. Exit 0 has stored the checked return in `<returns><task>.json`, where dependent tasks' packs
+   read its `notes`; the report's `stored` names it. Never copy a return there yourself.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
 4. Merge from the [merge queue](references/event-loop.md#merge-queue): wait until `build next`
