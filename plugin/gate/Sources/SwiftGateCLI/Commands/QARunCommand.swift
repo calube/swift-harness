@@ -122,7 +122,9 @@ enum QARunRun {
       return blocked("\(tablePath) doesn't read: \(error)", plan: slug)
     }
 
+    var notes: [String] = []
     var merged: Set<String>?
+    var ended: [String: TaskStatus]?
     if !options.atBase || options.after != nil {
       let progress: LedgerProgress
       do throws(PlanStateStoreError) {
@@ -135,12 +137,16 @@ enum QARunRun {
           "--after `\(after)` names no task in \(plan.ledgerFile); no row ran", plan: slug)
       }
       if !options.atBase {
-        merged = progress.merged
+        let build = await buildEvents(slug: slug, git: git, notes: &notes)
+        merged = progress.merged(per: build)
+        if options.after == nil, options.final || build?.finalGated == true {
+          ended = progress.statuses
+        }
       }
     }
-    var runPlan = QARunPlan.make(table: table, merged: merged, after: options.after)
+    var runPlan = QARunPlan.make(
+      table: table, merged: merged, after: options.after, ended: ended)
     var prepared: String?
-    var notes: [String] = []
     if let writer = options.preparedBy {
       let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
       let folder = root.appending(path: relative, directoryHint: .isDirectory).path
@@ -151,7 +157,8 @@ enum QARunRun {
           "this checkout has no \(relative)/ folder, so --prepared-by has no checks to run",
           plan: slug)
       }
-      runPlan = QARunPlan(entries: runPlan.entries.filter { $0.validation.writer == writer })
+      runPlan = QARunPlan(
+        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended)
       guard !runPlan.entries.isEmpty else {
         return blocked(
           "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
@@ -252,7 +259,8 @@ enum QARunRun {
 
     let report = QAReport(
       runID: runID, plan: slug, after: options.after, atBase: options.atBase,
-      final: options.final, commit: commit, rows: rows, gaps: gaps, notes: notes)
+      final: options.final, settled: ended != nil, commit: commit, rows: rows, gaps: gaps,
+      notes: notes)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data
@@ -266,6 +274,27 @@ enum QARunRun {
       return report.adding(notes: ["\(QAReport.fileName) not written: \(error)"])
     }
     return report
+  }
+
+  /// The plan's newest build run's events; `nil`, with a note when reading failed, when it has
+  /// none, so only the ledger says what merged.
+  private static func buildEvents(slug: String, git: any Git, notes: inout [String]) async
+    -> BuildEventLog?
+  {
+    do throws(BuildRunStoreError) {
+      guard let store = try await BuildRunStore.latest(plan: slug, git: git) else { return nil }
+      let log = try store.events()
+      if !log.damage.isEmpty {
+        notes.append(
+          "build run \(store.runID)'s events have \(log.damage.count) unreadable line(s); "
+            + "a merge on them isn't counted")
+      }
+      return log
+    } catch {
+      notes.append(
+        "the build run's events didn't read, so only the ledger says what merged: \(error)")
+      return nil
+    }
   }
 
   /// The areas a `test:` acceptance row resolves in: the brownfield config's, read only when a

@@ -337,9 +337,11 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    `lint` and `build` against the baseline, plus each area's `e2e`.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
 3. `"$SG" qa run --plan <slug> --json` in `<checkout>` runs every validation row whose tasks
-   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict counts as a red
-   `final` in item 4, whose fix task owns the files the red rows' checks exercise, and item 4's
-   second `final` runs this item again.
+   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict with a `red` row
+   counts as a red `final` in item 4, whose fix task owns the files the red rows' checks exercise,
+   and item 4's second `final` runs this item again. After `final` a row that never verified,
+   `unverified` or `abandoned`, is RED too; with no `red` row no fix task makes it run, so it
+   goes to the report as is.
 4. Not GREEN: close the span with `"$SG" events span end <span> --outcome red`, add 1 fix task
    to `PLAN.md` that owns the failing files, import again, run the build loop until it merges, then
    open a new `final` span as above and run `final` once more. A second red `final` closes its
@@ -360,8 +362,8 @@ fallbacks, the time box with each task that didn't fit it, and the plan branch t
 line says whether the run finished: a run that left any task blocked
 or pending leads with `run: INCOMPLETE` and names each one, and its `final` verdict, on the next
 line, covers only what merged. A plan with a validation table adds `validation: <n> of <m> rows
-verified` after it, from the newest `qa run` over every row: GREEN over 0 verified means no check
-ran. Print it as your last message as written, then 1 line per row of
+verified` after it, from the newest `qa run` over every row: after `final`, a row that never
+verified makes it RED. Print it as your last message as written, then 1 line per row of
 step 8's `qa run`, `<requirement> <layer> <check>: <result>, <message>`, and its `runID`. Merging
 `<plan-branch>` is the user's call; never merge it into their branch.
 

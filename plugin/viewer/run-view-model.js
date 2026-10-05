@@ -422,7 +422,7 @@
     });
   }
 
-  // The Validation tab's badges: its red, unverified and waiting counts.
+  // The Validation tab's badges: its red, unverified, waiting and abandoned counts.
   function validationBadges(view) {
     const v = view.validation;
     if (!v) return [];
@@ -430,7 +430,8 @@
     const badge = (key, kind, n, text, title) => (n > 0 ? [{ key, kind, n, text, title }] : []);
     return badge("red", "bad", c.red, c.red + " red", c.red + " red validation " + plural(c.red, "row"))
       .concat(badge("unverified", "warn", c.unverified, c.unverified + " unverified", c.unverified + " validation " + plural(c.unverified, "row") + " with no answer"))
-      .concat(badge("waiting", "plain", c.waiting, c.waiting + " waiting", c.waiting + " validation " + plural(c.waiting, "row") + " waiting on a task"));
+      .concat(badge("waiting", "plain", c.waiting, c.waiting + " waiting", c.waiting + " validation " + plural(c.waiting, "row") + " waiting on a task"))
+      .concat(badge("abandoned", "bad", c.abandoned || 0, c.abandoned + " abandoned", c.abandoned + " validation " + plural(c.abandoned, "row") + " whose task was abandoned"));
   }
 
   // A link to a file a run left, relative to the page: a report's folder keeps a copy under its

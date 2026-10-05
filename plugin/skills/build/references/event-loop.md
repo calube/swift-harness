@@ -491,7 +491,8 @@ rather than running them again, drives the screens the plan changed and judges e
 `sim verify`. It hands nothing to `/swift-harness:tdd`, since this skill never edits code.
 
 - GREEN from both: go on.
-- RED from either, a red row or a flow `sim verify` judged RED: halt with reason `gate-red`, and
+- RED from either, a red row, a row that never verified (`unverified` or `abandoned`, which gate
+  once the build has ended) or a flow `sim verify` judged RED: halt with reason `gate-red`, and
   quote each red row as `<requirement> <layer>: <message>` and each finding as `rule: message`.
   Options: **stop** (Recommended), which leaves the index at `building` so a sprint can fix it, or
   **finish anyway**.

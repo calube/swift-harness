@@ -30,9 +30,10 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 
 `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
-validation.json: none is GREEN with a note, and several exit 2 naming them. A row
-runs once every `Runs after` task is `done` in the ledger, the `--after` task counting as merged;
-`--after` keeps only the rows that name it, and a row with an unmerged task reads `waiting`.
+validation.json: none is GREEN with a note, several exit 2. A row runs once each `Runs after`
+task merged, per the ledger or build events, `--after` counting as merged and keeping only its
+rows. A row with an unmerged task reads `waiting`; once the build ended (`--final`, or a `final`
+gate after the last merge) `abandoned` if its task was, else `unverified`.
 
 Rows run in the checkout in layer order: acceptance, flow, state. A red row
 leaves only its own requirement's later-layer rows `unverified`. A requirement's state rows run straight after
@@ -60,8 +61,8 @@ only `<task>`'s rows run, their `qa/<name>` checks and `QA_DIR` read from the ch
 
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
 stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row. Its message leads with
-how many rows got a `pass` or `red`: an unverified row is a nit, so `0 of 3 rows verified`
-can still read GREEN, as `run report` repeats under its `final` line.
+how many rows got a `pass` or `red`. An unverified row is a nit during merges; once the
+build ended, it and an abandoned row gate. `run report` repeats the count under its `final` line.
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 [`simulator-qa-flows.md`](simulator-qa-flows.md).
