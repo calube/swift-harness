@@ -4006,3 +4006,108 @@ sed -E 's#"/[^"]*/price-tracker-3/repo/#"/trial/repo/#' $S/plans/spec/clock.json
 ```
 
 `grep -laE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-3-*` matched nothing.
+
+## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans and fixer
+
+The third price-tracker trial (2026-10-05) priced its unrun `final` at the cutoff as its 227 s
+merge gate plus 60 s, while the real `final` took 35 s with 6 of its 8 area steps reused; its
+validation agent waited on `pgrep -f` through the Monitor tool after the guard denied the same
+wait in Bash; its run-end ingest filed the fixer as the orchestrator and the worker of the
+Workflow the cutoff killed with no role; 3 spans never ended; `build next` kept the refused
+watchlist-screen ready to merge while its fixer worked. `T` is the trial folder under the practice-trial runs folder, its clone's state
+copied as `state/` and its transcripts as `transcripts/`. From the repository root:
+
+```sh
+S=$T/state R=$S/plans/spec/build/20261005T055727Z-2fbf5ab4 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $R/events.jsonl $F/price-tracker-3-build-events.jsonl
+cp $R/cutoff.json $F/price-tracker-3-cutoff.json
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/price-tracker-3-gate-runs.jsonl
+grep '"runID":"20261005T062852Z-66a265fc"' $S/events/gate.jsonl | grep '"kind":"gate.step"' \
+  > $F/price-tracker-3-final-steps.jsonl
+cp $S/warmup/f0bd7c247ed6a4afd220dfad6893cc719ca66bfa.json $F/price-tracker-3-warmup.json
+cp $S/config.toml $F/price-tracker-3-config.toml
+cp $S/events/build.jsonl $F/price-tracker-3-halts.jsonl
+cp $S/events/span.jsonl $F/price-tracker-3-spans.jsonl
+```
+
+`Hooks/price-tracker-3-monitor-pgrep-wait.json` is the validation agent's Monitor call, its name
+and input, with the task output folder cut to `/TMP/`:
+
+```sh
+T=$T/transcripts/cb039a0d-04f4-428a-b575-e73a1e11d628 F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+T, F = os.environ["T"], os.environ["F"]
+for line in open(f"{T}/subagents/agent-a5db10195f7f6c10e.jsonl"):
+    content = (json.loads(line).get("message") or {}).get("content")
+    for c in content if isinstance(content, list) else []:
+        if c.get("type") == "tool_use" and c.get("name") == "Monitor":
+            text = json.dumps({"name": c["name"], "input": c["input"]}, indent=2, ensure_ascii=False)
+            text = re.sub(r"/private/tmp/claude-\d+/[^/\"]+/", "/TMP/", text)
+            open(f"{F}/Hooks/price-tracker-3-monitor-pgrep-wait.json", "w").write(text + "\n")
+PY
+```
+
+`Transcripts/cb039a0d-…` holds the orchestrator's transcripts with the usage filter of the
+brownfield run section above, plus each agent's `.meta.json` cut to its type and launch fields,
+and each Workflow's record cut to its id, name, status and `task` and `plan` arguments. With `P`
+the trial's `transcripts` folder and `S` the session id:
+
+```sh
+F='select(.type=="assistant") | {type, timestamp, isSidechain, message: (.message | {id, model, usage})}'
+jq -c "$F" "$P/$S.jsonl" > "Transcripts/$S.jsonl"
+(cd "$P" && find "$S/subagents" -name 'agent-*.jsonl') | while read -r f; do
+  mkdir -p "Transcripts/$(dirname "$f")" && jq -c "$F" "$P/$f" > "Transcripts/$f"; done
+(cd "$P" && find "$S/subagents" -name 'agent-*.meta.json') | while read -r f; do
+  jq -S '{agentType, description, workflowPhase, spawnDepth, requestShape, model}' "$P/$f" \
+    > "Transcripts/$f"; done
+mkdir -p "Transcripts/$S/workflows"
+for f in "$P/$S"/workflows/wf_*.json; do
+  jq -S '{runId, workflowName, status, args: {task: .args.task, plan: .args.plan}}' "$f" \
+    > "Transcripts/$S/workflows/$(basename "$f")"; done
+```
+
+The orchestrator has 51 distinct messages, the fixer `ac257d99…` 68 and the killed worker
+`a441498…` 14. `grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in any of
+these files.
+
+## Brownfield trial: send-money-4's run-end and proof gaps
+
+The fourth send-money trial's fixer named the 1 file it changed outside its write set as
+`AppView.swift`, and `check-return --fix` read that as unexplained. Its contract changed the
+build-only app target's UI test, which no merge gate proved, and `final` read BLOCKED for want of
+time to prove it. Its copied evidence kept machine paths, and its first before-merge run's search
+row message was too long for the report. `T` is the trial folder under the practice-trial runs
+folder, holding the clone's state copied after the run as `state/` and the orchestrator's
+transcripts, and `R` the trial clone. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+S=$T/state F=BuildReturn/send-money-4 Q=20261005T061244Z-0883dbbe
+X=RunView/send-money-4-evidence/$Q W=$X/qa/01-req-contact-search.flow
+scrub() { LC_ALL=C sed -E -e "s#/Users/[^/\"]*/Developer/trials/practice/send-money-4/#/TRIAL/#g" \
+  -e "s#/Users/[^/\"]*/\.agent-device/#/HOME/.agent-device/#g" "$1" > "$2"; }
+mkdir -p $F $X/events $W
+sed -n 56p $T/transcripts/*/subagents/agent-a9f247b3f6b4d9d1c.jsonl | python3 -c \
+  "import json,sys;sys.stdout.write(json.loads(sys.stdin.read())['message']['content'][0]['text'])" \
+  > $F/fix-send-flow-core.json
+git -C $R diff --name-only swift-harness/spec...spec/fix-send-flow-core > $F/fix-send-flow-core.changed.txt
+python3 -c "import json,sys;l=json.load(open(sys.argv[1]))
+json.dump(next(t['writeSet'] for t in l['tasks'] if t['id']=='send-flow-core'),open(sys.argv[2],'w'))" \
+  $R/.git/swift-harness/plans/spec/ledger.json $F/send-flow-core.write-set.json
+git -C $R show 42098e0:UITests/LaunchFlowUITests.swift > BrownfieldTrial/send-money-4-LaunchFlowUITests-base.swift
+git -C $R show d40c812:UITests/LaunchFlowUITests.swift > BrownfieldTrial/send-money-4-LaunchFlowUITests-contract.swift
+cp $S/plans/spec/out/final.json BrownfieldTrial/send-money-4-final.json
+cp $S/runs/$Q/events/qa.jsonl $X/events/qa.jsonl
+cp $S/runs/$Q/qa/report.json $X/qa/report.json
+scrub $S/runs/$Q/qa/01-req-contact-search.flow/steps.json $W/steps.json
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));d['data']['results']=d['data']['results'][:4]
+json.dump(d,sys.stdout,indent=2)" $S/runs/$Q/qa/01-req-contact-search.flow/batch.json > /tmp/batch.json
+scrub /tmp/batch.json $W/batch.json
+```
+
+Line 56 of the fixer's transcript is its last message, its return. The changed files are the fix
+branch's changes since it left the plan branch, as `check-return` lists them. The 2 UI test
+versions are the plan base's and the contract commit's. `final.json` is the `final` gate's report
+the orchestrator saved. `batch.json` keeps the first 4 of the batch's 26 step results. The trial's
+`config.toml` differs from `send-money-3-config.toml` only in `discovered_at`, so its prove tests
+use that one. `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched
+nothing.

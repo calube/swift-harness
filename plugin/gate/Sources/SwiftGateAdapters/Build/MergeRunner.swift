@@ -812,7 +812,7 @@ public struct BuildMerge: Sendable {
     let kept = Self.keepEvidence(of: fix)
     try await step(command, context, "removing the fix worktree \(fix.path)") {
       () async throws(GitWorkspaceError) in
-      try await workspace.removeWorktree(at: fix.path, force: false)
+      try await WorktreePool.retire(fix, discard: false, workspace: workspace)
     }
     return " Removed the earlier fix worktree \(fix.path)\(kept)."
   }
@@ -915,19 +915,35 @@ public struct BuildMerge: Sendable {
     try await checkFixIsFree(command, context)
     let fix = context.fix
     let branch = context.names.branch
-    let outcome = try await step(command, context, "cutting the fix worktree \(fix.path)") {
-      () async throws(GitWorkspaceError) in
-      try await workspace.addWorktree(
-        at: fix.path, branch: fix.branch, from: context.names.baseBranch)
-      let subject = try await merger.subject(of: "refs/heads/\(branch)", in: fix.path)
-      return try await merger.merge(branch, message: "Merge: \(subject)", in: fix.path)
+    let (path, outcome) = try await step(
+      command, context, "cutting the fix worktree \(fix.path)"
+    ) { () async throws(GitWorkspaceError) in
+      // A brownfield fixer takes a pooled slot, warm from the task an earlier slot built.
+      var path = fix.path
+      switch profile {
+      case .owned:
+        try await workspace.addWorktree(
+          at: fix.path, branch: fix.branch, from: context.names.baseBranch)
+      case .brownfield:
+        path = try await WorktreePool(commonDirectory: context.common, plan: plan).checkOut(
+          branch: fix.branch, from: context.names.baseBranch, workspace: workspace
+        ).path
+      }
+      let subject = try await merger.subject(of: "refs/heads/\(branch)", in: path)
+      return (path, try await merger.merge(branch, message: "Merge: \(subject)", in: path))
     }
-    let cut = "Fix worktree \(fix.path) on \(fix.branch) has \(branch) merged in"
+    let cut = "Fix worktree \(path) on \(fix.branch) has \(branch) merged in"
     switch outcome {
     case .merged: return ([], cut + ".")
     case .conflicted(let files):
       return (files, cut + ", conflicted in \(files.joined(separator: ", ")).")
     }
+  }
+
+  /// Where the fix worktree is now: a fix cut after `context` was read may have taken a slot.
+  private static func fixPath(_ context: Context) -> String {
+    (try? WorktreePool(commonDirectory: context.common, plan: context.fix.plan)
+      .path(holding: context.fix.branch)) ?? context.fix.path
   }
 
   /// Runs one or more git steps, turning a git failure into a blocked report.
@@ -973,7 +989,7 @@ public struct BuildMerge: Sendable {
       command: command, plan: plan, task: task, status: status, reason: reason, verdict: verdict,
       runId: context.run.runID, branch: context.branch,
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
-      postCommit: post, fixWorktree: cut ? context.fix.path : nil,
+      postCommit: post, fixWorktree: cut ? Self.fixPath(context) : nil,
       fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted,
       gateRunId: gateRunId, keptBranches: keptBranches, message: message)
   }

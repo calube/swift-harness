@@ -1,0 +1,8 @@
+{
+  "agentType": "swift-harness:build-worker",
+  "description": "build:detail-screen",
+  "model": "claude-sonnet-5-5",
+  "requestShape": "foreground",
+  "spawnDepth": 1,
+  "workflowPhase": "Build"
+}

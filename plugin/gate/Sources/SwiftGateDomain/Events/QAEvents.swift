@@ -139,3 +139,59 @@ public struct QARepairEvent: Sendable, Equatable, Codable {
       failingCommand: record.failingCommand, removed: record.removed, added: record.added)
   }
 }
+
+/// 1 part of the setup before a `qa run`'s rows can run, and how long it took.
+public struct QASetupStep: Sendable, Equatable, Codable {
+  public enum Name: String, Sendable, Codable, CaseIterable {
+    /// The tree the rows run in: a scratch tree or a pooled slot at the merge or the merge base.
+    case tree
+    /// Waiting for the device: a held one borrowed, or a new clone leased and booted.
+    case device
+    /// Building the app for the simulator.
+    case build
+    /// Installing the app on the device and opening it.
+    case install
+  }
+
+  public let step: Name
+  public let milliseconds: Int
+  /// `true` when the step reused what an earlier run left: a warm slot, a held device, a build
+  /// whose DerivedData existed. Absent when that isn't known.
+  public let reused: Bool?
+
+  public init(step: Name, milliseconds: Int, reused: Bool? = nil) {
+    self.step = step
+    self.milliseconds = milliseconds
+    self.reused = reused
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case step, reused
+    case milliseconds = "ms"
+  }
+}
+
+/// `qa.setup`: 1 setup step of 1 `qa run`, joined to its row's `qa.check` by `plan` and `row`
+/// within the run; `row` is `nil` for the run's tree, which every row shares.
+public struct QASetupEvent: Sendable, Equatable, Codable {
+  public let plan: String
+  public let row: Int?
+  public let atBase: Bool
+  public let step: QASetupStep.Name
+  public let milliseconds: Int
+  public let reused: Bool?
+
+  public init(plan: String, row: Int?, atBase: Bool, setup: QASetupStep) {
+    self.plan = plan
+    self.row = row
+    self.atBase = atBase
+    self.step = setup.step
+    self.milliseconds = setup.milliseconds
+    self.reused = setup.reused
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case plan, row, atBase, step, reused
+    case milliseconds = "ms"
+  }
+}

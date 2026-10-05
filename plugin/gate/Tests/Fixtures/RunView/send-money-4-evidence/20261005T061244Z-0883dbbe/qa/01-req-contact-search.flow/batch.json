@@ -1,0 +1,755 @@
+{
+  "success": true,
+  "data": {
+    "total": 26,
+    "executed": 26,
+    "totalDurationMs": 14194,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-20261005T061244Z-0883dbbe-row1",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-20261005T061244Z-0883dbbe-row1",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T061244Z-0883dbbe-row1/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T061244Z-0883dbbe-row1/requests/620edd1cc93614d9.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T061244Z-0883dbbe-row1/events.ndjson",
+          "sessionReused": true,
+          "selection": {
+            "reason": "existing-session",
+            "source": "session",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "startup": {
+            "durationMs": 1618,
+            "measuredAt": "2026-10-05T06:13:43.930Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter"
+          },
+          "timing": {
+            "runnerDemand": "required",
+            "runnerPrewarmKind": "session",
+            "runnerPrewarmScheduled": true,
+            "openDispatchDurationMs": 741,
+            "launchUrlDurationMs": 0,
+            "runnerPrewarmWaited": false,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 841,
+            "totalDurationMs": 1618
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "swift-harness-4011-70917049",
+          "id": "3984D303-B7B2-44FC-8BA1-F0A5123EA285",
+          "kind": "simulator",
+          "device_udid": "3984D303-B7B2-44FC-8BA1-F0A5123EA285",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.InterviewStarter"
+        },
+        "durationMs": 1937
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 458,
+          "selector": "id=\"contacts.search\""
+        },
+        "durationMs": 460
+      },
+      {
+        "step": 3,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "InterviewStarter",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 13004,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "NavigationBar",
+              "role": "SwiftUI.UIKitNavigationBar",
+              "subrole": "UINavigationBar",
+              "identifier": "Send money",
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 402,
+                "height": 106
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "navigation-bar"
+            },
+            {
+              "index": 2,
+              "parentIndex": 1,
+              "type": "StaticText",
+              "role": "UILabel",
+              "label": "Send money",
+              "rect": {
+                "x": 16,
+                "y": 119.66666666666667,
+                "width": 195.66666666666666,
+                "height": 40.66666666666667
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "text"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "CollectionView",
+              "role": "SwiftUI.UpdateCoalescingCollectionView",
+              "subrole": "UICollectionView",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "collection"
+            },
+            {
+              "index": 4,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 168,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e5",
+              "kind": "cell"
+            },
+            {
+              "index": 5,
+              "parentIndex": 4,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Send money",
+              "identifier": "home.title",
+              "rect": {
+                "x": 16,
+                "y": 168,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e6",
+              "kind": "text"
+            },
+            {
+              "index": 6,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 220,
+                "width": 370,
+                "height": 70.66666666666669
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e7",
+              "kind": "cell"
+            },
+            {
+              "index": 7,
+              "parentIndex": 6,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "$250.00",
+              "identifier": "home.balance",
+              "rect": {
+                "x": 16,
+                "y": 220,
+                "width": 370,
+                "height": 70.66666666666669
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e8",
+              "kind": "text"
+            },
+            {
+              "index": 8,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewHeaderFooter",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 308.33333333333337,
+                "width": 370,
+                "height": 40.333333333333314
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e9",
+              "kind": "cell"
+            },
+            {
+              "index": 9,
+              "parentIndex": 8,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Contacts",
+              "rect": {
+                "x": 16,
+                "y": 308.33333333333337,
+                "width": 370,
+                "height": 40.333333333333314
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e10",
+              "kind": "text"
+            },
+            {
+              "index": 10,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 348.66666666666663,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e11",
+              "kind": "cell"
+            },
+            {
+              "index": 11,
+              "parentIndex": 10,
+              "type": "TextField",
+              "role": "UITextField",
+              "value": "Search contacts",
+              "placeholder": "Search contacts",
+              "identifier": "contacts.search",
+              "rect": {
+                "x": 32,
+                "y": 363.66666666666663,
+                "width": 338,
+                "height": 22
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e12",
+              "kind": "text-field"
+            },
+            {
+              "index": 12,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 400.66666666666663,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e13",
+              "kind": "cell"
+            },
+            {
+              "index": 13,
+              "parentIndex": 12,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Ava Chen",
+              "identifier": "contacts.row.ava",
+              "rect": {
+                "x": 16,
+                "y": 400.66666666666663,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e14",
+              "kind": "button"
+            },
+            {
+              "index": 14,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 452.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e15",
+              "kind": "cell"
+            },
+            {
+              "index": 15,
+              "parentIndex": 14,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Ben Ortiz",
+              "identifier": "contacts.row.ben",
+              "rect": {
+                "x": 16,
+                "y": 452.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e16",
+              "kind": "button"
+            },
+            {
+              "index": 16,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 504.6666666666667,
+                "width": 370,
+                "height": 52.00000000000006
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e17",
+              "kind": "cell"
+            },
+            {
+              "index": 17,
+              "parentIndex": 16,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Chloe Park",
+              "identifier": "contacts.row.chloe",
+              "rect": {
+                "x": 16,
+                "y": 504.6666666666667,
+                "width": 370,
+                "height": 52.00000000000006
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e18",
+              "kind": "button"
+            },
+            {
+              "index": 18,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 556.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e19",
+              "kind": "cell"
+            },
+            {
+              "index": 19,
+              "parentIndex": 18,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Dev Patel",
+              "identifier": "contacts.row.dev",
+              "rect": {
+                "x": 16,
+                "y": 556.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e20",
+              "kind": "button"
+            },
+            {
+              "index": 20,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 608.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e21",
+              "kind": "cell"
+            },
+            {
+              "index": 21,
+              "parentIndex": 20,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Ella Novak",
+              "identifier": "contacts.row.ella",
+              "rect": {
+                "x": 16,
+                "y": 608.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e22",
+              "kind": "button"
+            },
+            {
+              "index": 22,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 660.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e23",
+              "kind": "cell"
+            },
+            {
+              "index": 23,
+              "parentIndex": 22,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Finn Murphy",
+              "identifier": "contacts.row.finn",
+              "rect": {
+                "x": 16,
+                "y": 660.6666666666667,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e24",
+              "kind": "button"
+            },
+            {
+              "index": 24,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 712.6666666666666,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e25",
+              "kind": "cell"
+            },
+            {
+              "index": 25,
+              "parentIndex": 24,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Grace Kim",
+              "identifier": "contacts.row.grace",
+              "rect": {
+                "x": 16,
+                "y": 712.6666666666666,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e26",
+              "kind": "button"
+            },
+            {
+              "index": 26,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewCell",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 764.6666666666666,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e27",
+              "kind": "cell"
+            },
+            {
+              "index": 27,
+              "parentIndex": 26,
+              "type": "Button",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Hugo Silva",
+              "identifier": "contacts.row.hugo",
+              "rect": {
+                "x": 16,
+                "y": 764.6666666666666,
+                "width": 370,
+                "height": 52
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e28",
+              "kind": "button"
+            },
+            {
+              "index": 28,
+              "parentIndex": 3,
+              "type": "Cell",
+              "role": "SwiftUI.ListCollectionViewHeaderFooter",
+              "subrole": "UICollectionViewListCell",
+              "rect": {
+                "x": 16,
+                "y": 834,
+                "width": 370,
+                "height": 40
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e29",
+              "kind": "cell"
+            },
+            {
+              "index": 29,
+              "parentIndex": 28,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "Activity",
+              "identifier": "home.activity",
+              "rect": {
+                "x": 16,
+                "y": 834,
+                "width": 370,
+                "height": 40
+              },
+              "enabled": true,
+              "depth": 3,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e30",
+              "kind": "text"
+            },
+            {
+              "index": 30,
+              "parentIndex": 3,
+              "type": "Other",
+              "role": "_UIScrollViewScrollIndicator",
+              "label": "Vertical scroll bar, 2 pages",
+              "value": "0%",
+              "rect": {
+                "x": 369,
+                "y": 116,
+                "width": 30,
+                "height": 696
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e31",
+              "kind": "other"
+            },
+            {
+              "index": 31,
+              "parentIndex": 3,
+              "type": "Other",
+              "role": "_UIScrollViewScrollIndicator",
+              "label": "Vertical scroll bar, 2 pages",
+              "value": "0%",
+              "rect": {
+                "x": 369,
+                "y": 116,
+                "width": 30,
+                "height": 696
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 13004,
+              "hittable": true,
+              "ref": "e32",
+              "kind": "other"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": true,
+            "visibleNodeCount": 32,
+            "totalNodeCount": 32,
+            "reasons": [
+              "scroll-hidden-below"
+            ]
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 2,
+              "p50Ms": 436,
+              "p95Ms": 458,
+              "maxMs": 458,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 2
+              }
+            }
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "refsGeneration": 460445
+        },
+        "durationMs": 436
+      },
+      {
+        "step": 4,
+        "command": "screenshot",
+        "ok": true,
+        "data": {
+          "path": "/TRIAL/repo/.git/worktrees/repo-spec/swift-harness/runs/20261005T061244Z-0883dbbe/qa/01-req-contact-search.flow/sim/steps/.3865-C3C9E47B.png",
+          "message": "Saved screenshot: /TRIAL/repo/.git/worktrees/repo-spec/swift-harness/runs/20261005T061244Z-0883dbbe/qa/01-req-contact-search.flow/sim/steps/.3865-C3C9E47B.png",
+          "width": 402,
+          "height": 874,
+          "logicalWidth": 402,
+          "logicalHeight": 874,
+          "pixelDensity": 1
+        },
+        "durationMs": 529
+      }
+    ]
+  }
+}

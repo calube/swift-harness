@@ -75,9 +75,21 @@ enum BrownfieldMergeCheck {
       } catch {
         throw BrownfieldCheckSetupError(reason: "\(error)")
       }
+      // A test step runs on the build run's booted device while no qa run borrows it, and
+      // takes a `sim` slot for a clone only while it does.
+      let simctl = LiveSimctl(
+        runner: process,
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(SimulatorConfig.defaultSimctlTimeoutSeconds)))
       let runner = LeasedDeviceAreaRunner(
         base: LiveAreaCommandRunner(processRunner: process),
-        leases: LiveTestDeviceLeases(runner: process))
+        leases: RunDeviceTestLeases(
+          base: LiveTestDeviceLeases(runner: process),
+          lender: RunDeviceLender(
+            commonDirectory: layout.commonDir.path,
+            leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+            lockDirectory: FileCountingLock.defaultDirectory(),
+            devices: { (try? await simctl.devices()) ?? [] },
+            isAlive: SimulatorClones.processIsAlive)))
       let unbounded = BrownfieldProve.Dependencies.live(
         root: root, layout: layout, runner: runner, deadline: liveDeadline)
       let tree: @Sendable (String) async throws -> String = { commit in
@@ -313,7 +325,9 @@ enum BrownfieldMergeCheck {
           root: root, base: proofBase, config: config,
           junitDirectory: dependencies.layout.worktreeRoot.appending(
             path: "junit", directoryHint: .isDirectory),
-          proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout)
+          proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout,
+          outOfTime: tier == .final && !outcome.blocked && !gatingFailure(outcome.findings)
+            ? .unproven : .blocks)
       }
       let judgement = ran.judgement
       context.steps.record(
@@ -326,9 +340,11 @@ enum BrownfieldMergeCheck {
   }
 
   /// Where `tier`'s prove measures changed tests from and reverts the source to. At `merge` on a
-  /// merge commit, that's its first parent, the plan branch's tip before this merge, so a test an
-  /// earlier merge brought isn't counted again. `final`, a head that isn't a merge, or a first
-  /// parent from before `base`'s fork point, keeps `base`.
+  /// merge commit after an earlier merge, that's its first parent, the plan branch's tip before
+  /// this merge, so a test an earlier merge's gate proved isn't counted again. The first merge
+  /// keeps `base`, so it proves the build-only tests the commits before it, such as the contract,
+  /// changed and no gate ran. `final`, a head that isn't a merge, or a first parent from before
+  /// `base`'s fork point, keeps `base` too.
   static func proofBase(tier: CheckTier, base: String, git: any Git) async throws(GitError)
     -> String
   {
@@ -337,7 +353,30 @@ enum BrownfieldMergeCheck {
       let fork = try await git.mergeBase("HEAD", base),
       try await git.isAncestor(fork, of: parent)
     else { return base }
-    return parent
+    return try await mergesSince(fork, upTo: parent, git: git) ? parent : base
+  }
+
+  /// The most first-parent commits ``mergesSince(_:upTo:git:)`` walks; a longer plan branch
+  /// counts as having merged.
+  static let firstParentWalkLimit = 500
+
+  /// Whether the first-parent history from `tip` back to `fork` holds a merge commit.
+  private static func mergesSince(_ fork: String, upTo tip: String, git: any Git)
+    async throws(GitError) -> Bool
+  {
+    var commit = tip
+    for _ in 0..<firstParentWalkLimit {
+      if commit == fork { return false }
+      if try await git.revision("\(commit)^2") != nil { return true }
+      guard let parent = try await git.revision("\(commit)^1") else { return false }
+      commit = parent
+    }
+    return true
+  }
+
+  /// Whether `findings` already turn the gate RED.
+  private static func gatingFailure(_ findings: [Finding]) -> Bool {
+    findings.contains { $0.severity.failsGate }
   }
 
   /// What 1 area's steps did.
@@ -357,7 +396,7 @@ enum BrownfieldMergeCheck {
     _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
     context: GateRun.Context, dependencies: Dependencies
   ) async -> AreaSteps {
-    let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
+    let steps: [AreaStep] = tier == .final ? FinalGateReuse.steps : [.build, .test, .lint]
     guard let warming = dependencies.runner as? any TestDeviceWarming else {
       return await run(
         area, tier: tier, steps: steps, files: files, added: added, root: root,

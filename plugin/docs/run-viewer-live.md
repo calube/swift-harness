@@ -44,8 +44,9 @@ checkout, in a session of its own, on the saved port when it's free, and waits f
 save its port and pid. The server's output goes to `view-server.log` beside the record.
 
 The server follows the newest build run of any plan, and answers `/view.json` with 503 until one
-exists. It exits 10 minutes after the run's final report exists, or after 2 hours with no request
-and no change to the run. `SWIFTGATE_VIEW=off`, or `0`, `false` or `no`, starts nothing and prints
+exists. `build finish` stops it once it has written the run's final report, a static page from
+then on. Else it exits 10 minutes after that report exists, or after 2 hours with no request and
+no change to the run. `SWIFTGATE_VIEW=off`, or `0`, `false` or `no`, starts nothing and prints
 no URL, only a note on stderr.
 
 The build skill calls `view --ensure` after `build start`, and the run skill at launch; each

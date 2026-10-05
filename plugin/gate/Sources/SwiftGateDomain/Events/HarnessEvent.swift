@@ -89,6 +89,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case qaFlow = "qa.flow"
   /// A requirement's rewritten flow taken into plan state.
   case qaRepair = "qa.repair"
+  /// 1 setup step of 1 `qa run`: its tree, or a row's device, build or install.
+  case qaSetup = "qa.setup"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -101,7 +103,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .buildHalt, .buildResume, .buildReturnChecked: .build
     case .discoverRun, .warmupRun: .brownfield
     case .spanStart, .spanEnd: .span
-    case .qaCheck, .qaFlow, .qaRepair: .qa
+    case .qaCheck, .qaFlow, .qaRepair, .qaSetup: .qa
     }
   }
 }
@@ -188,6 +190,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case qaCheck(QACheckEvent)
   case qaFlow(QAFlowEvent)
   case qaRepair(QARepairEvent)
+  case qaSetup(QASetupEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -211,6 +214,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .qaCheck: .qaCheck
     case .qaFlow: .qaFlow
     case .qaRepair: .qaRepair
+    case .qaSetup: .qaSetup
     }
   }
 }
@@ -442,6 +446,8 @@ extension HarnessEvent: Codable {
       payload = .qaFlow(try c.decode(QAFlowEvent.self, forKey: .payload))
     case .qaRepair:
       payload = .qaRepair(try c.decode(QARepairEvent.self, forKey: .payload))
+    case .qaSetup:
+      payload = .qaSetup(try c.decode(QASetupEvent.self, forKey: .payload))
     }
   }
 
@@ -477,6 +483,7 @@ extension HarnessEvent: Codable {
     case .qaCheck(let check): try c.encode(check, forKey: .payload)
     case .qaFlow(let flow): try c.encode(flow, forKey: .payload)
     case .qaRepair(let repair): try c.encode(repair, forKey: .payload)
+    case .qaSetup(let setup): try c.encode(setup, forKey: .payload)
     }
   }
 }

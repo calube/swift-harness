@@ -683,6 +683,8 @@ public struct RunViewReader: RunViewReading {
     case .discoverRun, .warmupRun: return prebuild.holds(event.time)
     case .qaCheck(let check):
       return qaWindow?.holds(plan: check.plan, qaRun: event.runID) ?? false
+    case .qaSetup(let setup):
+      return qaWindow?.holds(plan: setup.plan, qaRun: event.runID) ?? false
     case .qaFlow(let flow) where flow.row != nil:
       return qaWindow?.holds(plan: flow.plan, qaRun: event.runID) ?? false
     case .qaFlow:

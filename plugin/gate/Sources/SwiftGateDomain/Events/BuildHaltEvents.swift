@@ -69,6 +69,19 @@ public struct BuildResumeEvent: Sendable, Equatable, Codable {
 
 /// Matches halts to the resumes that answer them.
 public enum BuildHalts {
+  /// For each task of `buildRun`, when its newest halt was answered `retry`: what sends a task
+  /// whose return was checked back to a fixer.
+  public static func retried(in events: [HarnessEvent], buildRun: String) -> [String: Date] {
+    var newest: [String: (time: Date, retry: Bool)] = [:]
+    for event in events {
+      guard case .buildResume(let resume) = event.payload, resume.buildRun == buildRun,
+        let task = resume.task
+      else { continue }
+      newest[task] = (event.time, resume.answer == .retry)
+    }
+    return newest.compactMapValues { $0.retry ? $0.time : nil }
+  }
+
   /// The newest halt of `buildRun` scoped to exactly `task` that no resume names as its parent.
   /// A halt of the whole run (`task` `nil`) is answered only by a resume of the whole run.
   public static func openHalt(in events: [HarnessEvent], buildRun: String, task: String?)

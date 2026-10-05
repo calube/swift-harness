@@ -269,7 +269,8 @@ struct SimUpTests {
     #expect(
       started
         == SimUpStarted(
-          runID: Self.runID, udid: Self.udid, session: session, scenario: "fixed-fact"))
+          runID: Self.runID, udid: Self.udid, session: session, scenario: "fixed-fact",
+          setup: started.setup))
     let launch = try #require(rig.launcher.launches.first)
     #expect(launch.executable == "/plugin/bin/sg")
     #expect(launch.arguments == ["sim", "hold", "--run", Self.runID])
@@ -382,7 +383,7 @@ struct SimUpTests {
     #expect(
       try store.read(runID: Self.rowRunIDs[1])
         == SimLease(
-          runID: Self.rowRunIDs[1], worktree: worktree.path, udid: Self.udid,
+          runID: Self.rowRunIDs[1], worktree: CanonicalPath.of(worktree), udid: Self.udid,
           holderPID: FakeHolderLauncher.pid,
           session: SimSession.agentDeviceSessionName(runID: Self.rowRunIDs[1])))
     #expect(try store.read(runID: hold.runID)?.session == nil)

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 @Suite("run view events")
@@ -156,5 +157,26 @@ struct SpanEventsTests {
     let object = try #require(
       JSONSerialization.jsonObject(with: JSONEncoder().encode(timed)) as? [String: Any])
     #expect(object["startMs"] as? Int == 120)
+  }
+}
+
+@Suite("the spans a build run left open")
+struct OpenSpansTests {
+  static let buildRun = "20261005T055727Z-2fbf5ab4"
+
+  @Test(
+    "the third price-tracker trial's span stream leaves 3 spans open: the detail worker the cutoff killed and the 2 review spans whose agents never ended them — catches spans drawn as running after the run ended"
+  )
+  func trialLeavesThreeOpen() throws {
+    let events = try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-spans.jsonl")
+    ).events
+
+    let open = OpenSpans.of(events, buildRun: Self.buildRun)
+
+    #expect(open.map(\.spanID) == ["f4102dced11585b9", "b5bd65c39f79bed5", "dd827de42d1b55e5"])
+    #expect(open.map(\.phase) == [.worker, .review, .review])
+    #expect(open.map(\.task) == ["detail-screen", "coingecko-client", "watchlist-screen"])
+    #expect(OpenSpans.of(events, buildRun: "20261005T000000Z-00000000").isEmpty)
   }
 }

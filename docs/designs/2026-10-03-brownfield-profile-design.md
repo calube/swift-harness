@@ -231,11 +231,17 @@ at the base tree; the contract commit still recompiles its dependents. Each area
 run, and a `gate.step` measures it again on a cold store.
 
 `xcodebuild` area commands pass `-derivedDataPath`: the warm-up and the main checkout build in the seed, and each
-linked worktree in its own folder under its git dir, which `git worktree remove` deletes. Before a worktree's
+linked worktree in its own folder under its git dir. Before a worktree's
 first run, the runner clones the seed's `SourcePackages` into that folder with `cp -c` and points SwiftPM's
 `workspace-state.json` at the copy. Build products and module caches aren't cloned. They name the seed's absolute
 paths, so another checkout recompiles every file anyway, and its build database deletes the seed's products as
 stale. Prove and baseline scratch trees keep Xcode's default DerivedData.
+
+Task and fix worktrees are a pool of slots, `<repo>-<plan>.slot-<n>`, since build products name the tree's path.
+`worktree create` and a fix cut check the branch out in a free slot, or add one. `worktree remove` refuses a slot
+with uncommitted work, then resets it and empties its state root but its DerivedData; ignored build folders stay.
+The next task in that slot rebuilds only what changed: 10–11 s against 96 s cold in a trial app.
+`run checkout remove` removes every slot.
 
 ## 10. Baseline
 

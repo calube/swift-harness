@@ -225,6 +225,9 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
 // `<span>` and `<outcome>` for the agent to fill.
 const SPAN_START_LINE = /^1\. Before anything else, run `([^`]+)`/m
 const SPAN_END_LINE = /^2\. Last, [^`]*run `([^`]+)`/m
+// The line a stage that follows another runs before its own start: it ends the stage before it,
+// which an agent that returned without its own step 2 left open.
+const SPAN_BACKSTOP_LINE = /^0\. First, [^`]*run `([^`]+)`/m
 const spanLines = prompt => ({ start: SPAN_START_LINE.exec(prompt)?.[1], end: SPAN_END_LINE.exec(prompt)?.[1] })
 const commandWords = command =>
   (command.slice(command.indexOf('events span ')).match(/'[^']*'|\S+/g) ?? []).map(w => w.replace(/^'|'$/g, ''))
@@ -243,7 +246,8 @@ function stageOutcome(agentType, value) {
 // A fake `swiftgate events span` that stage agents run their own span lines against. It answers
 // each command as the real one would and records every start and end in call order. `exit(n,
 // command)` forces the n-th command's exit status; `off` answers every start as telemetry-off does.
-function fakeSwiftgate({ exit = () => 0, off = false } = {}) {
+// `forgets(agentType, prompt)` makes that stage return without running its step 2.
+function fakeSwiftgate({ exit = () => 0, off = false, forgets = () => false } = {}) {
   const events = []
   const commands = []
   let next = 0
@@ -270,6 +274,8 @@ function fakeSwiftgate({ exit = () => 0, off = false } = {}) {
   }
   // Step 1 of the prompt: the span id, or null when the start printed nothing or failed.
   const open = prompt => {
+    const backstop = SPAN_BACKSTOP_LINE.exec(prompt)?.[1]
+    if (backstop) exec(backstop)
     const { start } = spanLines(prompt)
     if (!start) return null
     const r = exec(start)
@@ -279,6 +285,7 @@ function fakeSwiftgate({ exit = () => 0, off = false } = {}) {
   const close = (prompt, span, agentType, value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return value
     if (Object.prototype.hasOwnProperty.call(value, 'span')) return value
+    if (forgets(agentType, prompt)) return { ...value, span }
     const { end } = spanLines(prompt)
     if (span !== null && end) exec(end.replace('<span>', span).replace('<outcome>', stageOutcome(agentType, value)))
     return { ...value, span }
@@ -425,6 +432,46 @@ const tests = {
       assert.ok(c.opts.schema.required.includes('span'), `${c.opts.label}: the schema does not require "span"`)
     }
     assert.deepEqual([...seen].sort(), ['fix', 'review', 'verify', 'worker'])
+  },
+
+  async 'a stage that returns without ending its span has it ended by the stage after it, with the outcome its own rule gives — catches send-money-4\'s review span left open after its reviewer returned findings'() {
+    // send-money-4's account-client review: the test-quality reviewer returned a minor finding and
+    // never ran its span end; its verifier ran next.
+    const forgetful = [
+      { forgets: agentType => agentType === 'swift-harness:test-quality', args: brownfieldArgs(), diffRisk: judged('medium'), reviews: { 'test-quality': [{ findings: [finding({ severity: 'minor' })] }] }, workers: [brownfieldReturn()] },
+      { forgets: agentType => agentType === WORKER, args: baseArgs({ review: 'gate' }), workers: [red(), workerReturn()] },
+      { forgets: agentType => agentType === VERIFIER, args: baseArgs(), reviews: { architecture: [{ findings: [finding()] }] }, workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })] },
+    ]
+    for (const { forgets, args, ...scripted } of forgetful) {
+      let forgot = 0
+      const sg = fakeSwiftgate({ forgets: (agentType, prompt) => forgot === 0 && forgets(agentType, prompt) && ++forgot > 0 })
+      await run(args, { ...scripted, swiftgate: sg })
+      assert.equal(forgot, 1, 'no stage forgot its end')
+      assertSpanChain(sg, BUILD_RUN, args.task)
+    }
+    const sg = fakeSwiftgate({ forgets: agentType => agentType === WORKER })
+    await run(baseArgs({ review: 'gate' }), { workers: [red(), workerReturn()], swiftgate: sg })
+    const worker = sg.starts().find(s => s.phase === 'worker')
+    assert.equal(sg.endOf(worker.id)?.outcome, 'red', 'the gate-red worker ended other than red')
+  },
+
+  async 'a task launched with the run\'s cutoff tells its worker and fix pass that deadline, and a malformed one throws before any agent — catches a worker in a timed run starting a gate the cutoff will cut off'() {
+    const cutoffAt = '2026-10-05T06:28:02Z'
+    const { workerCalls } = await run(brownfieldArgs({ cutoffAt }), {
+      workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()],
+      diffRisk: judged('low'),
+    })
+    assert.equal(workerCalls.length, 2)
+    for (const c of workerCalls) {
+      assert.ok(c.prompt.includes(`Deadline: the run's cutoff is ${cutoffAt}`), `${c.opts.label}: no deadline line`)
+    }
+    const { workerCalls: untimed } = await run(brownfieldArgs(), { workers: [brownfieldReturn()], diffRisk: judged('low') })
+    assert.ok(!untimed[0].prompt.includes('Deadline:'), 'an untimed task got a deadline')
+    for (const bad of ['06:28', 'soon', '2026-10-05T06:28:02Z; rm -rf ~']) {
+      const calls = []
+      await assert.rejects(script(brownfieldArgs({ cutoffAt: bad }), async (p, o) => calls.push(o), () => {}), /cutoffAt/, bad)
+      assert.equal(calls.length, 0)
+    }
   },
 
   async 'no agent runs only for a span: every agent is a stage or the diff-risk classifier — catches a helper agent spent per span call'() {

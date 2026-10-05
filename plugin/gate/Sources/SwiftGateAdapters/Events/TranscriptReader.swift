@@ -12,15 +12,25 @@ public struct TranscriptFile: Sendable, Equatable {
   /// A Workflow's agent, from `subagents/workflows/<workflow>/`, rather than 1 the session
   /// launched itself with the Agent tool.
   public let workflow: Bool
+  /// The subagent's type from the `agent-<id>.meta.json` beside it, such as
+  /// `swift-harness:build-fixer`; `nil` when there is none that reads.
+  public let agentType: String?
+  /// A Workflow agent's task, from its Workflow's record, once that Workflow has ended: a
+  /// Workflow stopped before its own ingest leaves its agents to the session's. `nil` while it
+  /// runs, or when its record or its `task` argument can't be read.
+  public let endedWorkflowTask: String?
 
   public init(
-    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false
+    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false,
+    agentType: String? = nil, endedWorkflowTask: String? = nil
   ) {
     self.agent = agent
     self.agentID = agentID
     self.label = label
     self.data = data
     self.workflow = workflow
+    self.agentType = agentType
+    self.endedWorkflowTask = endedWorkflowTask
   }
 }
 
@@ -66,9 +76,37 @@ public struct TranscriptReader: Sendable {
     for name in names.sorted() {
       let directory = workflows.appending(path: name, directoryHint: .isDirectory)
       guard Self.isDirectory(directory) else { continue }
-      files += try agents(in: directory, workflow: true)
+      let task = Self.endedWorkflowTask(
+        record: subagents.deletingLastPathComponent().appending(path: "workflows/\(name).json"))
+      files += try agents(in: directory, workflow: true, endedWorkflowTask: task)
     }
     return files
+  }
+
+  /// The statuses a Workflow's record ends with: none of its agents runs again.
+  static let endedStatuses: Set<String> = ["completed", "killed", "failed", "cancelled"]
+
+  /// The `task` argument of the Workflow whose record is at `record`, when its status says it
+  /// ended; `nil` when it runs, or the record or its `task` can't be read.
+  private static func endedWorkflowTask(record: URL) -> String? {
+    struct Record: Decodable {
+      struct Args: Decodable { let task: String? }
+      let status: String?
+      let args: Args?
+    }
+    guard let data = try? Data(contentsOf: record),
+      let decoded = try? JSONDecoder().decode(Record.self, from: data),
+      let status = decoded.status, endedStatuses.contains(status),
+      let task = decoded.args?.task, isAgentID(task)
+    else { return nil }
+    return task
+  }
+
+  /// The `agentType` of the `.meta.json` at `meta`; `nil` when it can't be read.
+  private static func agentType(meta: URL) -> String? {
+    struct Meta: Decodable { let agentType: String? }
+    guard let data = try? Data(contentsOf: meta) else { return nil }
+    return (try? JSONDecoder().decode(Meta.self, from: data))?.agentType
   }
 
   private static func isDirectory(_ url: URL) -> Bool {
@@ -82,9 +120,9 @@ public struct TranscriptReader: Sendable {
     try agents(in: directory, workflow: true)
   }
 
-  private func agents(in directory: URL, workflow: Bool = false) throws(TranscriptReadError)
-    -> [TranscriptFile]
-  {
+  private func agents(
+    in directory: URL, workflow: Bool = false, endedWorkflowTask: String? = nil
+  ) throws(TranscriptReadError) -> [TranscriptFile] {
     let names: [String]
     do {
       names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
@@ -94,11 +132,14 @@ public struct TranscriptReader: Sendable {
     var files: [TranscriptFile] = []
     for name in names.sorted() where name.hasPrefix("agent-") && name.hasSuffix(".jsonl") {
       let id = String(name.dropFirst("agent-".count).dropLast(".jsonl".count))
+      let meta = String(name.dropLast(".jsonl".count)) + ".meta.json"
       do {
         files.append(
           TranscriptFile(
             agent: .subagent, agentID: Self.isAgentID(id) ? id : nil, label: name,
-            data: try Data(contentsOf: directory.appending(path: name)), workflow: workflow))
+            data: try Data(contentsOf: directory.appending(path: name)), workflow: workflow,
+            agentType: Self.agentType(meta: directory.appending(path: meta)),
+            endedWorkflowTask: endedWorkflowTask))
       } catch {
         throw TranscriptReadError("\(name) can't be read: \(Self.why(error))")
       }

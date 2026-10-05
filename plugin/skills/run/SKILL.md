@@ -23,7 +23,7 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<base>` | the commit `<plan-branch>` started at: `git merge-base <plan-branch> HEAD` in the user's checkout, before anything lands |
 | `<common>` | `git rev-parse --path-format=absolute --git-common-dir` |
 | `<plan-dir>` | `<common>/swift-harness/plans/<slug>` |
-| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task worktrees sit beside it as `<top>-<slug>-<task>` |
+| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task and fix worktrees are pooled slots beside it, `<top>-<slug>.slot-<n>`: use the `worktree` `worktree create` or `build merge` names |
 | `<config>` | `<common>/swift-harness/config.toml`, written only by `discover --apply` and `allow` |
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
 | `<run>` | the `runId` that `build start` prints in step 7 |
@@ -191,7 +191,7 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   it red first. A screen is a `Writes` path inside the area's root with a folder or file named
   `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or a
   `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
-  `…Reducer` or `…ViewModel`. The contract's stubs don't count. A requirement no flow can check
+  `…Reducer` or `…ViewModel`. The contract's stubs don't count. Such a requirement no flow can check
   opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
   `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. An existing-tests requirement opens its reason-only row with `gate:` and the tier, `final` or `merge`. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
@@ -327,15 +327,22 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      and what you chose. An option that stops the build starts nothing new: let running tasks
      merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is
      never one of these halts: the next bullet decides it by rule.
-   - **The time box replaces the build skill's cutoff timer and its halt.** No timer runs: the
-     cutoff is a check at every step of the loop. `build next` reports the box in `timeBox`, and
+   - **The time box replaces the build skill's cutoff timer and its halt.** The cutoff is a
+     check at every step of the loop. `build next` reports the box in `timeBox`, and
      `"$SG" run clock <slug> --json` reports its `phase`. Read `run clock` at each completion
-     notice, before each merge and its merge gate, and before each `qa run`. Run
+     notice, before each merge and its merge gate, and before each `qa run`. Before you end a
+     turn to wait on a background agent, a worker, fixer or the validation task, arm the cutoff
+     wake if none is running: `"$SG" run clock <slug> --wait-until cutoffAt --json` with
+     `run_in_background: true`. It exits once `cutoffAt` has passed, and its completion notice
+     wakes you to read the clock. Arm 1 at a time, never as a
+     foreground call, and only while an agent runs: a turn left with nothing but it in the
+     background ends the run. Run
      `"$SG" build cutoff <slug> --session <session> --json` when `run clock` or any `build next`
      reports `phase` `cutoff`, or when a `build next` reports `no-new-starts` with nothing in
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
      go on with the loop. It prices each task's landing from this run's recorded merge and
-     `final` gates, using fixed estimates only before any is recorded, and charges a task's
+     `final` gates, using fixed estimates only before any is recorded; before any `final`, it
+     prices `final` by the area steps it can't take from the merge gates' passes, and charges a task's
      before-merge `qa run` unless a GREEN one covers its tip. It lands a task whenever that fits
      before the box ends. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command

@@ -93,3 +93,47 @@ public enum WriteSet {
     lhs.contains { entry in rhs.contains { entriesOverlap(entry, $0) } }
   }
 }
+
+extension WriteSet {
+  /// Whether `text` names `path`: the whole path, or an ending of it at a `/` that ends exactly 1
+  /// of `changed`, standing in `text` as a word of its own rather than part of a longer path.
+  public static func named(_ path: String, in text: String, among changed: Set<String>) -> Bool {
+    if text.contains(path) { return true }
+    let components = path.split(separator: "/", omittingEmptySubsequences: false)
+    for start in components.indices {
+      let ending = components[start...].joined(separator: "/")
+      guard start > components.startIndex, !ending.isEmpty, standsAlone(ending, in: text) else {
+        continue
+      }
+      let ends = changed.filter { $0 == ending || $0.hasSuffix("/" + ending) }
+      if ends.count == 1 { return true }
+    }
+    return false
+  }
+
+  /// Whether `word` occurs in `text` with no path character right before it and none right after,
+  /// a sentence's closing period aside.
+  private static func standsAlone(_ word: String, in text: String) -> Bool {
+    func isPathCharacter(_ character: Character) -> Bool {
+      character.isLetter || character.isNumber || "_-/.~".contains(character)
+    }
+    var searched = text.startIndex
+    while let found = text.range(of: word, range: searched..<text.endIndex) {
+      searched = text.index(after: found.lowerBound)
+      if found.lowerBound > text.startIndex,
+        isPathCharacter(text[text.index(before: found.lowerBound)])
+      {
+        continue
+      }
+      guard found.upperBound < text.endIndex else { return true }
+      let next = text[found.upperBound]
+      if next == "." {
+        let after = text.index(after: found.upperBound)
+        if after == text.endIndex || !isPathCharacter(text[after]) { return true }
+        continue
+      }
+      if !isPathCharacter(next) { return true }
+    }
+    return false
+  }
+}

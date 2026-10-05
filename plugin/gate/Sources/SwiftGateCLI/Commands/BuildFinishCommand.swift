@@ -22,6 +22,14 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   var runReportNote: String? = nil
   /// The `qa run --final` the finish read; `nil` for a plan with no validation table.
   var validation: Validation? = nil
+  /// Telemetry lines that failed; the finish stands without them.
+  var notes: [String] = []
+  /// The final report's address on the repository's viewer server, which the finish stopped;
+  /// `nil` when no server answered or the run has no final report.
+  var viewerFinal: String? = nil
+  /// What became of the build run's shared device: released, or why it wasn't. `nil` when no
+  /// device was held for the run.
+  var device: String? = nil
 
   struct Validation: Sendable, Equatable, Encodable {
     let runID: String
@@ -35,9 +43,14 @@ enum BuildFinishRun {
   ///   - root: the checkout whose state root holds the report; `nil` writes no report.
   ///   - pluginRoot: where `viewer/` lives.
   ///   - qaRun: the `qa run --final` id the caller read, from `--qa-run`.
+  ///   - spans: where the run's spans are, to end each task span its agent left open; `nil`
+  ///     leaves them.
+  ///   - viewer: stops the repository's viewer server once the run's final report exists.
+  ///   - leases: where the build run's shared device's lease is; `nil` leaves it alone.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
-    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil
+    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil, spans: SpanLog? = nil,
+    viewer: ViewServerShutdown? = nil, leases: SimLeaseStore? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
@@ -91,14 +104,27 @@ enum BuildFinishRun {
         command: command, plan: slug, indexStatus: status, counts: counts,
         unfinished: unfinished, resume: resume)
       report.validation = validation
+      if let spans, let runID = run?.layout.runID {
+        report.notes = endOpenSpans(spans, buildRun: runID, ledger: ledger)
+      }
+      if let leases, let run {
+        report.device = BuildRunDevice.note(
+          BuildRunDevice.release(buildRunID: run.runID, leases: leases))
+      }
       let message =
         resume
         + (validation.map {
           "; validation \($0.verdict.rawValue) in qa run \($0.runID): \($0.message)"
-        } ?? "")
+        } ?? "") + (report.device.map { "; \($0)" } ?? "")
       if let root {
         (report.runReport, report.runReportNote) = await writeRunReport(
           run: run?.layout.runID, root: root, pluginRoot: pluginRoot, git: git, now: clock.now())
+        if let viewer, let runID = run?.layout.runID, report.runReport != nil,
+          finalReportExists(buildRun: runID, root: root),
+          let stopped = await viewer.stop()
+        {
+          report.viewerFinal = stopped.url + String(ViewRun.finalPath.dropFirst())
+        }
       }
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
@@ -106,6 +132,33 @@ enum BuildFinishRun {
     } catch {
       return .blocked(command, slug, error.message)
     }
+  }
+
+  /// Ends each task span of `buildRun` still open, as its task's ledger status reads: `ok` for a
+  /// done task, `abandoned` for an abandoned one, `halted` for any other. A stopped agent, or 1
+  /// that never ran its own `span end`, leaves its span open; the run's own spans are its own.
+  /// Returns a line per status whose spans weren't ended.
+  static func endOpenSpans(_ spans: SpanLog, buildRun: String, ledger: Ledger) -> [String] {
+    let status = Dictionary(
+      ledger.tasks.map { ($0.id, $0.status) }, uniquingKeysWith: { first, _ in first })
+    func outcome(_ task: String) -> SpanOutcome {
+      switch status[task] {
+      case .done?: .ok
+      case .abandoned?: .abandoned
+      default: .halted
+      }
+    }
+    var notes: [String] = []
+    for wanted in [SpanOutcome.ok, .abandoned, .halted] {
+      do throws(SpanLogError) {
+        _ = try spans.endOpen(buildRun: buildRun, outcome: wanted) { start in
+          start.task.map { outcome($0) == wanted } ?? false
+        }
+      } catch {
+        notes.append("open \(wanted.rawValue) task spans weren't ended: \(error)")
+      }
+    }
+    return notes
   }
 
   struct ValidationRefusal: Error {
@@ -176,6 +229,13 @@ enum BuildFinishRun {
     }
   }
 
+  /// Whether the run's report folder holds its final report: written from the done run.
+  private static func finalReportExists(buildRun: String, root: URL) -> Bool {
+    let folder = StateRootResolver.resolve(worktree: root).url(
+      "\(RunLayout.reportsDirectory)/\(buildRun)", directoryHint: .isDirectory)
+    return RunReportFolder(directory: folder).isFinal
+  }
+
   static func render(_ result: BuildLoopResult<BuildFinishReport>, format: OutputFormat) -> String {
     BuildLoop.render(result, format: format) { report in
       let tally = report.counts.keys.sorted().map { "\($0) \(report.counts[$0] ?? 0)" }
@@ -184,9 +244,24 @@ enum BuildFinishRun {
         report.runReport.map { "; report \($0)" } ?? report.runReportNote.map {
           "; no report: \($0)"
         } ?? ""
+      let viewer =
+        report.viewerFinal.map { "; viewer stopped (it served \($0)): open the report page" } ?? ""
       return
         "build finish: index \(report.indexStatus.rawValue) (\(tally)); \(report.resume)\(page)"
+        + viewer
     }
+  }
+}
+
+extension BuildFinishCommand {
+  /// The repository's viewer server, which the finish stops; `nil` when the git common dir
+  /// doesn't resolve.
+  static func viewer() async -> ViewServerShutdown? {
+    guard let common = try? await BuildLoop.git().commonDirectory() else { return nil }
+    return ViewServerShutdown(
+      registry: ViewServerRegistry(
+        commonDirectory: URL(filePath: common, directoryHint: .isDirectory)),
+      probe: LiveViewServerProbe())
   }
 }
 
@@ -217,12 +292,17 @@ struct BuildFinishCommand: AsyncParsableCommand {
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
+    var spans: SpanLog?
+    if case .found(let root, true) = await BuildHaltRun.store(command: "build finish") {
+      spans = SpanLog(root: root)
+    }
     let result = await BuildFinishRun.run(
       slug: plan, session: session, git: BuildLoop.git(),
       root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory),
       pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
         URL(filePath: $0, directoryHint: .isDirectory)
-      }, qaRun: qaRun)
+      }, qaRun: qaRun, spans: spans, viewer: await Self.viewer(),
+      leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()))
     Console.write(BuildFinishRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

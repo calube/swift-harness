@@ -89,6 +89,14 @@ enum BrownfieldProve {
     ).judgement
   }
 
+  /// What a prove does with an area whose reverted run the box can't hold.
+  enum OutOfTime: Sendable, Equatable {
+    /// BLOCKED: a later gate can still prove it.
+    case blocks
+    /// A `prove.unproven` note: no later gate runs, and the area's tests passed at the head.
+    case unproven
+  }
+
   /// What a prove decided, and how its reverted runs built: `none` when it ran none.
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
@@ -99,10 +107,13 @@ enum BrownfieldProve {
   /// build directories of the areas whose changed tests it runs, read before they run, and `none`
   /// when it runs none.
   ///
-  /// - Parameter layout: the clone's state the label reads; `nil` reads `dependencies`'.
+  /// - Parameters:
+  ///   - layout: the clone's state the label reads; `nil` reads `dependencies`'.
+  ///   - outOfTime: what an area the box leaves too little time becomes.
   static func prove(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil
+    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil,
+    outOfTime: OutOfTime = .blocks
   ) async -> Outcome {
     func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
       Outcome(judgement: judgement, derivedData: .none)
@@ -155,10 +166,19 @@ enum BrownfieldProve {
         return true
       }
       let expected = bound.expected.map { " its measured \($0.components.seconds) s" } ?? ""
-      judgement = judgement.merged(
-        with: blocked(
-          "\(plan.area.name)'s changed tests not run: \(bound.reason) can't hold\(expected)",
-          file: plan.ids.first?.file ?? "."))
+      let file = plan.ids.first?.file ?? "."
+      switch outOfTime {
+      case .blocks:
+        judgement = judgement.merged(
+          with: blocked(
+            "\(plan.area.name)'s changed tests not run: \(bound.reason) can't hold\(expected)",
+            file: file))
+      case .unproven:
+        judgement = judgement.merged(
+          with: unproven(
+            "\(plan.area.name)'s changed tests unproven, though its tests passed: "
+              + "\(bound.reason) can't hold\(expected)", file: file))
+      }
       return false
     }
     guard !plans.isEmpty else { return unbuilt(judgement) }
@@ -363,6 +383,13 @@ enum BrownfieldProve {
       ruleID: ProofRules.noEvidenceRuleID, severity: .minor, file: file, line: nil,
       message: "prove: \(message)", failureScenario: nil)
     return ChangedTestJudgement(findings: finding.map { [$0] } ?? [], blocked: true)
+  }
+
+  private static func unproven(_ message: String, file: String) -> ChangedTestJudgement {
+    let finding = try? Finding(
+      ruleID: ProofRules.unprovenRuleID, severity: .nit, file: file, line: nil,
+      message: "prove: \(message)", failureScenario: nil)
+    return ChangedTestJudgement(findings: finding.map { [$0] } ?? [], blocked: false)
   }
 
   private static func note(_ message: String) -> ChangedTestJudgement {
