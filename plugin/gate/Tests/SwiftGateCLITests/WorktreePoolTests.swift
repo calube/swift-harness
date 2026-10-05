@@ -12,12 +12,12 @@ private struct PinnedClock: BuildClock {
 
 /// A brownfield clone with tasks `t1` and `t2`, whose base commit ignores `.build/` as a package
 /// build directory would be.
-private func poolScenario() async throws -> PlanBranchScenario {
+private func poolScenario(tasks: [String] = ["t1", "t2"]) async throws -> PlanBranchScenario {
   try await PlanBranchScenario(
     files: [
       "app.py": Data("print('hi')\n".utf8), ".gitignore": Data(".build/\n".utf8),
     ],
-    tasks: ["t1", "t2"])
+    tasks: tasks)
 }
 
 extension PlanBranchScenario {
@@ -64,6 +64,25 @@ extension PlanBranchScenario {
 
   func slot(_ number: Int) throws -> String {
     try TaskWorktree.slotPath(commonDirectory: common, plan: Self.slug, number: number)
+  }
+
+  /// Leaves a built area's `Build` folder in the DerivedData of the worktree at `path`.
+  func markBuilt(_ path: String) async throws {
+    let build = try await stateRoot(of: path).appending(path: "derived-data/areas/App/Build")
+    try FileManager.default.createDirectory(at: build, withIntermediateDirectories: true)
+  }
+
+  /// Rewrites `task`'s write set in the ledger.
+  func setWriteSet(_ task: String, _ writeSet: [String]) throws {
+    let file = URL(filePath: plan.ledgerFile)
+    var ledger = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+    var tasks = try #require(ledger["tasks"] as? [[String: Any]])
+    for index in tasks.indices where tasks[index]["id"] as? String == task {
+      tasks[index]["writeSet"] = writeSet
+    }
+    ledger["tasks"] = tasks
+    try JSONSerialization.data(withJSONObject: ledger).write(to: file)
   }
 
   func setAbandoned(_ task: String) async throws {
@@ -156,6 +175,27 @@ struct WorktreePoolTests {
     #expect(first.reusedSlot == true)
     #expect(second.reusedSlot == true)
     #expect(FileManager.default.fileExists(atPath: derived.path))
+  }
+
+  @Test(
+    "a build task takes the free slot an area was built in over an earlier free one that has none, and the validation task, which builds no area, takes a new slot over a built one — catches the price-tracker trial's only reused slot going to the validation worker, so the next task built cold"
+  )
+  func builtSlotsGoToBuildTasks() async throws {
+    let scenario = try await poolScenario(tasks: ["t1", "t2", "t3"])
+    defer { scenario.remove() }
+    let base = try await scenario.git("rev-parse", "HEAD", in: scenario.checkout)
+    _ = try await scenario.pool.prepare(count: 2, revision: base, workspace: scenario.workspace)
+    try await scenario.markBuilt(try scenario.slot(2))
+    try scenario.setWriteSet("t3", [LedgerTask.validationChecksPrefix + "spec/"])
+
+    let built = await scenario.create("t1")
+    #expect(built.worktree == (try scenario.slot(2)), "\(built.message)")
+    try await scenario.markBuilt(try scenario.slot(1))
+    let validation = await scenario.create("t3")
+    #expect(validation.worktree == (try scenario.slot(3)), "\(validation.message)")
+    #expect(validation.reusedSlot == false)
+    let next = await scenario.create("t2")
+    #expect(next.worktree == (try scenario.slot(1)), "\(next.message)")
   }
 
   @Test(
