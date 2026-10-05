@@ -327,6 +327,15 @@ public enum Baseline {
   ///
   /// With `attributingTests`, a test step failing whole at both trees is unattributed rather
   /// than absorbed: `final` can't call a test step green that it excused whole.
+  /// The answer `known` implies for `key` when it records none: an `xcodebuild`
+  /// `build-for-testing` passes at a tree where the same command's `test` passed, since `test`
+  /// builds for testing before it runs a test. `nil` when nothing recorded implies one.
+  public static func implied(
+    _ key: BaselineStepKey, by known: [BaselineStepKey: BaselineStepResult]
+  ) -> BaselineStepResult? {
+    nil
+  }
+
   public static func compare(
     head: [BaselineStepKey: BaselineStepResult], base: [BaselineStepKey: BaselineStepResult],
     attributingTests: Bool = false

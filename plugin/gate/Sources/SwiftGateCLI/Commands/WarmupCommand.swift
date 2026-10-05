@@ -44,8 +44,11 @@ struct WarmupCommand: AsyncParsableCommand {
     let areas: [WarmupAreaResult]
     /// Each build in the seed checkout and the plan's slots, in checkout and config order.
     let seeded: [WarmupSeedBuild]
-    /// The plan's worktree slots this warm-up added, in slot order.
+    /// The plan's worktree slots this warm-up added for tasks, in slot order.
     let slots: [String]
+    /// The slot it added and built the app `qa run` installs in, kept for `qa run`'s trees;
+    /// `nil` when it added none.
+    var qaSlot: String? = nil
     /// Non-gating lines for stderr: a file not written, an event not recorded.
     let notes: [String]
   }
@@ -59,6 +62,8 @@ struct WarmupCommand: AsyncParsableCommand {
     var events: (any HarnessEventWriting)? = nil
     /// Per command run: a warm-up is never cut short by the gate budgets.
     var deadline: Duration = .seconds(3600)
+    /// Builds the app `qa run` installs in the slot kept for its trees; `nil` runs `xcodebuild`.
+    var xcodebuild: (any Xcodebuild)? = nil
   }
 
   /// The warm-up of `areaNames`, or of every area when `nil`, in the clone holding `directory`.

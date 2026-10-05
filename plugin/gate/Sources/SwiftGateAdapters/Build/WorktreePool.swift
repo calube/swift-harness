@@ -133,6 +133,12 @@ public struct WorktreePool: Sendable {
     }
   }
 
+  /// Whether the worktree at `path` holds a build of the app `sim up` installs and no area's
+  /// build: the slot a warm-up keeps for `qa run`'s trees.
+  static func holdsOnlyQAApp(_ path: String) -> Bool {
+    false
+  }
+
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never
   /// in a branch name, and the pid lets a later checkout free a slot whose process died.
   public static func scratchHolder(pid: Int32, token: String) -> String {

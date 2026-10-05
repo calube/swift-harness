@@ -21,6 +21,9 @@ enum BrownfieldProve {
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
     /// How many tests a reverted run ran, from the reports it left.
     var testCounts = AreaTestCountReader()
+    /// Proves that passed on the same reverted tree, which this prove takes without running;
+    /// `nil` runs every area's.
+    var reuse: ProveReuse? = nil
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
@@ -47,6 +50,7 @@ enum BrownfieldProve {
         git: git, scratch: scratch, runner: runner, readFile: readFile, deadline: deadline,
         layout: layout, bound: bound)
       copy.testCounts = testCounts
+      copy.reuse = reuse
       return copy
     }
 
@@ -62,6 +66,18 @@ enum BrownfieldProve {
         runner: runner, deadline: deadline,
         layout: layout)
     }
+  }
+
+  /// What a prove needs to take an area's earlier pass: the binary and config every key shares,
+  /// the store, the gate run recording new passes, and the files renamed since a merge base.
+  struct ProveReuse: Sendable {
+    let inputs: GateReuse.Inputs
+    let store: any ProveReusing
+    let runID: String
+    let tier: CheckTier
+    /// New path → old path for each file renamed from a commit to `HEAD`; `nil` when git can't
+    /// say, so nothing is reused.
+    let renames: @Sendable (_ since: String) async -> [String: String]?
   }
 
   /// `tree` as a bound prices it for `area`: a scratch tree whose build directories already hold a

@@ -11,7 +11,7 @@ enum BrownfieldMergeCheck {
     let git: any Git
     let runner: any AreaCommandRunning
     let baseline: BaselineStore
-    let prove: BrownfieldProve.Dependencies
+    var prove: BrownfieldProve.Dependencies
     /// The tracked files, for each area's shared cache variables.
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline file's name.
@@ -22,6 +22,9 @@ enum BrownfieldMergeCheck {
     let deadline: Duration
     /// Reads each test step's totals for the run's `report.json`.
     var testCounts = AreaTestCountReader()
+    /// `HEAD^{tree}` of a clean working tree, where each step that passes is recorded as the
+    /// baseline's answer; `nil` records none.
+    var headTree: String? = nil
     /// Each command's bound, from the area's warm-up times and the run's time box.
     var bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =

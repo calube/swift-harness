@@ -208,6 +208,12 @@ public struct WarmupSeedBuild: Sendable, Equatable {
 /// Runs every area's generate, build and test at the base tree, all areas at once, each to its
 /// end, so the shared caches fill and the times and baseline serve the run that follows.
 public enum Warmup {
+  /// How many task slots the warm-up builds in for a preset running `maxParallel` workers at
+  /// once.
+  public static func taskSlotCount(maxParallel: Int) -> Int {
+    maxParallel
+  }
+
   public struct Dependencies: Sendable {
     public let layout: BrownfieldStateLayout
     /// Absolute: the worktree's toplevel.

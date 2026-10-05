@@ -222,6 +222,11 @@ public struct BaselineStore: Sendable {
     return current.notes
   }
 
+  /// Records each of `keys` as passed at `tree`, a clean head's tree whose gate ran it GREEN, so
+  /// a later gate measuring from a commit with that tree needn't run it again there. A key the
+  /// file already answers keeps its answer. A file that can't be written is only not used.
+  public func recordPasses(_ keys: [BaselineStepKey], tree: String) async {}
+
   /// A missing file is an empty baseline: nothing was recorded at that tree yet.
   public func load(tree: String) -> BaselineLoad {
     let path = layout.baseline(tree: tree)

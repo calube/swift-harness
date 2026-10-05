@@ -40,6 +40,9 @@ enum BrownfieldSliceCheck {
     let deadline: Duration
     /// Reads each test step's totals for the run's `report.json`.
     var testCounts = AreaTestCountReader()
+    /// `HEAD^{tree}` of a clean working tree, where each step that passes is recorded as the
+    /// baseline's answer; `nil` records none.
+    var headTree: String? = nil
     /// The running `swiftgate run`'s box, which caps each command's bound; `nil` outside one.
     var box: RunTimeBox? = nil
     /// The clock each bound is taken on as its command starts.
