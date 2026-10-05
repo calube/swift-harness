@@ -451,7 +451,8 @@ struct BuildTimeBoxTests {
   ) async throws -> BuildLoopResult<BuildGateWaitReport> {
     let events = try priceTrackerEvents()
     return await BuildGateWaitRun.run(
-      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: maxWait, git: scenario.git,
+      slug: BoxScenario.plan, target: .gate(.merge), output: output, maxWait: maxWait,
+      git: scenario.git,
       clock: clock, events: { events }, sleep: { clock.sleep($0) })
   }
 
@@ -543,7 +544,8 @@ struct BuildTimeBoxTests {
     let clock = SteppingClock(started.addingTimeInterval(60))
     let events = try Self.priceTrackerEvents()
     let result = await BuildGateWaitRun.run(
-      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: 120, git: scenario.git,
+      slug: BoxScenario.plan, target: .gate(.merge), output: output, maxWait: 120,
+      git: scenario.git,
       clock: clock, events: { events },
       endedWorkflows: { WorkflowRecords.ended(in: workflows) },
       sleep: { seconds in

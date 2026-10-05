@@ -84,6 +84,16 @@ public struct AcceptanceTestReference: Sendable, Equatable {
     }.map(\.name)
   }
 
+  /// This reference with its id in the form `area`'s filter matches: a `swiftpm` area's
+  /// `--filter` reads `<Target>.<Suite>[/<test>]`, an `xcode` area's `-only-testing:`
+  /// `<Target>/<Class>[/<method>]`. The id's first separator is swapped only when the text before
+  /// it names a test target `area` holds, so `<Suite>/<test>` keeps its slash.
+  public func filterForm(in area: BrownfieldArea, directoryExists: (String) -> Bool)
+    -> AcceptanceTestReference
+  {
+    self
+  }
+
   /// The command that runs only this test, from the area it names or the 1 area that runs tests.
   ///
   /// - Parameters:

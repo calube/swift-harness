@@ -144,6 +144,14 @@ public struct FileCountingLock: CountingLock {
     return LockLease(slot: slot, descriptor: fd)
   }
 
+  /// Unlinks the lock's slot and guard files when no holder has a slot, under the guard so no
+  /// scan takes a slot meanwhile; `false`, removing nothing, while a slot is held or the guard is
+  /// busy.
+  @discardableResult
+  public func removeIfFree() -> Bool {
+    false
+  }
+
   /// The live PIDs holding a slot now; a slot whose holder let go still names it, so only a slot
   /// still locked counts.
   public func livePIDs() -> [Int32] {

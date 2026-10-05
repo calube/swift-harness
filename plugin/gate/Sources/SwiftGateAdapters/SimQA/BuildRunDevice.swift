@@ -157,8 +157,12 @@ public enum BuildRunDevice {
   }
 
   /// Ends the hold by removing its lease, which its holder watches: the holder then deletes the
-  /// device and exits.
-  public static func release(buildRunID: String, leases: SimLeaseStore) -> Release {
+  /// device and exits. Then removes the borrow lock's files of this build run and of every other
+  /// build run whose hold has ended, when no borrower holds them, from `lockDirectory`: by
+  /// default the directory holding `leases`.
+  public static func release(
+    buildRunID: String, leases: SimLeaseStore, lockDirectory: URL? = nil
+  ) -> Release {
     let runID = holdRunID(buildRunID: buildRunID)
     do throws(SimLeaseStoreError) {
       guard let lease = try leases.read(runID: runID) else { return .notHeld }

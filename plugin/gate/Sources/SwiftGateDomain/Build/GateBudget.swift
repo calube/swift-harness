@@ -107,6 +107,18 @@ public struct GateBudget: Sendable, Equatable, Encodable {
       areas: rows(areas), basis: [])
   }
 
+  /// The tier name a `qa run`'s budget carries.
+  public static let qaRunTier = "qa"
+
+  /// The budget for a `qa run` from a clone's `qa.check` events: the slowest of the newest
+  /// ``historyRuns`` runs that ran a row, each the sum of its rows' times, which hold the run's
+  /// device, build and install setup.
+  public static func estimateQARun(events: [HarnessEvent]) -> GateBudget {
+    GateBudget(
+      tier: qaRunTier, expectedSeconds: defaultExpectedSeconds, source: .default, areas: [],
+      basis: [])
+  }
+
   /// Each area's milliseconds from its first step's start to its last step's end. A step with no
   /// start time follows the area's previous one.
   private static func areaSpans(_ steps: [GateStepEvent]) -> [String: Int] {

@@ -27,6 +27,21 @@ struct BuildGateWaitReport: Sendable, Equatable, Encodable {
   let message: String
 }
 
+/// What `build gate-wait` watches: a gate of 1 tier, or a `qa run` writing its report with
+/// `--output`.
+enum GateWaitTarget: Sendable, Equatable {
+  case gate(CheckTier)
+  case qaRun
+
+  /// The name a report and message give it.
+  var name: String {
+    switch self {
+    case .gate(let tier): tier.rawValue
+    case .qaRun: GateBudget.qaRunTier
+    }
+  }
+}
+
 /// `build gate-wait`: watches the JSON file a background gate writes, for at most `maxWait`
 /// seconds, and says whether to read it, wait again, stop it as overrun, or run the cutoff.
 enum BuildGateWaitRun {
@@ -37,7 +52,7 @@ enum BuildGateWaitRun {
   static let pollSeconds = 5
 
   static func run(
-    slug: String, tier: CheckTier, output: URL, maxWait: Int, git: any Git,
+    slug: String, target: GateWaitTarget, output: URL, maxWait: Int, git: any Git,
     clock: any BuildClock, events: @Sendable () -> [HarnessEvent],
     endedWorkflows: @Sendable () -> [String: String] = { [:] },
     sleep: @Sendable (Int) async -> Void
@@ -64,7 +79,11 @@ enum BuildGateWaitRun {
         command, slug,
         "no gate output at \(output.path): launch the gate with its JSON redirected there first")
     }
-    let budget = GateBudget.estimate(tier: tier, events: events())
+    let budget: GateBudget
+    switch target {
+    case .gate(let tier): budget = GateBudget.estimate(tier: tier, events: events())
+    case .qaRun: budget = GateBudget.estimateQARun(events: events())
+    }
     let cutoffFile = store.layout.directory + "/" + CutoffRecord.fileName
     let endedBefore = Set(endedWorkflows().keys)
     var waited = 0
@@ -93,7 +112,7 @@ enum BuildGateWaitRun {
         return BuildLoopResult(
           command: command, plan: slug, verdict: .green,
           report: BuildGateWaitReport(
-            command: command, plan: slug, runId: record.runID, tier: tier.rawValue,
+            command: command, plan: slug, runId: record.runID, tier: target.name,
             output: output.path, action: watch.action, startedAt: startedAt,
             elapsedSeconds: watch.elapsedSeconds, deadlineAt: watch.deadlineAt,
             secondsToDeadline: watch.secondsToDeadline, budget: budget,
@@ -148,7 +167,12 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
   var plan: String
 
   @Option(help: "The gate's tier: merge or final.")
-  var tier: CheckTier
+  var tier: CheckTier?
+
+  @Flag(
+    help: ArgumentHelp(
+      "Watch a `qa run` writing its report with --output in place of a gate; takes no --tier."))
+  var qa = false
 
   @Option(help: "The file the gate's --json output is redirected to.")
   var output: String
@@ -163,6 +187,12 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
 
   @OptionGroup var outputFormat: OutputOptions
 
+  func validate() throws {
+    guard (tier == nil) == qa else {
+      throw ValidationError("name exactly 1 of --tier <merge|final> and --qa")
+    }
+  }
+
   func run() async throws {
     let directory = URL(
       filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
@@ -173,7 +203,8 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
       }
     }
     let result = await BuildGateWaitRun.run(
-      slug: plan, tier: tier, output: URL(filePath: output, relativeTo: directory),
+      slug: plan, target: tier.map(GateWaitTarget.gate) ?? .qaRun,
+      output: URL(filePath: output, relativeTo: directory),
       maxWait: maxWait, git: BuildLoop.git(), clock: LiveBuildClock(),
       events: {
         EventStoreReader(files: LiveEventStoreFiles(root: directory))
