@@ -20,6 +20,7 @@ public enum BashGuard {
   public static let globalDerivedDataRuleID = "guard.global-derived-data"
   public static let validationFlowByHandRuleID = "guard.validation-flow-by-hand"
   public static let bareStdinReaderRuleID = "guard.bare-stdin-reader"
+  public static let processMatchWaitRuleID = "guard.process-match-wait"
 
   public static func evaluate(_ command: String) -> GuardViolation? {
     for simple in ShellSyntax.simpleCommands(in: command) {
