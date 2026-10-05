@@ -1,0 +1,110 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 3 (wait): wait timed out for selector: id=\"probe.count\" value=\"4\"",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muvo1cz8-4b6f329e",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/requests/7bd871871e118222.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-selectors",
+      "requestId": "7bd871871e118222"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 3000,
+      "readableCaptures": 3,
+      "captures": 4,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 495,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 797,
+          "durationMs": 626,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1725,
+          "durationMs": 541,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2567,
+          "durationMs": 435,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 3002,
+      "step": 3,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.count\" value=\"4\"",
+        "3000"
+      ],
+      "executed": 2,
+      "total": 3,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-selectors",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-selectors",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/requests/7bd871871e118222.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.SelectorProbe",
+            "appBundleId": "com.example.SelectorProbe",
+            "startup": {
+              "durationMs": 1147,
+              "measuredAt": "2026-10-05T19:51:42.843Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.SelectorProbe",
+              "appBundleId": "com.example.SelectorProbe"
+            },
+            "timing": {
+              "runnerDemand": "none",
+              "openDispatchDurationMs": 402,
+              "launchUrlDurationMs": 0,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 731,
+              "totalDurationMs": 1147
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-37856",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.SelectorProbe"
+          },
+          "durationMs": 1663
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 3063,
+            "selector": "id=\"probe.count\" value=\"3\""
+          },
+          "durationMs": 3064
+        }
+      ]
+    }
+  }
+}

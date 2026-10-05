@@ -525,6 +525,29 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/selectors
+
+The selector keys `agent-device` matches an element by, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. In a build trial the validation
+worker read the installed tool's minified package for about 50 s to learn them. The app is
+`SelectorProbe.swift` with `Info.plist`: a text with the id `probe.count`, the label
+`Step count` and the accessibility value `0`, then `3` after 3 s, and a `Start` button with the
+id `probe.start`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/selectors/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app first.
+
+| Files | Batch |
+|---|---|
+| `pass.{steps.json,stdout,stderr,status}` | waits for `id="probe.count"`, `label="Step count"`, `id="probe.count" value="3"`, `role=button label="Start"`, `label="step COUNT"` and `id="probe.missing" \|\| id="probe.start"`, which resolved to `id="probe.start"`, then `is exists` `role=statictext id="probe.count" value="3"` (1 match). Exits 0 |
+| `label-part.{…}` | `label="Step"`: exits 1, `details.step` 3, `wait_target_absent`, "wait timed out for selector", while `Step count` showed |
+| `terms-all.{…}` | `id="probe.count" value="3"`, then `id="probe.count" value="4"`: exits 1, step 3, `wait_deadline_exceeded` |
+| `unknown-key.{…}` | `identifier="probe.count"`: exits 1, `INVALID_ARGS`, "Invalid wait selector" |
+
 ### AgentDevice/swipe
 
 Where each `gesture` `kind: swipe` preset moves its finger, captured on 2026-10-05 with

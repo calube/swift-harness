@@ -1,0 +1,5 @@
+[
+  {"command": "open", "input": {"app": "com.example.SelectorProbe", "relaunch": true}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.count\" value=\"3\"", "timeoutMs": 10000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.count\" value=\"4\"", "timeoutMs": 3000}}
+]
