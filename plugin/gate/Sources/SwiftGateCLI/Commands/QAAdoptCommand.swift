@@ -32,10 +32,13 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
   var unblocks: [Unblocked] = []
   /// Why a `--repair` adopt took nothing.
   var findings: [Finding] = []
+  /// The worktree's prepared folder, once a GREEN adopt has taken it and removed it; `nil` when
+  /// it stays, as on a refusal.
+  var removed: String?
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, worktree, verdict, adopted, repaired, unblocks, findings, message
+    case command, worktree, verdict, adopted, repaired, unblocks, findings, removed, message
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -47,6 +50,7 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
     try c.encode(repaired, forKey: .repaired)
     try c.encode(unblocks, forKey: .unblocks)
     try c.encode(findings, forKey: .findings)
+    try c.encode(removed, forKey: .removed)
     try c.encode(message, forKey: .message)
   }
 }
@@ -142,6 +146,7 @@ enum QAAdoptRun {
     report.message =
       "adopted "
       + report.adopted.map { "\($0.plan) (\($0.files) files)" }.joined(separator: ", ")
+    removePrepared(prepared, from: &report)
     for (name, plan) in plans {
       report.unblocks += await unblocked(
         plan: name, layout: plan, root: root, git: git, session: session)
@@ -381,7 +386,20 @@ enum QAAdoptRun {
     }
     for note in notes { message += "; \(note)" }
     report.message = message
+    removePrepared(preparedRoot, from: &report)
     return report
+  }
+
+  /// Removes `folder`, the worktree's prepared folder a GREEN adopt took, naming it in
+  /// `report.removed`, so no copy of the checks is left to adopt twice or to delete by hand; a
+  /// removal that fails is a note on the message.
+  private static func removePrepared(_ folder: URL, from report: inout QAAdoptReport) {
+    do {
+      try FileManager.default.removeItem(at: folder)
+      report.removed = folder.path
+    } catch {
+      report.message += "; \(folder.path) not removed: \(error.localizedDescription)"
+    }
   }
 
   /// Replaces `destination` with a copy of `source`, its permissions included, so a state script

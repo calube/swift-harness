@@ -66,12 +66,13 @@ struct FlowNoRepairTests {
   }
 
   @Test(
-    "with too little time to amend the contract before no new starts, the task merges with its 1 red row unverified — catches a build stopped over 1 row while its gate and other rows were GREEN"
+    "with too little time to amend the contract before the cutoff, the task merges with its 1 red row unverified — catches a build stopped over 1 row while its gate and other rows were GREEN"
   )
   func capturedHaltMergesWithTheRowUnverified() throws {
+    let cutoff = try #require(try Self.record().cutoffAt)
     let decision = try Self.decide(
       try Self.noRepair(), report: try Self.report(), fixGate: try Self.fixGate(),
-      at: Self.replied)
+      at: cutoff.addingTimeInterval(-60))
     #expect(decision.action == .mergeUnverified, "\(decision)")
     #expect(decision.rows == [3])
     #expect(decision.why.contains("row 3"), "\(decision.why)")
@@ -114,11 +115,13 @@ struct FlowNoRepairTests {
   }
 
   @Test(
-    "a fixer whose cited gate isn't GREEN keeps the task blocked — catches a merge of code no gate passed"
+    "a fixer whose cited gate isn't GREEN keeps the task blocked once no amendment fits — catches a merge of code no gate passed"
   )
   func redFixGateGoesOn() throws {
+    let cutoff = try #require(try Self.record().cutoffAt)
     let decision = try Self.decide(
-      try Self.noRepair(), report: try Self.report(), fixGate: .red, at: Self.replied)
+      try Self.noRepair(), report: try Self.report(), fixGate: .red,
+      at: cutoff.addingTimeInterval(-60))
     #expect(decision.action == .continue, "\(decision)")
   }
 
@@ -293,5 +296,110 @@ struct RowsUnverifiedTests {
     let three = try #require(rows.first { $0.row == 3 })
     #expect(three.result == .unverified)
     #expect(three.message == "left unverified")
+  }
+}
+
+/// A contract gap returned past no new starts with a measured fix round left before the cutoff,
+/// from a captured build run (`BuildReturn/no-repair-late/`, see the fixtures README).
+enum NoRepairLate1 {
+  static let task = "engine-sim"
+
+  static func data(_ name: String) throws -> Data {
+    try Fixture.data("BuildReturn/no-repair-late/\(name)")
+  }
+
+  static func record() throws -> BuildRunRecord {
+    try BuildRunJSON.decode(data("run.json"))
+  }
+
+  static func red() throws -> QAReport {
+    try QAReportJSON.decode(data("qa-red.json"))
+  }
+
+  static func noRepair() throws -> FlowNoRepair {
+    try #require(FlowNoRepair.parse(try Fixture.text("BuildReturn/no-repair-late/repair-reply.txt")))
+  }
+
+  static func gate() throws -> (runID: String, run: GateRunEvent) {
+    let event = try #require(try HarnessEventJSON.decode(data("fix-gate.jsonl")).events.first)
+    guard case .gateRun(let run) = event.payload, let id = event.runID else {
+      throw FixtureMissing()
+    }
+    return (id, run)
+  }
+
+  /// When `build no-repair` decided, as the build run's `rows-unverified` event recorded it.
+  static func decidedAt() throws -> Date {
+    try #require(BuildEventJSON.decode(data("rows-unverified.jsonl")).unverifiedRows().values.first)
+      .at
+  }
+
+  static func fixRound() throws -> TaskHaltAdvice.FixRound {
+    let (id, run) = try gate()
+    return try #require(
+      TaskHaltAdvice.FixRound.measured(
+        task: task, gateRunID: id, gateMilliseconds: [id: run.milliseconds],
+        reports: [try QAReportJSON.decode(data("qa-first.json")), try red()]))
+  }
+
+  static func decide(at now: Date) throws -> NoRepairDecision {
+    let record = try record()
+    let red = try red()
+    return NoRepairDecision.decide(
+      try noRepair(), run: red.rows,
+      runSeconds: red.rows.reduce(0) { $0 + $1.milliseconds } / 1000,
+      fixGate: try gate().run.verdict, now: now, noNewStartsAt: record.noNewStartsAt,
+      cutoffAt: record.cutoffAt, fixRound: try fixRound())
+  }
+
+  struct FixtureMissing: Error {}
+}
+
+@Suite("a no-repair contract gap prices its amendment against the cutoff")
+struct FlowNoRepairLateTests {
+  @Test(
+    "the captured contract gap, decided past no new starts with 366 s to the cutoff, amends the contract: the red row's proof and the measured gate and before-merge run fit — catches a contract gap merged unverified while 1 more round fits before the cutoff"
+  )
+  func capturedGapPastNoNewStartsAmends() throws {
+    let record = try NoRepairLate1.record()
+    let at = try NoRepairLate1.decidedAt()
+    #expect(at > (try #require(record.noNewStartsAt)))
+    #expect(Int(try #require(record.cutoffAt).timeIntervalSince(at)) == 366)
+    #expect(try NoRepairLate1.fixRound().seconds == 150)
+
+    let decision = try NoRepairLate1.decide(at: at)
+
+    #expect(decision.action == .amendContract, "\(decision)")
+    #expect(decision.rows == [6])
+    #expect(decision.why.contains("190 s"), "\(decision.why)")
+    #expect(decision.why.contains("176 s before the cutoff"), "\(decision.why)")
+  }
+
+  @Test(
+    "the amendment's advice names its 1 sanctioned path: the repair round naming the new name, then the fixer relaunched to commit it on the fix branch with each file in its notes, and never an amendment or return written by hand — catches advice that sends the orchestrator to commit the name itself or rewrite the fixer's return"
+  )
+  func amendmentNamesTheFixerPath() throws {
+    let decision = try NoRepairLate1.decide(at: try NoRepairLate1.decidedAt())
+
+    #expect(decision.why.contains("repair the row again"), "\(decision.why)")
+    #expect(decision.why.contains("relaunch the fixer"), "\(decision.why)")
+    #expect(decision.why.contains("commits it on the fix branch"), "\(decision.why)")
+    #expect(decision.why.contains("names each file"), "\(decision.why)")
+    #expect(
+      decision.why.contains("never write the amendment or the fixer's return yourself"),
+      "\(decision.why)")
+    #expect(!decision.why.contains("plan branch"), "\(decision.why)")
+  }
+
+  @Test(
+    "the same gap with less time to the cutoff than the proof and the measured round merges the row unverified, naming the cutoff — catches an amendment started that can't end before the cutoff"
+  )
+  func capturedGapWithNoRoundLeftMergesUnverified() throws {
+    let cutoff = try #require(try NoRepairLate1.record().cutoffAt)
+
+    let decision = try NoRepairLate1.decide(at: cutoff.addingTimeInterval(-189))
+
+    #expect(decision.action == .mergeUnverified, "\(decision)")
+    #expect(decision.why.contains("before the cutoff"), "\(decision.why)")
   }
 }

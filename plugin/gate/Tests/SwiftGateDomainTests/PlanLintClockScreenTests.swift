@@ -56,6 +56,10 @@ private enum ClockScreenPlan {
   static let seamLine =
     "  - the composition root reads `-harness-scenario`: `launch-held` holds the clock until the "
     + "first input, and `entity-center` seeds 1 entity at the screen's centre, held"
+
+  /// The contract's scope line that holds the clock after the screen's `Start again` too.
+  static let restartLine =
+    "  - `launch-held` also holds the clock after Start again, until the next input"
 }
 
 @Suite("plan-lint validation: a screen whose state advances on a clock needs a held scenario, and a seed makes a moving target placeable")
@@ -89,17 +93,28 @@ struct PlanLintClockScreenTests {
   }
 
   @Test(
-    "a contract scope line that reads `-harness-scenario` and names a held scenario clears clock-unheld, and the seedable reasons still fail until their requirements are flow rows — catches a seam check that a seed alone satisfies, or a held scenario that excuses a gesture"
+    "a contract scope line that reads `-harness-scenario` and names a held scenario clears clock-unheld at launch, while req-screen's `Start again` row still needs the clock held after the restart, and the seedable reasons still fail until their requirements are flow rows — catches a seam check that a seed alone satisfies, or a held scenario that excuses a gesture"
   )
   func seamClearsUnheldOnly() throws {
     let text = try ClockScreenPlan.captured
     let stub = "  - `TargetFeature` reducer stub in AppCore"
     let stubLine = try #require(
       text.split(separator: "\n").first { $0.hasPrefix(stub) }.map(String.init))
-    let seamed = try ClockScreenPlan.replacing(
+    let launchOnly = try ClockScreenPlan.replacing(
       stubLine, with: stubLine + "\n" + ClockScreenPlan.seamLine, in: text)
+    let seamed = try ClockScreenPlan.replacing(
+      stubLine,
+      with: stubLine + "\n" + ClockScreenPlan.seamLine + "\n" + ClockScreenPlan.restartLine,
+      in: text)
 
+    let restart = try ClockScreenPlan.findings(launchOnly).filter {
+      $0.ruleID == PlanLintValidation.clockUnheldRuleID
+    }
     let held = try ClockScreenPlan.findings(seamed)
+
+    #expect(
+      restart.map(\.line) == [ClockScreenPlan.line(of: "| req-screen | flow |", in: text)],
+      "\(restart.map(\.message))")
 
     #expect(held.map(\.ruleID).allSatisfy { $0 == PlanLintValidation.obstacleSeedableRuleID })
     #expect(held.count == 3, "\(held.map(\.message))")

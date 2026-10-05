@@ -3287,6 +3287,48 @@ cp $P/validation.json $F/; cp $R/run.json $F/; cp $R/events.jsonl $F/
 The repair worker's reply arrived at 2026-10-05T15:23:00.391Z, the time the tests decide at.
 `grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair` matched nothing.
 
+## Build returns: a no-repair contract gap past no new starts
+
+`BuildReturn/no-repair-late/` is what a brownfield practice trial on an app whose state advances on
+a clock left when its flow repair worker returned `no repair: <requirement>: contract gap: held:`
+for 1 row 366 s before the cutoff, after no new starts, and `build no-repair` merged the task with
+that row unverified. `repair-reply.txt` is that reply, `qa-red.json` the fixer's before-merge
+`qa run --fix`, red on row 6 alone, and `qa-first.json` the task's first before-merge run, the
+slowest that took it. `fix-gate.jsonl` is the `gate.run` event of the fix branch's slice gate,
+`rows-unverified.jsonl` the build run's `rows-unverified` event, whose `at` is when the command
+decided, and `run.json` the build run's record. `C` is the trial clone's state directory
+(`.git/swift-harness`), `J` the orchestrator's stream-json log and `SCRUB` a rename script outside
+this repository, since its pairs name the app; it maps each app-specific noun, label, scenario,
+requirement and task id to a generic one, such as `req-ended`, `Chances: 3`, `Start again` and
+`target-fall-held`, and rewrites any home path to `<path>`. From this directory:
+
+```sh
+F=BuildReturn/no-repair-late R=$C/plans/spec/build/20261005T202420Z-d318457a
+mkdir -p $F
+python3 $SCRUB $R/run.json > $F/run.json
+python3 $SCRUB $C/runs/20261005T204446Z-126de225/qa/report.json > $F/qa-red.json
+python3 $SCRUB $C/runs/20261005T203359Z-9e69c57f/qa/report.json > $F/qa-first.json
+grep 20261005T204415Z-12c13d21 $C/events/gate.jsonl | grep '"kind":"gate.run"' \
+  | python3 $SCRUB /dev/stdin > $F/fix-gate.jsonl
+grep '"kind":"rows-unverified"' $R/events.jsonl | python3 $SCRUB /dev/stdin > $F/rows-unverified.jsonl
+J=$J python3 - <<'PY' | python3 $SCRUB /dev/stdin > $F/repair-reply.txt
+import json, os
+for line in open(os.environ["J"]):
+    try: d = json.loads(line)
+    except ValueError: continue
+    for c in (d.get("message") or {}).get("content") or []:
+        if isinstance(c, dict) and c.get("type") == "tool_use":
+            cmd = c["input"].get("command", "")
+            if "no-repair-" in cmd and "contract gap: held:" in cmd:
+                i = cmd.find("no repair: ")
+                print(cmd[i:cmd.find("\nEOF", i)]); raise SystemExit
+PY
+```
+
+The slice gate took 16.65 s and the slowest before-merge run's rows 132.5 s, so 1 more fix round
+measures 150 s, and the red row's proof 39.2 s.
+`grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair-late` matched nothing.
+
 ## Build returns: a no-repair red run made in a fixer's slot
 
 `BuildReturn/no-repair-slot/` is what a brownfield trial left when a fixer's before-merge
@@ -5269,6 +5311,59 @@ PY
 
 `grep -aEi '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a heredoc after a shell function definition
+
+`Hooks/function-definition-after-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied
+in a later 2026-10-05 brownfield practice trial: from the clone's checkout it `cd`'d into a
+validation slot, made and `cd`'d into a relative `.harness/qa/spec`, defined a shell function
+whose body moves nothing, and on later lines wrote flow files there with heredocs that call the
+function. The function definition made the guard stop following the `cd`s, so it named the first
+write in the user's checkout. The clone becomes `/CLONE`, the harness checkout `/HARNESS`, the
+bundle id `com.example.App`, each launch scenario `scenario-N` in order of first use, an element
+id prefix `app.cell`, and the flow files after `launch.flow.json` `flow-2` to `flow-6` in order. Each
+heredoc body keeps only its `$(OPEN …)` line between `[` and `]`: the other lines are app content
+and name no write. With `T` the trial's run folder, whose `run.jsonl` is the orchestrator's
+stream-json output:
+
+```sh
+python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/function-definition-after-cd-bash.json <<'PY'
+import json,sys,re
+flows={}; scenarios={}
+def flow(m):
+    if m.group(1)=='launch': return m.group(0)
+    flows.setdefault(m.group(1),'flow-%d'%(len(flows)+2))
+    return flows[m.group(1)]+'.flow.json'
+def scenario(m):
+    scenarios.setdefault(m.group(1),'scenario-%d'%(len(scenarios)+1))
+    return '"-harness-scenario", "%s"'%scenarios[m.group(1)]
+def body(m):
+    kept=[l for l in m.group(2).split('\n') if l.startswith('  $(OPEN ')]
+    return m.group(1)+'\n'.join(['[']+kept+[']'])+'\nEOF\n'
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
+    c=re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-[^/]+','/HARNESS',c)
+    c=re.sub(r'com\.example\.[A-Za-z]+','com.example.App',c)
+    c=re.sub(r'(id=\\+")[A-Za-z]+\.[A-Za-z]+\.%d',r'\1app.cell.%d',c)
+    c=re.sub(r'(<<EOF\n)(.*?)\nEOF\n',body,c,flags=re.S)
+    c=re.sub(r'"-harness-scenario", "([^"]+)"',scenario,c)
+    return re.sub(r'(?<![\w/*-])([a-z-]+)\.flow\.json',flow,c)
+cwd=None; denied={}
+lines=[json.loads(l) for l in open(sys.argv[1])]
+for d in lines:
+    if d.get('type')=='system' and d.get('subtype')=='init' and cwd is None: cwd=d['cwd']
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_result' and str(b.get('content')).startswith('PreToolUse:Bash hook error: swiftgate guard.run-user-checkout'):
+            denied[b['tool_use_id']]=b['content']
+for d in lines:
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_use' and b.get('id') in denied:
+            json.dump({"cwd":scrub(cwd),"command":scrub(b['input']['command']),
+                       "denial":scrub(denied[b['id']])},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -aEi '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## qa lint: a flow that waits for a state the fake ends on its own
 
 `QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
@@ -5467,6 +5562,26 @@ and `moving` are as captured. The clone's `config.toml` differs from
 `price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
 `price-tracker-1-base-files.txt`, so the import test reads those 2.
 `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
+
+## Brownfield trial: a check after a restart of a held clock
+
+`BrownfieldTrial/clock-restart-1-PLAN.md` is the `PLAN.md` a 2026-10-05 brownfield practice trial
+on the iOS app starter left at its run's end. Its contract reads `-harness-scenario` and names a
+`launch-held` scenario that holds the clock until the first input, and its screen task runs a
+repeating timer effect. One flow row's requirement presses `Start again`, which starts a new
+session on a live clock, and its check after the press raced that clock: the row ended
+unverified. `C` is the trial clone's state directory and `SCRUB` the rename script of
+`BuildReturn/no-repair-late`:
+
+```sh
+python3 $SCRUB $C/plans/spec/PLAN.md \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/clock-restart-1-PLAN.md
+```
+
+Line numbers, the table's shape, the `slice` gate tier, and each brief's words for the timer, the
+clock and `held` are as captured.
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/clock-restart-1-PLAN.md` matched
+nothing.
 
 ## Build return: a worker's commits listed newest first
 

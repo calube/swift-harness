@@ -1,0 +1,167 @@
+{
+  "after" : "engine-sim",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "922dafe55d9836acc24b0bb1922c48bef2fb301a",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 6 (req-ended, flow) `qa/ended.flow.json`: step 7 `wait` failed: Batch failed at step 20 (wait): wait timed out for selector: id=\"session.chances\" label=\"Chances: 3\"; step 7 began 12.3 s into the batch: 1.1 s opening the app (1.0 s to launch, 0.6 s of it settling), 5.2 s in captures qa run added, 5.9 s in the flow's other steps",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 11 rows verified (5 reason-only, 1 not in this run): 4 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 5,
+  "rows" : [
+    {
+      "check" : "qa/cut-target.flow.json",
+      "evidence" : [
+        "qa/02-req-cut-target.flow/steps.json",
+        "qa/02-req-cut-target.flow/batch.json",
+        "qa/02-req-cut-target.flow/flow.json",
+        "qa/02-req-cut-target.flow/video.mp4",
+        "qa/02-req-cut-target.flow/sheet.png",
+        "qa/02-req-cut-target.flow/sim/steps.ndjson",
+        "qa/02-req-cut-target.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 3 steps",
+      "ms" : 20209,
+      "requirement" : "req-cut-target",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "engine-sim",
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/cut-hazard.flow.json",
+      "evidence" : [
+        "qa/03-req-hazard.flow/steps.json",
+        "qa/03-req-hazard.flow/batch.json",
+        "qa/03-req-hazard.flow/flow.json",
+        "qa/03-req-hazard.flow/video.mp4",
+        "qa/03-req-hazard.flow/sheet.png",
+        "qa/03-req-hazard.flow/sim/steps.ndjson",
+        "qa/03-req-hazard.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 3 steps",
+      "ms" : 12540,
+      "requirement" : "req-hazard",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "engine-sim",
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/miss.flow.json",
+      "evidence" : [
+        "qa/04-req-miss.flow/steps.json",
+        "qa/04-req-miss.flow/batch.json",
+        "qa/04-req-miss.flow/flow.json",
+        "qa/04-req-miss.flow/video.mp4",
+        "qa/04-req-miss.flow/sheet.png",
+        "qa/04-req-miss.flow/sim/steps.ndjson",
+        "qa/04-req-miss.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 4 steps",
+      "ms" : 16075,
+      "requirement" : "req-miss",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "engine-sim",
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/screen.flow.json",
+      "evidence" : [
+        "qa/05-req-screen.flow/steps.json",
+        "qa/05-req-screen.flow/batch.json",
+        "qa/05-req-screen.flow/flow.json",
+        "qa/05-req-screen.flow/video.mp4",
+        "qa/05-req-screen.flow/sheet.png",
+        "qa/05-req-screen.flow/sim/steps.ndjson",
+        "qa/05-req-screen.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 4 steps",
+      "ms" : 11367,
+      "requirement" : "req-screen",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "engine-sim",
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/ended.flow.json",
+      "evidence" : [
+        "qa/06-req-ended.flow/steps.json",
+        "qa/06-req-ended.flow/batch.json",
+        "qa/06-req-ended.flow/flow.json",
+        "qa/06-req-ended.flow/video.mp4",
+        "qa/06-req-ended.flow/sheet.png",
+        "qa/06-req-ended.flow/sim/steps.ndjson",
+        "qa/06-req-ended.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 7 `wait` failed: Batch failed at step 20 (wait): wait timed out for selector: id=\"session.chances\" label=\"Chances: 3\"; step 7 began 12.3 s into the batch: 1.1 s opening the app (1.0 s to launch, 0.6 s of it settling), 5.2 s in captures qa run added, 5.9 s in the flow's other steps",
+      "ms" : 39210,
+      "requirement" : "req-ended",
+      "result" : "red",
+      "row" : 6,
+      "runsAfter" : [
+        "engine-sim",
+        "screen-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T204446Z-126de225",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "9819f2955b0b91142c5b0b0a7becf569d6b330c4",
+    "branch" : "spec/fix-engine-sim",
+    "conflicts" : [
+
+    ],
+    "tip" : "87eb30f471a207546c87372f98821e6f370566d0"
+  },
+  "verdict" : "RED"
+}
