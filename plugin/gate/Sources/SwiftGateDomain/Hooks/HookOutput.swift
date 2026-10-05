@@ -31,6 +31,16 @@ public enum HookOutput {
     return encode(["hookSpecificOutput": output])
   }
 
+  /// PreToolUse: run the call with `toolInput`, the whole `tool_input` object, in place of the
+  /// one Claude sent. With `allow`, the call is also allowed with that reason shown to the user;
+  /// without it, the call goes on to the normal permission flow. `context`, when given, is shown
+  /// to Claude next to the tool result.
+  public static func rewrite(
+    toolInput: [String: Any], allow: String? = nil, context: String? = nil
+  ) -> String {
+    "{}"
+  }
+
   /// PostToolUse: put `reason` next to the tool result as a problem to fix. Stop: refuse to stop
   /// and give Claude `reason` as what to do next.
   public static func block(_ reason: String) -> String {

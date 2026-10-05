@@ -43,15 +43,23 @@ public struct HookPayload: Sendable, Equatable {
   public let transcriptPath: String?
   /// `tool_input.subagent_type` for the Agent tool.
   public let subagentType: String?
-  /// `tool_input.run_in_background` for the Agent tool; `nil` when the call leaves it out.
+  /// `tool_input.run_in_background` for the Agent and Bash tools; `nil` when the call leaves it
+  /// out.
   public let runInBackground: Bool?
+  /// `permission_mode`, such as `default` or `bypassPermissions`; `nil` when absent.
+  public let permissionMode: String?
+  /// `tool_input.timeout` for Bash, in milliseconds; `nil` when the call leaves it out.
+  public let timeout: Int?
+  /// `tool_input` as a JSON object, every key kept, so a rewrite of the call can return it whole.
+  public let toolInputJSON: String?
 
   public init(
     sessionID: String, cwd: String, hookEventName: String, toolName: String? = nil,
     command: String? = nil, filePath: String? = nil, stopHookActive: Bool = false,
     agentID: String? = nil, source: String? = nil, fileWrite: FileWrite? = nil,
     agentType: String? = nil, transcriptPath: String? = nil, subagentType: String? = nil,
-    runInBackground: Bool? = nil
+    runInBackground: Bool? = nil, permissionMode: String? = nil, timeout: Int? = nil,
+    toolInputJSON: String? = nil
   ) {
     self.sessionID = sessionID
     self.cwd = cwd
@@ -67,6 +75,9 @@ public struct HookPayload: Sendable, Equatable {
     self.transcriptPath = transcriptPath
     self.subagentType = subagentType
     self.runInBackground = runInBackground
+    self.permissionMode = permissionMode
+    self.timeout = timeout
+    self.toolInputJSON = toolInputJSON
   }
 
   public static func decode(_ data: Data) throws(HookPayloadError) -> HookPayload {
