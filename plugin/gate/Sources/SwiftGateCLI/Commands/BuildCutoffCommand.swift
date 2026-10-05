@@ -145,8 +145,16 @@ enum BuildCutoffRun {
       }
       // A gate still running in an abandoned task's worktree would only hold the machine, and
       // its scratch tree would outlive it.
+      // Named as every command names them: a pooled slot's path isn't the ledger's.
+      let common = try? await git.commonDirectory()
       let worktrees = ledger.tasks.filter { task in abandoned.contains { $0.task == task.id } }
-        .map(\.worktree)
+        .flatMap { task -> [String] in
+          guard let common else { return [task.worktree] }
+          return [task.id, "fix-\(task.id)"].compactMap { name in
+            try? TaskWorktree(commonDirectory: common, plan: slug, task: name, profile: .brownfield)
+              .path
+          }
+        }
       let stopped = await leftovers?.stopGates(in: worktrees) ?? []
       let sweep = await leftovers?.pruneScratchTrees() ?? ScratchWorktreeSweep()
       let notes =

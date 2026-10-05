@@ -136,29 +136,41 @@ enum WorktreeRun {
     if FileManager.default.fileExists(atPath: names.path) {
       return report.refused("\(names.path) already exists; remove it or pick another task")
     }
+    // A brownfield task takes a pooled slot, whose path and builds outlive each task.
+    var path = names.path
+    var reusedSlot: Bool?
     do throws(GitWorkspaceError) {
       if try await workspace.branchExists(names.branch) {
         return report.refused("branch \(names.branch) already exists")
       }
-      try await workspace.addWorktree(
-        at: names.path, branch: names.branch, from: names.baseBranch)
+      switch profile {
+      case .owned:
+        try await workspace.addWorktree(
+          at: names.path, branch: names.branch, from: names.baseBranch)
+      case .brownfield:
+        let slot = try await WorktreePool(commonDirectory: names.commonDirectory, plan: slug)
+          .checkOut(branch: names.branch, from: names.baseBranch, workspace: workspace)
+        path = slot.path
+        reusedSlot = slot.reused
+      }
     } catch {
       return report.blocked("\(error)")
     }
+    let made = Reporter(command: command, slug: slug, task: task, names: names, path: path)
 
     let cloned: [String]
     do throws(GitWorkspaceError) {
       cloned = try await workspace.cloneWarmBuild(
-        survey.clonable, from: names.mainCheckout, into: names.path)
+        survey.clonable, from: names.mainCheckout, into: path)
     } catch {
-      let undone = await report.undo(workspace: workspace)
-      return report.blocked("\(error); \(undone)")
+      let undone = await made.undo(workspace: workspace)
+      return made.blocked("\(error); \(undone)")
     }
     // Checked again: the lock may have changed hands while the clone ran.
     switch await context.recordBranch() {
     case .success: break
     case .failure(let refusal):
-      let undone = await report.undo(workspace: workspace)
+      let undone = await made.undo(workspace: workspace)
       let refused = refusal.report
       return WorktreeReport(
         command: refused.command, plan: refused.plan, task: refused.task,
@@ -172,16 +184,20 @@ enum WorktreeRun {
     // Installed once here so no area command has to; a failed install never undoes the worktree.
     let installed: WorktreeNodeInstall.Outcome? =
       profile == .brownfield
-      ? await WorktreeNodeInstall.run(worktree: names.path, dependencies: install) : nil
+      ? await WorktreeNodeInstall.run(worktree: path, dependencies: install) : nil
+    let slotNote = reusedSlot.map {
+      $0 ? "; a reused slot, its builds warm from its last task" : "; a new slot"
+    }
     var created = WorktreeReport(
       command: command, plan: slug, task: task, status: .created, verdict: .green, holder: nil,
-      worktree: names.path, branch: names.branch, cloned: cloned,
+      worktree: path, branch: names.branch, cloned: cloned,
       missing: survey.missingPackageBuilds,
-      message: "created \(names.path) on \(names.branch), cloned "
+      message: "created \(path) on \(names.branch), cloned "
         + (cloned.isEmpty ? "nothing" : cloned.joined(separator: ", ")) + missing
-        + (installed?.message ?? ""))
+        + (slotNote ?? "") + (installed?.message ?? ""))
     created.installs = installed.flatMap { $0.installs.isEmpty ? nil : $0.installs }
     created.installNotes = installed.flatMap { $0.notes.isEmpty ? nil : $0.notes }
+    created.reusedSlot = reusedSlot
     return created
   }
 
@@ -261,7 +277,7 @@ enum WorktreeRun {
           from: names.path, into: names.mainCheckout, commonDirectory: names.commonDirectory)
         events = copyEvents(
           from: names.path, into: names.mainCheckout, commonDirectory: names.commonDirectory)
-        try await workspace.removeWorktree(at: names.path, force: false)
+        try await WorktreePool.retire(names, discard: false, workspace: workspace)
       }
       try await workspace.deleteBranch(names.branch)
     } catch {
@@ -322,7 +338,7 @@ enum WorktreeRun {
             commonDirectory: worktree.commonDirectory
           ).message
         // The worker is gone: its uncommitted edits go, its commits stay on the branch.
-        try await workspace.removeWorktree(at: worktree.path, force: true)
+        try await WorktreePool.retire(worktree, discard: true, workspace: workspace)
         discarded.append(worktree.path)
       }
     } catch {
@@ -595,6 +611,8 @@ private struct Reporter {
   let slug: String?
   let task: String?
   let names: TaskWorktree?
+  /// Where `create` checked the branch out, when it got that far.
+  var path: String? = nil
 
   func blocked(_ message: String) -> WorktreeReport {
     make(.blocked, .blocked, message)
@@ -609,7 +627,10 @@ private struct Reporter {
   func undo(workspace: any GitWorkspace) async -> String {
     guard let names else { return "nothing to undo" }
     do throws(GitWorkspaceError) {
-      try await workspace.removeWorktree(at: names.path, force: true)
+      let pool = WorktreePool(commonDirectory: names.commonDirectory, plan: names.plan)
+      if try await pool.release(branch: names.branch, discard: true, workspace: workspace) == nil {
+        try await workspace.removeWorktree(at: path ?? names.path, force: true)
+      }
       try await workspace.deleteBranch(names.branch)
     } catch {
       return "couldn't remove the new worktree and branch: \(error)"
@@ -622,7 +643,8 @@ private struct Reporter {
   {
     WorktreeReport(
       command: command, plan: slug, task: task, status: status, verdict: verdict, holder: nil,
-      worktree: names?.path, branch: names?.branch, cloned: nil, missing: nil, message: message)
+      worktree: path ?? names?.path, branch: names?.branch, cloned: nil, missing: nil,
+      message: message)
   }
 }
 
@@ -636,8 +658,10 @@ struct WorktreeCreateCommand: AsyncParsableCommand {
       "Adds ../<repo>-<plan>-<task> beside the main checkout on branch <plan>/<task> from main, "
       + "APFS-clones every configured package's .build and the DerivedData under .harness/, "
       + "deletes each cloned module cache, and sets the task's branch in the ledger. In a "
-      + "brownfield clone it adds the same ../<repo>-<plan>-<task>, outside the git dir and the "
-      + "user's tree, on <plan>/<task> from the plan branch swift-harness/<plan>, clones "
+      + "brownfield clone it checks <plan>/<task> out from the plan branch swift-harness/<plan> "
+      + "in a free pooled slot ../<repo>-<plan>.slot-<n>, outside the git dir and the user's "
+      + "tree, or in a new slot when none is free (`reusedSlot` says which), so the slot's "
+      + "DerivedData and ignored build folders stay warm from its last task. It clones "
       + "nothing, and installs each node area's dependencies once, frozen to its lockfile, "
       + "listing each in `installs` and recording it as a warmup.run step `install`; a failed "
       + "install is a report line and leaves the worktree created. "
@@ -703,9 +727,13 @@ struct WorktreeRemoveCommand: AsyncParsableCommand {
       + "swift-harness/unkept-events/<storeID>/), naming any it couldn't keep. Exits 0 when removed; 1 when this session doesn't hold the plan's lock, the task isn't in "
       + "the ledger, or its branch is missing or not merged into main (the plan branch in a "
       + "brownfield clone); 2 for a missing flag or a "
-      + "failed git step, such as a worktree with uncommitted changes. With --abandoned, the task "
+      + "failed git step, such as a worktree with uncommitted changes. In a brownfield clone a "
+      + "pooled slot isn't removed but returned: refused while it has uncommitted changes, then "
+      + "detached, reset, its untracked files and state root emptied but its DerivedData, and its "
+      + "ignored build folders kept for the next task. With --abandoned, the task "
       + "must be `abandoned` in the ledger, merged or not: it keeps runs and events the same way, "
-      + "force-removes the task's and its fix worktree, whichever exist, and keeps both branches "
+      + "force-removes (or returns, discarding edits) the task's and its fix worktree, whichever "
+      + "exist, and keeps both branches "
       + "so their commits stay reachable; it refuses (exit 1) any other status.")
 
   @Argument(help: "The plan's slug.")

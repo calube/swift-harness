@@ -73,7 +73,8 @@ public protocol GitWorkspace: Sendable {
 /// merges land in the main checkout. In a brownfield clone nothing touches the user's checkout or
 /// branch: it is cut from the plan branch, and merges land in that branch's own checkout, the
 /// sibling `<repo>-<plan>`. Neither sits under the git dir: the plan-state guard owns every file in
-/// a plan's directory, and dev servers such as Vite refuse to serve files under `.git`.
+/// a plan's directory, and dev servers such as Vite refuse to serve files under `.git`. A brownfield
+/// task or fix branch checked out in a ``WorktreePool`` slot has that slot's path instead.
 public struct TaskWorktree: Sendable, Equatable {
   public static let base = "main"
 
@@ -85,22 +86,30 @@ public struct TaskWorktree: Sendable, Equatable {
   public let baseBranch: String
   /// The git common dir the names were derived from.
   public let commonDirectory: String
+  /// The plan's slug.
+  public let plan: String
 
   /// - Throws: ``GitWorkspaceError/git(_:)`` when `commonDirectory` isn't a checkout's `.git`, or
   ///   in a brownfield clone when `plan` isn't 1 path component.
   public init(
     commonDirectory: String, plan: String, task: String, profile: RepositoryProfile = .owned
   ) throws(GitWorkspaceError) {
-    branch = "\(plan)/\(task)"
+    let branch = "\(plan)/\(task)"
+    self.branch = branch
     self.commonDirectory = commonDirectory
-    path = try Self.sibling(commonDirectory: commonDirectory, named: "\(plan)-\(task)")
+    self.plan = plan
+    let own = try Self.sibling(commonDirectory: commonDirectory, named: "\(plan)-\(task)")
     switch profile {
     case .owned:
+      path = own
       mainCheckout = try Self.mainCheckout(commonDirectory: commonDirectory)
       baseBranch = Self.base
     case .brownfield:
       mainCheckout = try Self.planCheckout(commonDirectory: commonDirectory, plan: plan)
       baseBranch = BrownfieldRunReport.planBranch(slug: plan)
+      path =
+        try WorktreePool(commonDirectory: commonDirectory, plan: plan).path(holding: branch)
+        ?? own
     }
   }
 

@@ -135,8 +135,8 @@ enum RunCheckoutRun {
 
   /// Removes each ledger task's worktree and its fix worktree still on disk, merged or not, as
   /// `worktree remove --abandoned` does: their runs and events are kept first, uncommitted edits
-  /// go, and both branches stay so every commit stays reachable. The run has ended, so nothing
-  /// works in them any more.
+  /// go, and both branches stay so every commit stays reachable. Then every pooled slot left goes
+  /// too. The run has ended, so nothing works in them any more.
   private static func removeTaskWorktrees(
     _ context: Context, kept: StateRoot, main: String, workspace: LiveGitWorkspace
   ) async -> LeftWorktrees {
@@ -176,6 +176,14 @@ enum RunCheckoutRun {
           left.verdict = .blocked
         }
       }
+    }
+    // The free slots too, with each slot's DerivedData under its git dir.
+    let pool = await WorktreePool(commonDirectory: context.common, plan: context.slug)
+      .dispose(workspace: workspace)
+    left.discarded += pool.removed
+    if !pool.failures.isEmpty {
+      left.message += "; worktree slots weren't removed: " + pool.failures.joined(separator: "; ")
+      left.verdict = .blocked
     }
     if !left.discarded.isEmpty {
       left.message +=

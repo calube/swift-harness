@@ -80,8 +80,9 @@ public struct LiveGitWorkspace: GitWorkspace {
   }
 
   public func resetWorktree(at path: String) async throws(GitWorkspaceError) {
-    try await succeed(["-C", path, "switch", "--quiet", "--detach"])
+    // Reset first: it also ends a conflicted merge, which `switch` refuses to leave.
     try await succeed(["-C", path, "reset", "--quiet", "--hard"])
+    try await succeed(["-C", path, "switch", "--quiet", "--detach"])
     try await succeed(["-C", path, "clean", "-ffdq"])
   }
 

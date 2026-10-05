@@ -44,12 +44,17 @@ public struct WorktreePool: Sendable {
 
   /// The recorded slots; empty when the pool has none yet.
   public func state() throws(GitWorkspaceError) -> WorktreePoolState {
-    WorktreePoolState()
+    guard FileManager.default.fileExists(atPath: file.path) else { return WorktreePoolState() }
+    do {
+      return try JSONDecoder().decode(WorktreePoolState.self, from: Data(contentsOf: file))
+    } catch {
+      throw .pool(path: file.path, detail: "unreadable: \(error)")
+    }
   }
 
   /// The slot `branch` is checked out in, if a slot holds it.
   public func path(holding branch: String) throws(GitWorkspaceError) -> String? {
-    nil
+    try state().path(holding: branch)
   }
 
   /// Checks `branch` out new from `base` in the first free slot, or in a new slot when none is
@@ -57,7 +62,36 @@ public struct WorktreePool: Sendable {
   public func checkOut(branch: String, from base: String, workspace: any GitWorkspace)
     async throws(GitWorkspaceError) -> Checkout
   {
-    throw .pool(path: file.path, detail: "not available")
+    try await locked { () async throws(GitWorkspaceError) -> Checkout in
+      var state = try state()
+      if let held = state.path(holding: branch) {
+        throw .pool(path: held, detail: "\(branch) is already checked out here")
+      }
+      while let free = state.firstFree {
+        guard FileManager.default.fileExists(atPath: free.path) else {
+          state.drop(free.path)
+          continue
+        }
+        try await workspace.switchWorktree(at: free.path, toNewBranch: branch, from: base)
+        state.assign(branch, to: free.path)
+        try write(state)
+        return Checkout(path: free.path, reused: true)
+      }
+      var number = 1
+      var path = try TaskWorktree.slotPath(
+        commonDirectory: commonDirectory, plan: plan, number: number)
+      while state.slots.contains(where: { $0.path == path })
+        || FileManager.default.fileExists(atPath: path)
+      {
+        number += 1
+        path = try TaskWorktree.slotPath(
+          commonDirectory: commonDirectory, plan: plan, number: number)
+      }
+      try await workspace.addWorktree(at: path, branch: branch, from: base)
+      state.assign(branch, to: path)
+      try write(state)
+      return Checkout(path: path, reused: false)
+    }
   }
 
   /// Returns the slot `branch` is checked out in: refuses one with uncommitted work unless
@@ -67,12 +101,130 @@ public struct WorktreePool: Sendable {
   public func release(branch: String, discard: Bool, workspace: any GitWorkspace)
     async throws(GitWorkspaceError) -> String?
   {
-    nil
+    // Read once unlocked, so a repository without a pool never makes its directory.
+    guard try path(holding: branch) != nil else { return nil }
+    return try await locked { () async throws(GitWorkspaceError) -> String? in
+      var state = try state()
+      guard let path = state.path(holding: branch) else { return nil }
+      guard FileManager.default.fileExists(atPath: path) else {
+        state.drop(path)
+        try write(state)
+        return path
+      }
+      if !discard {
+        let dirty = try await workspace.uncommittedPaths(inWorktree: path)
+        guard dirty.isEmpty else {
+          throw .pool(
+            path: path,
+            detail: "uncommitted changes in \(dirty.joined(separator: ", ")); commit or "
+              + "discard them first")
+        }
+      }
+      try await workspace.resetWorktree(at: path)
+      try emptyState(of: path)
+      state.free(branch)
+      try write(state)
+      return path
+    }
   }
 
   /// Removes every slot's worktree, its DerivedData with it, and the pool's record: the run is
   /// over. A slot with a branch checked out loses its uncommitted edits; its branch stays.
   public func dispose(workspace: any GitWorkspace) async -> Disposal {
-    Disposal()
+    var disposal = Disposal()
+    let state: WorktreePoolState
+    do throws(GitWorkspaceError) {
+      state = try self.state()
+    } catch {
+      disposal.failures.append("\(error)")
+      return disposal
+    }
+    var left = state
+    for slot in state.slots {
+      guard FileManager.default.fileExists(atPath: slot.path) else {
+        left.drop(slot.path)
+        continue
+      }
+      do throws(GitWorkspaceError) {
+        try await workspace.removeWorktree(at: slot.path, force: true)
+        disposal.removed.append(slot.path)
+        left.drop(slot.path)
+      } catch {
+        disposal.failures.append("\(slot.path): \(error)")
+      }
+    }
+    do throws(GitWorkspaceError) {
+      if left.slots.isEmpty {
+        if FileManager.default.fileExists(atPath: file.path) {
+          do {
+            try FileManager.default.removeItem(at: file)
+          } catch {
+            throw .pool(path: file.path, detail: "removing: \(error)")
+          }
+        }
+      } else {
+        try write(left)
+      }
+    } catch {
+      disposal.failures.append("\(error)")
+    }
+    return disposal
+  }
+
+  /// Takes `worktree` away: returns its slot when it is pooled, else removes it with
+  /// `git worktree remove`, forced when `discard`.
+  public static func retire(
+    _ worktree: TaskWorktree, discard: Bool, workspace: any GitWorkspace
+  ) async throws(GitWorkspaceError) {
+    let pool = WorktreePool(commonDirectory: worktree.commonDirectory, plan: worktree.plan)
+    if try await pool.release(branch: worktree.branch, discard: discard, workspace: workspace)
+      == nil
+    {
+      try await workspace.removeWorktree(at: worktree.path, force: discard)
+    }
+  }
+
+  private func write(_ state: WorktreePoolState) throws(GitWorkspaceError) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+    do {
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try encoder.encode(state).write(to: file, options: .atomic)
+    } catch {
+      throw .pool(path: file.path, detail: "writing: \(error)")
+    }
+  }
+
+  /// Deletes what the slot's last task left in its state root, keeping ``keptState``.
+  private func emptyState(of path: String) throws(GitWorkspaceError) {
+    let root = StateRootResolver.resolve(worktree: URL(filePath: path, directoryHint: .isDirectory))
+      .directory
+    let files = FileManager.default
+    guard let entries = try? files.contentsOfDirectory(atPath: root.path) else { return }
+    for entry in entries where !Self.keptState.contains(entry) {
+      do {
+        try files.removeItem(at: root.appending(path: entry))
+      } catch {
+        throw .pool(path: path, detail: "emptying \(root.path): \(error)")
+      }
+    }
+  }
+
+  /// Runs `body` holding the pool's lock, so 2 commands never take the same free slot.
+  private func locked<T: Sendable>(_ body: () async throws(GitWorkspaceError) -> T)
+    async throws(GitWorkspaceError) -> T
+  {
+    let lock = FileCountingLock(
+      directory: file.deletingLastPathComponent(), name: "\(plan).lock", capacity: 1,
+      pollInterval: .milliseconds(5))
+    let lease: LockLease
+    do {
+      lease = try await lock.acquire(timeout: .seconds(60))
+    } catch {
+      throw .pool(path: file.path, detail: "locking: \(error)")
+    }
+    defer { lease.release() }
+    return try await body()
   }
 }
