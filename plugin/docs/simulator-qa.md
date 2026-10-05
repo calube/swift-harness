@@ -30,10 +30,10 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
 validation.json; with none it is GREEN with a note, and with several it exits 2 naming them. A row
-runs once every `Runs after` task is `done` in the ledger or merged in the build's events, the
-`--after` task counting as merged; `--after` keeps only the rows that name it, and a row with an
-unmerged task reads `waiting`; once the build has ended (`--final`, or a `final` gate after the
-last merge), `abandoned` if its task was, else `unverified`.
+runs once each `Runs after` task merged, by the ledger or the build's events, the `--after` task
+counting as merged; `--after` keeps only the rows that name it. A row with an unmerged task reads
+`waiting`, or once the build ended (`--final`, or a `final` gate after the last merge) `abandoned`
+if its task was, else `unverified`.
 
 Rows run in the current checkout in layer order, acceptance, then flow, then state. A red row
 leaves its own requirement's later-layer rows `unverified`; other requirements' rows still run. A requirement's state rows run straight after
@@ -60,9 +60,8 @@ status. Each `unverified` row's nit there says it has no red run.
 
 The run writes `.harness/runs/<runID>/qa/report.json`, each row's command, exit status, stdout and
 stderr in `qa/<NN>-<requirement>.<layer>.txt`, and 1 qa.check event per row. Its message leads with
-how many rows got an answer, `pass` or `red`. During merges an unverified row is a nit, so `0 of 3
-rows verified` can read GREEN; once the build has ended, every row short of an answer gates.
-`run report` repeats the count under its `final` line.
+how many rows got an answer, `pass` or `red`. An unverified row is a nit during merges; once the
+build ended, it and an abandoned row gate. `run report` repeats the count under its `final` line.
 
 A flow row runs as 1 `agent-device batch` on a device `sim up` leases; see
 [`simulator-qa-flows.md`](simulator-qa-flows.md).
