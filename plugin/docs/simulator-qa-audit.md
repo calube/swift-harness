@@ -11,7 +11,9 @@ Each step's tree must show every button, switch, text field and cell with an acc
 identifier (`sim.a11y-identifier`) and a readable label (`sim.a11y-label`). A label is readable when
 it holds more than whitespace and differs from the identifier. Static text, images and containers
 need neither. These 2 rules check standards §7 on the screen the app drew, so an icon-only
-button with no `.accessibilityLabel` fails here even when review missed it.
+button with no `.accessibilityLabel` fails here even when review missed it. A text field's title
+shows only as its placeholder, so a field needs `.accessibilityLabel` too; `lint` and each slice
+gate's changed Swift sources check that in source as `a11y.input-label`.
 
 ## Scope
 
