@@ -64,6 +64,9 @@ enum QARunRun {
     var started: (@Sendable (_ runID: String, _ report: URL) -> Void)? = nil
     /// The build run's device the flow rows borrow; `nil`, or a refused loan, holds the run's own.
     var devices: (any QADeviceLending)?
+    /// Where the run records itself while it runs, so `run checkout remove` stops it before its
+    /// tree goes; `nil` leaves it unrecorded.
+    var running: RunningGateRegistry? = nil
   }
 
   /// How long the scratch tree `tree` took since `asked`, and whether its app build is warm.
