@@ -112,15 +112,17 @@ public struct AreaCommandBounds: Sendable {
       ? "\(area)'s \(Self.seconds(record.coldMilliseconds)) s cold build and test plus \(warmText)"
       : warmText
     // A build needs no test run, so only test steps and scratch runs can be measured against. A
-    // test in an unbuilt checkout is held to its warm run: its build may be incremental.
+    // test in an unbuilt checkout is held to its warm run: its build may be incremental. A merge
+    // gate's later run of the area's tests replaces the warm-up's figure.
+    let run = measuredTests[area] ?? warm
     let expected: Duration? =
       switch (tree, step) {
       case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, .test),
         (.unbuiltCheckout, .testFiles):
-        .milliseconds(warm)
+        .milliseconds(run)
       case (.scratch, _): .milliseconds(record.coldMilliseconds)
       // Its build compiles only what differs from the build already there.
-      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(warm)
+      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(run)
       default: nil
       }
     guard Duration.milliseconds(milliseconds) > Self.floor else {

@@ -467,13 +467,6 @@ enum BrownfieldMergeCheck {
         continue
       }
       let bound = dependencies.bound(area.name, step, .checkout)
-      if bound.cannotFinish {
-        result.refused = true
-        if let refusal = notStarted(area, step: step, tier: tier, bound: bound) {
-          result.findings.append(refusal)
-        }
-        break
-      }
       guard
         let prepared = prepare(
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
@@ -483,6 +476,7 @@ enum BrownfieldMergeCheck {
         GateReuse.areaStepKey(
           $0.inputs, area: area.name, step: step, command: prepared.request.command)
       }
+      // A pass on the same inputs costs no time, so the box refuses only a step it must run.
       if let key, let pass = dependencies.reuse?.store.pass(key) {
         context.steps.record(
           gateStep(step), tier: nil, milliseconds: 0, verdict: .green, derivedData: .reused,
@@ -490,6 +484,13 @@ enum BrownfieldMergeCheck {
         if let tests = pass.tests { context.areaTests.record(tests.reused(from: pass.runID)) }
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
+      }
+      if bound.cannotFinish {
+        result.refused = true
+        if let refusal = notStarted(area, step: step, tier: tier, bound: bound) {
+          result.findings.append(refusal)
+        }
+        break
       }
       let request = AreaBuildPlacement.checkout(
         prepared.request, kind: area.kind, layout: dependencies.layout)
@@ -611,7 +612,7 @@ enum BrownfieldMergeCheck {
     return try? Finding(
       ruleID: CheckRun.notRunRuleID, severity: .minor, file: area.root, line: nil,
       message:
-        "merge: \(area.name) \(step.rawValue) not started: \(bound.reason) can't hold"
+        "\(tier.rawValue): \(area.name) \(step.rawValue) not started: \(bound.reason) can't hold"
         + "\(expected), so it would only be killed",
       failureScenario: nil)
   }
@@ -635,7 +636,7 @@ enum BrownfieldMergeCheck {
   private static func blocked(_ tier: CheckTier, _ reason: String) -> Outcome {
     let finding = try? Finding(
       ruleID: CheckRun.notRunRuleID, severity: .minor, file: ".", line: nil,
-      message: "merge: \(reason)", failureScenario: nil)
+      message: "\(tier.rawValue): \(reason)", failureScenario: nil)
     return Outcome(findings: finding.map { [$0] } ?? [], blocked: true)
   }
 }

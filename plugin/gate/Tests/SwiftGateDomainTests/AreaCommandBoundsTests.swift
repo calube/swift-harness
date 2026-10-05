@@ -183,14 +183,17 @@ struct AreaCommandBoundsTests {
   /// A merge gate's then a final's gate events on the same tree, the warm-up times at their base
   /// and the run's launch clock, from a brownfield trial whose final refused a UI test the merge
   /// had just run in 17 s.
-  static func finalReuse() throws -> (times: WarmupTimesFile, box: RunTimeBox, events: [HarnessEvent]) {
+  static func finalReuse() throws -> (
+    times: WarmupTimesFile, box: RunTimeBox, events: [HarnessEvent]
+  ) {
     let times = try WarmupTimesFile.decode(
       Fixture.data("BrownfieldTrial/final-reuse-warmup.json"),
       tree: "d2d38143ef2b5e7988dceae910f0f2521ea38531")
     let box = try #require(
       try RunClock.decode(Fixture.data("BrownfieldTrial/final-reuse-clock.json")).runTimeBox)
     let events = try HarnessEventJSON.decode(
-      Fixture.data("BrownfieldTrial/final-reuse-gate-events.jsonl")).events
+      Fixture.data("BrownfieldTrial/final-reuse-gate-events.jsonl")
+    ).events
     return (times, box, events)
   }
 
@@ -209,7 +212,8 @@ struct AreaCommandBoundsTests {
   func finalTestIsExpectedToTakeItsLatestMeasuredRun() throws {
     let (times, box, events) = try Self.finalReuse()
     let now = box.deadlines.endsAt.addingTimeInterval(-105)
-    let warmupOnly = AreaCommandBounds(times: times, box: box, tier: .final, fallback: .seconds(3600))
+    let warmupOnly = AreaCommandBounds(
+      times: times, box: box, tier: .final, fallback: .seconds(3600))
     let measured = AreaCommandBounds(
       times: times, box: box, tier: .final, fallback: .seconds(3600),
       measuredTests: MeasuredAreaTests.milliseconds(in: events))

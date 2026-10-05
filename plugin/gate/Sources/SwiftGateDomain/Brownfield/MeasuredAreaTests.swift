@@ -8,6 +8,15 @@ public enum MeasuredAreaTests {
   /// milliseconds. A merge runs each area's `test` and never its `e2e`, so its `area-test` is the
   /// whole test command.
   public static func milliseconds(in events: [HarnessEvent]) -> [String: Int] {
-    [:]
+    var latest: [String: (time: Date, milliseconds: Int)] = [:]
+    for event in events where event.source.tier == .merge {
+      guard case .gateStep(let step) = event.payload, step.step == .areaTest,
+        step.verdict == .green, step.derivedData != .reused, step.milliseconds > 0,
+        let area = step.area
+      else { continue }
+      if let seen = latest[area], seen.time > event.time { continue }
+      latest[area] = (event.time, step.milliseconds)
+    }
+    return latest.mapValues(\.milliseconds)
   }
 }
