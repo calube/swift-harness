@@ -1,0 +1,66 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist-rows",
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/watchlist-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-load-error-retry",
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/watchlist-refresh.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-refresh-last-updated",
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail-chart",
+      "runsAfter" : [
+        "watchlist-screen",
+        "detail-screen"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail-chart-failure",
+      "runsAfter" : [
+        "watchlist-screen",
+        "detail-screen"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: the simulator exposes no view of an in-flight URL task being cancelled; DetailFeatureTests proves the cancellation",
+      "requirement" : "req-detail-cancel"
+    },
+    {
+      "reason" : "the CoinGeckoLiveTests in coingecko-client decode recorded fixtures through a recording transport, with no network",
+      "requirement" : "req-coingecko-client"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

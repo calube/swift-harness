@@ -1,0 +1,10 @@
+[
+  {"command": "open", "input": {"app": "com.example.InterviewStarter", "relaunch": true, "launchArgs": ["-harness-scenario", "success"]}},
+  {"command": "wait", "input": {"timeoutMs": 15000, "selector": "id=\"watchlist.price.bitcoin\" label=\"$64,000.00\""}},
+  {"command": "wait", "input": {"timeoutMs": 5000, "selector": "id=\"watchlist.lastUpdated\""}},
+  {"command": "wait", "input": {"kind": "duration", "durationMs": 1500}},
+  {"command": "scroll", "input": {"direction": "up", "amount": 0.8, "settle": true}},
+  {"command": "wait", "input": {"timeoutMs": 10000, "selector": "id=\"watchlist.price.bitcoin\" label=\"$64,100.00\""}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"watchlist.price.ethereum\" label=\"$3,200.50\""}},
+  {"command": "is", "input": {"predicate": "visible", "selector": "id=\"watchlist.lastUpdated\""}}
+]

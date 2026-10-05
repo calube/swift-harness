@@ -15,10 +15,14 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
   var worktree: String
   var verdict: Verdict = .blocked
   var adopted: [Adopted] = []
+  /// The repair a `--repair` adopt took; `nil` otherwise, or when it took none.
+  var repaired: QAFlowRepairRecord?
+  /// Why a `--repair` adopt took nothing.
+  var findings: [Finding] = []
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, worktree, verdict, adopted, message
+    case command, worktree, verdict, adopted, repaired, findings, message
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -27,8 +31,20 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
     try c.encode(worktree, forKey: .worktree)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(adopted, forKey: .adopted)
+    try c.encode(repaired, forKey: .repaired)
+    try c.encode(findings, forKey: .findings)
     try c.encode(message, forKey: .message)
   }
+}
+
+/// What `qa adopt --repair` takes: 1 requirement's rewritten checks, and why.
+struct QAAdoptRepair: Sendable, Equatable {
+  var requirement: String
+  var buildRun: String
+  var cause: QAFlowRepair.Cause
+  var reason: String
+  /// The `qa run`s that read the row red before the repair.
+  var redRuns: [String]
 }
 
 /// `qa adopt`'s behaviour, apart from argument parsing so tests drive it against a temp repository.
@@ -113,6 +129,20 @@ enum QAAdoptRun {
     return report
   }
 
+  /// Copies only `repair.requirement`'s checks from the worktree's prepared folder into plan
+  /// state, merges their rows of the prepared `at-base-run.json` into plan state's, records the
+  /// repair in `qa/repairs.json` and writes 1 `qa.repair` event, when ``QAFlowRepair`` finds
+  /// nothing; otherwise copies nothing and names each finding.
+  static func repair(
+    _ repair: QAAdoptRepair, worktree: String, root: URL, git: any Git, runner: any ProcessRunner,
+    events: (any HarnessEventWriting)?, now: @Sendable () -> Date,
+    newEventID: @Sendable () -> String
+  ) async -> QAAdoptReport {
+    var report = QAAdoptReport(worktree: worktree)
+    report.message = "qa adopt --repair is not built yet"
+    return report
+  }
+
   static func render(_ report: QAAdoptReport, json: Bool) -> String {
     guard json else { return "\(command): \(report.verdict.rawValue) \(report.message)" }
     let encoder = JSONEncoder()
@@ -121,14 +151,35 @@ enum QAAdoptRun {
   }
 }
 
-/// `swiftgate qa adopt <worktree> [--json]`.
+/// `swiftgate qa adopt <worktree> [--repair <requirement> --build-run <run> --cause <cause>
+/// --reason <text> --red-run <id>...] [--json]`.
 struct QAAdoptCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "adopt",
-    abstract: "Copy a validation worktree's .harness/qa/<plan>/ into that plan's state as qa/.")
+    abstract:
+      "Copy a validation worktree's .harness/qa/<plan>/ into that plan's state as qa/, or 1 "
+      + "requirement's repaired checks with --repair.")
 
   @Argument(help: "A checkout of this repository holding .harness/qa/<plan>/.")
   var worktree: String
+
+  @Option(
+    help: ArgumentHelp(
+      "Take only this requirement's rewritten checks, proved red at the base by the worktree's "
+        + "--prepared-by --requirement run, in place of the adopted ones."))
+  var repair: String?
+
+  @Option(help: "With --repair, the build run the repair counts against: 1 per requirement.")
+  var buildRun: String?
+
+  @Option(help: "With --repair, flow-side or still-red.")
+  var cause: QAFlowRepair.Cause?
+
+  @Option(help: "With --repair, why the flow, not the app, kept the row red.")
+  var reason: String?
+
+  @Option(help: "With --repair, a qa run that read the row red before the repair; repeat it.")
+  var redRun: [String] = []
 
   @Flag(help: "Print JSON.")
   var json = false
@@ -136,10 +187,27 @@ struct QAAdoptCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
-    let report = await QAAdoptRun.run(
-      worktree: worktree, root: root, git: LiveGit(runner: runner, repositoryRoot: root.path),
-      runner: runner)
+    let git = LiveGit(runner: runner, repositoryRoot: root.path)
+    let report: QAAdoptReport
+    if let requirement = repair {
+      guard let buildRun, let cause, let reason else {
+        throw ValidationError("--repair needs --build-run, --cause and --reason")
+      }
+      report = await QAAdoptRun.repair(
+        QAAdoptRepair(
+          requirement: requirement, buildRun: buildRun, cause: cause, reason: reason,
+          redRuns: redRun),
+        worktree: worktree, root: root, git: git, runner: runner,
+        events: TelemetryOptIn.writer(root: root),
+        now: { Date() },  // swiftgate:allow det.date-init — the CLI edge stamps the repair
+        newEventID: {
+          UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
+        })
+    } else {
+      report = await QAAdoptRun.run(worktree: worktree, root: root, git: git, runner: runner)
+    }
     Console.write(QAAdoptRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
 }
+extension QAFlowRepair.Cause: ExpressibleByArgument {}

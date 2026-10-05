@@ -20,6 +20,9 @@ enum QARunRun {
     /// With `atBase`, only the rows this task writes, read from the checkout's prepared
     /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
     var preparedBy: String?
+    /// With `preparedBy`, only this requirement's rows: a repair worker's red run of the checks
+    /// it rewrote.
+    var requirement: String?
     /// With `after`, run its rows in a scratch tree where the task's branch is merged into main's
     /// tip, before `build merge` lands it.
     var beforeMerge = false
@@ -948,7 +951,7 @@ enum QARunRun {
 }
 
 /// `swiftgate qa run [--plan <slug>] [--after <task>[,<task>...] [--before-merge [--fix]]]
-/// [--at-base [--prepared-by <task>]] [--final] [--json]`.
+/// [--at-base [--prepared-by <task> [--requirement <id>]]] [--final] [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -976,6 +979,12 @@ struct QARunCommand: AsyncParsableCommand {
   )
   var preparedBy: String?
 
+  @Option(
+    help:
+      "With --prepared-by, run only this requirement's rows: a repaired flow's red run at the base."
+  )
+  var requirement: String?
+
   @Flag(
     help: ArgumentHelp(
       "With --after, run its rows where the task's branch is merged into main's tip in a scratch "
@@ -1001,7 +1010,8 @@ struct QARunCommand: AsyncParsableCommand {
       root: root,
       options: QARunRun.Options(
         plan: plan, after: tasks.first, atBase: atBase, final: final, preparedBy: preparedBy,
-        beforeMerge: beforeMerge, fix: fix, alongside: Array(tasks.dropFirst())),
+        requirement: requirement, beforeMerge: beforeMerge, fix: fix,
+        alongside: Array(tasks.dropFirst())),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,

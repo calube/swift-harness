@@ -19,10 +19,13 @@ public struct QAAtBaseRun: Sendable, Equatable {
     public let message: String
     public let exitStatus: Int?
     public let milliseconds: Int
+    /// The prepared run that proved this row when it isn't the record's own: a repaired row's.
+    public let runID: String?
 
     public init(
       requirement: String, layer: ValidationLayer, check: String, digest: String,
-      result: QAResult, message: String, exitStatus: Int?, milliseconds: Int
+      result: QAResult, message: String, exitStatus: Int?, milliseconds: Int,
+      runID: String? = nil
     ) {
       self.requirement = requirement
       self.layer = layer
@@ -32,11 +35,39 @@ public struct QAAtBaseRun: Sendable, Equatable {
       self.message = message
       self.exitStatus = exitStatus
       self.milliseconds = milliseconds
+      self.runID = runID
     }
 
     private enum CodingKeys: String, CodingKey {
-      case requirement, layer, check, digest, result, message, exitStatus
+      case requirement, layer, check, digest, result, message, exitStatus, runID
       case milliseconds = "ms"
+    }
+
+    public init(from decoder: any Decoder) throws {
+      let c = try decoder.container(keyedBy: CodingKeys.self)
+      self.init(
+        requirement: try c.decode(String.self, forKey: .requirement),
+        layer: try c.decode(ValidationLayer.self, forKey: .layer),
+        check: try c.decode(String.self, forKey: .check),
+        digest: try c.decode(String.self, forKey: .digest),
+        result: try c.decode(QAResult.self, forKey: .result),
+        message: try c.decode(String.self, forKey: .message),
+        exitStatus: try c.decodeIfPresent(Int.self, forKey: .exitStatus),
+        milliseconds: try c.decode(Int.self, forKey: .milliseconds),
+        runID: try c.decodeIfPresent(String.self, forKey: .runID))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+      var c = encoder.container(keyedBy: CodingKeys.self)
+      try c.encode(requirement, forKey: .requirement)
+      try c.encode(layer, forKey: .layer)
+      try c.encode(check, forKey: .check)
+      try c.encode(digest, forKey: .digest)
+      try c.encode(result, forKey: .result)
+      try c.encode(message, forKey: .message)
+      try c.encodeIfPresent(exitStatus, forKey: .exitStatus)
+      try c.encode(milliseconds, forKey: .milliseconds)
+      try c.encodeIfPresent(runID, forKey: .runID)
     }
   }
 
@@ -85,6 +116,12 @@ public struct QAAtBaseRun: Sendable, Equatable {
       bytes.append(UInt8(ascii: "-"))
     }
     return CaptureDigest.sha256Hex(bytes)
+  }
+
+  /// This record with `requirement`'s rows taken from `prepared`, each naming `prepared`'s run,
+  /// and every other row as it was.
+  public func replacing(requirement: String, with prepared: QAAtBaseRun) -> QAAtBaseRun {
+    self
   }
 
   /// What a run at the merge base takes from this record, and why each other row runs.

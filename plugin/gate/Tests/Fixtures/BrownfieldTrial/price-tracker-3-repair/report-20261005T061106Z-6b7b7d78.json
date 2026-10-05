@@ -1,0 +1,152 @@
+{
+  "after" : "watchlist-screen",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "68892fd802a1bc03d42c0467cd43e3a3e5b3867d",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-refresh-last-updated, flow) `qa/watchlist-refresh.flow.json`: step 6 `wait` failed: Batch failed at step 13 (wait): wait timed out for selector: id=\"watchlist.price.bitcoin\" label=\"$64,100.00\". Current surface: Prices, Bitcoin, Bitcoin, $64,000.00, +2.50%, Ethereum.",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "3 of 8 rows verified (3 reason-only): 2 pass, 1 red, 0 unverified, 2 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist-rows.flow/steps.json",
+        "qa/01-req-watchlist-rows.flow/batch.json",
+        "qa/01-req-watchlist-rows.flow/flow.json",
+        "qa/01-req-watchlist-rows.flow/video.mp4",
+        "qa/01-req-watchlist-rows.flow/sheet.png",
+        "qa/01-req-watchlist-rows.flow/sim/steps.ndjson",
+        "qa/01-req-watchlist-rows.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 10 steps; nit sim.a11y-untargeted: 80 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 89717,
+      "requirement" : "req-watchlist-rows",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-retry.flow.json",
+      "evidence" : [
+        "qa/02-req-load-error-retry.flow/steps.json",
+        "qa/02-req-load-error-retry.flow/batch.json",
+        "qa/02-req-load-error-retry.flow/flow.json",
+        "qa/02-req-load-error-retry.flow/video.mp4",
+        "qa/02-req-load-error-retry.flow/sheet.png",
+        "qa/02-req-load-error-retry.flow/sim/steps.ndjson",
+        "qa/02-req-load-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 7 steps; nit sim.a11y-untargeted: 32 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 32231,
+      "requirement" : "req-load-error-retry",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-refresh.flow.json",
+      "evidence" : [
+        "qa/03-req-refresh-last-updated.flow/steps.json",
+        "qa/03-req-refresh-last-updated.flow/batch.json",
+        "qa/03-req-refresh-last-updated.flow/flow.json",
+        "qa/03-req-refresh-last-updated.flow/video.mp4",
+        "qa/03-req-refresh-last-updated.flow/sheet.png",
+        "qa/03-req-refresh-last-updated.flow/sim/steps.ndjson",
+        "qa/03-req-refresh-last-updated.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 6 `wait` failed: Batch failed at step 13 (wait): wait timed out for selector: id=\"watchlist.price.bitcoin\" label=\"$64,100.00\". Current surface: Prices, Bitcoin, Bitcoin, $64,000.00, +2.50%, Ethereum.",
+      "ms" : 38416,
+      "requirement" : "req-refresh-last-updated",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "watchlist-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on detail-screen",
+      "ms" : 0,
+      "requirement" : "req-detail-chart",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "watchlist-screen",
+        "detail-screen"
+      ],
+      "waitingOn" : [
+        "detail-screen"
+      ]
+    },
+    {
+      "check" : "qa/detail-chart-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on detail-screen",
+      "ms" : 0,
+      "requirement" : "req-detail-chart-failure",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "watchlist-screen",
+        "detail-screen"
+      ],
+      "waitingOn" : [
+        "detail-screen"
+      ]
+    }
+  ],
+  "runID" : "20261005T061106Z-6b7b7d78",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "bac6f58f96873fb4e6c870f6c847a5c4a83872b3",
+    "branch" : "spec/fix-watchlist-screen",
+    "conflicts" : [
+
+    ],
+    "tip" : "44b368706c0af123c49cebb6d0c3dbcbe54db0c5"
+  },
+  "verdict" : "RED"
+}

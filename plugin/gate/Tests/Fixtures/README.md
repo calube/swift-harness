@@ -3954,6 +3954,26 @@ text, written by a python script over the transcript that looked up tool use
 `/REPO-spec`. `grep -rniE '/Users|/private|/var/folders|caleb'` on every file named here matched
 nothing.
 
+## Brownfield trial: price-tracker-3's refresh flow, red on its own `scroll`
+
+`BrownfieldTrial/price-tracker-3-repair/` holds what the third price-tracker trial (2026-10-05)
+left for its pull-to-refresh row, `req-refresh-last-updated`: the adopted
+`watchlist-refresh.flow.json`, whose step 5 is a `scroll up` that never refreshes the list, plan
+state's `at-base-run.json` (the row red at step 2, the watchlist missing at the base), the plan's
+`validation.json`, and the 2 `qa/report.json`s that read the row red at step 6 after the fixer made
+rows 1 and 2 pass: `20261005T061106Z-6b7b7d78` and `20261005T061625Z-cef9b62a`. The repair tests
+build the repaired flow from that file by putting the captured drag of
+`AgentDevice/pull-to-refresh/drag.steps.json` in place of step 5, between the flow's own ids. `S`
+is the run's copied state directory under the practice-trial runs folder:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-3-repair; mkdir -p $F
+cp $S/plans/spec/qa/watchlist-refresh.flow.json $S/plans/spec/qa/at-base-run.json $S/plans/spec/validation.json $F/
+for r in 20261005T061106Z-6b7b7d78 20261005T061625Z-cef9b62a; do cp $S/runs/$r/qa/report.json $F/report-$r.json; done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
 ## Brownfield trial: a changed test that spins, and the warm-up its bounds read
 
 `BrownfieldTrial/price-tracker-3-DetailFeatureTests-spin.swift` is the detail test file a

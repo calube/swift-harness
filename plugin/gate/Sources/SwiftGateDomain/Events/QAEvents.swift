@@ -95,3 +95,47 @@ public struct QAFlowEvent: Sendable, Equatable, Codable {
       sheetUnverified: sheetUnverified, flow: flow, test: test)
   }
 }
+
+/// `qa.repair`: `qa adopt --repair` took a requirement's rewritten checks into plan state, under
+/// the prepared run that proved them red at the merge base. Ids, row numbers and the commands of
+/// the steps it changed only: the orchestrator's reason stays in plan state's `qa/repairs.json`.
+public struct QARepairEvent: Sendable, Equatable, Codable {
+  public let plan: String
+  public let requirement: String
+  /// 1-based positions in `validation.json`'s `rows` whose checks it replaced.
+  public let rows: [Int]
+  public let buildRun: String
+  public let cause: QAFlowRepair.Cause
+  /// The `qa run`s that read the row red before the repair.
+  public let redRuns: [String]
+  /// The step those runs failed at, and its command.
+  public let failingStep: Int?
+  public let failingCommand: String?
+  /// The commands of the steps the repair took out of the flow and put in.
+  public let removed: [String]
+  public let added: [String]
+
+  public init(
+    plan: String, requirement: String, rows: [Int], buildRun: String, cause: QAFlowRepair.Cause,
+    redRuns: [String], failingStep: Int?, failingCommand: String?, removed: [String],
+    added: [String]
+  ) {
+    self.plan = plan
+    self.requirement = requirement
+    self.rows = rows
+    self.buildRun = buildRun
+    self.cause = cause
+    self.redRuns = redRuns
+    self.failingStep = failingStep
+    self.failingCommand = failingCommand
+    self.removed = removed
+    self.added = added
+  }
+
+  public init(plan: String, record: QAFlowRepairRecord) {
+    self.init(
+      plan: plan, requirement: record.requirement, rows: record.rows, buildRun: record.buildRun,
+      cause: record.cause, redRuns: record.redRuns, failingStep: record.failingStep,
+      failingCommand: record.failingCommand, removed: record.removed, added: record.added)
+  }
+}

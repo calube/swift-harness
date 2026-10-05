@@ -23,6 +23,12 @@ public enum QARunHistory {
     }
   }
 
+  /// The `qa/report.json` of `runID` in the first of `worktrees` whose runs hold one that
+  /// decodes.
+  public static func report(runID: String, worktrees: [URL]) -> QAReport? {
+    nil
+  }
+
   /// The bytes of `runs/<run id>/qa/<name>` for each run that has one.
   private static func files(_ name: String, worktree: URL) -> [Data] {
     let runs = RunStore(worktreeRoot: worktree).state.url(

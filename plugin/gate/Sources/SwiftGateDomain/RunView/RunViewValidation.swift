@@ -99,6 +99,37 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     }
   }
 
+  /// A rewrite of the row's flow that plan state took after the flow, not the app, kept it red,
+  /// from its `qa.repair`: a note in the row's history.
+  public struct Repair: Sendable, Equatable, Encodable {
+    /// The prepared run that proved the rewritten check red at the merge base.
+    public var atBaseRun: String
+    public var at: Date
+    public var cause: QAFlowRepair.Cause
+    public var redRuns: [String]
+    public var failingStep: Int?
+    public var failingCommand: String?
+    public var removed: [String]
+    public var added: [String]
+    /// 1 line saying what was repaired and why, for the history.
+    public var note: String
+
+    public init(
+      atBaseRun: String, at: Date, cause: QAFlowRepair.Cause, redRuns: [String],
+      failingStep: Int?, failingCommand: String?, removed: [String], added: [String], note: String
+    ) {
+      self.atBaseRun = atBaseRun
+      self.at = at
+      self.cause = cause
+      self.redRuns = redRuns
+      self.failingStep = failingStep
+      self.failingCommand = failingCommand
+      self.removed = removed
+      self.added = added
+      self.note = note
+    }
+  }
+
   /// 1 validation row as its newest `qa.check` left it, joined to its `qa/report.json` row.
   public struct Row: Sendable, Equatable, Encodable {
     /// 1-based position in the plan's `validation.json`.
@@ -135,13 +166,16 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var history: [Attempt]
     /// `nil` when the newest check passed with a video, or no check of the row passed.
     public var lastPass: LastPass?
+    /// Each rewrite of the row's flow plan state took, newest first.
+    public var repairs: [Repair]
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
       at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil,
-      atBase: Bool = false, history: [Attempt] = [], lastPass: LastPass? = nil
+      atBase: Bool = false, history: [Attempt] = [], lastPass: LastPass? = nil,
+      repairs: [Repair] = []
     ) {
       self.row = row
       self.requirement = requirement
@@ -162,6 +196,7 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.atBase = atBase
       self.history = history
       self.lastPass = lastPass
+      self.repairs = repairs
     }
   }
 
@@ -299,7 +334,7 @@ extension RunViewKeptFlow {
 extension RunViewValidation.Row {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence
-    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history, lastPass
+    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history, lastPass, repairs
     case milliseconds = "ms"
   }
 
@@ -324,6 +359,7 @@ extension RunViewValidation.Row {
     try c.encode(atBase, forKey: .atBase)
     try c.encode(history, forKey: .history)
     try c.encode(lastPass, forKey: .lastPass)
+    if !repairs.isEmpty { try c.encode(repairs, forKey: .repairs) }
   }
 }
 
