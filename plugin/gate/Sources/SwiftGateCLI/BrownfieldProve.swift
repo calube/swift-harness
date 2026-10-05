@@ -78,6 +78,14 @@ enum BrownfieldProve {
     ).judgement
   }
 
+  /// What a prove does with an area whose reverted run the box can't hold.
+  enum OutOfTime: Sendable, Equatable {
+    /// BLOCKED: a later gate can still prove it.
+    case blocks
+    /// A `prove.unproven` note: no later gate runs, and the area's tests passed at the head.
+    case unproven
+  }
+
   /// What a prove decided, and how its reverted runs built: `none` when it ran none.
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
@@ -88,10 +96,13 @@ enum BrownfieldProve {
   /// build directories of the areas whose changed tests it runs, read before they run, and `none`
   /// when it runs none.
   ///
-  /// - Parameter layout: the clone's state the label reads; `nil` reads `dependencies`'.
+  /// - Parameters:
+  ///   - layout: the clone's state the label reads; `nil` reads `dependencies`'.
+  ///   - outOfTime: what an area the box leaves too little time becomes.
   static func prove(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil
+    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil,
+    outOfTime: OutOfTime = .blocks
   ) async -> Outcome {
     func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
       Outcome(judgement: judgement, derivedData: .none)

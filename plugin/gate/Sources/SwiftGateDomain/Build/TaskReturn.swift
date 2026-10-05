@@ -330,6 +330,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public let taskStatus: TaskStatusReport?
   /// Files the task branch changed since it left `main` that no write-set entry covers.
   public let filesOutsideWriteSet: [String]
+  /// Every file the task branch changed since it left `main`, so a path ending the notes name
+  /// can be checked to name exactly 1 of them. Empty when unknown: the outside files stand in.
+  public let changedFiles: [String]
   /// A fixer resolves a collision with another task's files, so a file its notes name is allowed;
   /// a worker gets no such allowance.
   public let explainedEditsAllowed: Bool
@@ -356,7 +359,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
-    explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
+    changedFiles: [String] = [], explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
     taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil,
     testBuild: ProofBaseTestBuild? = nil, lastCommit: String? = nil,
@@ -370,6 +373,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.taskGate = taskGate
     self.taskStatus = taskStatus
     self.filesOutsideWriteSet = filesOutsideWriteSet
+    self.changedFiles = changedFiles
     self.explainedEditsAllowed = explainedEditsAllowed
     self.proofRequired = proofRequired
     self.reviewRequired = reviewRequired

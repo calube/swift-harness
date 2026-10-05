@@ -34,6 +34,24 @@ enum RunClockRun {
     case refused(message: String, status: Int32)
   }
 
+  /// The deadlines `--wait-until` takes, by their `deadlines` key.
+  static let deadlineNames = [
+    "exploreBy", "planBy", "contractBy", "noNewStartsAt", "cutoffAt", "endsAt",
+  ]
+
+  /// The longest 1 sleep of `--wait-until`: the clock is read again after each, since a
+  /// measured `final` brings the cutoff earlier.
+  static let waitStep: Duration = .seconds(30)
+
+  /// ``run(slug:root:runner:now:)`` once `deadline` has passed, read after sleeps of at most
+  /// ``waitStep``; a refusal, or an unknown deadline, returns at once.
+  static func wait(
+    until deadline: String, slug: String, root: URL, runner: any ProcessRunner,
+    now: @Sendable () -> Date, sleep: @Sendable (Duration) async throws -> Void
+  ) async -> Outcome {
+    await run(slug: slug, root: root, runner: runner, now: now())
+  }
+
   static func run(slug: String, root: URL, runner: any ProcessRunner, now: Date) async -> Outcome {
     let layout: BrownfieldStateLayout
     do {
@@ -102,19 +120,33 @@ struct RunClockCommand: AsyncParsableCommand {
     commandName: "clock",
     abstract: "Print where a brownfield run stands in its time box.",
     discussion:
-      "Reads the plan's clock.json, which `swiftgate run` wrote at launch. Exits 0 with the "
-      + "report, and 2 for a plan with no clock or a clock with no time box.")
+      "Reads the plan's clock.json, which `swiftgate run` wrote at launch. With --wait-until it "
+      + "reports only once that deadline has passed. Exits 0 with the report, and 2 for a plan "
+      + "with no clock, a clock with no time box, or a deadline --wait-until doesn't know.")
 
   @Argument(help: "The plan's slug.")
   var slug: String
+
+  @Option(
+    help: ArgumentHelp(
+      "Return only once this deadline has passed: exploreBy, planBy, contractBy, noNewStartsAt, "
+        + "cutoffAt or endsAt. Run it in the background so its exit wakes you at that deadline."))
+  var waitUntil: String?
 
   @Flag(help: "Print JSON.")
   var json = false
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
-    let outcome = await RunClockRun.run(
-      slug: slug, root: root, runner: LiveProcessRunner(), now: Date())
+    let outcome: RunClockRun.Outcome
+    if let waitUntil {
+      outcome = await RunClockRun.wait(
+        until: waitUntil, slug: slug, root: root, runner: LiveProcessRunner(), now: { Date() },
+        sleep: { try await Task.sleep(for: $0) })
+    } else {
+      outcome = await RunClockRun.run(
+        slug: slug, root: root, runner: LiveProcessRunner(), now: Date())
+    }
     Console.write(RunClockRun.render(outcome, json: json))
     if case .refused(_, let status) = outcome { throw ExitCode(status) }
   }

@@ -22,6 +22,9 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   var runReportNote: String? = nil
   /// The `qa run --final` the finish read; `nil` for a plan with no validation table.
   var validation: Validation? = nil
+  /// The final report's address on the repository's viewer server, which the finish stopped;
+  /// `nil` when no server answered or the run has no final report.
+  var viewerFinal: String? = nil
 
   struct Validation: Sendable, Equatable, Encodable {
     let runID: String
@@ -35,9 +38,11 @@ enum BuildFinishRun {
   ///   - root: the checkout whose state root holds the report; `nil` writes no report.
   ///   - pluginRoot: where `viewer/` lives.
   ///   - qaRun: the `qa run --final` id the caller read, from `--qa-run`.
+  ///   - viewer: stops the repository's viewer server once the run's final report exists.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
-    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil
+    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil,
+    viewer: ViewServerShutdown? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
