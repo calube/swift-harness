@@ -76,9 +76,11 @@ enum RunCheckoutRun {
   /// Copies the checkout's gate and `qa run` directories into the clone's kept runs, where the run
   /// viewer reads them, and any events it kept itself into the user's checkout first, so they
   /// outlive it. The plan branch stays: it holds the run.
-  static func remove(slug: String, session: String?, root: URL, runner: any ProcessRunner)
-    async -> WorktreeReport
-  {
+  /// - Parameter leases: where the build run's shared device's lease is, which removing releases.
+  static func remove(
+    slug: String, session: String?, root: URL, runner: any ProcessRunner,
+    leases: SimLeaseStore = SimLeaseStore(directory: SimLeaseStore.defaultDirectory())
+  ) async -> WorktreeReport {
     let context: Context
     switch await Context.resolve(
       "run checkout remove", slug: slug, session: session, root: root, runner: runner)
@@ -89,6 +91,9 @@ enum RunCheckoutRun {
     guard FileManager.default.fileExists(atPath: context.path) else {
       return context.report(.refused, .red, "no plan checkout at \(context.path)")
     }
+    // The build run's shared device first, while the tree its holder started in still exists; its
+    // holder deletes it once its lease goes.
+    let device = await releaseDevice(slug: slug, root: root, runner: runner, leases: leases)
     let main: String
     do throws(GitWorkspaceError) {
       main = try TaskWorktree.mainCheckout(commonDirectory: context.common)
@@ -112,7 +117,7 @@ enum RunCheckoutRun {
     var report = context.report(
       left.verdict == .green ? .removed : .blocked, left.verdict,
       "removed \(context.path); \(context.branch) stays" + keeping.message + events.message
-        + left.message)
+        + left.message + (device.map { "; \($0)" } ?? ""))
     report.keptRuns = keeping.kept + left.keptRuns
     let unkept = keeping.unkept + left.unkeptRuns
     report.unkeptRuns = unkept.isEmpty ? nil : unkept
@@ -120,7 +125,19 @@ enum RunCheckoutRun {
     report.unkeptEvents = events.unkept
     report.discarded = left.discarded
     report.keptBranches = left.keptBranches
+    report.device = device
     return report
+  }
+
+  /// Releases the plan's newest build run's shared device; `nil` when none was held.
+  private static func releaseDevice(
+    slug: String, root: URL, runner: any ProcessRunner, leases: SimLeaseStore
+  ) async -> String? {
+    let git = LiveGit(runner: runner, repositoryRoot: root.path)
+    guard let run = try? await BuildRunStore.latest(plan: slug, git: git) else {
+      return nil
+    }
+    return BuildRunDevice.note(BuildRunDevice.release(buildRunID: run.runID, leases: leases))
   }
 
   /// What the removal did with the task and fix worktrees the run left.
@@ -135,8 +152,8 @@ enum RunCheckoutRun {
 
   /// Removes each ledger task's worktree and its fix worktree still on disk, merged or not, as
   /// `worktree remove --abandoned` does: their runs and events are kept first, uncommitted edits
-  /// go, and both branches stay so every commit stays reachable. The run has ended, so nothing
-  /// works in them any more.
+  /// go, and both branches stay so every commit stays reachable. Then every pooled slot left goes
+  /// too. The run has ended, so nothing works in them any more.
   private static func removeTaskWorktrees(
     _ context: Context, kept: StateRoot, main: String, workspace: LiveGitWorkspace
   ) async -> LeftWorktrees {
@@ -176,6 +193,14 @@ enum RunCheckoutRun {
           left.verdict = .blocked
         }
       }
+    }
+    // The free slots too, with each slot's DerivedData under its git dir.
+    let pool = await WorktreePool(commonDirectory: context.common, plan: context.slug)
+      .dispose(workspace: workspace)
+    left.discarded += pool.removed
+    if !pool.failures.isEmpty {
+      left.message += "; worktree slots weren't removed: " + pool.failures.joined(separator: "; ")
+      left.verdict = .blocked
     }
     if !left.discarded.isEmpty {
       left.message +=

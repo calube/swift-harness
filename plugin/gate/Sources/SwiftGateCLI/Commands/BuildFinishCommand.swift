@@ -27,6 +27,9 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   /// The final report's address on the repository's viewer server, which the finish stopped;
   /// `nil` when no server answered or the run has no final report.
   var viewerFinal: String? = nil
+  /// What became of the build run's shared device: released, or why it wasn't. `nil` when no
+  /// device was held for the run.
+  var device: String? = nil
 
   struct Validation: Sendable, Equatable, Encodable {
     let runID: String
@@ -43,10 +46,11 @@ enum BuildFinishRun {
   ///   - spans: where the run's spans are, to end each task span its agent left open; `nil`
   ///     leaves them.
   ///   - viewer: stops the repository's viewer server once the run's final report exists.
+  ///   - leases: where the build run's shared device's lease is; `nil` leaves it alone.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
     root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil, spans: SpanLog? = nil,
-    viewer: ViewServerShutdown? = nil
+    viewer: ViewServerShutdown? = nil, leases: SimLeaseStore? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
@@ -103,11 +107,15 @@ enum BuildFinishRun {
       if let spans, let runID = run?.layout.runID {
         report.notes = endOpenSpans(spans, buildRun: runID, ledger: ledger)
       }
+      if let leases, let run {
+        report.device = BuildRunDevice.note(
+          BuildRunDevice.release(buildRunID: run.runID, leases: leases))
+      }
       let message =
         resume
         + (validation.map {
           "; validation \($0.verdict.rawValue) in qa run \($0.runID): \($0.message)"
-        } ?? "")
+        } ?? "") + (report.device.map { "; \($0)" } ?? "")
       if let root {
         (report.runReport, report.runReportNote) = await writeRunReport(
           run: run?.layout.runID, root: root, pluginRoot: pluginRoot, git: git, now: clock.now())
@@ -293,7 +301,8 @@ struct BuildFinishCommand: AsyncParsableCommand {
       root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory),
       pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
         URL(filePath: $0, directoryHint: .isDirectory)
-      }, qaRun: qaRun, spans: spans, viewer: await Self.viewer())
+      }, qaRun: qaRun, spans: spans, viewer: await Self.viewer(),
+      leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()))
     Console.write(BuildFinishRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

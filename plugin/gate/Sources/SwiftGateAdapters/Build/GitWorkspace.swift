@@ -5,6 +5,8 @@ import SwiftGateDomain
 public enum GitWorkspaceError: Error, Sendable, Equatable, CustomStringConvertible {
   case git(GitError)
   case clone(path: String, detail: String)
+  /// A pooled worktree slot couldn't be taken, returned or recorded.
+  case pool(path: String, detail: String)
 
   public var verdict: Verdict { .blocked }
 
@@ -15,6 +17,7 @@ public enum GitWorkspaceError: Error, Sendable, Equatable, CustomStringConvertib
         + stderr.trimmingCharacters(in: .whitespacesAndNewlines)
     case .git(let error): "git: \(error)"
     case .clone(let path, let detail): "cloning \(path): \(detail)"
+    case .pool(let path, let detail): "worktree slot \(path): \(detail)"
     }
   }
 }
@@ -34,6 +37,23 @@ public protocol GitWorkspace: Sendable {
 
   /// `git worktree remove`; `force` also discards a dirty or untracked tree.
   func removeWorktree(at path: String, force: Bool) async throws(GitWorkspaceError)
+
+  /// In the existing worktree at `path`, `git switch -c <branch> <base>`.
+  func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
+    async throws(GitWorkspaceError)
+
+  /// `git worktree add --detach <path> <revision>`.
+  func addDetachedWorktree(at path: String, revision: String) async throws(GitWorkspaceError)
+
+  /// In the existing worktree at `path`, `git switch --detach <revision>`.
+  func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError)
+
+  /// The worktree's tracked changes and untracked files, ignored files left out.
+  func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError) -> [String]
+
+  /// Detaches the worktree's `HEAD`, discards its tracked changes and deletes its untracked
+  /// files. Ignored files, such as build directories, stay.
+  func resetWorktree(at path: String) async throws(GitWorkspaceError)
 
   /// Deletes the local branch whatever it is merged into; callers check that first.
   func deleteBranch(_ branch: String) async throws(GitWorkspaceError)
@@ -59,7 +79,8 @@ public protocol GitWorkspace: Sendable {
 /// merges land in the main checkout. In a brownfield clone nothing touches the user's checkout or
 /// branch: it is cut from the plan branch, and merges land in that branch's own checkout, the
 /// sibling `<repo>-<plan>`. Neither sits under the git dir: the plan-state guard owns every file in
-/// a plan's directory, and dev servers such as Vite refuse to serve files under `.git`.
+/// a plan's directory, and dev servers such as Vite refuse to serve files under `.git`. A brownfield
+/// task or fix branch checked out in a ``WorktreePool`` slot has that slot's path instead.
 public struct TaskWorktree: Sendable, Equatable {
   public static let base = "main"
 
@@ -71,22 +92,30 @@ public struct TaskWorktree: Sendable, Equatable {
   public let baseBranch: String
   /// The git common dir the names were derived from.
   public let commonDirectory: String
+  /// The plan's slug.
+  public let plan: String
 
   /// - Throws: ``GitWorkspaceError/git(_:)`` when `commonDirectory` isn't a checkout's `.git`, or
   ///   in a brownfield clone when `plan` isn't 1 path component.
   public init(
     commonDirectory: String, plan: String, task: String, profile: RepositoryProfile = .owned
   ) throws(GitWorkspaceError) {
-    branch = "\(plan)/\(task)"
+    let branch = "\(plan)/\(task)"
+    self.branch = branch
     self.commonDirectory = commonDirectory
-    path = try Self.sibling(commonDirectory: commonDirectory, named: "\(plan)-\(task)")
+    self.plan = plan
+    let own = try Self.sibling(commonDirectory: commonDirectory, named: "\(plan)-\(task)")
     switch profile {
     case .owned:
+      path = own
       mainCheckout = try Self.mainCheckout(commonDirectory: commonDirectory)
       baseBranch = Self.base
     case .brownfield:
       mainCheckout = try Self.planCheckout(commonDirectory: commonDirectory, plan: plan)
       baseBranch = BrownfieldRunReport.planBranch(slug: plan)
+      path =
+        try WorktreePool(commonDirectory: commonDirectory, plan: plan).path(holding: branch)
+        ?? own
     }
   }
 
@@ -105,6 +134,15 @@ public struct TaskWorktree: Sendable, Equatable {
       throw .git(.unparseableOutput(command: "rev-parse --git-common-dir", detail: "\(error)"))
     }
     return try sibling(commonDirectory: commonDirectory, named: plan)
+  }
+
+  /// A brownfield plan's pooled worktree slot `<repo>-<plan>.slot-<number>`, beside the main
+  /// checkout (``WorktreePool``). The `.` keeps it apart from every `<repo>-<plan>-<task>`.
+  /// - Throws: ``GitWorkspaceError/git(_:)`` for a `commonDirectory` that isn't a checkout's `.git`.
+  public static func slotPath(commonDirectory: String, plan: String, number: Int)
+    throws(GitWorkspaceError) -> String
+  {
+    try sibling(commonDirectory: commonDirectory, named: "\(plan).slot-\(number)")
   }
 
   /// `<repo>-<suffix>` beside the main checkout `<repo>`.

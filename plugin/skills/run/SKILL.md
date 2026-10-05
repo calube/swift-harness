@@ -23,7 +23,7 @@ of this repository would pick, and write it as 1 bullet under `PLAN.md`'s `## As
 | `<base>` | the commit `<plan-branch>` started at: `git merge-base <plan-branch> HEAD` in the user's checkout, before anything lands |
 | `<common>` | `git rev-parse --path-format=absolute --git-common-dir` |
 | `<plan-dir>` | `<common>/swift-harness/plans/<slug>` |
-| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task worktrees sit beside it as `<top>-<slug>-<task>` |
+| `<checkout>` | `<top>-<slug>`, where `<top>` is the user's checkout (`git rev-parse --show-toplevel` there): the worktree on `<plan-branch>` beside it, outside the git dir and the user's tree, that `run checkout create` makes and names in its JSON's `worktree`. You commit there, merges land there and gates run there. Task and fix worktrees are pooled slots beside it, `<top>-<slug>.slot-<n>`: use the `worktree` `worktree create` or `build merge` names |
 | `<config>` | `<common>/swift-harness/config.toml`, written only by `discover --apply` and `allow` |
 | `<session>` | the `Session id: <id>` line of the SessionStart context |
 | `<run>` | the `runId` that `build start` prints in step 7 |

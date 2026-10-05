@@ -25,7 +25,8 @@ run shares. `qa run` holds 1 clone across its acceptance rows and gives it back 
 rows start. With no clone to be had, the command runs as written; a row's message says why.
 
 A brownfield gate leases each area's test clone as the area starts, so the clone boots while the
-area builds, and gives it back once the area is done.
+area builds, and gives it back once the area is done. While no `qa run` borrows the build run's device, a
+brownfield gate's test step runs on that device instead, and takes no `sim` slot.
 
 ## 1 device for the flow rows
 
@@ -33,6 +34,13 @@ A `qa run`'s flow rows share 1 device, held by a `sim hold --owner-pid` that end
 row or once the run exits. Each row borrows it under a lease of its own. Its `sim up` uninstalls
 the app and resets the keychain before installing, so no row starts on another's data, and builds
 the app while the device comes up. A row's state rows run before the next row's reset.
+
+In a brownfield build run, every `qa run` borrows the build run's own device instead, so only the
+first flow row of the run waits for a clone to boot. Its holder has no owner process and lasts to
+the time box's end; `build finish` and `run checkout remove` release it. 1 `qa run` borrows it at a
+time; another holds its own as above. A brownfield `qa run`'s trial merge or merge-base tree is a
+pooled worktree slot, the same slots task worktrees use, so the app `sim up` builds there stays
+warm for the next run in that slot.
 
 ## A runner that never launched
 

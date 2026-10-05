@@ -38,14 +38,24 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
 }
 
 /// The 1 device a `qa run` holds for all its flow rows: its hold's run id, and the folder its
-/// holder logs to.
+/// holder logs to. A hold kept after the run is a build run's, which every `qa run` of that build
+/// borrows in turn (``BuildRunDevice``).
 public struct QAFlowDeviceHold: Sendable, Equatable {
   public var runID: String
   public var directory: URL
+  /// `true` for a build run's hold: ``QAFlowRunner/finish()`` leaves it up, and its holder lasts
+  /// until it is released or `timeoutMinutes` pass, not as long as this process.
+  public var keptAfterRun: Bool
+  /// How long a hold kept after the run lasts unreleased; `nil` for the config's session timeout.
+  public var timeoutMinutes: Int?
 
-  public init(runID: String, directory: URL) {
+  public init(
+    runID: String, directory: URL, keptAfterRun: Bool = false, timeoutMinutes: Int? = nil
+  ) {
     self.runID = runID
     self.directory = directory
+    self.keptAfterRun = keptAfterRun
+    self.timeoutMinutes = timeoutMinutes
   }
 }
 
@@ -301,6 +311,7 @@ public actor QAFlowRunner {
   /// The tree whose rows have asked for the shared device, once 1 has.
   private var heldIn: URL?
   private var flowRecords: [Int: QAFlowRecord] = [:]
+  private var setupSteps: [Int: [QASetupStep]] = [:]
   private var evidenceGaps: [QAEvidenceGap] = []
 
   /// - Parameters:
@@ -320,9 +331,10 @@ public actor QAFlowRunner {
   }
 
   /// Gives back the device the rows shared, in the tree they ran in. Returns what went wrong,
-  /// if anything; a run with no row that asked for the device gives nothing back.
+  /// if anything; a run with no row that asked for the device gives nothing back, and a build
+  /// run's hold stays up for the next `qa run`.
   public func finish() async -> [String] {
-    guard let hold, let worktree = heldIn else { return [] }
+    guard let hold, !hold.keptAfterRun, let worktree = heldIn else { return [] }
     heldIn = nil
     let request = QAFlowSimulatorRequest(
       worktree: worktree, runID: hold.runID, simDirectory: hold.directory, scenario: nil,
@@ -333,6 +345,9 @@ public actor QAFlowRunner {
       return ["the flow rows' shared device: sim down \(failure.rule.rawValue): \(failure.message)"]
     }
   }
+
+  /// The setup steps of each row whose `sim up` got the app up, by row.
+  public var setup: [Int: [QASetupStep]] { setupSteps }
 
   /// The flow records of the rows that reached a batch, by row.
   public var records: [Int: QAFlowRecord] { flowRecords }
@@ -383,6 +398,7 @@ public actor QAFlowRunner {
         "not run: sim up \(failure.rule.rawValue): \(failure.message)" + Self.suffix(notes))
     case .success(let up):
       started = up
+      setupSteps[row.row] = up.setup
     }
 
     let target = AgentDeviceTarget(udid: started.udid, session: started.session)

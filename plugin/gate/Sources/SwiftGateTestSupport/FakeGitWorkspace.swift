@@ -7,6 +7,10 @@ public final class FakeGitWorkspace: GitWorkspace {
   public enum Call: Sendable, Equatable {
     case addWorktree(path: String, branch: String, base: String)
     case removeWorktree(path: String, force: Bool)
+    case switchWorktree(path: String, branch: String, base: String)
+    case resetWorktree(path: String)
+    case addDetachedWorktree(path: String, revision: String)
+    case detachWorktree(path: String, revision: String)
     case deleteBranch(String)
     case createBranch(String, commit: String)
     case cloneWarmBuild(paths: [String], source: String, destination: String)
@@ -56,6 +60,36 @@ public final class FakeGitWorkspace: GitWorkspace {
 
   public func removeWorktree(at path: String, force: Bool) async throws(GitWorkspaceError) {
     state.withLock { $0.calls.append(.removeWorktree(path: path, force: force)) }
+  }
+
+  public func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
+    async throws(GitWorkspaceError)
+  {
+    state.withLock {
+      $0.calls.append(.switchWorktree(path: path, branch: branch, base: base))
+      $0.branches.insert(branch)
+    }
+  }
+
+  public func addDetachedWorktree(at path: String, revision: String)
+    async throws(GitWorkspaceError)
+  {
+    state.withLock { $0.calls.append(.addDetachedWorktree(path: path, revision: revision)) }
+  }
+
+  public func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError) {
+    state.withLock { $0.calls.append(.detachWorktree(path: path, revision: revision)) }
+  }
+
+  /// Holds no files, so every worktree is clean.
+  public func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError)
+    -> [String]
+  {
+    []
+  }
+
+  public func resetWorktree(at path: String) async throws(GitWorkspaceError) {
+    state.withLock { $0.calls.append(.resetWorktree(path: path)) }
   }
 
   public func deleteBranch(_ branch: String) async throws(GitWorkspaceError) {

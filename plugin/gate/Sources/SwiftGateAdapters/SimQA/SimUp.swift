@@ -14,15 +14,19 @@ public enum SimUpDevice: Sendable, Equatable {
 public struct SimSharedHold: Sendable, Equatable {
   /// The hold's own lease's run id.
   public var runID: String
-  /// The process the hold lasts no longer than.
-  public var ownerPID: Int32
+  /// The process the hold lasts no longer than; `nil` for a build run's hold, which lasts until
+  /// it is released or `timeoutMinutes` pass.
+  public var ownerPID: Int32?
   /// Where the holder logs, when this run starts it.
   public var logFile: URL
+  /// How long a hold with no owner lasts unreleased; `nil` for the config's session timeout.
+  public var timeoutMinutes: Int?
 
-  public init(runID: String, ownerPID: Int32, logFile: URL) {
+  public init(runID: String, ownerPID: Int32?, logFile: URL, timeoutMinutes: Int? = nil) {
     self.runID = runID
     self.ownerPID = ownerPID
     self.logFile = logFile
+    self.timeoutMinutes = timeoutMinutes
   }
 }
 
@@ -181,12 +185,21 @@ public struct SimUp: Sendable {
     }
 
     // The clone boots while the app builds; only the install needs both.
-    async let held = device(for: request, log: log)
+    let clock = dependencies.clock
+    let began = clock.now()
+    let warmBuild = FileManager.default.fileExists(atPath: request.derivedDataPath)
+    async let held = { () async -> (Result<(SimLease, Bool), SimUpFailure>, Duration) in
+      let result = await device(for: request, log: log)
+      return (result, clock.now())
+    }()
     let built = await build(request, container: container, headCommit: headCommit, log: log)
+    let builtAt = clock.now()
+    let (heldResult, heldAt) = await held
     let leased: SimLease
-    switch await held {
+    let borrowed: Bool
+    switch heldResult {
     case .failure(let failure): throw failure
-    case .success(let lease): leased = lease
+    case .success(let (lease, reused)): (leased, borrowed) = (lease, reused)
     }
     let app: BuiltApp
     switch built {
@@ -196,26 +209,47 @@ public struct SimUp: Sendable {
       throw failure
     case .success(let built): app = built
     }
+    let waited = [
+      (heldAt, QASetupStep(step: .device, milliseconds: Self.ms(heldAt - began), reused: borrowed)),
+      (
+        builtAt,
+        QASetupStep(step: .build, milliseconds: Self.ms(builtAt - began), reused: warmBuild)
+      ),
+    ].sorted { $0.0 < $1.0 }.map(\.1)
 
     do {
       let lease = try borrowedLease(request, hold: leased)
-      return try await prepare(
+      let installing = clock.now()
+      var started = try await prepare(
         request, lease: lease, app: app, version: version, headCommit: headCommit,
         startedAt: startedAt, log: log)
+      started.setup =
+        waited + [
+          QASetupStep(step: .install, milliseconds: Self.ms(clock.now() - installing))
+        ]
+      return started
     } catch {
       throw release(error, runID: request.runID)
     }
   }
 
-  /// The run's own holder's lease, or the shared hold's.
-  private func device(for request: Request, log: URL) async -> Result<SimLease, SimUpFailure> {
+  private static func ms(_ duration: Duration) -> Int {
+    Int(
+      duration.components.seconds * 1000 + duration.components.attoseconds / 1_000_000_000_000_000)
+  }
+
+  /// The run's own holder's lease, or the shared hold's, and whether a live holder already had
+  /// that device.
+  private func device(for request: Request, log: URL) async
+    -> Result<(SimLease, Bool), SimUpFailure>
+  {
     do throws(SimUpFailure) {
       switch request.device {
       case .own:
         let holderPID = try launchHolder(
           request, arguments: ["sim", "hold", "--run", request.runID], log: log)
         return .success(
-          try await waitForLease(runID: request.runID, holderPID: holderPID, log: log))
+          (try await waitForLease(runID: request.runID, holderPID: holderPID, log: log), false))
       case .shared(let hold):
         return .success(try await sharedHold(hold, request: request))
       }
@@ -251,7 +285,7 @@ public struct SimUp: Sendable {
   /// The shared hold's lease while its holder lives; else a new holder's, owned by the hold's
   /// owner. A dead holder's lease is dropped first, and the orphan sweep deletes its device.
   private func sharedHold(_ hold: SimSharedHold, request: Request) async throws(SimUpFailure)
-    -> SimLease
+    -> (SimLease, Bool)
   {
     let current: SimLease?
     do {
@@ -259,7 +293,7 @@ public struct SimUp: Sendable {
     } catch {
       throw environment(error.message, request.runID)
     }
-    if let current, dependencies.isAlive(current.holderPID) { return current }
+    if let current, dependencies.isAlive(current.holderPID) { return (current, true) }
     if current != nil {
       do {
         try dependencies.leases.remove(runID: hold.runID)
@@ -277,18 +311,23 @@ public struct SimUp: Sendable {
     }
     let holderPID = try launchHolder(
       request,
-      arguments: ["sim", "hold", "--run", hold.runID, "--owner-pid", String(hold.ownerPID)],
+      arguments: ["sim", "hold", "--run", hold.runID]
+        + (hold.ownerPID.map { ["--owner-pid", String($0)] } ?? [])
+        + (hold.timeoutMinutes.map { ["--timeout-minutes", String($0)] } ?? []),
       log: hold.logFile)
-    return try await waitForLease(runID: hold.runID, holderPID: holderPID, log: hold.logFile)
+    return (
+      try await waitForLease(runID: hold.runID, holderPID: holderPID, log: hold.logFile), false
+    )
   }
 
   /// The lease the run works under: its own holder's, or, on a shared hold, a lease of its own
-  /// naming the hold's device and holder, which `sim down` removes without the device going.
+  /// naming the hold's device and holder, which `sim down` removes without the device going. It
+  /// names the run's own tree: a build run's hold may have started in another one.
   private func borrowedLease(_ request: Request, hold: SimLease) throws(SimUpFailure) -> SimLease {
     guard case .shared = request.device else { return hold }
     let lease = SimLease(
-      runID: request.runID, worktree: hold.worktree, udid: hold.udid, holderPID: hold.holderPID,
-      session: nil)
+      runID: request.runID, worktree: CanonicalPath.of(request.worktree), udid: hold.udid,
+      holderPID: hold.holderPID, session: nil)
     do {
       try dependencies.leases.write(lease)
     } catch {

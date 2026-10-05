@@ -87,6 +87,8 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
   case qaCheck = "qa.check"
   /// 1 flow's steps, from a batch `qa run` drove or a kept XCUITest.
   case qaFlow = "qa.flow"
+  /// 1 setup step of 1 `qa run`: its tree, or a row's device, build or install.
+  case qaSetup = "qa.setup"
 
   public var stream: HarnessEventStream {
     switch self {
@@ -99,7 +101,7 @@ public enum HarnessEventKind: String, Sendable, Codable, CaseIterable {
     case .buildHalt, .buildResume, .buildReturnChecked: .build
     case .discoverRun, .warmupRun: .brownfield
     case .spanStart, .spanEnd: .span
-    case .qaCheck, .qaFlow: .qa
+    case .qaCheck, .qaFlow, .qaSetup: .qa
     }
   }
 }
@@ -185,6 +187,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
   case agentTools(AgentToolsEvent)
   case qaCheck(QACheckEvent)
   case qaFlow(QAFlowEvent)
+  case qaSetup(QASetupEvent)
 
   public var kind: HarnessEventKind {
     switch self {
@@ -207,6 +210,7 @@ public enum HarnessEventPayload: Sendable, Equatable {
     case .agentTools: .agentTools
     case .qaCheck: .qaCheck
     case .qaFlow: .qaFlow
+    case .qaSetup: .qaSetup
     }
   }
 }
@@ -436,6 +440,8 @@ extension HarnessEvent: Codable {
       payload = .qaCheck(try c.decode(QACheckEvent.self, forKey: .payload))
     case .qaFlow:
       payload = .qaFlow(try c.decode(QAFlowEvent.self, forKey: .payload))
+    case .qaSetup:
+      payload = .qaSetup(try c.decode(QASetupEvent.self, forKey: .payload))
     }
   }
 
@@ -470,6 +476,7 @@ extension HarnessEvent: Codable {
     case .agentTools(let tools): try c.encode(tools, forKey: .payload)
     case .qaCheck(let check): try c.encode(check, forKey: .payload)
     case .qaFlow(let flow): try c.encode(flow, forKey: .payload)
+    case .qaSetup(let setup): try c.encode(setup, forKey: .payload)
     }
   }
 }

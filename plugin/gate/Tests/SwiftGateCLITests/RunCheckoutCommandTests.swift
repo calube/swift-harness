@@ -203,6 +203,7 @@ struct RunCheckoutCommandTests {
     defer { scenario.remove() }
     #expect(await scenario.create().status == .created)
     let taskTip = try await scenario.commitTask()
+    let taskWorktree = scenario.taskWorktree
     let fix = try TaskWorktree(
       commonDirectory: scenario.common, plan: PlanBranchScenario.slug,
       task: "fix-\(PlanBranchScenario.task)", profile: .brownfield)
@@ -214,8 +215,8 @@ struct RunCheckoutCommandTests {
       runner: scenario.runner)
 
     #expect(report.status == .removed, "\(report.message)")
-    #expect(Set(report.discarded ?? []) == [scenario.taskWorktree, fix.path])
-    #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree))
+    #expect(Set(report.discarded ?? []) == [taskWorktree, fix.path])
+    #expect(!FileManager.default.fileExists(atPath: taskWorktree))
     #expect(!FileManager.default.fileExists(atPath: fix.path))
     let taskBranch = "\(PlanBranchScenario.slug)/\(PlanBranchScenario.task)"
     #expect(try await scenario.git("rev-parse", "refs/heads/\(taskBranch)") == taskTip)

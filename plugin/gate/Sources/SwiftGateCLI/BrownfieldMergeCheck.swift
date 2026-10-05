@@ -75,9 +75,21 @@ enum BrownfieldMergeCheck {
       } catch {
         throw BrownfieldCheckSetupError(reason: "\(error)")
       }
+      // A test step runs on the build run's booted device while no qa run borrows it, and
+      // takes a `sim` slot for a clone only while it does.
+      let simctl = LiveSimctl(
+        runner: process,
+        timeouts: LiveSimctl.Timeouts(quick: .seconds(SimulatorConfig.defaultSimctlTimeoutSeconds)))
       let runner = LeasedDeviceAreaRunner(
         base: LiveAreaCommandRunner(processRunner: process),
-        leases: LiveTestDeviceLeases(runner: process))
+        leases: RunDeviceTestLeases(
+          base: LiveTestDeviceLeases(runner: process),
+          lender: RunDeviceLender(
+            commonDirectory: layout.commonDir.path,
+            leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()),
+            lockDirectory: FileCountingLock.defaultDirectory(),
+            devices: { (try? await simctl.devices()) ?? [] },
+            isAlive: SimulatorClones.processIsAlive)))
       let unbounded = BrownfieldProve.Dependencies.live(
         root: root, layout: layout, runner: runner, deadline: liveDeadline)
       let tree: @Sendable (String) async throws -> String = { commit in

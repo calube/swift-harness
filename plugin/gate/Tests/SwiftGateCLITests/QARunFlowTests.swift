@@ -21,6 +21,8 @@ final class FakeFlowSimulator: QAFlowSimulating {
   let marker: URL?
   let leases: SimLeaseStore
   let history: URL
+  /// The setup steps each `up` reports.
+  let setup: [QASetupStep]
   private let recorded = Mutex<[String]>([])
   private let holdsAsked = Mutex<[QAFlowDeviceHold?]>([])
   private let releases = Mutex<[Release]>([])
@@ -37,9 +39,10 @@ final class FakeFlowSimulator: QAFlowSimulating {
   /// - Parameter agentDevice: the device, in place of 1 that answers every batch with `batch`.
   init(
     batch: String, head: String, scratch: URL, upFailure: SimUpFailure? = nil,
-    marker: URL? = nil, agentDevice: (any AgentDevice)? = nil,
+    marker: URL? = nil, agentDevice: (any AgentDevice)? = nil, setup: [QASetupStep] = [],
     beforeVerify: @escaping @Sendable (URL) -> Void = { _ in }
   ) throws {
+    self.setup = setup
     self.agentDevice = try agentDevice ?? LiveAgentDevice(runner: CapturedBatch.runner(batch))
     self.head = head
     self.upFailure = upFailure
@@ -76,7 +79,7 @@ final class FakeFlowSimulator: QAFlowSimulating {
       SimUpStarted(
         runID: request.runID, udid: "LEASED-UDID",
         session: SimSession.agentDeviceSessionName(runID: request.runID),
-        scenario: request.scenario))
+        scenario: request.scenario, setup: setup))
   }
 
   func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {
@@ -134,7 +137,7 @@ struct QARunFlowTests {
 
   static func run(
     _ repo: QARepo, _ simulator: FakeFlowSimulator, events: MemoryEventLog = MemoryEventLog(),
-    atBase: Bool = false, preparedBy: String? = nil
+    atBase: Bool = false, preparedBy: String? = nil, devices: (any QADeviceLending)? = nil
   ) async -> QAReport {
     await QARunRun.run(
       root: repo.root, options: QARunRun.Options(atBase: atBase, preparedBy: preparedBy),
@@ -144,17 +147,17 @@ struct QARunFlowTests {
         scratch: LiveScratchWorktrees(runner: repo.runner, repositoryRoot: repo.root.path),
         events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
         runIDSuffix: { 0xf10 }, newEventID: { UUID().uuidString }, timeout: .seconds(120),
-        flows: simulator, pluginRoot: Fixture.checkoutRoot))
+        flows: simulator, pluginRoot: Fixture.checkoutRoot, devices: devices))
   }
 
   static func simulator(
-    _ repo: QARepo, batch: String, upFailure: SimUpFailure? = nil,
+    _ repo: QARepo, batch: String, upFailure: SimUpFailure? = nil, setup: [QASetupStep] = [],
     beforeVerify: @escaping @Sendable (URL) -> Void = { _ in }
   ) async throws -> FakeFlowSimulator {
     try FakeFlowSimulator(
       batch: batch, head: try await repo.git("rev-parse", "HEAD"),
       scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
-      upFailure: upFailure, marker: marker(repo), beforeVerify: beforeVerify)
+      upFailure: upFailure, marker: marker(repo), setup: setup, beforeVerify: beforeVerify)
   }
 
   @Test(
@@ -228,7 +231,8 @@ struct QARunFlowTests {
           return ProcessOutput(status: .exited(0), stdout: "{}")
         }
         return ProcessOutput(
-          status: .exited(1), stdout: CapturedStream(bytes: batch), stderr: CapturedStream(bytes: Data()),
+          status: .exited(1), stdout: CapturedStream(bytes: batch),
+          stderr: CapturedStream(bytes: Data()),
           elapsed: .zero)
       })
     let head = try await repo.git("rev-parse", "HEAD")
@@ -450,6 +454,79 @@ struct QARunFlowTests {
     #expect(flow.message.contains(SimUpRule.noSlot.rawValue), "\(flow.message)")
     #expect(simulator.calls.last == "down")
     #expect(simulator.calls.count == 2)
+  }
+}
+
+/// Lends every `qa run` the same build run hold, as a build run's device does.
+struct FixedDeviceLender: QADeviceLending {
+  let hold: QAFlowDeviceHold
+
+  func borrow(plan: String) async -> BorrowedDevice? {
+    BorrowedDevice(hold: hold, lease: nil)
+  }
+}
+
+@Suite("qa run flows on a build run's device, and the setup each run times")
+struct QARunSharedDeviceTests {
+  @Test(
+    "2 qa runs in a build run both borrow its hold for every flow row and neither gives it back, so its device stays booted for the next — catches a simulator cloned and booted for every qa run of a build"
+  )
+  func qaRunsBorrowTheBuildRunsDevice() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try QARunFlowTests.twoFlows(repo)
+    let simulator = try await QARunFlowTests.simulator(repo, batch: "pass")
+    let hold = QAFlowDeviceHold(
+      runID: "20261004T120000Z-1a2b3c4d-run-device",
+      directory: repo.root.appending(path: "build-run/device", directoryHint: .isDirectory),
+      keptAfterRun: true, timeoutMinutes: 40)
+    let lender = FixedDeviceLender(hold: hold)
+
+    let first = await QARunFlowTests.run(repo, simulator, devices: lender)
+    let second = await QARunFlowTests.run(repo, simulator, devices: lender)
+
+    #expect(first.rows.map(\.result) == [.pass, .pass], "\(first.rows.map(\.message))")
+    #expect(second.rows.map(\.result) == [.pass, .pass], "\(second.rows.map(\.message))")
+    #expect(simulator.holds == [hold, hold, hold, hold])
+    #expect(simulator.holdReleases.isEmpty)
+  }
+
+  @Test(
+    "a qa run writes 1 qa.setup event per setup step of each flow row, with its time and whether it was reused, and at the merge base 1 for its tree — catches the minutes before a qa run's first row missing from its telemetry"
+  )
+  func setupStepsAreEvents() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try QARunFlowTests.twoFlows(repo)
+    let simulator = try await QARunFlowTests.simulator(
+      repo, batch: "pass",
+      setup: [
+        QASetupStep(step: .device, milliseconds: 1200, reused: true),
+        QASetupStep(step: .build, milliseconds: 3400, reused: false),
+        QASetupStep(step: .install, milliseconds: 800),
+      ])
+    let events = MemoryEventLog()
+
+    let report = await QARunFlowTests.run(repo, simulator, events: events, atBase: true)
+
+    let setup = events.events.compactMap { event -> QASetupEvent? in
+      guard case .qaSetup(let setup) = event.payload else { return nil }
+      #expect(event.runID == report.runID)
+      return setup
+    }
+    let rows = report.rows.map(\.row)
+    #expect(rows.count == 2)
+    for row in rows {
+      #expect(
+        setup.filter { $0.row == row }.map {
+          "\($0.step.rawValue) \($0.milliseconds) \($0.reused.map(String.init) ?? "-")"
+        }
+          == ["device 1200 true", "build 3400 false", "install 800 -"])
+    }
+    let tree = setup.filter { $0.row == nil }
+    #expect(tree.map(\.step) == [.tree])
+    #expect(tree.first?.atBase == true)
+    #expect(tree.first?.plan == QARepo.slug)
   }
 }
 
