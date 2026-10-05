@@ -8,7 +8,9 @@
 // the `task-status.json` design-conflict report, test-first or the foreground rule; an agent never
 // told to run its gates at the 600000 timeout, so a gate is backgrounded and watched by a `pgrep -f`
 // loop that matches its own shell; a fixer that may commit to `main` or merge; a fixer that spends
-// its 1 attempt probing why 1 flow row stays red instead of returning that row's evidence.
+// its 1 attempt probing why 1 flow row stays red instead of returning that row's evidence; a
+// fixer, or the brief that launches it, that names a red flow row's cause before reading the red
+// run's evidence, so a real app defect on a clock-driven screen is waved through as a timing race.
 //
 // `checkBuildAgentText(fileName, text)` is exported so the checks run against edited copies too.
 import assert from 'node:assert/strict'
@@ -305,6 +307,100 @@ function fixerBrief() {
   return text.slice(start, end)
 }
 
+
+const sentencesOf = text => text.replace(/\s+/g, ' ').split(/(?<=\.)\s+/)
+
+/**
+ * Where a fixer can name a red flow row's cause without looking at it. On a screen whose state
+ * advances on a clock, a fixer called a red row a clock race on its first red, read neither the
+ * contact sheet nor the failing step, and changed nothing, while the frames showed the app
+ * removing entities before it drew them. The fixer reads the red run's evidence (`steps.json`,
+ * the contact sheet `sheet.png`) against the requirement, reproduces what it shows in a unit test
+ * under the red run's scenario and seed, and only when that test passes may it call the row a
+ * contract gap, flow-side or a clock race; a cause a brief suggests is no evidence.
+ */
+export function evidenceFirstProblems(text) {
+  const sentences = sentencesOf(text)
+  const problems = []
+  if (!sentences.some(s => /`steps\.json`/.test(s) && /`sheet\.png`/.test(s) && /\bevidence\b/.test(s))) {
+    problems.push('never opens the red run\'s evidence, its `steps.json` and contact sheet `sheet.png`')
+  }
+  if (!sentences.some(s => /\bframes?\b/.test(s) && /\bagainst the requirement\b/.test(s))) {
+    problems.push('never holds the captured frames against the requirement')
+  }
+  if (!sentences.some(s => /\bunit test\b/.test(s) && /\bsame scenario and seed\b/.test(s))) {
+    problems.push('never reproduces the observed behaviour in a unit test under the red run\'s scenario and seed')
+  }
+  if (!sentences.some(s => /\bOnly when\b[^.]*\bpasses\b/.test(s) && /contract gap/.test(s) && /flow-side/.test(s) && /clock race/.test(s))) {
+    problems.push('lets the fixer call a row a contract gap, flow-side or a clock race before the reproduction test passes')
+  }
+  if (!sentences.some(s => /\bbrief\b/.test(s) && /\bcause\b/.test(s) && /\bno evidence\b/.test(s))) {
+    problems.push('never says a cause a brief suggests is no evidence')
+  }
+  return problems
+}
+
+/**
+ * Where the clock-race rule outgrows its case. It holds only for a check of a starting state under
+ * a scenario that doesn't hold the clock, where the evidence shows that state correct and then
+ * moved by the clock; any other red on a clock-driven screen takes the evidence rule and its 2 runs.
+ */
+export function clockRaceScopeProblems(text) {
+  const sentences = sentencesOf(text)
+  const problems = []
+  if (!sentences.some(s => /\bclock race only when\b/.test(s) && /\bstarting state\b/.test(s) && /\bscenario that doesn't hold the clock\b/.test(s))) {
+    problems.push('the clock race is not limited to a starting state checked under a scenario that doesn\'t hold the clock')
+  }
+  if (!sentences.some(s => /\bevidence shows\b/.test(s) && /\bcorrect\b/.test(s) && /\bthen moved\b/.test(s))) {
+    problems.push('the clock race never needs evidence that the state was correct and then moved')
+  }
+  if (!sentences.some(s => /\bAny other red\b/.test(s) && /\bevidence\b/.test(s))) {
+    problems.push('any other red on a clock-driven screen is never sent through the evidence rule')
+  }
+  return problems
+}
+
+/**
+ * Where an orchestrator brief hands a fixer or a repair worker a guessed cause. A fixer brief said
+ * a red row was "likely a flow-side timing problem, not an app defect", and the fixer and the
+ * repair worker both took it. A brief quotes the red evidence: the failing step, what it expected,
+ * what it observed and the evidence paths, and never a cause.
+ */
+export function briefEvidenceProblems(text) {
+  const sentences = sentencesOf(text)
+  const problems = []
+  for (const part of ['failing step', 'expected', 'observed']) {
+    if (!sentences.some(s => /\bevidence\b/.test(s) && new RegExp(`\\b${part}\\b`).test(s))) problems.push(`the brief's red evidence never names the ${part}`)
+  }
+  if (!sentences.some(s => /`sheet\.png`/.test(s) && /`steps\.json`/.test(s))) problems.push('the brief never gives the evidence paths, `steps.json` and the contact sheet `sheet.png`')
+  if (!sentences.some(s => /\bnever\b/i.test(s) && /\b(likely|guessed)\b[^.]*\bcause\b/.test(s))) problems.push('the brief never forbids a likely or guessed cause')
+  return problems
+}
+
+/**
+ * Where a repair worker rewrites a flow around an app defect. Before it judges the flow, it holds
+ * the red frames against the requirement and returns `no repair: … app defect` for a screen that
+ * breaks it, and a clock-driven contract gap only when the frames show the starting state correct
+ * and then moved.
+ */
+export function repairEvidenceProblems(text) {
+  const sentences = sentencesOf(text)
+  const problems = []
+  if (!sentences.some(s => /\bframes?\b/.test(s) && /\bagainst the requirement\b/.test(s))) problems.push('the repair worker never holds the red frames against the requirement')
+  if (!/`no repair: <requirement>: app defect: /.test(text.replace(/\s+/g, ' '))) problems.push('no `no repair: … app defect` line for a screen that breaks the requirement')
+  if (!sentences.some(s => /\bstarting state\b/.test(s) && /\bcorrect\b/.test(s) && /\bthen moved\b/.test(s))) problems.push('a clock contract gap never needs frames showing the starting state correct and then moved')
+  return problems
+}
+
+/** Each part of event-loop.md that composes a fixer or repair worker brief for red flow rows. */
+function redRowBriefs() {
+  const text = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8')
+  const repair = text.split('\n## ').find(p => p.startsWith('Flow repair')) ?? ''
+  const step2 = /\n2\. Launch 1 Agent tool call[^]*?(?=\n3\. )/.exec(repair)?.[0] ?? ''
+  const relaunch = /- GREEN: go on to the next requirement's round[^]*?(?=\n {3}- RED)/.exec(repair)?.[0] ?? ''
+  return { launch: fixerBrief(), repair: step2, relaunch }
+}
+
 const tests = {
   'the key lists are read from the Swift types — catches this test checking a stale copy of the return shape'() {
     assert.deepEqual(RETURN_KEYS, [
@@ -446,6 +542,55 @@ const tests = {
     assert.match(rowCapProblems(good.replace('run ids', 'runs')).join('\n'), /run ids/)
     assert.match(rowCapProblems(good.replace("Never read `agent-device`'s source, and n", 'N')).join('\n'), /`agent-device`'s source/)
     assert.match(rowCapProblems(good.replace('probe tests', 'tests')).join('\n'), /probe tests/)
+  },
+
+  'the fixer reads a red flow row\'s evidence and reproduces it in a unit test before calling it a contract gap, flow-side or a clock race — catches a real app defect waved through as a timing race'() {
+    assert.deepEqual(evidenceFirstProblems(parseFrontmatter(agentText('build-fixer')).body), [])
+  },
+
+  'the fixer\'s clock race covers only a starting state, under a scenario that doesn\'t hold the clock, shown correct then moved — catches a clock rule that excuses every red on a clock-driven screen'() {
+    assert.deepEqual(clockRaceScopeProblems(parseFrontmatter(agentText('build-fixer')).body), [])
+  },
+
+  'every orchestrator brief for a red flow row quotes the failing step, expected, observed and evidence paths, never a guessed cause — catches a brief that tells the fixer the cause'() {
+    for (const [name, brief] of Object.entries(redRowBriefs())) {
+      assert.ok(brief, `event-loop.md has no ${name} brief`)
+      assert.deepEqual(briefEvidenceProblems(brief), [], name)
+    }
+  },
+
+  'the repair worker holds the red frames against the requirement and returns an app defect as no repair — catches a flow rewritten around a defect'() {
+    const worker = readFileSync(join(root, 'skills/qa/references/validation-worker.md'), 'utf8')
+    const repair = worker.split('\n## ').find(p => p.startsWith('Repair mode')) ?? ''
+    assert.deepEqual(repairEvidenceProblems(repair), [])
+  },
+
+  'the evidence checks name each missing part — catches checks that pass anything'() {
+    const fixer = "Open the evidence, its `steps.json` and the contact sheet `sheet.png`. Hold each frame against the requirement. Reproduce it in a unit test under the same scenario and seed. Only when that test passes may you call it a contract gap, flow-side or a clock race. A cause a brief suggests is no evidence."
+    assert.deepEqual(evidenceFirstProblems(fixer), [])
+    assert.match(evidenceFirstProblems(fixer.replace('`sheet.png`', 'video')).join('\n'), /`sheet\.png`/)
+    assert.match(evidenceFirstProblems(fixer.replace('against the requirement', 'closely')).join('\n'), /against the requirement/)
+    assert.match(evidenceFirstProblems(fixer.replace('same scenario and seed', 'live app')).join('\n'), /scenario and seed/)
+    assert.match(evidenceFirstProblems(fixer.replace('Only when that test passes may', 'You may')).join('\n'), /before the reproduction test passes/)
+    assert.match(evidenceFirstProblems(fixer.replace('is no evidence', 'helps')).join('\n'), /no evidence/)
+
+    const clock = "It is a clock race only when the step checks a starting state under a scenario that doesn't hold the clock, and the evidence shows that state correct and then moved by the clock. Any other red takes the evidence rule."
+    assert.deepEqual(clockRaceScopeProblems(clock), [])
+    assert.match(clockRaceScopeProblems(clock.replace('only when', 'when')).join('\n'), /not limited/)
+    assert.match(clockRaceScopeProblems(clock.replace('then moved', 'gone')).join('\n'), /correct and then moved/)
+    assert.match(clockRaceScopeProblems(clock.replace('Any other red', 'Each red')).join('\n'), /evidence rule/)
+
+    const brief = "Quote the red evidence: the failing step, what it expected and what it observed. Give the paths `steps.json` and `sheet.png`. Never add a likely cause."
+    assert.deepEqual(briefEvidenceProblems(brief), [])
+    assert.match(briefEvidenceProblems(brief.replace('observed', 'saw')).join('\n'), /observed/)
+    assert.match(briefEvidenceProblems(brief.replace('`sheet.png`', 'the video')).join('\n'), /evidence paths/)
+    assert.match(briefEvidenceProblems(brief.replace('Never add a likely cause.', 'Add a likely cause.')).join('\n'), /guessed cause/)
+
+    const repair = "Hold its frames against the requirement. Return `no repair: <requirement>: app defect: <frame>: <what>`. A clock gap needs a starting state correct and then moved."
+    assert.deepEqual(repairEvidenceProblems(repair), [])
+    assert.match(repairEvidenceProblems(repair.replace('against the requirement', 'closely')).join('\n'), /against the requirement/)
+    assert.match(repairEvidenceProblems(repair.replace('app defect', 'bug')).join('\n'), /app defect/)
+    assert.match(repairEvidenceProblems(repair.replace('then moved', 'gone')).join('\n'), /then moved/)
   },
 
   'every verb the guard denies to a subagent is in the forbidden list — catches a guard verb added without the prompt learning it'() {
