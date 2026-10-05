@@ -287,7 +287,11 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
   or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
   passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
-  (`guard.fixer-gate-cap`).
+  (`guard.fixer-gate-cap`);
+- that after 2 red `qa run`s of the same flow row it stops and returns `gate-red` with that row's
+  evidence: its requirement, the failing step and its message, and both run ids. It never reads
+  `agent-device`'s source and never writes probe tests to learn why a step fails. Its `gate-red`
+  return then takes the path below like any other, quoting the row's evidence.
 
 Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
 end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `ready-to-merge`,

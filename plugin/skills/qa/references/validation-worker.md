@@ -50,6 +50,11 @@ exists and fails for the reason the feature is missing.
   A screen a dependency client feeds never reaches the live service: the flow's first step is
   `{"command": "open", "input": {"app": "<bundle id>", "relaunch": true, "launchArgs":
   ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
+  A pull to refresh is 1 step, `{"command": "gesture", "input": {"kind": "drag", "source":
+  "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`, from the list's top row to an
+  element at least 350 pt lower on screen, then a `wait` for what the refresh changes. A `scroll`
+  step is never a pull to refresh: it leaves the row red on a gesture that didn't refresh. When no
+  element sits that far below the top row, return the one you need as a missing contract name.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its
