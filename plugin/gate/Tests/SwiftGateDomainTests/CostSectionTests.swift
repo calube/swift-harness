@@ -55,7 +55,8 @@ struct CostSectionTests {
     _ id: String, cost: Double?, cacheHit: Bool, at seconds: Double = 0
   ) -> HarnessEvent {
     HarnessEvent(
-      eventID: id, time: start.addingTimeInterval(seconds), source: HarnessEventSource(route: .checkReady),
+      eventID: id, time: start.addingTimeInterval(seconds),
+      source: HarnessEventSource(route: .checkReady),
       payload: .judgeCall(
         JudgeCallEvent(
           role: .answer, backend: .claude, model: "sonnet", servedModel: nil,
