@@ -276,11 +276,15 @@ public enum BuildEvent: Sendable, Equatable {
     public let at: Date
     /// The checked return's outcome; `nil` when the recorded check names none.
     public let outcome: TaskReturn.Outcome?
+    /// The return's `flow row:` lines.
+    public let flowRows: [FlowRowVerdict]
 
     public init(
       task: String, fix: Bool, verdict: Verdict, commit: String?, checkID: String,
-      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil
+      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil,
+      flowRows: [FlowRowVerdict] = []
     ) {
+      self.flowRows = flowRows
       self.task = task
       self.fix = fix
       self.verdict = verdict
@@ -384,7 +388,7 @@ extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
     case fix, commit, rules, qaRun, validation, outcome, carried
-    case requirement, rows, cause, contractName
+    case requirement, rows, cause, contractName, flowRows
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -433,7 +437,9 @@ extension BuildEvent: Codable {
           commit: try container.decodeIfPresent(String.self, forKey: .commit),
           checkID: try container.decode(String.self, forKey: .checkID),
           rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at,
-          outcome: try container.decodeIfPresent(TaskReturn.Outcome.self, forKey: .outcome)))
+          outcome: try container.decodeIfPresent(TaskReturn.Outcome.self, forKey: .outcome),
+          flowRows: try container.decodeIfPresent([FlowRowVerdict].self, forKey: .flowRows)
+            ?? []))
     case .finish:
       self = .finish(
         Finish(
@@ -491,6 +497,7 @@ extension BuildEvent: Codable {
       try container.encode(check.rules, forKey: .rules)
       try container.encode(check.at, forKey: .at)
       try container.encodeIfPresent(check.outcome, forKey: .outcome)
+      if !check.flowRows.isEmpty { try container.encode(check.flowRows, forKey: .flowRows) }
     case .finish(let finish):
       try container.encodeIfPresent(finish.qaRun, forKey: .qaRun)
       try container.encodeIfPresent(finish.validation, forKey: .validation)
@@ -605,6 +612,14 @@ public struct BuildEventLog: Sendable, Equatable {
       for row in left.rows { rows[row] = left }
     }
     return rows
+  }
+
+  /// Every `flow row:` line the checked fixers' returns carried, oldest first.
+  public func flowRowVerdicts() -> [FlowRowVerdict] {
+    events.flatMap { event -> [FlowRowVerdict] in
+      guard case .returnCheck(let check) = event, check.fix else { return [] }
+      return check.flowRows
+    }
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

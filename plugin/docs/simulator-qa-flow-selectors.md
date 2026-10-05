@@ -30,6 +30,16 @@ element that takes no identifier, such as `role=searchfield`. A key the tool doe
 - `||` separates alternatives, tried in order: `id="probe.missing" || id="probe.start"` takes the
   first that matches.
 
+## A step that acts on an element
+
+A `press` names its element under `target`, as a `selector` kind:
+`{"command": "press", "input": {"target": {"kind": "selector", "selector": "id=\"counter.increment\""}}}`.
+That step ran in the captured batch
+`plugin/gate/Tests/Fixtures/AgentDevice/record/recorded-pass.steps.json`. A target that is a ref,
+such as `@e3`, or a point fails `qa.flow-ref-target`.
+
+## A value on a clock
+
 To wait for a state an app reaches on a clock, put the value under `value` beside the element's
 `id`: the `wait` polls until both hold, with no sleep.
 

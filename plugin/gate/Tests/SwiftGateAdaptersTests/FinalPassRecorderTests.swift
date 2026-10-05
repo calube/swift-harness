@@ -75,10 +75,10 @@ struct FinalPassRecorderTests {
     let (outcome, recording) = await run.record(run.recorder(device), device: device)
 
     #expect(outcome.stop == nil)
-    #expect(outcome.videoStartMs == 1441)
+    #expect(outcome.videoStartMs == 3513)
     #expect(recording.video == "qa/01-req-count.flow/\(FinalPassRecorder.videoFileName)")
     #expect(recording.sheet == "qa/01-req-count.flow/\(FinalPassRecorder.sheetFileName)")
-    #expect(recording.videoStartMs == 1441)
+    #expect(recording.videoStartMs == 3513)
     #expect(recording.videoGap == nil)
     #expect(recording.sheetGap == nil)
     let video = run.flowDirectory.appending(path: FinalPassRecorder.videoFileName).path
@@ -118,8 +118,8 @@ struct FinalPassRecorderTests {
       run.recorder(device), device: device, flow: "AgentDevice/record/relaunched-pass.flow.json")
 
     #expect(outcome.stop == nil)
-    #expect(outcome.videoStartMs == 2069)
-    #expect(recording.videoStartMs == 2069)
+    #expect(outcome.videoStartMs == 1951)
+    #expect(recording.videoStartMs == 1951)
     #expect(recording.video == "qa/01-req-count.flow/\(FinalPassRecorder.videoFileName)")
     let calls = runner.invocations
     let driven = try #require(
@@ -130,7 +130,7 @@ struct FinalPassRecorderTests {
     ).prefix(3).map { $0["command"] as? String }
     #expect(commands == ["open", "record", "wait"])
     let record = outcome.record.recorded(recording)
-    #expect(record.steps.map(\.offsetMs) == [0, 0, 1728, 2434, 3994])
+    #expect(record.steps.map(\.offsetMs) == [0, 0, 790, 1521, 2349])
   }
 
   @Test(
@@ -150,11 +150,11 @@ struct FinalPassRecorderTests {
     }
     #expect(n == 3)
     #expect(command == "is")
-    #expect(outcome.videoStartMs == 623)
+    #expect(outcome.videoStartMs == 655)
     #expect(recording.video == "qa/01-req-count.flow/\(FinalPassRecorder.videoFileName)")
     #expect(runner.invocations.map(CapturedFinalPass.key).contains("record stop"))
     let record = outcome.record.recorded(recording)
-    #expect(record.steps.map(\.offsetMs) == [0, 1536, 2268])
+    #expect(record.steps.map(\.offsetMs) == [0, 800, 1524])
     #expect(record.steps.last?.ok == false)
   }
 

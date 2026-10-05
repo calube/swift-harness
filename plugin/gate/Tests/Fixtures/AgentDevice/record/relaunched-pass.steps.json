@@ -2,11 +2,7 @@
  {"command":"record","input":{"action":"start","path":"/SCRATCH/relaunched.mp4"}},
  {"command":"wait","input":{"kind":"selector","selector":"id=\"counter.value\"","timeoutMs":5000}},
  {"command":"snapshot","input":{}},
- {"command":"screenshot","input":{"path":"/SCRATCH/1.png"}},
- {"command":"snapshot","input":{}},
  {"command":"press","input":{"target":{"kind":"selector","selector":"id=\"counter.increment\""}}},
  {"command":"is","input":{"predicate":"text","selector":"id=\"counter.value\"","value":"1"}},
- {"command":"snapshot","input":{}},
- {"command":"screenshot","input":{"path":"/SCRATCH/2.png"}},
  {"command":"snapshot","input":{}},
  {"command":"snapshot","input":{}}]

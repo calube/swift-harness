@@ -1,0 +1,1 @@
+[{"command":"open","input":{"app":"com.example.InterviewStarter","relaunch":true}},{"command":"wait","input":{"kind":"selector","selector":"id=\"app.new\"","timeoutMs":20000}},{"command":"is","input":{"predicate":"visible","selector":"id=\"app.new\""}}]

@@ -19,7 +19,7 @@ struct RecordingRetryTests {
   }
 
   @Test(
-    "a recorded plan starts with record start to the video path, its captures and stops shift by 1, and a failure at the first step is the record start — catches a recording failure read as a failing flow step"
+    "a recorded plan starts with record start to the video path, takes 1 snapshot after each check, its stops shift by 1, and a failure at the first step is the record start — catches a recording failure read as a failing flow step"
   )
   func recordedPlanStartsWithRecord() throws {
     let steps = try FlowSteps.parse(try Fixture.data("QA/counter.flow.json"))
@@ -32,9 +32,9 @@ struct RecordingRetryTests {
       try FlowJSON.parse(plan.drivenJSON())
         == FlowJSON.parse(try Fixture.data("AgentDevice/record/recorded-pass.steps.json")))
     #expect(plan.recordTo == "/SCRATCH/video.mp4")
-    #expect(plan.evidence.map(\.snapshot) == [3, 8])
+    #expect(plan.evidence.map(\.snapshot) == [3, 6])
     #expect(plan.stop(atDrivenIndex: 1, command: "record") == .recordStart)
-    #expect(plan.stop(atDrivenIndex: 7, command: "is") == .step(n: 3, command: "is"))
+    #expect(plan.stop(atDrivenIndex: 5, command: "is") == .step(n: 3, command: "is"))
   }
 
   @Test(
@@ -54,8 +54,8 @@ struct RecordingRetryTests {
         video: "qa/01-req-count.flow/video.mp4", sheet: "qa/01-req-count.flow/sheet.png",
         videoStartMs: recordMs))
 
-    #expect(batch.steps.map(\.offsetMs) == [1441, 3162, 3998, 5550])
-    #expect(recorded.steps.map(\.offsetMs) == [0, 1721, 2557, 4109])
+    #expect(batch.steps.map(\.offsetMs) == [3513, 4360, 5224, 6043])
+    #expect(recorded.steps.map(\.offsetMs) == [0, 847, 1711, 2530])
     #expect(recorded.steps.map(\.n) == [1, 2, 3, 4])
     #expect(recorded.video == "qa/01-req-count.flow/video.mp4")
     #expect(recorded.sheet == "qa/01-req-count.flow/sheet.png")
@@ -133,10 +133,10 @@ struct RecordingRetryTests {
       try FlowJSON.parse(plan.drivenJSON())
         == FlowJSON.parse(try Fixture.data("AgentDevice/record/relaunched-pass.steps.json")))
     #expect(plan.recordIndex == 2)
-    #expect(plan.evidence.map(\.snapshot) == [4, 9])
+    #expect(plan.evidence.map(\.snapshot) == [4, 7])
     #expect(plan.stop(atDrivenIndex: 1, command: "open") == .step(n: 1, command: "open"))
     #expect(plan.stop(atDrivenIndex: 2, command: "record") == .recordStart)
-    #expect(plan.stop(atDrivenIndex: 8, command: "is") == .step(n: 4, command: "is"))
+    #expect(plan.stop(atDrivenIndex: 6, command: "is") == .step(n: 4, command: "is"))
   }
 
   @Test(
@@ -155,9 +155,9 @@ struct RecordingRetryTests {
     let recorded = batch.recorded(
       QAFlowRecording(video: "qa/01-req-count.flow/video.mp4", videoStartMs: start))
 
-    #expect(start == 2069)
-    #expect(batch.steps.map(\.offsetMs) == [0, 2069, 3797, 4503, 6063])
-    #expect(recorded.steps.map(\.offsetMs) == [0, 0, 1728, 2434, 3994])
+    #expect(start == 1951)
+    #expect(batch.steps.map(\.offsetMs) == [0, 1951, 2741, 3472, 4300])
+    #expect(recorded.steps.map(\.offsetMs) == [0, 0, 790, 1521, 2349])
     #expect(recorded.steps.map(\.n) == [1, 2, 3, 4, 5])
     #expect(recorded.steps.map(\.ok) == [true, true, true, true, true])
   }

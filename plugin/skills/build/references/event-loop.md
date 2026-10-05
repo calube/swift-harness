@@ -507,6 +507,12 @@ or a row red again after a fixer's `ready-to-merge`. A row gets up to 2 adopted 
 the second only before `noNewStartsAt`: `qa adopt --repair` refuses any other with
 `qa.repair-cap`. A repair is no halt, so record none.
 
+`build check-return` records each `flow row:` line. When the line says `flow-side: yes`, or
+`flow-side: no: contract gap`, the fixer showed the app correct, so a later pass of that same flow
+file won a race: the final `qa run` reports it `unverified`, its message opening `flaky:` and
+naming the red run, until a repaired flow is adopted. A pass in a before-merge run is no proof
+either: repair the row as below whatever a rerun showed.
+
 Repair 1 requirement per round. With several `flow row:` lines, run a round for each, 1 after
 another in the same fix worktree, starting with the row whose step failed first.
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
-# Captures a final pass's batch for a flow that starts by relaunching the app: the `open` runs
-# first and `record start` second, so the video opens on the fresh launch, then the `record stop`.
-# Usage, from the repository root: capture-relaunched.sh <swiftgate binary>
+# Captures the batches a final pass drives for SampleApp's counter flow, in the shape `qa run`
+# drives a recorded flow: 1 `snapshot` after each check, whose PNG is the video's frame. It runs the
+# flow once passing and once failing, each after a `record start` with the `record stop` after it,
+# the contact sheet of the passing video, and a flow that relaunches the app with its `open` before
+# the `record start`. Each video is kept beside its batch.
+# Usage, from the repository root: capture-frames.sh <swiftgate binary>
 # The device comes from `swiftgate sim up` in examples/SampleApp, a clone under the `sim` lock, and
 # `sim down` gives it back on exit, so no device another session uses is touched.
 set -uo pipefail
@@ -35,9 +38,25 @@ save() {
 
 target=(--udid "$udid" --session "$session" --json)
 
+batch() {
+  local name="$1"
+  sed -e "s#/SCRATCH#$work#g" "$here/$name.steps.json" >"$work/$name.steps.json"
+  save "$name" agent-device batch --steps-file "$work/$name.steps.json" --on-error stop \
+    "${target[@]}"
+}
+
+batch recorded-pass
+save record-stop agent-device record stop "${target[@]}"
+cp "$work/video.mp4" "$here/recorded-pass.mp4"
+save contact-sheet agent-device record contact-sheet "$work/video.mp4" \
+  --out "$work/sheet.png" --json
+/bin/rm -f "$work/video.mp4"
+batch recorded-fail
+save record-stop-after-fail agent-device record stop "${target[@]}"
+cp "$work/video.mp4" "$here/recorded-fail.mp4"
+
 # Leaves the counter at 1, so a frame from before the relaunch differs from the fresh launch's 0.
 agent-device press 'id="counter.increment"' "${target[@]}" >/dev/null
-sed -e "s#/SCRATCH#$work#g" "$here/relaunched-pass.steps.json" >"$work/steps.json"
-save relaunched-pass agent-device batch --steps-file "$work/steps.json" --on-error stop \
-  "${target[@]}"
+batch relaunched-pass
 save relaunched-record-stop agent-device record stop "${target[@]}"
+cp "$work/relaunched.mp4" "$here/relaunched-pass.mp4"

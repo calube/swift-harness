@@ -1,0 +1,56 @@
+{
+  "run" : {
+    "commit" : "d7637637bf1fd8ad7f4d73418ee7a8eafa70e603",
+    "preparedBy" : "entity-sim",
+    "rows" : [
+      {
+        "check" : "qa/drag-hit.flow.json",
+        "digest" : "45a6aa0e8c356e8c5fb634c7474f4b1dec46d31b29e866db98091b3a868018f7",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 3 steps",
+        "ms" : 20450,
+        "requirement" : "req-drag-hit",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/drag-stop.flow.json",
+        "digest" : "9261bebf9cd1e30dc0dc29428c6e6cbef9e1929fa1ee1f00a3d4ed15df11a693",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 3 steps",
+        "ms" : 12527,
+        "requirement" : "req-drag-stop",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/remaining.flow.json",
+        "digest" : "d0acfb551b8ae410e2dbddfec6fc29742ca7dbc37edb1271ca94dc737217ec09",
+        "layer" : "flow",
+        "message" : "step 5 `wait` failed: Batch failed at step 12 (wait): wait timed out for selector: id=\"app.remaining\" label=\"Remaining: 2\"; step 5 began 5.5 s into the batch: 1.1 s opening the app (1.0 s to launch, 0.6 s of it settling), 2.8 s in captures qa run added, 1.5 s in the flow's other steps",
+        "ms" : 49262,
+        "requirement" : "req-remaining",
+        "result" : "red"
+      },
+      {
+        "check" : "qa/screen.flow.json",
+        "digest" : "6c48fdc13e88dc506905dafc283f205b82e1728df53e14e56acdfebdaa8fcf3e",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 4 steps",
+        "ms" : 11073,
+        "requirement" : "req-screen",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/finished.flow.json",
+        "digest" : "581c6aabeb4451014cb8d56e0690e246a3b1bfe8ada2224aef15525d702cb65a",
+        "layer" : "flow",
+        "message" : "step 7 `wait` failed: Batch failed at step 20 (wait): wait timed out for selector: id=\"app.remaining\" label=\"Remaining: 3\". Current surface: Count: 0, Remaining: 0, 381, Finished.; step 7 began 12.2 s into the batch: 1.2 s opening the app (1.0 s to launch, 0.7 s of it settling), 5.1 s in captures qa run added, 5.9 s in the flow's other steps",
+        "ms" : 39217,
+        "requirement" : "req-finished",
+        "result" : "red"
+      }
+    ],
+    "runID" : "20261005T203359Z-9e69c57f",
+    "schemaVersion" : 1
+  },
+  "tree" : "0227880a9ba205aaa38df6ccf91ec1691a7e3ba7"
+}

@@ -641,8 +641,10 @@ struct BuildPlanBranchTests {
       git: LiveGit(runner: scenario.runner, repositoryRoot: scenario.checkout),
       profile: BuildPresetCatalog.profile(root: scenario.user))
 
-    #expect(
-      report.findings.map(\.rule).filter { $0 == .testsNotRun } == (refused ? [.testsNotRun] : []),
-      "\(report.message) \(report.findings)")
+    let notRun: [TaskReturnFinding.Rule] = report.findings.map(\.rule).filter {
+      $0 == .testsNotRun
+    }
+    let expected: [TaskReturnFinding.Rule] = refused ? [.testsNotRun] : []
+    #expect(notRun == expected, "\(report.message) \(report.findings)")
   }
 }

@@ -3,8 +3,9 @@ import SwiftGateAdapters
 import Synchronization
 
 /// The device a final pass drives, answered with the calls `Fixtures/AgentDevice/record/capture.sh`
-/// captured. Like the real tools it leaves files where they would: each `screenshot` step's PNG,
-/// the video at the batch's `record start` path once `record stop` runs, the sheet at
+/// and `capture-frames.sh` captured. Like the real tools it leaves files where they would: each
+/// `screenshot` step's PNG, the video at the batch's `record start` path once `record stop` runs,
+/// the batch's captured video when it has one, the sheet at
 /// `contact-sheet --out`, and the trace at `trace stop`'s path. Captured paths under `/HOME` read
 /// as `home`, where the session's app log and the app's data container are laid out.
 public enum CapturedFinalPass {
@@ -29,10 +30,14 @@ public enum CapturedFinalPass {
   ///   - batch: the capture every `batch` answers with: `record/recorded-pass` or
   ///     `record/recorded-fail` under `Fixtures/AgentDevice/`, or `batch/pass` or `batch/fail`.
   ///   - failing: call keys answered with exit 1 and no output, as a call that broke.
-  public static func runner(batch: String, home: URL, failing: Set<String> = []) throws
-    -> FakeProcessRunner
-  {
+  ///   - capturedVideo: `false` leaves bytes AVFoundation can't open as the video, as an export
+  ///     that broke.
+  public static func runner(
+    batch: String, home: URL, failing: Set<String> = [], capturedVideo: Bool = true
+  ) throws -> FakeProcessRunner {
     let batchOutput = try output("AgentDevice/\(batch)", home: home)
+    let captured = capturedVideo ? try? Fixture.data("AgentDevice/\(batch).mp4") : nil
+    let video = captured ?? Data("mp4".utf8)
     let ran = try executedSteps(batchOutput.stdout.bytes)
     var answers: [String: ProcessOutput] = [:]
     for (key, path) in fixtures { answers[key] = try output(path, home: home) }
@@ -57,7 +62,7 @@ public enum CapturedFinalPass {
         return batchOutput
       case "record stop":
         if let path = recordTo.withLock({ $0 }) {
-          FileManager.default.createFile(atPath: path, contents: Data("mp4".utf8))
+          FileManager.default.createFile(atPath: path, contents: video)
         }
       case "record contact-sheet":
         if let out = Self.value(after: "--out", in: arguments) {

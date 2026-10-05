@@ -25,7 +25,7 @@
       "bundleId": "com.example.SampleApp",
       "name": "com.example.SampleApp"
     },
-    "durationMs": 4595,
+    "durationMs": 3726,
     "recorder": "confirmed",
     "nativePathDisposition": "retired",
     "showTouches": true

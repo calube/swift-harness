@@ -108,7 +108,8 @@ struct SpecPageParseTests {
   func specNone() throws {
     let page = try SpecPageFixture.parsed(SpecPageFixture.page("shipping-address"))
 
-    #expect(page.slices.map(\.spec).filter { $0 == .none }.count == 1)
+    let unspecified = page.slices.filter { $0.spec == SpecPage.SpecReference.none }
+    #expect(unspecified.count == 1)
     #expect(page.slices[2].spec == .none)
     #expect(page.slices[2].testName == "deliveryNoteShowsCharactersLeft")
   }

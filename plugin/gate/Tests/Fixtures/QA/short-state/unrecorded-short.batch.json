@@ -1,0 +1,345 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 6 (is): Selector did not match: id=\"app.new\"",
+    "hint": "Selector text/label values match exactly (quote multi-word values: text=\"Sign in\"). Run snapshot -i to see current elements and refs, or use find <text> for contains matching.",
+    "diagnosticId": "muvr3gaf-5e153888",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-20261005T211619Z-ed6f84be-row2/requests/1fa75b2876873f1a.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-20261005T211619Z-ed6f84be-row2",
+      "requestId": "1fa75b2876873f1a"
+    },
+    "details": {
+      "command": "is",
+      "reason": "selector_not_found",
+      "predicate": "visible",
+      "selector": "id=\"app.new\"",
+      "step": 6,
+      "positionals": [
+        "visible",
+        "id=\"app.new\""
+      ],
+      "executed": 5,
+      "total": 9,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-20261005T211619Z-ed6f84be-row2",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-20261005T211619Z-ed6f84be-row2",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T211619Z-ed6f84be-row2/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T211619Z-ed6f84be-row2/requests/1fa75b2876873f1a.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T211619Z-ed6f84be-row2/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter",
+            "startup": {
+              "durationMs": 1022,
+              "measuredAt": "2026-10-05T21:17:17.642Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.InterviewStarter",
+              "appBundleId": "com.example.InterviewStarter"
+            },
+            "timing": {
+              "runnerDemand": "none",
+              "openDispatchDurationMs": 317,
+              "launchUrlDurationMs": 0,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 693,
+              "totalDurationMs": 1022
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "swift-harness-72279-31fcf417",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.InterviewStarter"
+          },
+          "durationMs": 1191
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 3391,
+            "selector": "id=\"app.new\""
+          },
+          "durationMs": 3393
+        },
+        {
+          "step": 3,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Other",
+                "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+                "subrole": "UIApplication",
+                "label": "InterviewStarter",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 79183,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "other"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "SwiftUI.UIKitNavigationBar",
+                "subrole": "UINavigationBar",
+                "identifier": "Posts",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 106
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e2",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 2,
+                "parentIndex": 1,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Posts",
+                "rect": {
+                  "x": 15.999999999999993,
+                  "y": 119.66666666666667,
+                  "width": 89,
+                  "height": 40.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e3",
+                "kind": "text"
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "100 posts available",
+                "identifier": "app.status",
+                "rect": {
+                  "x": 128.66666666666669,
+                  "y": 475.6666666666667,
+                  "width": 144.66666666666669,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "text"
+              },
+              {
+                "index": 4,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "New",
+                "identifier": "app.new",
+                "rect": {
+                  "x": 183.83333333333334,
+                  "y": 512,
+                  "width": 34.33333333333334,
+                  "height": 20.33333333333337
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e5",
+                "kind": "text"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": false,
+              "visibleNodeCount": 5,
+              "totalNodeCount": 5,
+              "reasons": []
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 6,
+                "p50Ms": 437,
+                "p95Ms": 523,
+                "maxMs": 523,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 6
+                }
+              }
+            },
+            "appName": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter",
+            "refsGeneration": 475847
+          },
+          "durationMs": 523
+        },
+        {
+          "step": 4,
+          "command": "screenshot",
+          "ok": true,
+          "data": {
+            "path": "/SCRATCH/app/.harness/runs/20261005T211619Z-ed6f84be/qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/steps/.72270-F1D8813D.png",
+            "message": "Saved screenshot: /SCRATCH/app/.harness/runs/20261005T211619Z-ed6f84be/qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/steps/.72270-F1D8813D.png",
+            "width": 402,
+            "height": 874,
+            "logicalWidth": 402,
+            "logicalHeight": 874,
+            "pixelDensity": 1
+          },
+          "durationMs": 385
+        },
+        {
+          "step": 5,
+          "command": "snapshot",
+          "ok": true,
+          "data": {
+            "nodes": [
+              {
+                "index": 0,
+                "type": "Other",
+                "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+                "subrole": "UIApplication",
+                "label": "InterviewStarter",
+                "rect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 402,
+                  "height": 874
+                },
+                "enabled": true,
+                "depth": 0,
+                "pid": 79183,
+                "hittable": false,
+                "ref": "e1",
+                "kind": "other"
+              },
+              {
+                "index": 1,
+                "parentIndex": 0,
+                "type": "NavigationBar",
+                "role": "SwiftUI.UIKitNavigationBar",
+                "subrole": "UINavigationBar",
+                "identifier": "Posts",
+                "rect": {
+                  "x": 0,
+                  "y": 62,
+                  "width": 402,
+                  "height": 106
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e2",
+                "kind": "navigation-bar"
+              },
+              {
+                "index": 2,
+                "parentIndex": 1,
+                "type": "StaticText",
+                "role": "UILabel",
+                "label": "Posts",
+                "rect": {
+                  "x": 15.999999999999993,
+                  "y": 119.66666666666667,
+                  "width": 89,
+                  "height": 40.66666666666667
+                },
+                "enabled": true,
+                "depth": 2,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e3",
+                "kind": "text"
+              },
+              {
+                "index": 3,
+                "parentIndex": 0,
+                "type": "StaticText",
+                "role": "SwiftUI.AccessibilityNode",
+                "subrole": "UIResponder",
+                "label": "100 posts available",
+                "identifier": "app.status",
+                "rect": {
+                  "x": 128.66666666666669,
+                  "y": 485.8333333333333,
+                  "width": 144.66666666666669,
+                  "height": 20.333333333333314
+                },
+                "enabled": true,
+                "depth": 1,
+                "pid": 79183,
+                "hittable": true,
+                "ref": "e4",
+                "kind": "text"
+              }
+            ],
+            "truncated": false,
+            "visibility": {
+              "partial": false,
+              "visibleNodeCount": 4,
+              "totalNodeCount": 4,
+              "reasons": []
+            },
+            "snapshotDiagnostics": {
+              "stats": {
+                "count": 7,
+                "p50Ms": 437,
+                "p95Ms": 523,
+                "maxMs": 523,
+                "slowThresholdMs": 1500,
+                "platform": "ios",
+                "backends": {
+                  "xctest": 7
+                }
+              }
+            },
+            "appName": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter",
+            "refsGeneration": 475848
+          },
+          "durationMs": 416
+        }
+      ]
+    }
+  }
+}

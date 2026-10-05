@@ -26,6 +26,9 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   /// Where the checked return now lives in the build run's returns store; `nil` when it wasn't
   /// stored: a fixer's return, a check that didn't pass, or a plan with no build run.
   var stored: String? = nil
+  /// The return's `flow row:` lines, which the recorded check keeps for the final `qa run`;
+  /// `nil` when it has none.
+  var flowRows: [FlowRowVerdict]? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
@@ -77,6 +80,7 @@ enum BuildCheckReturnRun {
       }
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       let verdict: Verdict = findings.isEmpty ? .green : .red
+      let flowRows = FlowRowVerdict.parse(notes: taskReturn.notes)
       var rules: [TaskReturnFinding.Rule] = []
       for finding in findings where !rules.contains(finding.rule) { rules.append(finding.rule) }
       return BuildCheckReturnReport(
@@ -89,7 +93,8 @@ enum BuildCheckReturnRun {
         haltAdvice: await haltAdvice(
           taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git,
           profile: profile),
-        outcome: taskReturn.outcome)
+        outcome: taskReturn.outcome,
+        flowRows: flowRows.isEmpty ? nil : flowRows)
     } catch {
       return blocked(taskReturn.task, error.message)
     }
@@ -247,7 +252,8 @@ enum BuildCheckReturnRun {
         .returnCheck(
           .init(
             task: task, fix: fix, verdict: report.verdict, commit: report.commit,
-            checkID: eventID, rules: rules, at: now, outcome: report.outcome)))
+            checkID: eventID, rules: rules, at: now, outcome: report.outcome,
+            flowRows: report.flowRows ?? [])))
     } catch {
       return [
         "\(notRecorded) in build run \(buildRun), so `build merge` will refuse this return: "

@@ -1,0 +1,75 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "f06c9cf6df6e7d7907756a0ca9f76acae0050491",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (slice-2-decrement-at-zero-stays-zero, flow) `short-state.flow.json`: step 3 `is` failed: Batch failed at step 6 (is): Selector did not match: id=\"app.new\"; step 3 began 5.9 s into the batch: 1.2 s opening the app (1.0 s to launch, 0.7 s of it settling), 1.3 s in captures qa run added, 3.4 s in the flow's other steps; capture delay: the tree qa run captured after step 2 shows `id=\"app.new\"` 1.3 s before step 3 began, so the state was on screen and ended during the 1.3 s of captures qa run added there: this red is qa run's, no evidence against the app, the flow or the contract",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "2 of 2 rows verified: 1 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "2026-10-03-counter-reset-and-floor",
+  "reasonOnly" : 0,
+  "rows" : [
+    {
+      "check" : "reads.flow.json",
+      "evidence" : [
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/steps.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/batch.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/flow.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps.ndjson",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 3 steps",
+      "ms" : 54372,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "short-state.flow.json",
+      "evidence" : [
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/steps.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/batch.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/flow.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/steps.ndjson",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 3 `is` failed: Batch failed at step 6 (is): Selector did not match: id=\"app.new\"; step 3 began 5.9 s into the batch: 1.2 s opening the app (1.0 s to launch, 0.7 s of it settling), 1.3 s in captures qa run added, 3.4 s in the flow's other steps; capture delay: the tree qa run captured after step 2 shows `id=\"app.new\"` 1.3 s before step 3 began, so the state was on screen and ended during the 1.3 s of captures qa run added there: this red is qa run's, no evidence against the app, the flow or the contract",
+      "ms" : 8793,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T211619Z-ed6f84be",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "RED"
+}
