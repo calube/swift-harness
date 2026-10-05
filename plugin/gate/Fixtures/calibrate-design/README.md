@@ -85,6 +85,13 @@ one answer:
 - `design-pre-mortem/*` are judged on what the gating failure stories say about concurrent
   downloads. A pre-mortem is asked to find every open failure story, and the clean twin leaves
   some open (failed downloads, cache retention), so "no gating finding" isn't its label.
+- `design-lane-prior-decisions/supported-prior-file-claim` carries a prior claim whose text says
+  no more than its quote: DatabaseWriter.swift documents that it executes database operations
+  in a transaction (seed changed with the user's approval, 2026-10-04). The old text said
+  `DatabaseQueue.write` runs its closure inside one transaction, broader than the quote, so the
+  lane prompt's rule to carry a prior claim verbatim under its id met its rules that a claim say
+  no more than its quote and that a different claim takes a new id, and the clean twin had two
+  defensible answers.
 
 ## `label.json`
 
