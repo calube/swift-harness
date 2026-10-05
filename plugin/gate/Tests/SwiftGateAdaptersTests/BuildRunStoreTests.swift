@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateTestSupport
 import Testing
 
 /// The build run store against real files under a temporary repository's git common dir.
@@ -309,5 +310,30 @@ struct BuildRunStoreTests {
     await #expect(throws: BuildRunStoreError.invalidPlanName("x/y")) {
       _ = try await BuildRunStore.open(plan: "x/y", runID: "r", git: repo.adapter)
     }
+  }
+
+  @Test(
+    "a run id alone finds its record in whichever plan holds it, and an unknown id finds none — catches build halt blind to the run's time box"
+  )
+  func recordFoundByRunIDAlone() throws {
+    let common = TestTemporaryDirectory.root.appending(
+      path: "swiftgate-run-record-\(UUID().uuidString)", directoryHint: .isDirectory)
+    defer { try? FileManager.default.removeItem(at: common) }
+    let captured = try Fixture.data("BuildReturn/send-money-5/run.json")
+    let runID = try BuildRunJSON.decode(captured).runID
+    let directory = common.appending(path: "swift-harness/plans/spec/build/\(runID)")
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(
+      at: common.appending(path: "swift-harness/plans/other/build"),
+      withIntermediateDirectories: true)
+    try captured.write(to: directory.appending(path: "run.json"))
+
+    let record = BuildRunStore.record(runID: runID, commonDirectory: common.path)
+
+    #expect(record?.plan == "spec")
+    #expect(
+      record?.timeBox?.deadlines.cutoffAt == (try Date("2026-10-05T08:17:07Z", strategy: .iso8601)))
+    #expect(
+      BuildRunStore.record(runID: "20261005T074715Z-00000000", commonDirectory: common.path) == nil)
   }
 }

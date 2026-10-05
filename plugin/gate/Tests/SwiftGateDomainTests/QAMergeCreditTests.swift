@@ -57,7 +57,7 @@ struct QAMergeCreditTests {
   /// The cutoff's view of the detail task: the list task merged, the detail task's newest check
   /// its own GREEN return, and the plan branch at the list task's merge.
   static func detailAtCutoff() throws -> CutoffQA {
-    let record = try CutoffRecord.decode(Fixture.data("\(directory)/price-tracker-4-cutoff.json"))
+    let record = try CutoffRecord.decode(Fixture.data("BuildCutoff/price-tracker-4/cutoff.json"))
     let log = try log()
     let before = BuildEventLog(
       events: log.events.filter { event in
@@ -90,7 +90,7 @@ struct QAMergeCreditTests {
   )
   func cutoffOwesTheRunItNeverPassed() throws {
     let record = try CutoffRecord.decode(
-      Fixture.data("\(Self.directory)/price-tracker-4-cutoff.json"))
+      Fixture.data("BuildCutoff/price-tracker-4/cutoff.json"))
 
     let qa = try Self.detailAtCutoff()
 
@@ -123,7 +123,7 @@ struct QAMergeCreditTests {
       task: "send-flow", fix: true, verdict: .red, commit: merge.tip, checkID: "fix-check",
       rules: [.gateMissing], at: Date(timeIntervalSince1970: 1_790_000_000), outcome: outcome)
     let record = try CutoffRecord.decode(
-      Fixture.data("\(directory)/price-tracker-4-cutoff.json"))
+      Fixture.data("BuildCutoff/price-tracker-4/cutoff.json"))
 
     let qa = CutoffQA.of(
       table: table, merged: ["amount-input"], plan: Self.plan, task: "send-flow",

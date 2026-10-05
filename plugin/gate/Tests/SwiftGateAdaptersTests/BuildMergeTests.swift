@@ -293,6 +293,41 @@ struct BuildMergeTests {
   }
 
   @Test(
+    "--undo of a merged task the newest cutoff said to finish, with only a BLOCKED merge gate after it, exits 1 and leaves main; a RED gate after it lets the undo run — catches an orchestrator undoing a task build cutoff kept"
+  )
+  func undoOfACutoffFinishRefused() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let merged = await scenario.merge("t1")
+    let captured = try CutoffRecord.decode(
+      Fixture.data("BuildCutoff/price-tracker-4/cutoff.json"))
+    let cutoff = CutoffRecord(
+      at: MergeScenario.at, timeBox: captured.timeBox,
+      decisions: [CutoffDecision(task: "t1", action: .finishMerge, reason: "its merge is on main")])
+    try cutoff.encoded().write(
+      to: URL(filePath: scenario.run.layout.directory + "/" + CutoffRecord.fileName))
+    func gate(_ verdict: Verdict, _ id: String) async throws {
+      try await scenario.run.append(
+        .gate(
+          .init(
+            stage: .merge(task: "t1"), tier: .ready, verdict: verdict, runID: id,
+            at: MergeScenario.at)))
+    }
+
+    try await gate(.blocked, "20260921T120000Z-00000001")
+    let refused = await scenario.undo("t1")
+    #expect(refused.status != .undone, "\(refused.message)")
+    #expect(refused.reason == .undoRefused, "\(refused.message)")
+    #expect(refused.message.contains("finish-merge"), "\(refused.message)")
+    #expect(try await scenario.main() == merged.postCommit)
+
+    try await gate(.red, "20260921T120100Z-00000002")
+    let undone = await scenario.undo("t1")
+    #expect(undone.status == .undone, "\(undone.message)")
+  }
+
+  @Test(
     "--undo prunes the scratch trees gates left behind and names them, and a refused undo prunes nothing — catches a killed gate's prove tree registered after the undo"
   )
   func undoPrunesScratchTrees() async throws {

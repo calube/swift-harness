@@ -4112,6 +4112,56 @@ the orchestrator saved. `batch.json` keeps the first 4 of the batch's 26 step re
 use that one. `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched
 nothing.
 
+`BuildReturn/send-money-5/` is the fifth send-money trial's unconfirmed fix: its fixer committed
+the fix, ran out of time for its own gate and `qa run --fix`, and returned `gate-red` with a BLOCKED
+gate and no run id. `run.json` is the build run's record, whose time box puts no new starts at
+08:09:07Z and the cutoff at 08:17:07Z. `clock-and-cutoff-at-return.txt` is the orchestrator's
+`run clock` and `build cutoff` output right after the return, 215 s before the cutoff; it then
+blocked the task by hand. `T` is the trial folder under the practice-trial runs folder, holding the
+orchestrator's transcripts, and `R` the trial clone. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+S=$R/.git/swift-harness F=BuildReturn/send-money-5 B=20261005T074715Z-e542ff56
+mkdir -p $F
+cp $S/plans/spec/build/$B/run.json $F/run.json
+sed -n 35p $T/transcripts/*/subagents/agent-a780f362b4a9c997c.jsonl | python3 -c \
+  "import json,sys;sys.stdout.write(json.loads(sys.stdin.read())['message']['content'][0]['text'])" \
+  | LC_ALL=C sed -E -e "s#/Users/[^/\"]*/Developer/trials/practice/send-money-5/#/TRIAL/#g" \
+  > $F/fix-send-flow.json
+python3 - $T/transcripts/f43f6be3-b6fa-45df-8258-3a3f1f577f4c.jsonl > $F/clock-and-cutoff-at-return.txt <<'PY'
+import json,sys
+for l in open(sys.argv[1]):
+    c=json.loads(l).get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')=='tool_result':
+            t=b['content'] if isinstance(b['content'],str) else ''.join(x.get('text','') for x in b['content'])
+            if '"command" : "build cutoff"' in t and 'no-new-starts' in t:
+                keep=[x for x in t.split('\n') if not x.startswith(('events ','Shell cwd'))]
+                sys.stdout.write('\n'.join(keep).rstrip('\n')+'\n'); sys.exit()
+PY
+```
+
+Line 35 of the fixer's transcript is its first return, the one the orchestrator halted on. The
+clock capture drops the span and ingest lines before it and the shell's cwd note after it.
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
+`BuildCutoff/price-tracker-4/` is the fourth price-tracker trial's cutoff. Its watchlist task was
+merged with a merge gate BLOCKED on time (`prove.no-evidence`: the time left before the cutoff
+couldn't hold the prove), `cutoff.json` said `finish-merge` for it, and the orchestrator undid it
+anyway. `run.json` and `cutoff.json` are the build run's, and `events-before-undo.jsonl` is its
+ledger log up to the line before that undo. `P` is the trial folder under the practice-trial runs
+folder, holding the clone's state copied after the run as `state/`. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+B=20261005T074707Z-2fab1421 F=BuildCutoff/price-tracker-4
+mkdir -p $F
+cp $P/state/plans/spec/build/$B/run.json $P/state/plans/spec/build/$B/cutoff.json $F/
+sed -n '1,/"kind":"undo","task":"tracker-watchlist"/p' $P/state/plans/spec/build/$B/events.jsonl | sed '$d' > $F/events-before-undo.jsonl
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
 ## Brownfield trials: send-money-5's combined-run merges and price-tracker-4's credited rows
 
 The fifth send-money trial ran account-fake and send-flow on 1 trial merge, RED only in the search
@@ -4134,7 +4184,7 @@ cp $S/runs/20261005T080159Z-d7726b40/qa/report.json $F/send-money-5-qa-before-se
 grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/send-money-5-gate-runs.jsonl
 mkdir -p BuildReturn/send-money-5
 python3 - $T/transcripts/f43f6be3-b6fa-45df-8258-3a3f1f577f4c.jsonl \
-  > BuildReturn/send-money-5/fix-send-flow.json <<'PY'
+  > BuildReturn/send-money-5/fix-send-flow-orchestrator.json <<'PY'
 import json,sys
 for l in open(sys.argv[1]):
     c=json.loads(l).get('message',{}).get('content')
@@ -4147,11 +4197,10 @@ PY
 T=<price-tracker-4 run folder> S=$T/state R=20261005T074707Z-2fab1421
 cp $S/plans/spec/validation.json $F/price-tracker-4-validation.json
 cp $S/plans/spec/build/$R/events.jsonl $F/price-tracker-4-build-events.jsonl
-cp $S/plans/spec/build/$R/cutoff.json $F/price-tracker-4-cutoff.json
 cp $S/runs/20261005T080814Z-ffc2a55e/qa/report.json $F/price-tracker-4-qa-before-watchlist-detail.json
 cp $S/runs/20261005T081116Z-e407d716/qa/report.json $F/price-tracker-4-qa-before-watchlist.json
 ```
 
-The fixer's return is the heredoc the orchestrator wrote to `fix-send-flow.json` before its
-`check-return --fix`. The gate runs give each worker's GREEN slice at the tip its return check named.
+`fix-send-flow-orchestrator.json` is the return the orchestrator rewrote by hand from the fixer's
+before its `check-return --fix`. The cutoff tests read `BuildCutoff/price-tracker-4/cutoff.json`. The gate runs give each worker's GREEN slice at the tip its return check named.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
