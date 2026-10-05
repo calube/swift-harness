@@ -178,6 +178,7 @@ struct RunViewContractTests {
             steps: [RunViewFlow.Step(n: 1, label: nil, offsetMs: 0, ok: true)],
             videoUnverified: .recorderBusy)),
       ],
+      reasonOnly: [RunViewValidation.ReasonOnly(requirement: "req-b", reason: nil)],
       keptFlows: [
         RunViewKeptFlow(
           name: "counter", test: nil, gateRun: "g1", at: start,
@@ -186,7 +187,8 @@ struct RunViewContractTests {
     let object = try #require(
       JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
     let validation = try #require(object["validation"] as? [String: Any])
-    #expect(keys(validation) == ["plan", "counts", "rows", "keptFlows"])
+    #expect(keys(validation) == ["plan", "counts", "rows", "reasonOnly", "keptFlows"])
+    #expect(keys(first(validation["reasonOnly"])) == ["requirement", "reason"])
     #expect(
       keys(validation["counts"]) == ["pass", "red", "unverified", "waiting", "abandoned", "atBase"])
     let row = first(validation["rows"])

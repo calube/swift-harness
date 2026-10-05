@@ -48,6 +48,23 @@ struct ChangedTestWaitsTests {
     #expect(Self.findings([Self.file(text, added: [15...30, 102...102])]).map(\.line) == [102])
   }
 
+  @Test(
+    "price-tracker-4's captured detail test, new in the change, is RED at its first-element `for await`, and the same file once its author dropped the wait is clean — catches a changed test that hung prove at the base for 227 s"
+  )
+  func capturedFirstElementWaitIsFound() throws {
+    let waits = Self.findings([
+      Self.file(try Self.fixture("price-tracker-4-AssetDetailFeatureTests-for-await.swift"))
+    ])
+    #expect(waits.map(\.ruleID) == [ChangedTestWaits.ruleID])
+    #expect(waits.map(\.line) == [79])
+    #expect(waits.allSatisfy { $0.severity.failsGate })
+
+    let fixed = Self.findings([
+      Self.file(try Self.fixture("price-tracker-4-AssetDetailFeatureTests.swift"))
+    ])
+    #expect(fixed.isEmpty, "\(fixed.map(\.message))")
+  }
+
   private static func findings(_ files: [ChangedTestFile]) -> [Finding] {
     ChangedTestWaits.findings(files)
   }

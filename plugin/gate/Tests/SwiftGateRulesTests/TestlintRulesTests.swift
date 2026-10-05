@@ -237,4 +237,12 @@ struct TestlintRulesTests {
     #expect(try lines("test.unbounded-wait", "bad/AssetDetailFeatureTests.swift") == [71, 73])
     #expect(try lines("test.unbounded-wait", "good/BoundedWaits.swift") == [])
   }
+
+  @Test(
+    "price-tracker-4's captured detail test, which waits for a stream's first element with `for await _ in started.stream { break }`, is RED at that loop, and first-element waits inside a timeout or racing a sleep pass — catches the for-await wait that hung 4 tests at the base"
+  )
+  func unboundedWaitCapturedFirstElement() throws {
+    #expect(try lines("test.unbounded-wait", "bad/ForAwaitFirstElement.swift") == [79])
+    #expect(try lines("test.unbounded-wait", "good/BoundedWaits.swift") == [])
+  }
 }

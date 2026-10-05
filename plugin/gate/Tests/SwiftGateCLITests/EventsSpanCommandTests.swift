@@ -195,12 +195,15 @@ struct EventsSpanCommandTests {
     try await Self.git(runner, in: main.root, "worktree", "add", "-q", "-b", "a", first.path)
     try await Self.git(runner, in: main.root, "worktree", "add", "-q", "-b", "b", second.path)
 
+    let index = SpanStoreIndex(directory: Self.temporaryRoot())
+    defer { try? FileManager.default.removeItem(at: index.directory) }
     let before = Date()  // swiftgate:allow det.date-init — bounds the real elapsed time
     let started = await SpanRun.start(
       in: first.path, phase: "review", buildRun: Self.buildRun, task: "parse-config",
-      role: "review", parent: nil)
+      role: "review", parent: nil, index: index)
     #expect(started.status == 0, "\(started)")
-    let ended = await SpanRun.end(in: second.path, spanID: started.stdout, outcome: "ok")
+    let ended = await SpanRun.end(
+      in: second.path, spanID: started.stdout, outcome: "ok", index: index)
     let after = Date()  // swiftgate:allow det.date-init — bounds the real elapsed time
     let elapsed = after.timeIntervalSince(before)
     #expect(ended.status == 0, "\(ended)")
@@ -217,6 +220,77 @@ struct EventsSpanCommandTests {
     #expect(end.spanID == started.stdout)
     #expect(events.last?.parentID == events.first?.eventID)
     #expect(Double(end.milliseconds) <= elapsed * 1000 + 1000, "\(end.milliseconds) ms")
+  }
+
+  @Test(
+    "the trial's contract span, started in the clone's checkout, ends from a directory in another repository and lands in the clone's store — catches the price-tracker-4 contract span left open because its end ran from the plugin's skill directory"
+  )
+  func spanEndsFromAnotherRepository() async throws {
+    let clone = try ProbeRepository()
+    let elsewhere = try ProbeRepository()
+    let runner = LiveProcessRunner(baseEnvironment: Self.gitEnvironment)
+    let index = SpanStoreIndex(directory: Self.temporaryRoot())
+    defer {
+      try? FileManager.default.removeItem(at: index.directory)
+      clone.remove()
+      elsewhere.remove()
+    }
+    for repository in [clone, elsewhere] {
+      try await Self.git(runner, in: repository.root, "init", "-q", "-b", "main")
+    }
+    let skills = elsewhere.root.appending(path: "skills/build", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: skills, withIntermediateDirectories: true)
+
+    let started = await SpanRun.start(
+      in: clone.root.path, phase: "contract", buildRun: "spec", task: nil, role: nil,
+      parent: nil, index: index)
+    #expect(started.status == 0, "\(started)")
+    let ended = await SpanRun.end(
+      in: skills.path, spanID: started.stdout, outcome: "ok", index: index)
+    #expect(ended.status == 0, "\(ended)")
+
+    #expect(try Self.events(elsewhere.root).isEmpty, "the other repository holds spans")
+    let events = try Self.events(clone.root)
+    #expect(events.count == 2)
+    guard case .spanEnd(let end) = events.last?.payload else {
+      Issue.record("no span.end in the clone's store: \(events)")
+      return
+    }
+    #expect(end.spanID == started.stdout)
+    #expect(index.root(spanID: started.stdout) != nil)
+  }
+
+  @Test(
+    "an index entry older than the kept window is dropped on the next start, and a span the index never saw ends from its own repository — catches an index that grows forever or one that blocks a plain end"
+  )
+  func indexPrunesAndFallsBack() async throws {
+    let repository = try ProbeRepository()
+    let runner = LiveProcessRunner(baseEnvironment: Self.gitEnvironment)
+    let index = SpanStoreIndex(directory: Self.temporaryRoot())
+    defer {
+      try? FileManager.default.removeItem(at: index.directory)
+      repository.remove()
+    }
+    try await Self.git(runner, in: repository.root, "init", "-q", "-b", "main")
+    index.record(spanID: "0123456789abcdef", root: repository.root)
+    let old = index.directory.appending(path: "0123456789abcdef")
+    try FileManager.default.setAttributes(
+      [.modificationDate: Date(timeIntervalSinceNow: -SpanStoreIndex.retainedSeconds - 60)],
+      ofItemAtPath: old.path)
+
+    let started = await SpanRun.start(
+      in: repository.root.path, phase: "plan", buildRun: "spec", task: nil, role: nil,
+      parent: nil, index: index)
+    #expect(started.status == 0, "\(started)")
+    #expect(index.root(spanID: "0123456789abcdef") == nil)
+    #expect(
+      index.root(spanID: started.stdout)?.standardizedFileURL.path
+        == repository.root.standardizedFileURL.path)
+
+    let other = SpanStoreIndex(directory: Self.temporaryRoot())
+    let ended = await SpanRun.end(
+      in: repository.root.path, spanID: started.stdout, outcome: "ok", index: other)
+    #expect(ended.status == 0, "\(ended)")
   }
 
   @Test(
