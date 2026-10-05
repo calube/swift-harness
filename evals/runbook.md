@@ -2,8 +2,8 @@
 
 How to work on the evals in any session: build cases, run them, record results. Read
 [`README.md`](README.md) for why, [`design.md`](design.md) for method, and [`suites.md`](suites.md)
-and [`components.md`](components.md) for what to measure. The dated handoff for the current round
-lives in `docs/handoffs/` and names the scope.
+and [`components.md`](components.md) for what to measure. The prompt for the current round names
+the scope.
 
 ## Your role: operator
 

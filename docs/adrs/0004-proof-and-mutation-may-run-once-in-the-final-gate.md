@@ -1,7 +1,7 @@
 # 0004. Proof and mutation may run once, in the final gate
 
 Status: accepted, 2026-09-27, with the build executor plan's "Speed" section
-(`docs/plans/2026-09-26-build-executor-plan.md`). Changes the build executor spec §5.1.
+(the plan now lives only in the tag `harness-freeze-2026-10-05`). Changes the build executor spec §5.1.
 
 ## Context
 

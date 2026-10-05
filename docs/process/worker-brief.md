@@ -4,18 +4,9 @@ You are a worker implementing tasks from a swift-harness implementation plan (na
 owns the plan and merges your work. Your task IDs and worktree are given in your prompt.
 
 ## Sources of truth (read only what you need)
-- Plan: the file named in your prompt (e.g. `docs/plans/2026-09-25-design-plan-workflows-plan.md`) — read its
-  "Decisions" and "How to work this plan" sections and YOUR task sections only (grep for the task id).
+- Plan: the file named in your prompt. Read its "Decisions" and "How to work this plan" sections and YOUR task
+  sections only (grep for the task id).
 - Spec: the design the plan names — grep for the sections your task cites (e.g. `§5.4`, `### 7.4`). Do not read the whole spec unless needed.
-
-## Speed mode until the #8 cleanup (2026-10-03 to 2026-10-04)
-
-The maintainer chose build speed until a cleanup on 2026-10-04. Until this section is deleted:
-- Don't wait for low machine load before running or rerunning a gate.
-- If a gate's only failure is a node walk test's 60 s timeout (issue #8), commit anyway and name the run id in
-  the commit body. Those tests are being skipped until #8 is fixed.
-- Everything else stands: the push gate with `--prove` on every change, surface-first commits, tests that fail
-  first, captured fixtures, and no push.
 
 ## Rules
 1. **TDD.** For each behavior: write the failing test first, named `@Test("<behavior> — catches <regression>")`
@@ -40,7 +31,7 @@ The maintainer chose build speed until a cleanup on 2026-10-04. Until this secti
 8. **Dependencies:** only those in the plan's Decisions table unless unavoidable (report it).
 9. **Scope:** only your tasks. If blocked, stop and report — do not improvise large redesigns.
 
-## Known pitfalls (each one cost a fix round in earlier waves; check your diff against them before reporting)
+## Known pitfalls (each one cost a fix round; check your diff against them before reporting)
 1. **Close types at trust boundaries.** Data written by another agent, a skill or a user, or read by a gate,
    gets a closed type: an enum, not a `String`, and no `.other(String)` or `.unknown` catch-all. An unknown value fails
    decoding and names itself. Exception: a parser of hand-written docs may keep an unknown value, but only

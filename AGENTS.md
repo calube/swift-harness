@@ -2,8 +2,8 @@
 
 A Claude Code plugin holding SwiftUI iOS work to a consistent bar. Full docs: [`docs/index.md`](docs/index.md).
 
-Status: frozen at `harness-freeze-2026-10-05`; see
-[`docs/handoffs/2026-10-05-practice-app-results.md`](docs/handoffs/2026-10-05-practice-app-results.md).
+Status: frozen at the tag `harness-freeze-2026-10-05`; see the
+[practice-app results](docs/results/2026-10-05-practice-app-results.md) for the open follow-ups.
 
 This file is for contributors: people building the harness itself. The plugin that consumers
 install is [`plugin/`](plugin/): skills, agents, hooks, workflows, templates, the `swiftgate`
@@ -45,10 +45,10 @@ pre-push to `plugin/bin/swiftgate check --tier push` and commit-msg to the comme
 For building an app on top of the harness (module kinds, `@Dependency`, TCA, logging clients, no
 singletons), read [`plugin/docs/standards.md`](plugin/docs/standards.md), not this file.
 
-The plan and wave process that build this harness live in
-[the current plan](docs/plans/2026-09-25-design-plan-workflows-plan.md), the
-[orchestrator runbook](docs/handoffs/subproject-2-orchestrator-runbook.md), and the
-[interfaces note](docs/handoffs/subproject-2-interfaces.md) each wave appends to.
+Multi-task work on the harness runs in waves: the
+[orchestrator runbook](docs/process/orchestrator-runbook.md) drives them, and each worker follows
+the [worker brief](docs/process/worker-brief.md). The finished plans and handoffs live only in
+the tag `harness-freeze-2026-10-05`.
 
 Everything else (the rule catalog, testing tiers, hooks, design docs, ADRs) is in
 [`docs/index.md`](docs/index.md). Don't guess a rule; grep `plugin/docs/standards.md` or ask.

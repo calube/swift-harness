@@ -7,7 +7,7 @@ agent's blind labels (§7).
 Why: the judge seam was built with a second backend in mind (`[judge] backend = "jev"` parses today and reports
 BLOCKED), and the repo runs 2 judge stacks that share no code.
 Decision record: [ADR 0007](../adrs/0007-jev-is-an-opt-in-second-judge-backend.md), accepted.
-Plan: [`../plans/2026-09-30-jev-judge-backend-plan.md`](../plans/2026-09-30-jev-judge-backend-plan.md).
+Plan: built; it now lives only in the tag `harness-freeze-2026-10-05`.
 Read first: this header, §3, §7 and §12.
 §13 (the Jev-native question set and the cascade) was added on 2026-09-30 from the question design study
 (evals/results/2026-09-30-jev-question-design/). The user hasn't approved it yet; its plan tasks wait for that.

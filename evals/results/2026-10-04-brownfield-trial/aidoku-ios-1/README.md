@@ -2,8 +2,8 @@
 
 This trial runs the brownfield profile (design §14) on an iOS app for the first time, to prove the Xcode path end to
 end. The repository is `Aidoku/Aidoku` at `3091ef26e593d303e34afed70bc8c5997c105f80`: a SwiftUI and UIKit app with an
-Xcode project, 14 SwiftPM dependencies and a Swift Testing target. [The trial repositories page](../../../../docs/handoffs/brownfield-trial-repos.md#ios-trial)
-says why this trial uses it. The clone is fresh, made on 2026-10-04 at `trials/aidoku-ios-1`. The spec asks for a
+Xcode project, 14 SwiftPM dependencies and a Swift Testing target. The trial repositories page, now only in the tag
+`harness-freeze-2026-10-05`, says why this trial uses it. The clone is fresh, made on 2026-10-04 at `trials/aidoku-ios-1`. The spec asks for a
 download queue summary row: a value type, a SwiftUI row with an accessibility identifier, and a unit test. The
 harness ran from this branch's `plugin/bin/swiftgate`, which is main at `99f847d0`, built as source hash
 `18477dbc3f8e90ef`.

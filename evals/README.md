@@ -37,8 +37,8 @@ limit.
 
 ## When to run
 
-After wave 27 of the sub-project 2 plan
-([`nonexistent-api-run-refutes-claim`](../docs/plans/2026-09-25-design-plan-workflows-plan.md#nonexistent-api-run-refutes-claim)).
+After the design and plan workflows' `nonexistent-api-run-refutes-claim` acceptance task (its plan now
+lives only in the tag `harness-freeze-2026-10-05`).
 By then the plugin installs through the marketplace, lives under `plugin/`, and has refuted 1
 fabricated claim in a real run. The `design-honesty` suite extends that single run into a dataset.
 

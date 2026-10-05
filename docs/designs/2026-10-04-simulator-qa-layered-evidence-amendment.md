@@ -4,7 +4,7 @@
 Status: APPROVED 2026-10-04 by the user, who accepted every recommendation in §12 and chose decisions 1, 10 and 17
 themselves. Decision record: [ADR 0008](../adrs/0008-simulator-qa-layered-validation.md), amending [ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md).
 Amends: the approved simulator QA design (docs/designs/2026-09-28-simulator-qa-design.md), its decision record
-[ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), and its plan (docs/plans/2026-09-28-simulator-qa-plan.md), which now carries §13's tasks.
+[ADR 0005](../adrs/0005-simulator-qa-drives-agent-device.md), and its plan, which carried §13's tasks (it now lives only in the tag `harness-freeze-2026-10-05`).
 Why: the user asked for layered validation planning and richer QA evidence, fitted to this harness's QA setup and
 report format.
 Read first: this header, §2, §4, §10 (conflicts) and §12 (decisions).
@@ -404,7 +404,7 @@ choices the user made in so many words.
 
 ## 13. Changes to the plan
 
-[The plan](../plans/2026-09-28-simulator-qa-plan.md) carries each change below as a task, in waves that reach a
+The simulator QA plan carried each change below as a task, in waves that reach a
 brownfield iOS run first.
 
 - The capture task also captures `batch --json` success and failure, `record start`, `record stop`, `record

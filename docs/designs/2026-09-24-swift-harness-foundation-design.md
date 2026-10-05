@@ -5,7 +5,7 @@
 > move plan state into the git common dir and move design docs under `docs/`.
 
 <!-- RESUME
-Status: FOUNDATION BUILT 2026-09-25 (plan docs/plans/2026-09-24-foundation-plan.md, all tasks M0–M7 done; 594 tests).
+Status: FOUNDATION BUILT 2026-09-25 (all plan tasks done; 594 tests; the plan now lives only in the tag `harness-freeze-2026-10-05`).
 Verified live in Claude Code via --plugin-dir; end-to-end results in docs/e2e-report.md.
 Refinement after build: review findings carry kind (defect | standards-violation) — docs/adrs/0001.
 Next action: sub-project 2 (design & plan workflows) spec. Review workflow ran for real 2026-09-25 (refactor-needed, correct; dedupe fixed 87aae53).
