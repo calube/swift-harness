@@ -60,6 +60,11 @@ exists and fails for the reason the feature is missing.
   refresh row, `"destination": "id=\"<bottom id>\""`; the contract pins it with
   `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`.
   When the contract has none, return it as a missing contract name.
+  A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
+  {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
+  `fill` or `press` on the list's id. Check the result by the ids of the count and rows, and wait
+  for a row to go with `{"kind": "absent", "absent": "id=\"<row>\""}`: with a `selector` key the
+  wait is for the row to appear.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its

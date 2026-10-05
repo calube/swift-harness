@@ -153,6 +153,9 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`,
   and the flow's step is `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top
   row>\"", "destination": "id=\"<bottom id>\""}}`.
+- A search journey's flow types into a `.searchable` field by `role=searchfield`, since the field
+  takes no identifier and an identifier after `.searchable` lands on the list. The contract names
+  the field's prompt and gives ids to what the search changes: the result count and each row.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 
