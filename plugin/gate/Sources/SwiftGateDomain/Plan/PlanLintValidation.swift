@@ -148,6 +148,15 @@ public enum PlanLintValidation {
     return findings
   }
 
+  /// The app-without-flow findings alone, for a plan with no `## Validation` section (`table`
+  /// `nil`), which then has no flow row for any app whose screens its tasks write.
+  public static func appWithoutFlowFindings(
+    table: ValidationTable?, tasks: [TaskWrites], appAreas: [AppArea], file: String,
+    contractTask: String? = nil
+  ) throws(ReportContractViolation) -> [Finding] {
+    []
+  }
+
   /// 1 finding per requirement, in plan order, that a task covers while writing a screen of an
   /// `xcode` area, with no `flow` row and no reason on any of its rows naming an obstacle.
   private static func screenFindings(

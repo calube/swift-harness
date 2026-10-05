@@ -2989,6 +2989,15 @@ cp $S/runs/20261005T020255Z-74e7bef9/qa/report.json $F/QA/send-money-1/final-rep
 
 `grep -rniE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
 
+`BrownfieldTrial/send-money-1-no-validation-PLAN.md` is the same `PLAN.md` with its
+`## Validation` section deleted, from its heading up to the next heading, and nothing else changed:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+awk '/^## Validation$/{skip=1; next} skip && /^#{2,3} /{skip=0} !skip' \
+  $F/send-money-1-PLAN.md > $F/send-money-1-no-validation-PLAN.md
+```
+
 ## Brownfield trial: a flow row's sim run on an iOS clone
 
 `BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
