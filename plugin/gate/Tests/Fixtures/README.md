@@ -2905,6 +2905,46 @@ last `sed` replaced the clone's absolute path in the GREEN merge gate's baseline
 '/Users|/private|/var/folders|caleb|@[a-z]+\.|home|/tmp' RunView/brownfield-rejected` and the secrets grep
 above matched nothing.
 
+## Run view: worker gate runs of tasks running at once
+
+`RunView/brownfield-parallel-workers/` is the state a brownfield trial of 2026-10-05 left, a
+`swiftgate run` on a copy of the evals starter app, build run `20261005T130559Z-158c916a` of plan
+`spec`. It feeds crediting a worker's own gate runs to its task. The validation task and 3 build
+tasks moved to `in-progress` within 1 second of each other. The build workers ran 14 slice and
+test-only gates and 1 stop hook in the clone's shared store, which no ledger event or return names,
+and all their
+worktrees were removed before the run ended. 1 task's return lists its commits as abbreviated
+shas. Another task's first worker left commits that only its branch, never its return, holds.
+
+With `T` the trial's folder, `C=$T/state` (the clone's `swift-harness` state root, copied after the
+run), `P=$C/plan` and `R=$P/build/20261005T130559Z-158c916a`, copied 2026-10-05:
+
+```sh
+S='s#/Users/[^/]*/Developer/trials/practice/[^/"]*/repo-#../repo-#g; s#"/Users/[^"]*/spec\.md"#"/spec.md"#g'
+mkdir -p events returns
+cp $C/events/{gate,build}.jsonl events/
+sed -E "$S" $T/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+```
+
+`branch-commits/` holds, for each ledger task, what `git rev-list` printed for the task's branch
+and its fixer's: the commits those branches alone reach among the clone's local branches. The
+merged task's branch and the validation task's branch were deleted, so theirs are empty. With `G`
+the clone and `F` the fixture folder, after the run ended:
+
+```sh
+mkdir -p $F/branch-commits
+for t in <each ledger task id>; do b=spec/$t; x=spec/fix-$t
+  git --git-dir=$G/.git rev-list --ignore-missing refs/heads/$b refs/heads/$x --not \
+    --exclude=$b --exclude=$x --branches > $F/branch-commits/$(echo $b | tr / _).txt; done
+```
+
+The `sed` made each ledger worktree path relative
+(`../repo-spec-<task>`) and set `clock.json`'s `spec` and `origin` to `/spec.md`. `plan.json` and the
+other streams stayed out: the reader needs none of them to credit a gate run.
+`grep -rniE '/Users|/private|/var/folders|caleb|trials' RunView/brownfield-parallel-workers`
+matched nothing.
+
 ## Run view: brownfield runs cut off with an undone merge
 
 `RunView/price-tracker-1/` and `RunView/send-money-2/` are the state 2 brownfield trials of
@@ -2935,6 +2975,11 @@ cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/cutoff.js
 The `sed` made each ledger worktree path relative (`../repo-spec-<task>`) and set `clock.json`'s
 `spec` and `origin` to `/spec.md`, as `brownfield-blocked` spells them. The trials removed every
 task worktree before they ended, so neither capture has a `worktrees/` folder.
+
+`RunView/price-tracker-1/branch-commits/` came later the same day from the same clone, whose task
+branches outlived the run, by the `branch-commits` loop under "worker gate runs of tasks running at
+once" above, over its 6 ledger tasks. Only `app-core`'s (with its fixer's branch) and
+`client-live`'s branches hold commits no other branch reaches.
 
 `RunView/price-tracker-1/out/merge-{tracker-ui,app-core}.json` are the orchestrator's merge gate
 outputs, copied unedited with `cp $P/out/merge-{tracker-ui,app-core}.json out/`. The
@@ -4821,3 +4866,94 @@ sed -i '' 's/<the app scheme>/App/g' $F/final-reuse-*
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/final-reuse-*` matched nothing.
+
+## Brownfield trial: orchestrator Bash calls hung by the user's shell aliases
+
+In a practice brownfield trial (2026-10-05) the orchestrator lost 2 calls of 600 s each. One began
+`cat >> /dev/null;` with `cat` aliased to `bat --paging=never`; the other ran `cp` aliased to
+`cp -i` over a file that existed and waited on its overwrite prompt. Both held a heredoc, and the
+Bash tool runs a command holding a heredoc without its usual `< /dev/null`, so stdin stayed open.
+`Hooks/practice-trials-alias-hang-bash.json` holds those 2 calls' `tool_input`, tool result and
+background output; `Hooks/practice-trials-long-foreground-bash.json` holds another trial's
+orchestrator call, a script it wrote, run in the foreground at a 600 s timeout with no `swiftgate`
+on its line. `R` is the harness-runs folder, each trial's `run.jsonl` its `claude -p` stream. From
+the repository root:
+
+```sh
+R=<harness runs folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+R, F = os.environ["R"], os.environ["F"]
+calls = [
+    ("<trial A>", "toolu_01Rx5Ja7tEY6P2tEe5ETdmBE", "alias-hang"),
+    ("<trial A>", "toolu_01GoHCQRpzHsvsv2K1JogSpw", "alias-hang"),
+    ("<trial B>", "toolu_01HB8HEhnu9Fs6Gsa7RmH8Gm", "long-foreground"),
+]
+scrubs = [
+    (r"/private/tmp/claude-\d+/[^/\s]+/[0-9a-f-]{36}/tasks", "/TASKS"),
+    (r"/Users/[^/]+/\.claude/projects/[^/\s]+", "/HOME/.claude/projects/-CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/\s\"]+/plugin", "/PLUGIN"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec(?=[/\s;\"]|$)", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;\"]|$)", "/CLONE"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+out = {"alias-hang": [], "long-foreground": []}
+for trial, use, kind in calls:
+    tool_input, result = None, None
+    for line in open(f"{R}/{trial}/run.jsonl"):
+        record = json.loads(line)
+        content = (record.get("message") or {}).get("content")
+        if not isinstance(content, list): continue
+        for block in content:
+            if block.get("type") == "tool_use" and block.get("id") == use: tool_input = block["input"]
+            if block.get("type") == "tool_result" and block.get("tool_use_id") == use: result = block["content"]
+    text = result if isinstance(result, str) else json.dumps(result)
+    entry = {"tool_input": json.loads(scrub(json.dumps(tool_input))), "result": scrub(text)}
+    moved = re.search(r"Output is being written to: (\S+\.output)", text)
+    if moved and os.path.exists(moved.group(1)):
+        entry["background_output"] = scrub(open(moved.group(1)).read())
+    out[kind].append(entry)
+for kind, entries in out.items():
+    open(f"{F}/Hooks/practice-trials-{kind}-bash.json", "w").write(json.dumps(entries, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on both fixtures matched nothing.
+
+`Hooks/pre-tool-use-bash-bypass-heredoc.json` and `Hooks/pre-tool-use-bash-bypass-long.json` are
+the PreToolUse payloads Claude Code 2.1.288 sent (2026-10-05) in a scratch git repository holding
+`src.txt` and `dst.txt`, with this `settings.json` hook recording each payload and returning it as
+`updatedInput` with the command wrapped in `unalias -a` and an inner `eval` reading
+`/dev/null`, and the `sleep` call's timeout set to 5 s:
+
+```sh
+claude -p $'Use the Bash tool exactly twice, verbatim, then reply with each output and nothing else.\nCall 1, with timeout 300000:\ncp src.txt dst.txt; cat <<\'EOF\'\nheredoc-probe\nEOF\ncat dst.txt\nCall 2, with timeout 300000:\nsleep 15; echo slept' \
+  --model haiku --settings settings.json --setting-sources local --dangerously-skip-permissions \
+  --output-format stream-json --verbose > run.jsonl
+```
+
+```python
+import json, sys, os
+raw = sys.stdin.read()
+d = json.loads(raw)
+n = len([f for f in os.listdir('.') if f.startswith('payload-')])
+open(f'payload-{n}.json', 'w').write(raw)
+ti = dict(d.get('tool_input') or {})
+if d.get('tool_name') != 'Bash':
+    sys.exit(0)
+cmd = ti['command']
+q = cmd.replace("'", "'\\''")
+ti['command'] = "\\builtin unalias -a 2>/dev/null; \\builtin eval '" + q + "' </dev/null"
+if 'sleep' in cmd:
+    ti['timeout'] = 5000
+print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "updatedInput": ti}}))
+```
+
+The run, in a zsh whose profile aliases `cp` to `cp -i`, showed what the rewrite relies on: with no
+`permissionDecision`, Claude Code ran the returned input in place of the model's (call 1 printed
+`heredoc-probe` and `dst.txt`'s new text with no overwrite prompt; call 2 moved to the background
+at 5 s), and the payload carries `permission_mode: "bypassPermissions"`. Scrubbing: the cwd
+becomes `/REPO`, the transcript `/HOME/.claude/projects/-REPO/`, and `session_id` the fixed
+`8f2c1d7e-…`; nothing else changed.

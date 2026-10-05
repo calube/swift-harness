@@ -23,13 +23,19 @@ public struct RunViewReader: RunViewReading {
   public let stateRoot: StateRoot
   /// Which ``TaskWorktree`` layout names the task worktrees and the checkout merges land in.
   public let profile: RepositoryProfile
+  /// Which commits each task branch alone reaches, so a worker's gate run goes to the task
+  /// whose checkout ran it.
+  public let branchCommits: any BranchCommitReading
 
+  /// - Parameter branchCommits: `nil` reads them with git in `commonDirectory`.
   public init(
-    commonDirectory: URL, stateRoot: StateRoot, profile: RepositoryProfile = .owned
+    commonDirectory: URL, stateRoot: StateRoot, profile: RepositoryProfile = .owned,
+    branchCommits: (any BranchCommitReading)? = nil
   ) {
     self.commonDirectory = commonDirectory
     self.stateRoot = stateRoot
     self.profile = profile
+    self.branchCommits = branchCommits ?? LiveBranchCommits(commonDirectory: commonDirectory)
   }
 
   public func read(buildRun: String) throws -> RunViewInput {
@@ -97,13 +103,14 @@ public struct RunViewReader: RunViewReading {
       }
     }
 
-    let workerGateRuns =
+    let workers =
       join.map {
-        Self.workerGateRuns(
+        workerGateRuns(
           workerEvents, events: $0.events, named: gateRuns, holders: holders,
-          returns: $0.returns)
-      } ?? [:]
-    gateRuns.formUnion(workerGateRuns.keys)
+          returns: $0.returns, plan: $0.plan, ledger: ledger)
+      } ?? RunViewWorkerGates.Attribution()
+    gateRuns.formUnion(workers.tasks.keys)
+    gateRuns.formUnion(workers.unattributed)
     let events = EventQuery.merge(batches).map(\.event)
     let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns, prebuild: prebuild)
     let belonging = events.filter {
@@ -123,10 +130,10 @@ public struct RunViewReader: RunViewReading {
     let qa = qaRuns(of: kept, in: checkouts, damage: &damage)
     return RunViewInput(
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
-      damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workerGateRuns,
-      launchedAt: prebuild.launchedAt, gateReports: reports,
-      checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa,
-      validation: validation)
+      damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workers.tasks,
+      unattributedGateRuns: workers.unattributed, launchedAt: prebuild.launchedAt,
+      gateReports: reports, checkoutRoots: checkoutRoots(worktrees: worktrees),
+      warmupBaselines: baselines, qaRuns: qa, validation: validation)
   }
 
   /// The plan's `validation.json` as it stands now; `nil` when the plan has none, and damage when
@@ -577,78 +584,41 @@ public struct RunViewReader: RunViewReading {
     }
   }
 
-  /// Each `gate.run` of a worker's store that nothing names, by run id, with the task whose
-  /// window holds its start, read from its run id, or its end when the id says no time: from the
-  /// task's move to `in-progress` until it is `done` or `abandoned`, or open. A run inside no
-  /// window, or inside more than 1, stays out: a store copied into the main checkout no longer
-  /// says which task's worktree it came from.
-  ///
-  /// Of several windows, those whose task stored a return listing commits other than the run's
-  /// head drop out, so a task whose return was never stored keeps the runs of its own commits
-  /// beside tasks that ran at the same time. A return that lists the head claims the run.
-  ///
-  /// A fix window, from a task's `build merge --undo` until its next merge or its task's window
-  /// ends, wins over those: the task's fixer runs then, while every task still in progress beside
-  /// it holds the run too. A run inside more than 1 fix window stays out.
+  /// Each `gate.run` of a worker's store that nothing names, credited by
+  /// ``RunViewWorkerGates/attribute(_:events:holders:returns:branchCommits:)``. A run starts at
+  /// the time its run id names, or at its event when the id names none.
   ///
   /// A run a live task worktree's run store holds, by run id in `holders`, goes to that
-  /// worktree's task before any window: concurrent tasks of a clone write to 1 shared store,
-  /// where windows alone can't tell their runs apart.
-  static func workerGateRuns(
+  /// worktree's task: concurrent tasks of a clone write to 1 shared store. A worktree removed
+  /// before the run ended leaves its branch, `<plan>/<task>` unless the ledger names another,
+  /// and its fixer's `<plan>/fix-<task>`, whose commits name the runs at them; git is asked
+  /// only when some run's head is left to name.
+  func workerGateRuns(
     _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>,
-    holders: [String: String] = [:], returns: [String: TaskReturn] = [:]
-  ) -> [String: String] {
-    typealias Window = (task: String, start: Date, end: Date?)
-    var windows: [Window] = []
-    var fixes: [Window] = []
-    for event in events {
-      switch event {
-      case .transition(let move):
-        if move.to == .inProgress, !windows.contains(where: { $0.task == move.task }) {
-          windows.append((move.task, move.at, nil))
-        } else if move.to == .done || move.to == .abandoned,
-          let index = windows.firstIndex(where: { $0.task == move.task && $0.end == nil })
-        {
-          windows[index].end = move.at
-        }
-        if move.to == .done || move.to == .abandoned,
-          let index = fixes.firstIndex(where: { $0.task == move.task && $0.end == nil })
-        {
-          fixes[index].end = move.at
-        }
-      case .undo(let undo):
-        fixes.append((undo.task, undo.at, nil))
-      case .merge(let merge):
-        if let index = fixes.firstIndex(where: { $0.task == merge.task && $0.end == nil }) {
-          fixes[index].end = merge.at
-        }
-      case .gate, .returnCheck, .finish:
-        continue
-      }
-    }
-    func holding(_ windows: [Window], _ time: Date) -> [Window] {
-      windows.filter { $0.start <= time && $0.end.map { time <= $0 } ?? true }
-    }
-    var tasks: [String: String] = [:]
+    holders: [String: String] = [:], returns: [String: TaskReturn] = [:], plan: String,
+    ledger: Ledger?
+  ) -> RunViewWorkerGates.Attribution {
+    var runs: [RunViewWorkerGates.Run] = []
+    var seen = Set<String>()
     for event in workerEvents {
-      guard case .gateRun = event.payload, let runID = event.runID, !named.contains(runID)
+      guard case .gateRun = event.payload, let runID = event.runID, !named.contains(runID),
+        seen.insert(runID).inserted
       else { continue }
-      if let holder = holders[runID] {
-        tasks[runID] = holder
-        continue
-      }
-      let started = RunViewEventWindow.startTime(of: runID) ?? event.time
-      let fixing = holding(fixes, started)
-      var holds = fixing.isEmpty ? holding(windows, started) : fixing
-      if holds.count > 1, let head = event.head {
-        let claiming = holds.filter { returns[$0.task]?.commits.contains(head) == true }
-        holds =
-          claiming.count == 1
-          ? claiming : holds.filter { returns[$0.task].map { $0.commits.contains(head) } ?? true }
-      }
-      if holds.count == 1, let window = holds.first { tasks[runID] = window.task }
+      runs.append(
+        RunViewWorkerGates.Run(
+          runID: runID, started: RunViewEventWindow.startTime(of: runID) ?? event.time,
+          head: event.head))
     }
-    return tasks
+    var commits: [String: Set<String>] = [:]
+    if runs.contains(where: { holders[$0.runID] == nil && $0.head != nil }) {
+      for task in ledger?.tasks ?? [] {
+        let branches = [task.branch ?? "\(plan)/\(task.id)", "\(plan)/fix-\(task.id)"]
+        guard let owned = branchCommits.exclusiveCommits(of: branches) else { continue }
+        commits[task.id] = owned
+      }
+    }
+    return RunViewWorkerGates.attribute(
+      runs, events: events, holders: holders, returns: returns, branchCommits: commits)
   }
 
   /// Every gate run the run's ledger log or its returns name.

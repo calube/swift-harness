@@ -11,8 +11,10 @@ enum RunViewGateFailures {
     var task: Set<String> = []
     var worker: Set<String> = []
 
-    init(_ run: BuildJoin.Run?, workerGateRuns: [String: String]) {
-      worker = Set(workerGateRuns.keys)
+    init(
+      _ run: BuildJoin.Run?, workerGateRuns: [String: String], unattributed: Set<String> = []
+    ) {
+      worker = Set(workerGateRuns.keys).union(unattributed)
       guard let run else { return }
       task = Set(run.returns.values.compactMap { $0.gate?.runID })
       for event in run.events {
@@ -34,7 +36,8 @@ enum RunViewGateFailures {
   }
 
   static func fill(_ view: inout RunView, input: RunViewInput, events: [HarnessEvent]) {
-    let stages = Stages(input.join, workerGateRuns: input.workerGateRuns)
+    let stages = Stages(
+      input.join, workerGateRuns: input.workerGateRuns, unattributed: input.unattributedGateRuns)
     let roots = Scrub.roots(input.checkoutRoots)
     var runEvents: [String: (event: HarnessEvent, run: GateRunEvent)] = [:]
     var failedTests: [String: [TestResultEvent]] = [:]

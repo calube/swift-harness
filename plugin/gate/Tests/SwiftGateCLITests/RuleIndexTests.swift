@@ -102,6 +102,7 @@ struct RuleIndexTests {
       SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID, DirtyFileGuard.ruleID,
       ReviewerBashGuard.ruleID, GateOutputGuard.ruleID, UserCheckoutGuard.ruleID,
+      RunBashRewrite.foregroundTimeoutRuleID,
     ]
     let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     let brownfield = BrownfieldRuleID.allCases.map(\.rawValue)

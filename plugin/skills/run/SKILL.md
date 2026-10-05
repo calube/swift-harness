@@ -77,6 +77,8 @@ call also builds the binary, which can take minutes, so before step 1 warm it wi
 `"$SG" --version`. That call and every `check`, `qa run`, `build cutoff` and area command run in
 the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
 `run_in_background` to one and never end one with a shell `&`.
+The hook holds any other foreground call to 120 s (`guard.foreground-timeout`); one that moves
+to the background reports through its notification, so keep the turn going.
 
 The merge gates and `final` are the exception, since a hung test can hold one for an hour. Each
 runs with `run_in_background: true`, its JSON redirected to `<out>`. Then `"$SG" build gate-wait`
