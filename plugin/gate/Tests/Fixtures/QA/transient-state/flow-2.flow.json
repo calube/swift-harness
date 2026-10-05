@@ -1,0 +1,11 @@
+[
+  {"command": "open", "input": {"app": "com.example.App", "relaunch": true, "launchArgs": ["-harness-scenario", "scenario-2"]}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el12\"", "timeoutMs": 15000}},
+  {"command": "is", "input": {"predicate": "text", "selector": "id=\"el12\"", "value": "text7"}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"el13\""}},
+  {"command": "is", "input": {"predicate": "absent", "selector": "id=\"el1\""}},
+  {"command": "press", "input": {"target": {"kind": "selector", "selector": "id=\"el13\""}}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"el1\"", "timeoutMs": 10000}},
+  {"command": "wait", "input": {"kind": "absent", "absent": "id=\"el12\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "text", "selector": "id=\"el4\"", "value": "text2"}}
+]

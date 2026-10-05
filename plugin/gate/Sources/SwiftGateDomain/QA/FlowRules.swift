@@ -21,6 +21,12 @@ public enum FlowRules {
   public static let unknownIDRuleID = "qa.flow-unknown-id"
   public static let idsUnknownRuleID = "qa.flow-ids-unknown"
   public static let kindKeyRuleID = "qa.flow-kind-key"
+  /// A warning that never gates: the flow sees a state appear, then go by itself, under a fake
+  /// scenario that doesn't hold it, so the fake's latency decides whether the first wait sees it.
+  public static let transientStateRuleID = "qa.flow-transient-state"
+  /// The `-`- or `_`-separated word a scenario's name carries when its fake holds an in-flight
+  /// state until the flow moves on, as in `save-held`.
+  public static let heldScenarioWord = "held"
 
   /// The input key a `wait` of each `kind` reads its target from. The pinned tool drops `kind`
   /// before it runs the step and takes whichever 1 of these keys is present, so a target under
