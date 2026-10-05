@@ -143,19 +143,21 @@ public struct BatchFlowPlan: Sendable, Equatable {
   /// For each driven index, 1-based at position `index - 1`: the flow file's step number, or
   /// `nil` for a capture `qa run` added.
   public let origin: [Int?]
-  /// Where the first driven step, a `record start`, writes the video; `nil` when the batch
-  /// records nothing.
+  /// Where the batch's `record start` writes the video; `nil` when the batch records nothing.
   public let recordTo: String?
+  /// The driven index of the `record start`, 1-based; `nil` when the batch records nothing.
+  public let recordIndex: Int?
 
   public init(
     steps: [FlowStep], evidence: [Evidence], driven: [FlowJSON], origin: [Int?],
-    recordTo: String? = nil
+    recordTo: String? = nil, recordIndex: Int? = nil
   ) {
     self.steps = steps
     self.evidence = evidence
     self.driven = driven
     self.origin = origin
     self.recordTo = recordTo
+    self.recordIndex = recordIndex ?? (recordTo == nil ? nil : 1)
   }
 
   /// How many assertions `steps` holds, and so how many screenshots the plan needs.
@@ -203,6 +205,15 @@ public struct BatchFlowPlan: Sendable, Equatable {
     }
     return BatchFlowPlan(
       steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo)
+  }
+
+  /// When the video's first frame came, on the batch's clock: the end of the `record start`.
+  /// `nil` when the batch records nothing or the `record start` has no passing result.
+  public func videoStartMs(results: [BatchStepOutcome]) -> Int? {
+    guard let recordIndex,
+      let record = results.first(where: { $0.index == recordIndex }), record.ok
+    else { return nil }
+    return record.durationMs
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.

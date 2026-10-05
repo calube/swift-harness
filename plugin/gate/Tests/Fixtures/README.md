@@ -281,6 +281,7 @@ with `/SCRATCH` and `$HOME` with `/HOME`. The same script writes
 | `record-start`, `record-stop`, `contact-sheet` | `record start <path>`, a `press`, `record stop`, `record contact-sheet <video> --out <sheet> --json` |
 | `logs-path`, `network-dump`, `trace-start`, `trace-stop` | `logs path`, `network dump 25 --include headers`, `trace start <path>`, `trace stop <path>` |
 | `close` | `close` |
+| `session-state-dir` | `session state-dir --json`, which names no device or session |
 | `close-session-not-found` | `close --udid 00000000-0000-0000-0000-000000000000 --session swiftgate-capture-closed --json`, a session never opened |
 | `device-release-session-refused`, `device-release-stale` | `device release --stale` with `--udid --session`, then with `--udid` alone |
 

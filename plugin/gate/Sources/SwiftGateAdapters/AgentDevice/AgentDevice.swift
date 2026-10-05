@@ -113,6 +113,8 @@ public protocol AgentDevice: Sendable {
   func trace(_ action: AgentDeviceTraceAction, path: String, on target: AgentDeviceTarget)
     async throws(AgentDeviceError)
   func close(on target: AgentDeviceTarget) async throws(AgentDeviceError)
+  /// The directory `agent-device` keeps its daemon and session state in; touches no device.
+  func stateDirectory() async throws(AgentDeviceError) -> String
   /// Clears claims on `udid` whose owner is provably dead. `device` refuses `--session`.
   func releaseStale(udid: String) async throws(AgentDeviceError)
 }
@@ -301,6 +303,10 @@ public struct LiveAgentDevice: AgentDevice {
 
   public func close(on target: AgentDeviceTarget) async throws(AgentDeviceError) {
     _ = try await succeeded("close", ["close"], on: target, timeout: timeouts.quick)
+  }
+
+  public func stateDirectory() async throws(AgentDeviceError) -> String {
+    ""
   }
 
   public func releaseStale(udid: String) async throws(AgentDeviceError) {

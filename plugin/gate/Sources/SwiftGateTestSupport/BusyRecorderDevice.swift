@@ -81,6 +81,9 @@ public final class BusyRecorderDevice: AgentDevice {
   public func close(on target: AgentDeviceTarget) async throws(AgentDeviceError) {
     try await device.close(on: target)
   }
+  public func stateDirectory() async throws(AgentDeviceError) -> String {
+    try await device.stateDirectory()
+  }
   public func releaseStale(udid: String) async throws(AgentDeviceError) {
     try await device.releaseStale(udid: udid)
   }

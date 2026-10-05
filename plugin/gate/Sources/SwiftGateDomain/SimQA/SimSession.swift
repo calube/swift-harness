@@ -53,6 +53,13 @@ public struct SimSession: Sendable, Equatable {
     "swiftgate-\(runID)"
   }
 
+  /// The folder `agent-device` keeps `session`'s state in under its state directory, for
+  /// removal once the session is closed. `nil` for a session `sim up` didn't name, so no other
+  /// session's folder is ever named.
+  public static func agentDeviceSessionFolder(stateDirectory: String, session: String) -> String? {
+    nil
+  }
+
   /// The app's launch arguments for `scenario`; none for live dependencies.
   public static func launchArguments(scenario: String?) -> [String] {
     scenario.map { [scenarioArgument, $0] } ?? []

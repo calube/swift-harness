@@ -70,6 +70,9 @@ final class ScreenAgentDevice: AgentDevice {
   func close(on target: AgentDeviceTarget) async throws(AgentDeviceError) {
     try await fake.close(on: target)
   }
+  func stateDirectory() async throws(AgentDeviceError) -> String {
+    try await fake.stateDirectory()
+  }
   func releaseStale(udid: String) async throws(AgentDeviceError) {
     try await fake.releaseStale(udid: udid)
   }
