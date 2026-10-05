@@ -303,6 +303,18 @@ public enum Warmup {
     return result
   }
 
+  /// A swiftpm `area`'s build in `checkout`, a task slot or the plan branch's checkout, into the
+  /// checkout's own prove scratch path (``ScratchTreeBuild/proveScratchPath(area:layout:)``), so
+  /// the first prove there finds its dependencies built. `layout` is that checkout's. `nil` for an
+  /// area of another kind, for the main checkout, whose prove builds in the shared scratch path
+  /// the base tree's run warmed, and with no build command.
+  public static func proveSeedRequest(
+    area: BrownfieldArea, checkout: String, layout: BrownfieldStateLayout,
+    tree: TrackedTreeSnapshot, deadline: Duration
+  ) -> AreaCommandRequest? {
+    nil
+  }
+
   /// `area`'s build in `checkout`, a checkout the run builds in: the plan branch's or a task
   /// slot. Xcode keys a build by the project's absolute path, so only a build in the checkout's
   /// own DerivedData warms the builds the run makes there; `layout` is that checkout's. `nil` for

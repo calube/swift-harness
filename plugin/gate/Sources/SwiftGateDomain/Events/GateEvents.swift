@@ -61,10 +61,14 @@ public struct GateStepTiming: Sendable, Equatable {
   public let area: String?
   /// The step's start, in milliseconds after its gate's start; `nil` when not timed.
   public let startMs: Int?
+  /// The part of ``milliseconds`` the step's builds spent waiting for another build in the same
+  /// build directory to end; `nil` when no build of the step waited its turn for 1.
+  public let lockWaitMilliseconds: Int?
 
   public init(
     step: GateStep, tier: Tier?, milliseconds: Int, verdict: Verdict,
-    derivedData: GateDerivedData, area: String? = nil, startMs: Int? = nil
+    derivedData: GateDerivedData, area: String? = nil, startMs: Int? = nil,
+    lockWaitMilliseconds: Int? = nil
   ) {
     self.step = step
     self.tier = tier
@@ -73,6 +77,7 @@ public struct GateStepTiming: Sendable, Equatable {
     self.derivedData = derivedData
     self.area = area
     self.startMs = startMs
+    self.lockWaitMilliseconds = lockWaitMilliseconds
   }
 }
 
@@ -222,6 +227,9 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
   /// The step's start, in milliseconds after its gate's start; `nil` on a line written before
   /// steps were timed from the start, so a reader lays those end to end.
   public let startMs: Int?
+  /// The part of `ms` spent waiting for another build in the same build directory; absent when
+  /// no build of the step waited its turn for 1.
+  public let lockWaitMs: Int?
 
   public init(_ timing: GateStepTiming) {
     self.tier = timing.tier
@@ -231,10 +239,11 @@ public struct GateStepEvent: Sendable, Equatable, Codable {
     self.derivedData = timing.derivedData
     self.area = timing.area
     self.startMs = timing.startMs
+    self.lockWaitMs = nil
   }
 
   private enum CodingKeys: String, CodingKey {
-    case tier, step, verdict, derivedData, area, startMs
+    case tier, step, verdict, derivedData, area, startMs, lockWaitMs
     case milliseconds = "ms"
   }
 }

@@ -790,6 +790,20 @@ const DIFF_RISK_SCHEMA = {
     exitStatus: { type: 'integer', description: "the command's exit status" },
   },
 }
+// A ready-to-merge worker return that lists no commits, though the branch has some past its base,
+// would merge nothing it names; 1 agent lists the branch's commits from git and the workflow fills
+// them in, where a fresh fix-pass worker would build the task again.
+const COMMIT_LISTER_LABEL = 'commits:'
+const COMMITS_SCHEMA = {
+  type: 'object',
+  required: ['commits', 'exitStatus', 'reason'],
+  additionalProperties: false,
+  properties: {
+    commits: { type: 'array', items: { type: 'string' }, description: 'each sha the command printed, in the order printed' },
+    exitStatus: { type: 'integer', description: "the command's exit status" },
+    reason: { type: ['string', 'null'], description: 'what went wrong running it; null when it ran' },
+  },
+}
 let classified = null
 async function classify() {
   if (A.review !== 'classified' || classified) return classified

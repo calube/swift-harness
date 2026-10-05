@@ -113,6 +113,9 @@ enum BrownfieldProve {
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
     let derivedData: GateDerivedData
+    /// How long its reverted runs waited for their build directories, added up; `nil` when none
+    /// took a turn.
+    var lockWaitMilliseconds: Int? = nil
   }
 
   /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by the scratch-tree

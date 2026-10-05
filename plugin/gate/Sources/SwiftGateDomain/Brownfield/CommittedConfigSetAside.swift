@@ -36,6 +36,21 @@ public struct CommittedConfigSetAside: Codable, Sendable, Equatable {
     return try decoder.decode(Self.self, from: data)
   }
 
+  /// The set-aside file at the plan branch's head.
+  public enum AtPlanTip: Sendable, Equatable {
+    /// `git rev-parse <head>:<file>`.
+    case blob(String)
+    /// The head's tree has no such file.
+    case absent
+    /// The head or its tree couldn't be read.
+    case unknown
+  }
+
+  /// The report's line for it, saying whether the plan branch left the file as it was set aside.
+  public func reportLine(atPlanTip tip: AtPlanTip) -> String {
+    reportLine
+  }
+
   /// The report's line for it.
   public var reportLine: String {
     "\(file)" + (blob.map { " (blob \($0))" } ?? "") + " set aside for this clone at "

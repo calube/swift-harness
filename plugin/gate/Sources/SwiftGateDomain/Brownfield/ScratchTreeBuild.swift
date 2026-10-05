@@ -17,6 +17,14 @@ public enum ScratchTreeBuild {
     "\(AreaCacheEnvironment.cachesDirectory(layout: layout))/swiftpm-scratch/\(area)"
   }
 
+  /// Where a scratch tree's `swift build` or `swift test` for `area` builds: in a linked
+  /// worktree, `<git-dir>/swift-harness/derived-data/prove/<area>`, 1 per worktree and area, so
+  /// gates in 2 slots never take turns on 1 scratch path, and it lasts as long as the slot; in the
+  /// main checkout, the area's shared scratch path. Absolute.
+  public static func proveScratchPath(area: String, layout: BrownfieldStateLayout) -> String {
+    swiftPMScratchPath(area: area, layout: layout)
+  }
+
   /// `command` with `--scratch-path <scratchPath>` after each `swift build` and `swift test`;
   /// unchanged when it runs neither, already names a scratch or build path, or spells them in a
   /// way the insertion can't place.
@@ -47,9 +55,11 @@ public enum ScratchTreeBuild {
     return rewritten + command[rest...]
   }
 
-  /// `request` as a scratch tree runs it for an area of `kind`.
+  /// `request` as a scratch tree runs it for an area of `kind`. With `waits`, a command that
+  /// builds in a directory the harness places takes its turn there, adding its wait to `waits`.
   public static func request(
-    _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout
+    _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout,
+    waits: BuildLockWaits? = nil
   ) -> AreaCommandRequest {
     switch kind {
     case .xcode:
@@ -73,7 +83,8 @@ public enum ScratchTreeBuild {
       area: request.area, step: request.step, command: command,
       workingDirectory: request.workingDirectory, deadline: request.deadline,
       environment: request.environment, junitPath: request.junitPath,
-      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed,
+      buildLock: request.buildLock)
   }
 
   /// The build directories a scratch tree's command for `area` builds into, for a step to label

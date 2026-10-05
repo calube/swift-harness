@@ -41,7 +41,8 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
         area: request.area, step: request.step, command: request.command,
         workingDirectory: request.workingDirectory, deadline: max(left, .milliseconds(1)),
         environment: request.environment, junitPath: request.junitPath,
-        resultBundlePath: request.resultBundlePath, derivedDataSeed: copy))
+        resultBundlePath: request.resultBundlePath, derivedDataSeed: copy,
+        buildLock: request.buildLock))
   }
 
   private func launch(_ request: AreaCommandRequest) async -> AreaCommandOutcome {

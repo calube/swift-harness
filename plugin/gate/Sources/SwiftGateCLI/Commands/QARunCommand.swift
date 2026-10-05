@@ -1041,9 +1041,24 @@ enum QARunRun {
     return QARunDeadline.of(box, final: final)
   }
 
+  /// The line a run prints once its run directory exists, naming where its report is written
+  /// and, when that is a worktree's own state, where the clone keeps it once the checkout is
+  /// removed.
+  static func startedLine(runID: String, reportFile: String, keptReportFile: String?) -> String {
+    "\(command): run \(runID) started; its report will be written to \(reportFile)\n"
+  }
+
+  /// Where the clone keeps run `runID`'s `qa/report.json` once the checkout at `root` is
+  /// removed; `nil` when that is where the run writes it.
+  static func keptReportFile(runID: String, root: URL) -> String? {
+    nil
+  }
+
   /// 1 line naming the verdict, the run and the report file, printed last so a cut output keeps
   /// it; empty when `reportFile` is `nil`.
-  static func summary(_ report: QAReport, reportFile: String?) -> String {
+  static func summary(_ report: QAReport, reportFile: String?, keptReportFile: String? = nil)
+    -> String
+  {
     guard let reportFile else { return "" }
     return
       "\(command): \(report.verdict.rawValue) \(report.message); run \(report.runID ?? "none"), "
@@ -1051,8 +1066,11 @@ enum QARunRun {
   }
 
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
-  static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
-    let summary = summary(report, reportFile: reportFile)
+  /// - Parameter keptReportFile: where the clone keeps that report once the checkout is removed.
+  static func render(
+    _ report: QAReport, json: Bool, reportFile: String? = nil, keptReportFile: String? = nil
+  ) -> String {
+    let summary = summary(report, reportFile: reportFile, keptReportFile: keptReportFile)
     guard !json else {
       let encoded = String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
       // The summary goes in as the object's last member, so the JSON still reads.

@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// 1 command an area runs, already expanded: no `{files}`, `{tests}` or `{junit}` remains.
 public struct AreaCommandRequest: Sendable, Equatable {
@@ -19,11 +20,14 @@ public struct AreaCommandRequest: Sendable, Equatable {
   /// The DerivedData the runner seeds before the command runs, when the command builds into a
   /// worktree's own DerivedData.
   public let derivedDataSeed: DerivedDataSeedCopy?
+  /// The build directory the command takes its turn in, and where the runner adds up how long it
+  /// waited; `nil` leaves the command to the tool's own locking, untimed.
+  public let buildLock: BuildDirectoryLock?
 
   public init(
     area: String, step: AreaStep, command: String, workingDirectory: String, deadline: Duration,
     environment: [String: String], junitPath: String?, resultBundlePath: String? = nil,
-    derivedDataSeed: DerivedDataSeedCopy? = nil
+    derivedDataSeed: DerivedDataSeedCopy? = nil, buildLock: BuildDirectoryLock? = nil
   ) {
     self.area = area
     self.step = step
@@ -34,7 +38,40 @@ public struct AreaCommandRequest: Sendable, Equatable {
     self.junitPath = junitPath
     self.resultBundlePath = resultBundlePath
     self.derivedDataSeed = derivedDataSeed
+    self.buildLock = buildLock
   }
+}
+
+/// A build directory that 1 command builds in at a time: SwiftPM locks a scratch path while it
+/// builds, and `xcodebuild` fails a build whose build database another build holds. The runner
+/// waits its turn on a lock beside the directory and adds the wait to ``waits``.
+public struct BuildDirectoryLock: Sendable, Equatable {
+  /// Absolute.
+  public let directory: String
+  public let waits: BuildLockWaits
+
+  public init(directory: String, waits: BuildLockWaits) {
+    self.directory = directory
+    self.waits = waits
+  }
+}
+
+/// How long the commands sharing it waited for their build directories, added up across them.
+/// Equal only to itself, since commands add to 1 shared total.
+public final class BuildLockWaits: Sendable, Equatable {
+  private let total = Mutex<Int?>(nil)
+
+  public init() {}
+
+  /// Adds a wait of `milliseconds`; a wait of 0 still marks that a command took its turn.
+  public func add(milliseconds: Int) {
+    total.withLock { $0 = ($0 ?? 0) + max(0, milliseconds) }
+  }
+
+  /// The waits added up; `nil` when no command took a turn.
+  public var milliseconds: Int? { total.withLock { $0 } }
+
+  public static func == (lhs: BuildLockWaits, rhs: BuildLockWaits) -> Bool { lhs === rhs }
 }
 
 /// A worktree's DerivedData to start from the area's seed, which the warm-up builds at the base
