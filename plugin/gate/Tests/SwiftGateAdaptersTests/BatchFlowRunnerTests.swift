@@ -55,6 +55,9 @@ struct BatchFlowRunnerTests {
     #expect(steps.map(\.assert) == [nil, "1"])
     #expect(steps.map(\.settled) == [true, true])
     #expect(
+      steps.map(\.target) == ["id=\"counter.value\"", "id=\"counter.value\""],
+      "each check's element, which sim verify holds in view")
+    #expect(
       steps.map(\.label) == [
         "after step 1: wait selector id=\"counter.value\"",
         "after step 3: is text id=\"counter.value\" \"1\"",

@@ -1,0 +1,202 @@
+[
+  {
+    "command": "open",
+    "input": {
+      "app": "com.example.InterviewStarter",
+      "relaunch": true,
+      "launchArgs": [
+        "-harness-scenario",
+        "success"
+      ]
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"contact.row.c1\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"home.balance\"",
+      "value": "$250.00"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "exists",
+      "selector": "id=\"activity.empty\""
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"contact.row.c3\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"amount.display\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"amount.contact\"",
+      "value": "To Chloe Nguyen"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"amount.display\"",
+      "value": "$0"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"keypad.1\""
+      }
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"keypad.2\""
+      }
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"keypad.decimal\""
+      }
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"keypad.5\""
+      }
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"keypad.0\""
+      }
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"amount.display\"",
+      "value": "$12.50"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"amount.continue\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"confirm.send\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"confirm.amount\"",
+      "value": "$12.50"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"confirm.send\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "absent",
+      "absent": "id=\"confirm.send\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"contact.row.c1\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"home.balance\"",
+      "value": "$237.50"
+    }
+  },
+  {
+    "command": "scroll",
+    "input": {
+      "direction": "down",
+      "until": "id=\"activity.row.0\""
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"activity.row.0\" label=\"Chloe Nguyen, $12.50\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "absent",
+      "selector": "id=\"activity.empty\""
+    }
+  }
+]

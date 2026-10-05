@@ -1,0 +1,18 @@
+[
+  {
+    "argument": "AppCoreTests/ConfirmFeatureTests",
+    "refusal": null
+  },
+  {
+    "argument": "AppCoreTests/ConfirmFeatureTests",
+    "refusal": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/ConfirmFeatureTests`"
+  },
+  {
+    "argument": "test AppFeature: AppCoreTests/ConfirmFeatureTests",
+    "refusal": "test-only not run: `test:` names no test: write 1 id with no spaces, such as `test: <Target>/<Class>/<method>`"
+  },
+  {
+    "argument": "test AppFeature: AppCoreTests/ConfirmFeatureTests/sendWhileSendingIgnored",
+    "refusal": "test-only not run: `test:` names no test: write 1 id with no spaces, such as `test: <Target>/<Class>/<method>`"
+  }
+]

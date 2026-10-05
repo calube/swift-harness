@@ -292,4 +292,99 @@ struct TestOnlyCheckTests {
         $0.ruleID == CheckRun.notRunRuleID && $0.message.contains("20 s left")
       }, "\(parts.findings.map(\.message))")
   }
+
+  /// A call a send-money fixer made, and the refusal it got.
+  private struct CapturedCall: Decodable {
+    let argument: String
+    let refusal: String?
+  }
+
+  /// `test-only <argument>` in send-money-7's 4 areas, the clone holding AppFeature's
+  /// `AppCoreTests` target, with no `--area` unless one is given.
+  private static func sendMoney(
+    _ clone: Clone, _ argument: String, area: String? = nil, runner: FakeAreaCommandRunner,
+    holding: Set<String> = ["Packages/AppFeature/Tests/AppCoreTests"]
+  ) async throws -> GateRunParts {
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-7-config.toml"))
+    return try await TestOnlyCheck.run(
+      root: clone.root, test: argument, area: area,
+      context: GateRun.Context(runID: "run", directory: clone.run),
+      dependencies: TestOnlyCheck.Dependencies(
+        areas: config.areas, layout: clone.layout, trackedTree: TrackedTreeSnapshot(files: [:]),
+        runner: runner, xcresults: FakeXcresultReader(scenario: "one-test"),
+        bound: { _, _ in AreaCommandBound(duration: .seconds(5), reason: "the flat 5 s") },
+        changedTests: { _ in .success([]) }, directoryExists: { holding.contains($0) }))
+  }
+
+  @Test(
+    "each of the send-money fixer's 4 test-only calls, BLOCKED in the trial, runs its test once in AppFeature: the bare id finds the area holding its target, and `test AppFeature: <id>` reads its area — catches the fixer giving up on test-only after 4 refusals and gating the whole slice"
+  )
+  func capturedCallsRunInTheirArea() async throws {
+    let calls = try JSONDecoder().decode(
+      [CapturedCall].self, from: Fixture.data("BrownfieldTrial/send-money-7-test-only-calls.json"))
+    try #require(calls.count == 4)
+    #expect(calls.compactMap(\.refusal).count == 3, "the trial refused every call it printed")
+
+    for call in calls {
+      let clone = try Clone()
+      defer { try? FileManager.default.removeItem(at: clone.base) }
+      let runner = FakeAreaCommandRunner { _ in .passed }
+
+      let parts = try await Self.sendMoney(clone, call.argument, runner: runner)
+
+      #expect(Self.verdict(parts) != .blocked, "\(call.argument): \(parts.findings.map(\.message))")
+      #expect(runner.requests.map(\.area) == ["AppFeature"], "\(call.argument)")
+      let id = call.argument.split(separator: ":").last.map {
+        $0.trimmingCharacters(in: .whitespaces)
+      }
+      #expect(
+        runner.requests.first?.command.contains(id ?? "--") == true,
+        "\(runner.requests.map(\.command))")
+    }
+  }
+
+  @Test(
+    "a bare id whose target no area holds is BLOCKED with 1 test-only command line naming `--area`, and that line with an area filled in runs — catches the refusal pointing at a `test <area>: <id>` form test-only itself refuses"
+  )
+  func refusalNamesACommandTestOnlyRuns() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let id = "AppCoreTests/ConfirmFeatureTests"
+
+    let refused = try await Self.sendMoney(clone, id, runner: runner, holding: [])
+
+    #expect(Self.verdict(refused) == .blocked)
+    #expect(runner.requests.isEmpty)
+    let message = try #require(refused.findings.first?.message)
+    let suggested = "`\"$SG\" test-only --area <area> \(id)`"
+    #expect(message.contains(suggested), "\(message)")
+    #expect(!message.contains("`test <area>:"), "\(message)")
+    for area in ["APIClient", "AppFeature", "LogClient", "InterviewStarter"] {
+      #expect(message.contains("`\(area)`"), "\(message)")
+    }
+
+    let rerun = try await Self.sendMoney(
+      clone, id, area: "AppFeature", runner: runner, holding: [])
+    #expect(Self.verdict(rerun) != .blocked, "\(rerun.findings.map(\.message))")
+    #expect(runner.requests.map(\.area) == ["AppFeature"])
+  }
+
+  @Test(
+    "an id with a space is BLOCKED naming the test-only command line, not an acceptance row's `test:` form — catches a refusal that tells the caller to write what only a validation row takes"
+  )
+  func spacedIDNamesTheCommandLine() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+
+    let parts = try await Self.sendMoney(
+      clone, "AppCoreTests/ConfirmFeatureTests extra", area: "AppFeature", runner: runner)
+
+    #expect(Self.verdict(parts) == .blocked)
+    let message = try #require(parts.findings.first?.message)
+    #expect(message.contains("`\"$SG\" test-only --area <area> <Target>/<Class>"), "\(message)")
+    #expect(!message.contains("`test:"), "\(message)")
+  }
 }
