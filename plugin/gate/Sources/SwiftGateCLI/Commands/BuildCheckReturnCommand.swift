@@ -23,6 +23,9 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   var haltAdvice: TaskHaltAdvice? = nil
   /// The checked return's outcome, which `build merge` reads off the recorded check.
   var outcome: TaskReturn.Outcome? = nil
+  /// Where the checked return now lives in the build run's returns store; `nil` when it wasn't
+  /// stored: a fixer's return, a check that didn't pass, or a plan with no build run.
+  var stored: String? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
