@@ -65,6 +65,8 @@ struct BrownfieldSliceCheckTests {
     history: [CommitTree] = [CommitTree(commit: "base0", tree: "tree0")],
     warmByTree: [String: [String: Int]] = [:],
     changedSince: [String: [String]] = [:],
+    records: [String: WarmupAreaRecord] = [:],
+    box: RunTimeBox? = nil, now: Date = Date(timeIntervalSince1970: 0),
     judge:
       @escaping @Sendable (AssertionCandidate, String) async
       -> BrownfieldSliceCheck.AssertionJudgement = { _, _ in .asserts },
@@ -90,12 +92,15 @@ struct BrownfieldSliceCheckTests {
         git: git, scratch: scratch, runner: runner,
         readFile: { known[clone.relative($0)] }, deadline: .seconds(5), layout: clone.layout),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      warmTestMilliseconds: { area, tree in
-        tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]
+      warmup: { area, tree in
+        if tree == "tree0", let record = records[area.name] { return record }
+        return (tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]).map {
+          WarmupAreaRecord(coldMilliseconds: 0, testMilliseconds: $0, steps: [.test: .passed])
+        }
       },
       history: { _ in history },
       changedBetween: { from, _ in changedSince[from] ?? [] },
-      judgeAssertion: judge, deadline: .seconds(5))
+      judgeAssertion: judge, deadline: .seconds(5), box: box, now: { now })
     return try await BrownfieldSliceCheck.run(
       root: clone.root, base: "main",
       context: context ?? GateRun.Context(runID: "run", directory: clone.base),
@@ -695,7 +700,7 @@ extension BrownfieldSliceCheckTests {
   }
 
   @Test(
-    "price-tracker's AppFeature, over the 30 s budget at its 31.7 s warm test, still runs the app-core task's new detail tests at the head through test_files --filter and proves them, and never runs its whole suite — catches a build-only slice that leaves a new test, such as the spin that hung the merge gate, to run first at merge"
+    "price-tracker's AppFeature, over the 30 s budget at its 31.7 s warm test, still runs a task's new detail tests at the head through test_files --filter and proves them, and never runs its whole suite — catches a build-only slice that leaves a new test to run first at merge"
   )
   func overBudgetAreaRunsChangedTests() async throws {
     let clone = try Clone()
@@ -709,11 +714,11 @@ extension BrownfieldSliceCheckTests {
       clone, areas: config.areas,
       changes: [
         Change(
-          path: "Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift",
+          path: "Packages/AppFeature/Sources/AppCore/DetailFeature.swift",
           text: "let chart = 1\n", added: [1...1]),
         Self.newFile(
-          "Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift",
-          try Fixture.text("BrownfieldTrial/price-tracker-1-AssetDetailFeatureTests.swift")),
+          Self.detailTests,
+          try Fixture.text("BrownfieldTrial/price-tracker-3-DetailFeatureTests.swift")),
       ],
       runner: runner, warm: ["AppFeature": 31_700], context: context)
 
@@ -724,13 +729,148 @@ extension BrownfieldSliceCheckTests {
     #expect(!runner.requests.contains { $0.area == "AppFeature" && $0.step == .test })
     #expect(context.steps.steps.contains { $0.step == .areaTest && $0.area == "AppFeature" })
     #expect(
-      context.proofs.results.filter { $0.target == "AppFeature" }.count == 3,
+      context.proofs.results.filter { $0.target == "AppFeature" }.count == 5,
       "\(context.proofs.results.map(\.test))")
     #expect(
       !parts.findings.contains {
         $0.ruleID == BrownfieldRuleID.buildOnly.rawValue && $0.file == "Packages/AppFeature"
       })
     #expect(Self.verdict(parts) == .green)
+  }
+
+  /// price-tracker-3's detail task file, and the source it changed beside it.
+  private static let detailTests =
+    "Packages/AppFeature/Tests/AppCoreTests/DetailFeatureTests.swift"
+
+  /// The warm-up price-tracker-3 measured: AppFeature's 11.3 s warm test and 161.4 s cold cost.
+  private static func priceTrackerRecords() throws -> [String: WarmupAreaRecord] {
+    try WarmupTimesFile.decode(
+      Fixture.data("BrownfieldTrial/price-tracker-3-warmup.json"),
+      tree: "f0bd7c247ed6a4afd220dfad6893cc719ca66bfa"
+    ).areas
+  }
+
+  /// The detail task's change: its reducer and `file`'s text as its new test file.
+  private static func detailChange(_ file: String) throws -> [Change] {
+    [
+      Change(
+        path: "Packages/AppFeature/Sources/AppCore/DetailFeature.swift",
+        text: "let chart = 1\n", added: [1...1]),
+      Self.newFile(Self.detailTests, try Fixture.text("BrownfieldTrial/\(file)")),
+    ]
+  }
+
+  @Test(
+    "price-tracker-3's detail test that spins on `while !started.value { await Task.yield() }` is RED at once at both loops, with file and line, and AppFeature runs no test, prove or build — catches the slice that hung about 700 s on it until the cutoff"
+  )
+  func spinningTestIsRedBeforeAnyRun() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    let runner = Self.failsReverted(clone)
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: try Self.detailChange("price-tracker-3-DetailFeatureTests-spin.swift"),
+      runner: runner, records: try Self.priceTrackerRecords())
+
+    #expect(
+      runner.requests.filter { $0.area == "AppFeature" }.isEmpty,
+      "\(runner.requests.map(\.command))")
+    #expect(Self.verdict(parts) == .red)
+    let waits = parts.findings.filter { $0.ruleID == "test.unbounded-wait" }
+    #expect(waits.map(\.file) == [Self.detailTests, Self.detailTests])
+    #expect(waits.map(\.line) == [100, 102])
+    #expect(waits.allSatisfy { $0.severity.failsGate })
+  }
+
+  @Test(
+    "a changed test that hangs at the head is killed at AppFeature's bound from the warm-up, 161.4 s cold plus 5 warm runs with no build of the package yet, is RED naming the hang and the bound, and its prove doesn't start — catches slice waiting 600 s at the head and 600 s more in the prove scratch tree"
+  )
+  func hungHeadTestIsRedAtItsBound() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    let runner = FakeAreaCommandRunner { request in
+      request.step == .testFiles
+        ? .timedOut(tail: "◇ Test dismissCancelsChart() started.") : .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: try Self.detailChange("price-tracker-3-DetailFeatureTests.swift"),
+      runner: runner, records: try Self.priceTrackerRecords(), context: context)
+
+    let tests = runner.requests.filter { $0.area == "AppFeature" && $0.step == .testFiles }
+    #expect(tests.count == 1, "only the head ran: \(tests.map(\.workingDirectory))")
+    #expect(tests.first?.deadline == .milliseconds(161_442 + 5 * 11_349))
+    #expect(!context.steps.steps.contains { $0.step == .prove && $0.area == "AppFeature" })
+    #expect(Self.verdict(parts) == .red)
+    let finding = try #require(
+      parts.findings.first { $0.ruleID == BrownfieldRuleID.testFailed.rawValue })
+    #expect(finding.message.contains("hung"), "\(finding.message)")
+    #expect(finding.message.contains("219 s"), "\(finding.message)")
+    #expect(finding.message.contains("161.4 s cold"), "\(finding.message)")
+    #expect(finding.message.contains("dismissCancelsChart() started"), "\(finding.message)")
+  }
+
+  @Test(
+    "with AppFeature's .build in the worktree, the head run gets the 120 s floor and each prove run in the scratch tree the cold cost plus 5 warm runs — catches the flat 600 s every slice command, prove's included, ran under"
+  )
+  func headAndProveRunsGetTheirBounds() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    try FileManager.default.createDirectory(
+      at: clone.root.appending(path: "Packages/AppFeature/.build"),
+      withIntermediateDirectories: true)
+    let runner = Self.failsReverted(clone)
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: try Self.detailChange("price-tracker-3-DetailFeatureTests.swift"),
+      runner: runner, records: try Self.priceTrackerRecords())
+
+    let tests = runner.requests.filter { $0.area == "AppFeature" && $0.step == .testFiles }
+    let head = tests.filter { !Self.inScratchTree($0, clone) }
+    let proved = tests.filter { Self.inScratchTree($0, clone) }
+    #expect(head.map(\.deadline) == [AreaCommandBounds.floor])
+    #expect(!proved.isEmpty)
+    #expect(
+      proved.allSatisfy { $0.deadline == .milliseconds(161_442 + 5 * 11_349) },
+      "\(proved.map(\.deadline))")
+    #expect(Self.verdict(parts) == .green, "\(parts.findings.map(\.message))")
+  }
+
+  @Test(
+    "at 06:26:43, 87.3 s before price-tracker-3's cutoff at 06:28:10.303, the head run is held to those 87.3 s on the gate's clock and its hang is RED naming the cutoff — catches a slice running past the box's cutoff"
+  )
+  func headRunIsCappedAtTheCutoff() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    let box = try #require(
+      try RunClock.decode(Fixture.data("BrownfieldTrial/price-tracker-3-clock.json")).runTimeBox)
+    let now = try #require(ISO8601DateFormatter().date(from: "2026-10-05T06:26:43Z"))
+    let runner = FakeAreaCommandRunner { request in
+      request.step == .testFiles ? .timedOut(tail: "") : .passed
+    }
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: try Self.detailChange("price-tracker-3-DetailFeatureTests.swift"),
+      runner: runner, records: try Self.priceTrackerRecords(), box: box, now: now)
+
+    let head = runner.requests.filter { $0.area == "AppFeature" && $0.step == .testFiles }
+    #expect(head.map(\.deadline) == [.milliseconds(87_303)])
+    let finding = try #require(
+      parts.findings.first { $0.ruleID == BrownfieldRuleID.testFailed.rawValue })
+    #expect(finding.message.contains("88 s left before the run's cutoff"), "\(finding.message)")
   }
 
   @Test(

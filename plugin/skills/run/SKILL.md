@@ -250,8 +250,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      run as its return, which `build start` hands to the dependents' packs. `build next` never
      offers it.
    - `contract.status` `pending` (exit 1): its `message` says why, such as a RED run or a run of an
-     older commit. Fix the contract, commit, gate it as in step 6 and import again with the new
-     run. Never move the contract through `ledger set` or write its return by hand.
+     older commit, a `Writes` file the commit left untouched, or a missing `-harness-scenario`
+     seam. Fix the contract, commit, gate it as in step 6 and import again with the new run. Never move the contract through `ledger set` or write its return by hand.
 2. Run the build loop of `/swift-harness:build` (its `SKILL.md` and `references/event-loop.md`) with
    these changes:
    - Start it with `"$SG" build start <slug> --preset brownfield --session <session> --json`.
@@ -305,6 +305,11 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      in `<checkout>` runs the rows that merge makes ready, acceptance, then flow, then state, on
      the task's branch merged into `<plan-branch>` in a scratch tree; `<plan-branch>` doesn't
      move. `build merge` refuses `flows-unchecked` until that run is GREEN at the branch's tip.
+     A row whose other tasks all have checked returns waiting to merge runs before the first of
+     them lands, on 1 trial merge of all their branches: the refusal names the command,
+     `--after <task>,<other>,…`. A RED run there goes to the fixer of the task that owns the red
+     behaviour: run `build merge` for that task first, so it cuts that task's fix worktree, then
+     merge the others, which no longer wait on it.
      A RED run is a red merge gate before the merge: `build merge` refuses `flows-red` and cuts
      the fix worktree, then `"$SG" build halt --run <run> --task <task> --reason gate-red`,
      `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer, given the red

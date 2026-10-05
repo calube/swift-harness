@@ -404,6 +404,36 @@ with `--udid` and `--session` from its output, and on exit runs `sim down` and r
 |---|---|
 | `press-switch.{steps.json,stdout,stderr,status}` | wait for the counter, then press the toggle by its id: step 5, the `press`, exits 1 with `COMMAND_FAILED`, `details.reason` `covered_by_interactive_descendants`, `details.step` 5 and the 4 steps before it under `details.partialResults` |
 
+### AgentDevice/pull-to-refresh
+
+Which step pulls a SwiftUI `.refreshable` list far enough to run its refresh, captured on
+2026-10-05 with `agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. Two build trial
+runs left a refresh flow red on a `scroll up` step that never triggered the refresh. The
+app is `RefreshProbe.swift` with `Info.plist`: a `List` under a large navigation title whose
+`.refreshable` bumps the `probe.refreshes` text from `Refreshes 0` to `Refreshes 1`, over 8 rows
+`probe.row.0` to `probe.row.7`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/pull-to-refresh/capture.sh
+```
+
+The script compiles the app with `swiftc` for the simulator, creates its own
+`agent-device-capture-<pid>` iPhone 17 device, runs each batch with `--steps-file`, and deletes the
+device on exit. It scrubs the outputs as in `AgentDevice/batch`, and the UDID to `UDID`. Each batch
+relaunches the app, waits for `Refreshes 0`, runs step 3, then waits 5 s for `Refreshes 1`.
+
+| Files | Step 3 |
+|---|---|
+| `drag.{steps.json,stdout,stderr,status}` | `gesture` `kind: drag` from `id="probe.refreshes"` to `id="probe.row.6"`: (201, 194) to (201, 558), 364 pt over 1300 ms. Exits 0 and the list refreshed |
+| `drag-short.{steps.json,stdout,stderr,status}` | the same drag to `id="probe.row.3"`: 208 pt. Exits 1, `details.step` 4: no refresh |
+| `scroll-up.{steps.json,stdout,stderr,status}` | the trials' `scroll` `direction: up`, `amount: 0.8`, `settle: true`: (201, 87) to (201, 787) in 400 ms, starting in the navigation bar. Exits 1, `details.step` 4: no refresh |
+
+Probes on the same app and device, 3 to 6 runs each: drags of 312 pt and 364 pt refreshed every
+time, also from a `NavigationLink` row (no navigation followed) and under an inline title, and a
+355 pt drag did in a `ScrollView` with a `LazyVStack`. Drags of 156 pt, 208 pt and 266 pt never
+refreshed. A `scroll up` refreshed only sometimes: 3 of 4 with `pixels: 500`, 3 of 4 with
+`amount: 0.5`, 0 of 4 with `pixels: 600`, which starts at y 137, and never with `amount: 0.8`.
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -3871,6 +3901,82 @@ task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`.
 leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
 differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: flow rows held until the last of their tasks merged
+
+The fourth send-money trial's 8 flow rows each ran after all 3 build tasks. All 3 returns were
+checked before the first merge, yet the rows first ran on the last task's trial merge, where 2
+screen bugs read red. `BrownfieldTrial/send-money-4-validation.json` is that plan's table,
+`send-money-4-build-events.jsonl` its build run's `events.jsonl`,
+`send-money-4-qa-before-account-client.json` the first task's `qa run --after account-client
+--before-merge` report (every row `waiting`), `send-money-4-qa-before-send-flow-core.json` the last
+task's (rows 1 and 7 red), and `send-money-4-qa-at-base.json` the JSON the orchestrator's
+`qa run --plan spec --at-base --json` printed, kept in the plan's `out/`. From
+`plugin/gate/Tests/Fixtures`, with `S` the clone's state the trial's run folder kept:
+
+```sh
+S=<send-money-4 run folder>/state
+F=BrownfieldTrial
+cp $S/plans/spec/validation.json $F/send-money-4-validation.json
+cp $S/plans/spec/build/20261005T055912Z-33c711cb/events.jsonl $F/send-money-4-build-events.jsonl
+cp $S/runs/20261005T060956Z-bdf9713a/qa/report.json $F/send-money-4-qa-before-account-client.json
+cp $S/runs/20261005T061244Z-0883dbbe/qa/report.json $F/send-money-4-qa-before-send-flow-core.json
+cp $S/plans/spec/out/qa-at-base.json $F/send-money-4-qa-at-base.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-4-*` matched nothing.
+
+## Brownfield trial: price-tracker-3's contract without its app seam
+
+The third price-tracker trial (2026-10-05) wrote its composition root, the file that reads
+`-harness-scenario`, in the same Bash call as a raw `xcodebuild`. The guard denied the whole call,
+the heredoc never ran, and the contract `e54fcd53` (base `c1388265`, gated GREEN at `slice` as
+`20261005T055628Z-0c95049d`) was committed and imported without the file its `Writes` named. The
+fixer's `44b36870` added the seam. `T` is the trial folder under the practice-trial runs folder,
+with its orchestrator transcript in `transcripts/`, and `G` the trial clone. From the repository
+root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial D=$F/price-tracker-3-contract
+for p in $(git -C $G diff --name-only c138826 e54fcd5) App/InterviewStarterApp.swift; do
+  if git -C $G cat-file -e c138826:$p 2>/dev/null; then
+    mkdir -p $D/base/$(dirname $p); git -C $G show c138826:$p > $D/base/$p; fi
+  mkdir -p $D/contract/$(dirname $p); git -C $G show e54fcd5:$p > $D/contract/$p
+done
+rm -r $D/contract/App   # the contract left it identical to the base
+mkdir -p $D/seam/App; git -C $G show 44b3687:App/InterviewStarterApp.swift > $D/seam/App/InterviewStarterApp.swift
+cp $T/PLAN.md $F/price-tracker-3-PLAN.md; cp $T/state/config.toml $F/price-tracker-3-config.toml
+```
+
+`Hooks/price-tracker-3-blocked-seam-bash.json` is that call's `tool_use` input and its denial
+text, written by a python script over the transcript that looked up tool use
+`toolu_01RENaH9WZdjTUSwczgVdKrs` and its `tool_result`, and replaced the plan checkout's path with
+`/REPO-spec`. `grep -rniE '/Users|/private|/var/folders|caleb'` on every file named here matched
+nothing.
+
+## Brownfield trial: a changed test that spins, and the warm-up its bounds read
+
+`BrownfieldTrial/price-tracker-3-DetailFeatureTests-spin.swift` is the detail test file a
+price-tracker-3 worker committed: its `dismissCancelsChart` spins twice on
+`while !flag.value { await Task.yield() }`, and `test-only` then `slice --prove` ran it for about
+1700 s. `price-tracker-3-DetailFeatureTests.swift` is the same file after the worker bounded the
+test with `store.finish()`. `price-tracker-3-warmup.json` is the warm-up times file that run wrote
+at its base tree (AppFeature: 11.3 s warm test, 161.4 s cold), and `price-tracker-3-clock.json`
+is its launch clock, with its absolute spec paths cut to `/trial/repo/`. The run's `config.toml`
+differs from `price-tracker-1-config.toml` only in `discovered_at`, so the tests use that one.
+`T` is the trial clone and `S` the run's copied state directory:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+P=Packages/AppFeature/Tests/AppCoreTests/DetailFeatureTests.swift
+git -C $T show 765d143:$P > $F/price-tracker-3-DetailFeatureTests-spin.swift
+git -C $T show 4dca7a5:$P > $F/price-tracker-3-DetailFeatureTests.swift
+cp $S/warmup/f0bd7c247ed6a4afd220dfad6893cc719ca66bfa.json $F/price-tracker-3-warmup.json
+sed -E 's#"/[^"]*/price-tracker-3/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
+  > $F/price-tracker-3-clock.json
+```
+
+`grep -laE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-3-*` matched nothing.
 
 ## Brownfield trial: price-tracker-3's cutoff, Monitor wait, roles, open spans and fixer
 

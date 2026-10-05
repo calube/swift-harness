@@ -1,0 +1,111 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-contact-search",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/contact-tap.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-contact-tap",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/keypad-entry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-keypad-entry",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/amount-currency.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-amount-currency",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/continue-rule.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-continue-rule",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-send.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-confirm-send",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-success",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure",
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: a running app can't show which numeric type holds a value; the AccountClient and AmountInput tests compare Decimal values",
+      "requirement" : "req-decimal-money"
+    },
+    {
+      "reason" : "the AccountClientTests in account-client check the start balance, the contacts and the failing send",
+      "requirement" : "req-fake-account"
+    },
+    {
+      "reason" : "system: a simulator flow can't observe the unit test suite; the AppCore tests in send-flow-core are the requirement itself",
+      "requirement" : "req-unit-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

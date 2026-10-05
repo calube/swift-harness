@@ -22,6 +22,12 @@ and `trialMerge.conflicts` names the files. `build merge` refuses `build-merge.f
 while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s commit, and
 `build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does.
 
+`--after <task>,<other>,… --before-merge` merges each named branch in turn and runs every row that
+names any of them, each counting as merged; `trialMerge.alongside` names the others' branches and
+tips. Once each unmerged task a row waits on has a checked return waiting to merge, and no fixer's
+branch, `build merge` of any of them refuses `flows-unchecked` until such a run took all their
+branches at their tips on `main`'s commit, so the row runs before the first of them lands.
+
 Each merged run leaves `merged-tree-run.json` beside its report: the merge's tree and each row's
 result with its check's digest. A later run whose trial merge makes the same tree takes, from the
 newest such record, each row that read `pass` with a byte-identical check, naming that run in
@@ -52,3 +58,6 @@ hold it, its check changed, or it read `unverified` there.
 A flow row and its requirement's state rows are taken together or run together: a state check
 reads what its flow left on a device that only a run of that flow brings up. When every ready row
 is taken, no scratch worktree is made.
+
+Every `qa run` ends its output with 1 line naming the verdict, the run id and the run's
+`report.json` (with `--json`, the last member, `summary`), so a cut output still names its run.

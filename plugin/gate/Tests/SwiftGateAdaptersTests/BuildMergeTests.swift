@@ -936,6 +936,105 @@ struct BuildMergeFlowsTests {
     #expect(FileManager.default.fileExists(atPath: fix + "/B.swift"))
   }
 
+  /// Writes a table with 1 row that runs after `t1` and `t2`, and a ledger with both in progress.
+  fileprivate static func planOverBoth(_ scenario: MergeScenario) throws {
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    let directory = URL(filePath: plan.directory, directoryHint: .isDirectory)
+    try ValidationTableJSON.encode(
+      ValidationTable(rows: [
+        ValidationRow(
+          requirement: "req-search", layer: .flow, check: "qa/search-contacts.flow.json",
+          runsAfter: ["t1", "t2"], writer: "validation")
+      ])
+    ).write(to: directory.appending(path: ValidationTable.fileName))
+    try LedgerJSON.encode(
+      Ledger(
+        schemaVersion: 1, resume: "", maxParallel: 2,
+        tasks: ["t1", "t2"].map { id in
+          LedgerTask(
+            id: id, deps: [], writeSet: [], gate: .push, tests: [], covers: [], estLines: 10,
+            status: .inProgress, worktree: scenario.checkout.path + "-search-\(id)")
+        }, waves: [["t1", "t2"]])
+    ).write(to: directory.appending(path: "ledger.json"))
+  }
+
+  /// Writes a GREEN or RED `qa run --before-merge` report of `search/t1` with `search/t2`
+  /// alongside, each at its tip, on `base`.
+  fileprivate static func combinedReport(
+    _ scenario: MergeScenario, runID: String, tips: (String, String), base: String, red: Bool
+  ) throws {
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-4-qa-before-send-flow-core.json"))
+    let row = try #require(captured.rows.first)
+    let report = QAReport(
+      runID: runID, plan: MergeScenario.plan, after: "t1", atBase: false, commit: nil,
+      rows: [
+        QARow(
+          row: 1, requirement: row.requirement, layer: row.layer, check: row.check,
+          runsAfter: ["t1", "t2"], result: red ? row.result : .pass,
+          message: red ? row.message : "batch passed", evidence: row.evidence)
+      ],
+      trialMerge: QATrialMerge(
+        branch: "\(MergeScenario.plan)/t1", tip: tips.0, base: base,
+        alongside: [
+          QATrialMerge.Branch(task: "t2", branch: "\(MergeScenario.plan)/t2", tip: tips.1)
+        ]
+      ))
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
+  }
+
+  @Test(
+    "with both tasks' returns checked and neither merged, the first merge is refused flows-unchecked naming a run over both, and merges once that run is GREEN at both tips — catches rows first run on the last task's trial merge"
+  )
+  func firstMergeWaitsForTheCombinedRun() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    let t1 = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: t2)
+    let pre = try await scenario.main()
+
+    let unchecked = await scenario.merge("t1")
+    try Self.combinedReport(
+      scenario, runID: "20261005T061000Z-00000001", tips: (t1, t2), base: pre, red: false)
+    let merged = await scenario.merge("t1")
+
+    #expect(unchecked.status == .refused, "\(unchecked.message)")
+    #expect(unchecked.reason == .flowsUnchecked)
+    #expect(unchecked.message.contains("--after t1,t2 --before-merge"), "\(unchecked.message)")
+    #expect(merged.status == .merged, "\(merged.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
+  }
+
+  @Test(
+    "a RED run over both tasks refuses flows-red and cuts the fix worktree of the task merged first, after which the other task merges with no run — catches the tasks that don't own a red row held behind its fixer"
+  )
+  func redCombinedRunSetsTheOwnerAside() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    let t1 = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: t2)
+    let pre = try await scenario.main()
+    try Self.combinedReport(
+      scenario, runID: "20261005T061244Z-0883dbbe", tips: (t1, t2), base: pre, red: true)
+
+    let owner = await scenario.merge("t1")
+    let other = await scenario.merge("t2")
+
+    #expect(owner.status == .refused, "\(owner.message)")
+    #expect(owner.reason == .flowsRed)
+    #expect(owner.fixBranch == "search/fix-t1")
+    #expect(other.status == .merged, "\(other.message)")
+    #expect(try scenario.merges().map(\.task) == ["t2"])
+  }
+
   @Test(
     "a GREEN qa run --before-merge of the tip on main's commit merges, while one of an older tip is refused — catches a stale run vouching for new commits"
   )

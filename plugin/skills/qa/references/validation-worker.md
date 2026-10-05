@@ -8,7 +8,7 @@ those checks wait for.
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Work only in your own worktree, from its toplevel.
 
 Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash tool's `timeout` at
-600000, never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
+600000, never a shorter one, and never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
 the background while you wait on it, and every merge your rows name waits on you. If 1 does,
 `qa run` printed `run <id> started; its report will be written to <path>` first: wait for that
 file, in Bash or Monitor, never for a process by name, which the hook denies. Never search
@@ -52,6 +52,11 @@ exists and fails for the reason the feature is missing.
   A screen a dependency client feeds never reaches the live service: the flow's first step is
   `{"command": "open", "input": {"app": "<bundle id>", "relaunch": true, "launchArgs":
   ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
+  A pull to refresh is 1 step, `{"command": "gesture", "input": {"kind": "drag", "source":
+  "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`, from the list's top row to an
+  element at least 350 pt lower on screen, then a `wait` for what the refresh changes. A `scroll`
+  step is never a pull to refresh: it leaves the row red on a gesture that didn't refresh. When no
+  element sits that far below the top row, return the one you need as a missing contract name.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its
@@ -76,6 +81,11 @@ lint finding isn't ready: fix it and run it again before you return.
   ```bash
   "$SG" qa run --plan <plan> --at-base --prepared-by <your task id> --json
   ```
+
+  Never pipe it through `head`, `tail` or a filter, and never send it to a file outside your
+  worktree: read the whole JSON it prints. Its last member, `summary`, is 1 line naming the
+  verdict, the run id and its `report.json`, which holds the same JSON. A finished run on the same
+  commit is never run again: read its report there, or the `at-base-run.json` beside your checks.
 
   It runs only the rows you write, from your prepared folder, at the merge base in a scratch tree:
   each flow is linted, run as 1 batch on a device `sim up` leases, snapped at each step and judged
