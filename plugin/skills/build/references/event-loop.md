@@ -540,7 +540,8 @@ main checkout:
 "$SG" build no-repair <slug> <task> --reply .harness/build/<run>/no-repair-<task>.txt --qa-run <red run id> --fix-return .harness/build/<run>/fix-<task>.json --session <session> --json
 ```
 
-`<red run id>` is the fixer's newest red before-merge run. Quote its `why`. It never answers stop
+`<red run id>` is the fixer's newest red before-merge run, read from any checkout of the clone,
+the fixer's slot included; so is the run `build merge --fix` credits. Quote its `why`. It never answers stop
 the build. Its `action`:
 
 - `amend-contract`: a contract gap with time before `noNewStartsAt` for the repair's proof and
