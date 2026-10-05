@@ -336,7 +336,8 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   row and its files: the requirement's text, the `check`, the failing step's number and command,
   what that step expected (its selector or value in the flow file) and what it observed (its
   `message`), and the absolute paths of the row's `evidence` files, `steps.json`, `sheet.png` and
-  `video.mp4`, in the checkout that ran it. Never add a likely or guessed cause, such as a
+  `video.mp4`, in the run's folder: `<git common dir>/swift-harness/runs/<run id>/` in a
+  brownfield clone, whichever checkout ran it, never a `worktrees/` path. Never add a likely or guessed cause, such as a
   flow-side timing problem or a clock race, and never say no app change is needed: the fixer
   judges the cause from that evidence and a reproduction test, as its rules say;
 - both returns: this task's, and that of the task it collides with, read from `<returns>`. For a
@@ -512,8 +513,11 @@ another in the same fix worktree, starting with the row whose step failed first.
    worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from
    `validation.json`. It quotes the `flow row:` line, both red run ids and each red run's evidence:
    the failing step, what it expected and what it observed, and the absolute paths of the
-   `steps.json`, `sheet.png` and `video.mp4` their `qa/report.json` rows name. It never adds a
-   likely or guessed cause, the fixer's or yours, beyond that line. It says to follow the repair mode of
+   `steps.json`, `sheet.png` and `video.mp4` their `qa/report.json` rows name, joined to the run
+   folder. In a brownfield clone a `qa run` in any checkout writes
+   `<git common dir>/swift-harness/runs/<run id>/qa/report.json`, which reads from every checkout
+   and outlives the slot; never cite a `worktrees/` path. It never adds a likely or guessed cause,
+   the fixer's or yours, beyond that line. It says to follow the repair mode of
    `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`, which runs the at-base proof
    itself. Never prescribe the edit: the fixer's suggestion, such as an `is` in place of a `wait`,
    can weaken the check. Record its usage as for the validation task, under the task the row
@@ -788,7 +792,7 @@ At `changed`, with a `<plans>/<slug>/validation.json`, run the final pass first:
 ```
 
 It runs every row whose tasks merged, records each flow under the 1-slot `sim-record` lock, and
-writes `.harness/runs/<runID>/qa/report.json`. A video the recorder couldn't take is a
+writes `runs/<runID>/qa/report.json` at the path its last line names. A video the recorder couldn't take is a
 `qa.video-unverified` nit and never fails a row. Keep `runID`, `verdict` and each row's
 `requirement`, `layer`, `result` and `message`.
 
