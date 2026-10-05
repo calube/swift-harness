@@ -65,6 +65,34 @@ struct QARunBeforeMergeTests {
   }
 
   @Test(
+    "a second --before-merge run whose trial merge makes the tree a passing run already checked takes that run's rows, naming it, and runs them again once main moves or the check changes — catches flows run twice on an identical tree before the merge"
+  )
+  func reusesThePassingRunOnTheSameTree() async throws {
+    let (repo, _) = try await Self.repo()
+    defer { repo.remove() }
+
+    let first = await repo.run(QARunRun.Options(after: Self.screens, beforeMerge: true), suffix: 1)
+    let again = await repo.run(QARunRun.Options(after: Self.screens, beforeMerge: true), suffix: 2)
+    try Data("more\n".utf8).write(to: repo.root.appending(path: "more.txt"))
+    try await repo.git("add", "-A")
+    try await repo.git("commit", "-q", "-m", "Merge: more")
+    let moved = await repo.run(QARunRun.Options(after: Self.screens, beforeMerge: true), suffix: 3)
+    try repo.plan(
+      [validationRow("req-search", .acceptance, Self.check + " ", after: ["send-flow", Self.screens])],
+      tasks: ["send-flow": .done, Self.screens: .inProgress])
+    let changed = await repo.run(QARunRun.Options(after: Self.screens, beforeMerge: true), suffix: 4)
+
+    #expect(first.rows.map(\.result) == [.pass], "\(first.rows.map(\.message))")
+    #expect(first.rows.map(\.reusedFrom) == [nil])
+    #expect(again.verdict == .green, "\(again.message)")
+    #expect(again.rows.map(\.reusedFrom) == [first.runID], "\(again.rows.map(\.message))")
+    #expect(again.trialMerge?.tip == first.trialMerge?.tip)
+    #expect(moved.rows.map(\.result) == [.pass])
+    #expect(moved.rows.map(\.reusedFrom) == [nil], "\(moved.rows.map(\.message))")
+    #expect(changed.rows.map(\.reusedFrom) == [nil], "\(changed.rows.map(\.message))")
+  }
+
+  @Test(
     "a branch that conflicts with main runs no row, reads each ready row unverified naming the conflict, and records the conflicted files — catches a conflicting task stuck behind a run that can't happen"
   )
   func conflictRunsNothing() async throws {

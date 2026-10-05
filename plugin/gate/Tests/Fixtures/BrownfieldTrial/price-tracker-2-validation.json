@@ -1,0 +1,85 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist-rows.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist-rows",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-first-load-spinner",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-refresh",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/last-updated.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-last-updated",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/load-error-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-load-error-retry",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail-chart",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/chart-failure-keeps-price.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-chart-failure-keeps-price",
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: the simulator exposes no in-flight request to a flow, so a flow can't see the chart request cancel; AssetDetailFeature's TestStore test checks the cancellation",
+      "requirement" : "req-chart-cancel"
+    },
+    {
+      "reason" : "no user journey: the APIClientLive tests over recorded CoinGecko fixtures prove it, with a transport that never reaches the network",
+      "requirement" : "req-client-tests"
+    }
+  ]
+}
