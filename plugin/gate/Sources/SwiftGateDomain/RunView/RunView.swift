@@ -392,6 +392,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     }
   }
 
+  /// What an ``unwritten`` row reads.
+  public static let notWrittenYet = "not written yet"
   /// A requirement title's cap.
   public static let maxTitleBytes = 120
   /// A brief string's cap.

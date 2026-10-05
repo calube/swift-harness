@@ -34,8 +34,16 @@ public struct RunViewReader: RunViewReading {
 
   public func read(buildRun: String) throws -> RunViewInput {
     var damage: [RunView.Damage] = []
+    var unwritten: [RunView.Damage] = []
     let joined = BuildJoinReader(commonDirectory: commonDirectory).read(buildRunID: buildRun)
-    damage += joined.damage.map { RunView.Damage(source: $0.path, reason: $0.reason) }
+    for entry in joined.damage {
+      let row = RunView.Damage(source: entry.path, reason: entry.reason)
+      if entry.reason == BuildJoinReader.missingLogReason {
+        unwritten.append(row)
+      } else {
+        damage.append(row)
+      }
+    }
     let join = joined.runs.first
 
     var ledger: Ledger?
@@ -44,7 +52,7 @@ public struct RunViewReader: RunViewReading {
     var prebuild = Prebuild()
     var qaWindow: QAWindow?
     if let join {
-      let plan = try planState(join.plan, damage: &damage)
+      let plan = try planState(join.plan, damage: &damage, unwritten: &unwritten)
       ledger = plan.ledger
       requirements = plan.requirements
       briefs = plan.briefs
@@ -106,7 +114,7 @@ public struct RunViewReader: RunViewReading {
     let qa = qaRuns(of: kept, in: checkouts, damage: &damage)
     return RunViewInput(
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
-      damage: damage, briefs: briefs, workerGateRuns: workerGateRuns,
+      damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workerGateRuns,
       launchedAt: prebuild.launchedAt, gateReports: reports,
       checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa)
   }
@@ -662,14 +670,20 @@ public struct RunViewReader: RunViewReading {
     var briefs: [String: RunView.Brief] = [:]
   }
 
+  /// A plan with no `plan.json` names no spec page, which is no damage. A spec page it names
+  /// that doesn't exist goes to `unwritten`, damage only once the run has ended.
   /// - Throws: ``PlanStateLayoutError`` for a relative common dir, a caller's mistake.
-  private func planState(_ plan: String, damage: inout [RunView.Damage]) throws -> PlanState {
+  private func planState(
+    _ plan: String, damage: inout [RunView.Damage], unwritten: inout [RunView.Damage]
+  ) throws -> PlanState {
     var state = PlanState()
     let paths = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan)
     // The build join reads the same file and already names it when it's missing or undecodable.
     state.ledger = (try? Data(contentsOf: URL(filePath: paths.ledgerFile)))
       .flatMap { try? LedgerJSON.decode($0) }
-    guard let data = read(paths.planFile, damage: &damage) else { return state }
+    guard FileManager.default.fileExists(atPath: paths.planFile),
+      let data = read(paths.planFile, damage: &damage)
+    else { return state }
     let file: PlanFile
     do {
       file = try PlanFileJSON.decode(data)
@@ -680,6 +694,10 @@ public struct RunViewReader: RunViewReading {
     switch file.source {
     case .specPage(let page):
       let path = "\(paths.directory)/\(page.path)"
+      guard FileManager.default.fileExists(atPath: path) else {
+        unwritten.append(RunView.Damage(source: display(path), reason: "missing spec page"))
+        return state
+      }
       guard let data = read(path, damage: &damage) else { return state }
       switch SpecPage.parse(String(decoding: data, as: UTF8.self)) {
       case .parsed(let parsed):

@@ -26,6 +26,15 @@ public enum RunViewBuilder {
       events: events, join: join, taskSpans: Set(taskSpans.map(\.id)), runSpan: runSpan?.id)
 
     var damage = input.damage + gates.damage
+    // A file a run writes as it goes is only late until the run ends.
+    var unwritten: [RunView.Damage] = []
+    if state == .done {
+      damage += input.unwritten
+    } else {
+      unwritten = input.unwritten.map {
+        RunView.Damage(source: $0.source, reason: RunView.notWrittenYet)
+      }
+    }
     let usage = events.compactMap { event -> AgentUsageEvent? in
       guard case .agentUsage(let usage) = event.payload else { return nil }
       return usage
@@ -51,7 +60,7 @@ public enum RunViewBuilder {
             events: events, parent: runSpan?.id, baselines: input.warmupBaselines)),
       gates: gates.gates,
       halts: halts(events),
-      damage: damage)
+      damage: damage, unwritten: unwritten)
     view = RunViewEmittedEvents.fold(events, into: view)
     RunViewValidationFold.fold(
       events, qaRuns: input.qaRuns, roots: input.checkoutRoots,

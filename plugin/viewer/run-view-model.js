@@ -1,7 +1,8 @@
 // Pure functions over a RunView: merging partials, laying out the timeline, and formatting.
 // Loaded as a classic script so the report can inline it; it publishes one global.
 (function (root) {
-  // The key each RunView array merges on. A partial row replaces the row with the same key.
+  // The key each RunView array merges on. A partial row replaces the row with the same key. Any
+  // other array, `damage` and `unwritten` among them, comes whole and replaces the old one.
   const KEYS = {
     spec: (x) => x.id,
     tasks: (x) => x.id,
@@ -9,8 +10,7 @@
     spans: (x) => x.id,
     gates: (x) => x.runId,
     proofs: (x) => x.gateRun + "\u0000" + x.test,
-    halts: (x) => (x.task || "") + "\u0000" + x.at,
-    damage: (x) => x.source + "\u0000" + x.reason
+    halts: (x) => (x.task || "") + "\u0000" + x.at
   };
 
   function mergeBy(rows, partial, key) {
@@ -328,6 +328,12 @@
     return `box ${box.budgetMin} min (${from}): starts stop ${clock(box.noNewStartsAt)}, cutoff ${clock(box.cutoffAt)}, ends ${clock(box.endsAt)}`;
   }
 
+  // A report of a run that hadn't ended says when it was taken; null for a final report.
+  function snapshotText(run) {
+    if (!run || !run.snapshotAt) return null;
+    return `Snapshot at ${run.snapshotAt.slice(0, 10)} ${clock(run.snapshotAt)}, run still ${run.state}`;
+  }
+
   // Gate runs in time order: by the end of each run's gate span, falling back to the view's order
   // for a run with no span.
   function gatesInTime(view, gates) {
@@ -461,7 +467,7 @@
 
   root.RunViewModel = {
     validationGroups, validationBadges, evidenceHref, gapText, keptFlowGroups,
-    apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText,
+    apply, latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText, snapshotText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

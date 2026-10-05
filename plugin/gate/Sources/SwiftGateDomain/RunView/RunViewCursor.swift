@@ -39,7 +39,8 @@ public struct RunViewSnapshot: Sendable, Equatable {
 }
 
 /// The part of a ``RunView`` that changed after a cursor: each array holds only its new or
-/// changed rows, and an absent key means nothing changed there. The page merges it by id.
+/// changed rows, but `damage` and `unwritten` come whole, and an absent key means nothing changed
+/// there. The page merges the rest by id.
 public struct RunViewChanges: Sendable, Equatable, Encodable {
   public var cursor: String
   public var run: RunView.Run?
@@ -52,6 +53,7 @@ public struct RunViewChanges: Sendable, Equatable, Encodable {
   public var halts: [RunView.Halt]?
   /// The whole validation section when any of it changed: the page replaces it.
   public var validation: RunViewValidation?
+  /// The whole list when it changed: the page replaces it.
   public var damage: [RunView.Damage]?
   /// The whole list when it changed, so a file written since drops out: the page replaces it.
   public var unwritten: [RunView.Damage]?
@@ -74,7 +76,9 @@ public struct RunViewChanges: Sendable, Equatable, Encodable {
       "\($0.task ?? "")\u{0}\($0.at.timeIntervalSinceReferenceDate)"
     }
     if old.validation != new.validation { changes.validation = new.validation }
-    changes.damage = changed(old.damage, new.damage) { "\($0.source)\u{0}\($0.reason)" }
+    // Whole, not merged by row: a torn line that healed or a late file must leave the footer.
+    if old.damage != new.damage { changes.damage = new.damage }
+    if old.unwritten != new.unwritten { changes.unwritten = new.unwritten }
     return changes
   }
 

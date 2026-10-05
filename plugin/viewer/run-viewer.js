@@ -49,6 +49,9 @@
     const state = $("state");
     state.textContent = r.state;
     state.className = "chip " + ({ done: "ok", running: "info", halted: "bad" }[r.state] || "plain");
+    const snapshot = M.snapshotText(r);
+    $("snapshot").textContent = snapshot || "";
+    $("snapshot").hidden = !snapshot;
     const box = M.timeBoxText(r);
     $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].concat(box ? [esc(box)] : []).map((x) => `<span>${x}</span>`).join("");
     const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
@@ -352,6 +355,10 @@
 
   // spec mapping
   function renderSpec() {
+    if (!view.spec.length) {
+      $("spec-table").innerHTML = `<tbody><tr><td class="sub">No spec page: the plan names no requirements${(view.unwritten || []).length ? ", or they aren't written yet (see the footer)" : ""}.</td></tr></tbody>`;
+      return;
+    }
     $("spec-table").innerHTML = `<thead><tr><th>requirement</th><th>tasks</th><th>merged commits</th><th>merge gate</th></tr></thead><tbody>` +
       view.spec.map((q) => {
         const ts = q.tasks.map((id) => taskBy[id]).filter(Boolean);
@@ -735,7 +742,8 @@
   function renderFooter() {
     const damage = (view ? view.damage : []).concat(pageDamage);
     $("foot").innerHTML = `<span>RunView schema ${view ? esc(view.schemaVersion) : "none"}</span><span>damage: ${damage.length ? damage.length : "none"}</span><span>plan text, ids, counts, times and repo-relative paths; no source or transcripts</span>` +
-      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
+      damage.map((d) => `<span class="damage-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("") +
+      ((view && view.unwritten) || []).map((d) => `<span class="unwritten-line">${esc(d.source)}: ${esc(d.reason)}</span>`).join("");
   }
 
   // Optional modules (board, graph) render into their own hidden panel. One that throws is shown
