@@ -19,14 +19,18 @@ public struct BaselineQuery: Sendable {
   public let head: AreaCommandOutcome
   /// The same step's request with its paths under `scratchToplevel` instead of the worktree.
   public let request: @Sendable (_ scratchToplevel: URL) -> AreaCommandRequest
+  /// Where the gate kept the head run's output and report, absolute.
+  public let headEvidence: [String]
 
   public init(
     key: BaselineStepKey, head: AreaCommandOutcome,
-    request: @escaping @Sendable (_ scratchToplevel: URL) -> AreaCommandRequest
+    request: @escaping @Sendable (_ scratchToplevel: URL) -> AreaCommandRequest,
+    headEvidence: [String] = []
   ) {
     self.key = key
     self.head = head
     self.request = request
+    self.headEvidence = headEvidence
   }
 }
 
@@ -37,11 +41,17 @@ public struct BaselineLookup: Sendable, Equatable {
   public let notes: [Finding]
   /// The steps rerun at the merge base because no answer was recorded.
   public let reran: [BaselineStepKey]
+  /// Gating `baseline.whole-step` findings for ``BaselineVerdict/unattributed``.
+  public let unattributed: [Finding]
 
-  public init(verdict: BaselineVerdict, notes: [Finding], reran: [BaselineStepKey]) {
+  public init(
+    verdict: BaselineVerdict, notes: [Finding], reran: [BaselineStepKey],
+    unattributed: [Finding] = []
+  ) {
     self.verdict = verdict
     self.notes = notes
     self.reran = reran
+    self.unattributed = unattributed
   }
 }
 
@@ -90,11 +100,12 @@ public struct BaselineStore: Sendable {
   }
 
   /// Compares the queries' head failures with the base tree's answers, rerunning at
-  /// `base.commit` each failing step that has none and recording what the rerun gives.
-  /// A step with no answer, because its rerun couldn't run, stays gating.
-  public func lookupOrRerun(_ queries: [BaselineQuery], base: BaselineBase) async
-    -> BaselineLookup
-  {
+  /// `base.commit` each failing step that has none and recording what the rerun gives, with
+  /// its output and report kept under the baseline directory. A step with no answer, because
+  /// its rerun couldn't run, stays gating. `attributingTests` is ``Baseline/compare(head:base:attributingTests:)``'s.
+  public func lookupOrRerun(
+    _ queries: [BaselineQuery], base: BaselineBase, attributingTests: Bool = false
+  ) async -> BaselineLookup {
     var head: [BaselineStepKey: BaselineStepResult] = [:]
     var failing: [BaselineQuery] = []
     for query in queries {

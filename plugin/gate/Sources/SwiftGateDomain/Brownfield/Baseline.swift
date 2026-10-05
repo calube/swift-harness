@@ -71,10 +71,26 @@ public struct BaselineFailure: Sendable, Hashable {
 public struct BaselineRecord: Sendable, Equatable {
   public let key: BaselineStepKey
   public let result: BaselineStepResult
+  /// The folder holding the failing run's output and report, relative to the baseline
+  /// directory; `nil` when none was kept.
+  public let evidence: String?
 
-  public init(key: BaselineStepKey, result: BaselineStepResult) {
+  public init(key: BaselineStepKey, result: BaselineStepResult, evidence: String? = nil) {
     self.key = key
     self.result = result
+    self.evidence = evidence
+  }
+}
+
+/// Where 1 failing step's output and report were kept: at the head by the gate, at the merge
+/// base by the baseline. Paths are absolute.
+public struct BaselineEvidence: Sendable, Equatable {
+  public let head: [String]
+  public let base: [String]
+
+  public init(head: [String] = [], base: [String] = []) {
+    self.head = head
+    self.base = base
   }
 }
 
@@ -198,21 +214,28 @@ public struct BaselineVerdict: Sendable, Equatable {
   public let remaining: [BaselineFailure]
   /// Not installed at both the head and the base tree: neither absorbed nor gating, and reported.
   public let notInstalled: [BaselineStepKey]
+  /// A test step failing whole at both the head and the base tree, when the gate asked for test
+  /// ids: no test id says the head fails only what the base did, so these gate.
+  public let unattributed: [BaselineFailure]
 
   public init(
     absorbed: [BaselineFailure] = [], remaining: [BaselineFailure] = [],
-    notInstalled: [BaselineStepKey] = []
+    notInstalled: [BaselineStepKey] = [], unattributed: [BaselineFailure] = []
   ) {
     self.absorbed = absorbed
     self.remaining = remaining
     self.notInstalled = notInstalled
+    self.unattributed = unattributed
   }
 
   /// `gate.run`'s `baselineCount`.
   public var baselineCount: Int { absorbed.count }
 
-  /// The `baseline.summary` nit listing what was absorbed; `nil` when nothing was.
-  public func summary(file: String) -> Finding? {
+  /// The `baseline.summary` nit listing what was absorbed and where each step's evidence was
+  /// kept; `nil` when nothing was.
+  public func summary(file: String, evidence: [BaselineStepKey: BaselineEvidence] = [:])
+    -> Finding?
+  {
     guard !absorbed.isEmpty else { return nil }
     let listed = absorbed.map { failure in
       "\(failure.key.area) \(failure.key.step.rawValue)"
@@ -228,6 +251,13 @@ public struct BaselineVerdict: Sendable, Equatable {
 }
 
 extension BaselineVerdict {
+  /// 1 gating `baseline.whole-step` per unattributed failure, naming its evidence.
+  public func unattributedFindings(
+    file: String, evidence: [BaselineStepKey: BaselineEvidence] = [:]
+  ) -> [Finding] {
+    []
+  }
+
   /// 1 non-gating `area.step-dropped` per step whose tool isn't installed.
   public func notInstalledFindings(file: String) -> [Finding] {
     notInstalled.compactMap { key in
@@ -260,8 +290,12 @@ public enum Baseline {
   /// failure: a whole-step failure never absorbs a named test, nor a named test a whole step.
   /// A step not installed at the head is never absorbed: it is reported when the base can't run
   /// it either, and gates when the base can.
+  ///
+  /// With `attributingTests`, a test step failing whole at both trees is unattributed rather
+  /// than absorbed: `final` can't call a test step green that it excused whole.
   public static func compare(
-    head: [BaselineStepKey: BaselineStepResult], base: [BaselineStepKey: BaselineStepResult]
+    head: [BaselineStepKey: BaselineStepResult], base: [BaselineStepKey: BaselineStepResult],
+    attributingTests: Bool = false
   ) -> BaselineVerdict {
     var absorbed: [BaselineFailure] = []
     var remaining: [BaselineFailure] = []

@@ -104,11 +104,15 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     public let step: AreaStep
     /// `nil` when the whole step failed with no test id to read.
     public let test: String?
+    /// The folder holding the merge base run's output and report, relative to the baseline
+    /// directory; `nil` when none was kept.
+    public let evidence: String?
 
-    public init(area: String, step: AreaStep, test: String?) {
+    public init(area: String, step: AreaStep, test: String?, evidence: String? = nil) {
       self.area = area
       self.step = step
       self.test = test
+      self.evidence = evidence
     }
   }
 
