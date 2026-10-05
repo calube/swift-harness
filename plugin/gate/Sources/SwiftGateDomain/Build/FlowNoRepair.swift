@@ -12,7 +12,8 @@ public struct FlowNoRepair: Sendable, Equatable {
   }
 
   public static let prefix = "no repair:"
-  /// What a contract gap's reason starts with: `no repair: <requirement>: contract gap: <name>: <why>`.
+  /// What a contract gap's reason starts with:
+  /// `no repair: <requirement>: contract gap: <name>: <why>`.
   public static let contractGapMarker = "contract gap:"
 
   public let requirement: String
@@ -37,7 +38,7 @@ public struct FlowNoRepair: Sendable, Equatable {
       guard !requirement.isEmpty, !requirement.contains(" ") else { return nil }
       let reason = rest[rest.index(after: colon)...].trimmingCharacters(in: .whitespaces)
       guard reason.lowercased().hasPrefix(contractGapMarker) else {
-        // The repair-mode reference's own words for this cause, before it had a marker.
+        // The cause in prose, as the repair-mode reference words it, with no marker.
         let gap = reason.lowercased().contains("contract name")
         return FlowNoRepair(
           requirement: requirement, cause: gap ? .contractGap(name: nil) : .appAtFault,
