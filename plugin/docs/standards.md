@@ -629,6 +629,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `safety.blocking-in-async` | C6 |
 | `tca.banned-api` | A6 |
 | `snap.record-mode` | playbook P4 |
+| `a11y.input-label` | X1 |
 | `arch.undeclared-kind`, `arch.config-module-mismatch` | A1, A3 |
 | `arch.test-support-dependency` | A1 |
 | `arch.ui-framework-in-core` | A2 |
