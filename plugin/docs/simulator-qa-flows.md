@@ -5,7 +5,8 @@ the layer order are in [`simulator-qa.md`](simulator-qa.md#qa-run), and the sess
 [`simulator-qa-sim.md`](simulator-qa-sim.md). Rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index). Steps for gestures a selector alone
 doesn't drive, such as pull to refresh, are in
-[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md).
+[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md), and the key each `wait` kind
+reads in [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md).
 
 ## Running a flow row
 
