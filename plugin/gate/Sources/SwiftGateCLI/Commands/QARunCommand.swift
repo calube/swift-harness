@@ -186,6 +186,7 @@ enum QARunRun {
       dependencies: dependencies,
       runID: runID, plan: runPlan, atBase: options.atBase,
       areas: testAreas(root: root, common: common, table: table),
+      testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
         QAFlowRunner(
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
@@ -228,6 +229,7 @@ enum QARunRun {
       }
       rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
     }
+    await checks.testDevices?.releaseAll()
     let flowRecords = await checks.flowRecords()
     let gaps = await checks.gaps()
 
@@ -341,6 +343,9 @@ enum QARunRun {
     let atBase: Bool
     /// What a `test:` acceptance row resolves in.
     let areas: Result<[BrownfieldArea], AcceptanceTestUnresolved>
+    /// The clones `test:` rows run on, held across the acceptance rows and given back before the
+    /// first flow row brings its own device up.
+    let testDevices: HeldTestDevices?
     let flows: QAFlowRunner?
     /// State rows a flow row already ran on its device, by row.
     let stateResults = StateResults()
@@ -375,6 +380,7 @@ enum QARunRun {
 
     func run(_ entry: QARunPlan.Entry, in workingDirectory: String) async -> QACheckOutcome {
       let row = entry.validation
+      if row.layer != .acceptance { await testDevices?.releaseAll() }
       if row.layer == .flow {
         return await flow(entry, in: workingDirectory)
       }
@@ -456,14 +462,25 @@ enum QARunRun {
         row.layer == .acceptance
         ? qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path : nil
       var resultBundle: String?
+      var notes: [String] = []
       if let junit, let test = AcceptanceTestReference.parse(row.check) {
         reference = test.id
         let bundle = qaDirectory.appending(path: name.dropLast(".txt".count) + ".xcresult").path
         switch areas.flatMap({ test.resolve(in: $0, junitPath: junit, resultBundlePath: bundle) })
         {
         case .success(let resolved):
-          program = .command(resolved.command)
-          shown = resolved.command
+          var command = resolved.command
+          if let testDevices, let destination = XcodeTestDestination.simulator(in: command) {
+            switch await testDevices.device(for: destination) {
+            case .success(let device):
+              command = XcodeTestDestination.leased(command, udid: device.udid) ?? command
+            case .failure(let error):
+              notes.append(
+                "ran on the shared \(destination.device), with no clone to run on: \(error.reason)")
+            }
+          }
+          program = .command(command)
+          shown = command
           resultBundle = resolved.resultBundlePath
           if resolved.root != "." { directory += "/" + resolved.root }
         case .failure(let unresolved):
@@ -486,11 +503,20 @@ enum QARunRun {
         JUnitReportFiles.clear(at: junit)
         environment[QACheckJudgement.reportVariable] = junit
       }
-      let output = await dependencies.checks.run(
-        QACheckRequest(
-          program: program, workingDirectory: directory,
-          environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
-          timeout: dependencies.timeout))
+      let request = QACheckRequest(
+        program: program, workingDirectory: directory,
+        environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
+        timeout: dependencies.timeout)
+      var output = await dependencies.checks.run(request)
+      if case .exited(let code) = output.exit, code != 0,
+        let launch = TestRunnerLaunchFailure.reason(in: output.stdout + "\n" + output.stderr)
+      {
+        // `xcodebuild` refuses to write over a result bundle, and the retry's report must be its own.
+        if let resultBundle { try? FileManager.default.removeItem(atPath: resultBundle) }
+        if let junit { JUnitReportFiles.clear(at: junit) }
+        notes.append("retried once after \(launch)")
+        output = await dependencies.checks.run(request)
+      }
 
       var exitStatus: Int?
       let end: QACheckJudgement.End
@@ -529,8 +555,9 @@ enum QARunRun {
       let result = judgement.result
       let text =
         "$ \(shown)\nQA_PORT=\(port)\nexit: \(status)\n"
+        + notes.map { "note: \($0)\n" }.joined()
         + "--- stdout ---\n\(output.stdout)\n--- stderr ---\n\(output.stderr)\n"
-      var message = judgement.message
+      var message = ([judgement.message] + notes).joined(separator: "; ")
       var evidence: [String] = []
       do {
         try QAFiles.write(Data(text.utf8), to: qaDirectory.appending(path: name))
@@ -640,7 +667,8 @@ struct QARunCommand: AsyncParsableCommand {
               agentDevice: agentDevice,
               lock: FileCountingLock(name: FinalPassRecorder.lockName, capacity: 1),
               clock: .continuous())),
-          evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner))))
+          evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
+        testDevices: LiveTestDeviceLeases(runner: runner)))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

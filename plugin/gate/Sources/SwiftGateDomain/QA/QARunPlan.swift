@@ -89,10 +89,14 @@ public struct QARunPlan: Sendable, Equatable {
   ///   plan passed; another requirement's red row stops nothing, since it crosses another
   ///   boundary. `true` runs every ready row, since each is expected to fail there, except a state
   ///   row whose flow row didn't run: with no device, its red would prove nothing.
+  ///
+  /// An acceptance check that rows share runs once, for the first of them; each later row takes
+  /// its result and evidence, naming the row that ran it.
   public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
     var rows: [QARow] = []
     var reds: [String: QARow] = [:]
     var flows: [String: [QARow]] = [:]
+    var ran: [String: (row: Int, outcome: QACheckOutcome)] = [:]
     for entry in entries {
       let validation = entry.validation
       let row: QARow
@@ -122,7 +126,13 @@ public struct QARunPlan: Sendable, Equatable {
             "not run: flow row \(flow.row) `\(flow.check)` for \(validation.requirement) is "
             + flow.result.rawValue)
       } else {
-        let outcome = await check(entry)
+        let outcome: QACheckOutcome
+        if validation.layer == .acceptance, let first = ran[validation.check] {
+          outcome = Self.shared(first.outcome, ranFor: first.row)
+        } else {
+          outcome = await check(entry)
+          if validation.layer == .acceptance { ran[validation.check] = (entry.row, outcome) }
+        }
         row = QARow(
           row: entry.row, requirement: validation.requirement, layer: validation.layer,
           check: validation.check, runsAfter: validation.runsAfter, result: outcome.result,
@@ -136,6 +146,14 @@ public struct QARunPlan: Sendable, Equatable {
       rows.append(row)
     }
     return rows
+  }
+
+  /// The outcome of a check another row ran, for a row that names the same check. It took this
+  /// row no time.
+  private static func shared(_ outcome: QACheckOutcome, ranFor row: Int) -> QACheckOutcome {
+    QACheckOutcome(
+      result: outcome.result, message: "row \(row) ran this same check: \(outcome.message)",
+      exitStatus: outcome.exitStatus, milliseconds: 0, evidence: outcome.evidence)
   }
 
   /// A row whose tasks the build ended without merging: `abandoned` when any of them was, and
