@@ -268,7 +268,7 @@ struct RunCommandTests {
           started: started, spec: copy.path(percentEncoded: false), origin: spec.path,
           specSource: .copied, planBranch: "swift-harness/add-sharing", base: head,
           timeBox: TimeBoxLimits(
-            budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config)))
+            budgetMin: 40, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config)))
     #expect(prepared.clock == clock)
     #expect(FileManager.default.fileExists(atPath: clone.layout.config.path))
     #expect(prepared.settings == clone.layout.settings.path(percentEncoded: false))
@@ -276,7 +276,7 @@ struct RunCommandTests {
   }
 
   @Test(
-    "run writes the brownfield preset's 45-minute box into clock.json, and --time-box replaces it for that run alone — catches a brownfield run with no budget"
+    "run writes the brownfield preset's 40-minute box into clock.json, and --time-box replaces it for that run alone — catches a brownfield run with no budget"
   )
   func clockCarriesTheBox() async throws {
     let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
@@ -300,13 +300,13 @@ struct RunCommandTests {
     #expect(
       try written(configured)
         == TimeBoxLimits(
-          budgetMin: 45, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
+          budgetMin: 40, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .config))
     #expect(
       try written(flagged)
         == TimeBoxLimits(budgetMin: 30, stopStartsBeforeMin: 13, finalReserveMin: 5, source: .flag))
     let config = try TOMLConfigDecoder().decodeBrownfield(
       String(contentsOf: clone.layout.config, encoding: .utf8))
-    #expect(config.buildPresets["brownfield"]?.timeBudgetMin == 45)
+    #expect(config.buildPresets["brownfield"]?.timeBudgetMin == 40)
   }
 
   @Test(
@@ -335,9 +335,9 @@ struct RunCommandTests {
     }
     #expect(report.phase == .normal)
     #expect(report.elapsedSeconds == 360)
-    #expect(report.budgetMin == 45)
+    #expect(report.budgetMin == 40)
     #expect(report.deadlines.planBy == launch.addingTimeInterval(8 * 60))
-    #expect(report.deadlines.endsAt == launch.addingTimeInterval(45 * 60))
+    #expect(report.deadlines.endsAt == launch.addingTimeInterval(40 * 60))
     #expect(report.next == RunClockReport.Next(deadline: "planBy", secondsLeft: 120))
     guard case .refused(let message, let status) = missing else {
       Issue.record("a plan with no clock got a report")

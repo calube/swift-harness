@@ -17,8 +17,8 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   /// Every not-done task the app target needs, which the no-new-starts phase still starts.
   let required: [Required]
   /// Minutes the stall watch lets a worker's transcripts sit unchanged: the preset's `stall_min`,
-  /// or `nil` when the preset doesn't say.
-  let stallMin: Int?
+  /// or ``BuildPreset/defaultStallMin`` when the preset doesn't say.
+  let stallMin: Int
   /// A `swiftgate run`'s box: when starts stop, when the cutoff comes and when the box ends.
   /// Absent for a run without one.
   let timeBox: TimeBox?
@@ -149,7 +149,7 @@ enum BuildNextRun {
         },
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
-        }, stallMin: record.preset.stallMin,
+        }, stallMin: record.preset.effectiveStallMin,
         timeBox: record.timeBox.map { box in
           let deadlines = box.deadlines
           return BuildNextReport.TimeBox(

@@ -119,6 +119,26 @@ struct QARunTestCountTests {
   }
 
   @Test(
+    "a `test:` row whose captured swift test run passed 2 tests says so and lists both reports it wrote beside its output as evidence — catches a pass whose only evidence is `exit 0`"
+  )
+  func testFormPassCountsAndListsReports() async throws {
+    let repo = try await Self.featureRepo(
+      [validationRow("req-reset", .acceptance, "test: \(Self.id)", after: ["f"])],
+      brownfield: true)
+    defer { repo.remove() }
+
+    let report = await repo.run(QARunRun.Options(), checks: ReplayedSwiftTest("pass"))
+
+    #expect(report.rows.map(\.result) == [.pass], "\(report.rows.map(\.message))")
+    #expect(report.rows.first?.message == "exit 0, 2 tests passed")
+    #expect(
+      report.rows.first?.evidence == [
+        "qa/01-req-reset.acceptance.txt", "qa/01-req-reset.acceptance.junit.xml",
+        "qa/01-req-reset.acceptance.junit-swift-testing.xml",
+      ])
+  }
+
+  @Test(
     "a plain command that wrote its swift test report to $QA_JUNIT and ran no test is red at base and unverified after — catches a report of 0 tests read as a pass"
   )
   func plainCommandReportRanNoTest() async throws {

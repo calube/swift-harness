@@ -50,20 +50,20 @@ they take no span call here.
 ## Time box
 
 A run ends inside its time box: `[build.presets.brownfield] time_budget_min` minutes from the
-launch, 45 unless the config or the `--time-box <min>` option of `swiftgate run` says otherwise. The box keeps a
+launch, 40 unless the config or the `--time-box <min>` option of `swiftgate run` says otherwise. The box keeps a
 reserve at its end for the merges of the tasks still running, `final` and this report: starts
 stop `stop_starts_before_min` minutes before the end, and the cutoff comes 5 minutes before it.
 `"$SG" run clock <slug> --json` prints where the run stands: its `phase`, each deadline in
 `deadlines` and the seconds to the `next` one. Read it at the start of steps 1, 3, 5, 6 and 7.
 
-| Deadline | At 45 min | When it passes |
+| Deadline | At 40 min | When it passes |
 |---|---|---|
 | `exploreBy` | 5 min | stop every explorer still running and plan their areas from your own reading |
 | `planBy` | 8 min | write `PLAN.md` now from what you know, with an assumption for each open question |
 | `contractBy` | 12 min | land the smallest contract that builds: fewer types, more stubs |
-| `noNewStartsAt` | 32 min | `build next` starts nothing new; running tasks go on |
-| `cutoffAt` | 40 min | `build cutoff` decides every running task (step 7) |
-| `endsAt` | 45 min | the report is printed |
+| `noNewStartsAt` | 27 min | `build next` starts nothing new; running tasks go on |
+| `cutoffAt` | 35 min | `build cutoff` decides every running task (step 7) |
+| `endsAt` | 40 min | the report is printed |
 
 No early deadline is a reason to skip a step: past one, finish that step at its smallest and go
 on. A contract with no GREEN `slice` by `noNewStartsAt` lets no task start: go to step 8 with
@@ -139,7 +139,8 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
 - **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
   step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
-  `<config>`'s `[brownfield]` builds only at `slice`; its tests and their proof run at `merge`,
+  `<config>`'s `[brownfield]` builds only at `slice` (an `xcode` area's slice runs
+  `build-for-testing`, so its test targets compile); its tests and their proof run at `merge`,
   which proves only the tests that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
   running, is marked as unknown; `slice` measures it.
 
@@ -280,8 +281,11 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      go on with the loop. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
         already set it `abandoned`, with the reason the report quotes.
-     2. Merge each task in `finish`, in order, as the build loop's completion step does. A
-        conflict or a RED `merge` gate gets no fixer at the cutoff: `build merge --undo`, then
+     2. Merge each task in `finish`, in order, as the build loop's completion step does, from
+        where it stands: a task already merged skips `build merge`, and one in `landed` skips
+        its merge gate too, going straight to `qa run --after`, `ledger set … done` and
+        `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
+        gets no fixer at the cutoff: `build merge --undo`, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json`.
      3. Start nothing else, and go to step 8.
 
@@ -345,7 +349,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 
 ## 9. Report
 
-`"$SG" run report <slug>` writes the report to `<plan-dir>` and prints it: the assumptions, the
+`"$SG" run report <slug>` writes the report to `<plan-dir>`, rewrites the run's report page, whose path
+its JSON names as `runReport`, and prints the report: the assumptions, the
 baseline failures, the build-only areas, the dropped steps, each task's review depth, the review
 fallbacks, the time box with each task that didn't fit it, and the plan branch to merge. Its first
 line says whether the run finished: a run that left any task blocked

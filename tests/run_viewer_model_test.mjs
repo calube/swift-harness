@@ -43,6 +43,29 @@ const tests = {
     assert.equal(view.spans[2].end, null, 'apply changed its input')
   },
 
+  'apply replaces damage and unwritten whole, so a cleared row leaves the footer — catches a live footer that keeps a healed torn line'() {
+    const view = runView({ damage: [{ source: 'a.jsonl:3', reason: 'torn last line' }], unwritten: [{ source: 'events.jsonl', reason: 'not written yet' }] })
+    const merged = M.apply(view, { cursor: 'c1', damage: [], unwritten: [] })
+    assert.deepEqual(merged.damage, [])
+    assert.deepEqual(merged.unwritten, [])
+    const grown = M.apply(view, { damage: [{ source: 'b.json', reason: 'unreadable' }] })
+    assert.deepEqual(grown.damage, [{ source: 'b.json', reason: 'unreadable' }])
+  },
+
+  'evidenceHref reaches a report folder\'s copies through the view\'s evidence base, and a live page\'s run files through ../runs/ — catches a final report whose step links leave its folder'() {
+    assert.equal(M.evidenceHref('r1', 'qa/01 a.flow/video.mp4', 2500, 'runs/'), 'runs/r1/qa/01%20a.flow/video.mp4#t=2.5')
+    assert.equal(M.evidenceHref('r1', 'qa/sheet.png', null, 'runs/'), 'runs/r1/qa/sheet.png')
+    assert.equal(M.evidenceHref('r1', 'qa/sheet.png', null, null), '../runs/r1/qa/sheet.png')
+    assert.equal(M.evidenceHref('r1', 'qa/sheet.png'), '../runs/r1/qa/sheet.png')
+  },
+
+  'snapshotText names when a report of a run that hadn\'t ended was taken and its state, and nothing for a final report — catches a mid-run report mistaken for the final one'() {
+    assert.equal(M.snapshotText({ state: 'running', snapshotAt: '2026-10-04T05:17:00.000Z' }), 'Snapshot at 2026-10-04 05:17 UTC, run still running')
+    assert.equal(M.snapshotText({ state: 'halted', snapshotAt: '2026-10-04T05:17:00.000Z' }), 'Snapshot at 2026-10-04 05:17 UTC, run still halted')
+    assert.equal(M.snapshotText({ state: 'done', snapshotAt: null }), null)
+    assert.equal(M.snapshotText({ state: 'running' }), null)
+  },
+
   'apply appends a span the view does not hold yet — catches a merge that only updates'() {
     const view = runView({ spans: [span('run', null, 'run', 0, 40)] })
     const merged = M.apply(view, { spans: [span('new', 'run', 'plan', 2, 3)] })

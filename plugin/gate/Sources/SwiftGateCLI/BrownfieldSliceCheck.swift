@@ -344,6 +344,9 @@ enum BrownfieldSliceCheck {
     }
 
     let budget = dependencies.config.brownfield.sliceBudgetSeconds * 1000
+    // A step that ends build-only still compiles the area's tests where it can, so a test that
+    // doesn't compile fails here rather than first at merge.
+    let testable = XcodeBuildForTesting.area(area) ?? area
     let why: String
     switch warm {
     case .current(let milliseconds, _) where milliseconds <= budget:
@@ -359,10 +362,12 @@ enum BrownfieldSliceCheck {
       }
       return result
     case .stale(let milliseconds, let at, _) where milliseconds <= budget:
-      guard let build = await build(area, root: root, context: context, dependencies: dependencies)
+      guard
+        let build = await build(
+          testable, root: root, context: context, dependencies: dependencies)
       else {
         result.findings += buildOnly(
-          area,
+          testable,
           because: "its files changed since the warm-up at \(at.commit) measured its tests, and it "
             + "has no build command to bring its build up to date")
         result.findings += stepDropped(area)
@@ -385,7 +390,7 @@ enum BrownfieldSliceCheck {
             dependencies: dependencies))
         return result
       }
-      result.findings += buildOnly(area, because: why)
+      result.findings += buildOnly(testable, because: why)
       return result
     case .current(let milliseconds, let at), .stale(let milliseconds, let at, _):
       let measured = at.commit == change.mergeBase ? "" : ", measured at \(at.commit),"
@@ -397,8 +402,8 @@ enum BrownfieldSliceCheck {
         "no warm-up on the first-parent history of the merge base \(change.mergeBase) measured "
         + "its tests"
     }
-    result.findings += buildOnly(area, because: why)
-    if let build = await build(area, root: root, context: context, dependencies: dependencies) {
+    result.findings += buildOnly(testable, because: why)
+    if let build = await build(testable, root: root, context: context, dependencies: dependencies) {
       result.runs.append(build.run)
     } else {
       result.findings += stepDropped(area)
@@ -407,12 +412,17 @@ enum BrownfieldSliceCheck {
   }
 
   private static func buildOnly(_ area: BrownfieldArea, because why: String) -> [Finding] {
-    (try? Finding(
-      ruleID: BrownfieldRuleID.buildOnly.rawValue, severity: .nit, file: area.root, line: nil,
-      message:
-        "\(area.name): \(why), so slice only builds it; its changed tests and their prove run "
-        + "at merge",
-      failureScenario: nil)).map { [$0] } ?? []
+    let compiles =
+      area.build?.contains(XcodeBuildForTesting.action) == true
+      ? "only builds it and compiles its tests (`\(XcodeBuildForTesting.action)`)"
+      : "only builds it"
+    return
+      (try? Finding(
+        ruleID: BrownfieldRuleID.buildOnly.rawValue, severity: .nit, file: area.root, line: nil,
+        message:
+          "\(area.name): \(why), so slice \(compiles); its changed tests and their prove run "
+          + "at merge",
+        failureScenario: nil)).map { [$0] } ?? []
   }
 
   private static func stepDropped(_ area: BrownfieldArea) -> [Finding] {
