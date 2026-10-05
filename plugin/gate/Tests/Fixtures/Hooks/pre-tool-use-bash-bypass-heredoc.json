@@ -1,0 +1,14 @@
+{
+  "session_id": "8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f",
+  "transcript_path": "/HOME/.claude/projects/-REPO/8f2c1d7e-5b4a-4c1e-9d3f-2a6b7c8d9e0f.jsonl",
+  "cwd": "/REPO",
+  "prompt_id": "f15dcad3-0600-4941-bfbc-927d44c85730",
+  "permission_mode": "bypassPermissions",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cp src.txt dst.txt; cat <<'EOF'\nheredoc-probe\nEOF\ncat dst.txt",
+    "timeout": 300000
+  },
+  "tool_use_id": "toolu_01AWsEE9FtoCE3GxhThpH8WW"
+}
