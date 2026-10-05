@@ -214,7 +214,17 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
 
     /// A finding only a design or plan change resolves, which no retry of the task can fix.
     public var needsDesign: Bool {
-      false
+      switch self {
+      case .outsideWriteSet, .targetOutsideSurface, .designConflictOutcome,
+        .designConflictUnrecorded, .designConflictUnreturned, .designConflictMismatch:
+        true
+      case .branchMissing, .noCommits, .commitMissing, .commitOffBranch, .gateMissing,
+        .gateRunMissing, .gateVerdictMismatch, .gateTierMismatch, .gateNotGreen, .gateBelowTaskGate,
+        .gateRedOutcomeIsGreen, .reviewMissing, .gateMissingProof, .surfaceCommitOffBranch,
+        .surfaceCommitNotProofBase, .outsideWriteSetUnexplained, .gateMissingStep, .testNeedsStub,
+        .staleGate, .testsNotRun:
+        false
+      }
     }
   }
 

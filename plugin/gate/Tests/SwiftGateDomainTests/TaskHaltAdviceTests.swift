@@ -96,7 +96,8 @@ struct TaskHaltAdviceTests {
     let check = try SendMoney3.check("send-views")
     let started = try SendMoney3.started("send-views")
 
-    let tooLong = try #require(try advise(check, startedAt: started, now: at("2026-10-05T04:40:00Z")))
+    let tooLong = try #require(
+      try advise(check, startedAt: started, now: at("2026-10-05T04:40:00Z")))
     let noStarts = try #require(
       try advise(check, startedAt: try at("2026-10-05T04:45:00Z"), now: at("2026-10-05T04:45:50Z")))
 

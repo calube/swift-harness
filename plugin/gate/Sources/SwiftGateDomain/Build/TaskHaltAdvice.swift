@@ -27,6 +27,36 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
     outcome: TaskReturn.Outcome, verdict: Verdict, rules: [TaskReturnFinding.Rule],
     startedAt: Date?, now: Date, noNewStartsAt: Date?, cutoffAt: Date?
   ) -> TaskHaltAdvice? {
-    nil
+    let halts = verdict != .green || outcome != .readyToMerge
+    guard halts else { return nil }
+    let design = rules.filter(\.needsDesign)
+    if outcome == .designConflict || !design.isEmpty {
+      let named = design.map(\.rawValue).joined(separator: ", ")
+      return TaskHaltAdvice(
+        answer: .continue,
+        why: "a design conflict" + (named.isEmpty ? "" : " (\(named))")
+          + ": only a design or plan change resolves it, so a retry can't")
+    }
+    let found =
+      rules.isEmpty ? "a \(outcome.rawValue) return" : rules.map(\.rawValue).joined(separator: ", ")
+    if let noNewStartsAt, now >= noNewStartsAt {
+      return TaskHaltAdvice(
+        answer: .continue, why: "\(found): no new starts since \(stamp(noNewStartsAt))")
+    }
+    let took = startedAt.map { max(0, Int(now.timeIntervalSince($0).rounded())) }
+    if let cutoffAt, let took, now.addingTimeInterval(TimeInterval(took)) > cutoffAt {
+      return TaskHaltAdvice(
+        answer: .continue,
+        why: "\(found): a retry as long as its first run (\(took) s) would end after the cutoff "
+          + "at \(stamp(cutoffAt))")
+    }
+    let left = noNewStartsAt.map { " with \(Int($0.timeIntervalSince(now))) s to no new starts" }
+    return TaskHaltAdvice(
+      answer: .retry,
+      why: "\(found): fixable by a retry whose fixer brief quotes the findings\(left ?? "")")
+  }
+
+  private static func stamp(_ date: Date) -> String {
+    date.formatted(.iso8601)
   }
 }

@@ -9,7 +9,8 @@ enum BuildMergeRun {
   static func run(
     slug: String, task: String, undo: Bool, fix: Bool = false, session: String?, git: any Git,
     workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock,
-    profile: RepositoryProfile = .owned, leftovers: (any RunLeftovers)? = nil
+    profile: RepositoryProfile = .owned, leftovers: (any RunLeftovers)? = nil,
+    halts: BuildHaltLog? = nil
   ) async -> BuildMergeReport {
     let command = undo ? BuildMerge.undoCommand : BuildMerge.mergeCommand
     if let refusal: BuildLoopResult<BuildMergeReport> = await BuildLoop.authorize(
@@ -24,7 +25,7 @@ enum BuildMergeRun {
     let flow = BuildMerge(
       plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger,
       clock: clock,
-      profile: profile, leftovers: leftovers)
+      profile: profile, leftovers: leftovers, halts: halts)
     return undo ? await flow.undo() : await flow.merge()
   }
 
@@ -64,7 +65,10 @@ struct BuildMergeCommand: AsyncParsableCommand {
       + "records it as the task's merge. A merge needs the build run's newest `build "
       + "check-return` of the task's return (with --fix, the fixer's) to be GREEN for the "
       + "commit the branch is at; otherwise it refuses with return-unchecked, return-not-green "
-      + "(naming the check's id and rules) or return-stale. Exits 0 when "
+      + "(naming the check's id and rules) or return-stale. A check of a review-blocked "
+      + "return also needs a halt of the task, made since the check, answered merge; without "
+      + "one it refuses with review-blocked-unanswered. With [telemetry] enabled = false no "
+      + "halt is recorded, so none is required. Exits 0 when "
       + "merged or undone; 1 on a conflict, when --session doesn't hold the plan's lock, when "
       + "the return isn't checked GREEN at the branch tip, or when "
       + "main isn't clean, on main, or where the last merge left it; 2 for a missing --session, "
@@ -94,6 +98,11 @@ struct BuildMergeCommand: AsyncParsableCommand {
   func run() async throws {
     let root = FileManager.default.currentDirectoryPath
     let runner = LiveProcessRunner()
+    let halts: BuildHaltLog? =
+      switch await BuildHaltRun.store(command: "build merge", directory: root) {
+      case .found(let found, true): BuildHaltLog(root: found)
+      case .found(_, false), .refused: nil
+      }
     let report = await BuildMergeRun.run(
       slug: plan, task: task, undo: undo, fix: fix, session: session,
       git: LiveGit(runner: runner, repositoryRoot: root),
@@ -101,7 +110,8 @@ struct BuildMergeCommand: AsyncParsableCommand {
       merger: LiveMergeRunner(runner: runner), clock: LiveBuildClock(),
       profile: BuildPresetCatalog.profile(root: URL(filePath: root, directoryHint: .isDirectory)),
       leftovers: LiveRunLeftovers(
-        directory: URL(filePath: root, directoryHint: .isDirectory), runner: runner))
+        directory: URL(filePath: root, directoryHint: .isDirectory), runner: runner),
+      halts: halts)
     Console.write(BuildMergeRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
