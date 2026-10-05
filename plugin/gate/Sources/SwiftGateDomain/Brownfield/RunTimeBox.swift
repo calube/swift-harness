@@ -23,7 +23,7 @@ public enum TimeBoxSource: String, Sendable, Codable, CaseIterable {
 ///   finish its slice, review and return. Starts stop 13 min before the end, so whatever is
 ///   running then has 8 min before the cutoff to return and merge.
 public struct TimeBoxLimits: Sendable, Equatable, Codable {
-  public static let defaultBudgetMin = 45
+  public static let defaultBudgetMin = 40
   public static let defaultStopStartsBeforeMin = 13
   public static let defaultFinalReserveMin = 5
 
@@ -154,8 +154,13 @@ public struct RunTimeBox: Sendable, Equatable, Codable {
 public enum CutoffTaskStage: String, Sendable, Equatable, Codable, CaseIterable {
   /// Its worker hasn't returned a checked `ready-to-merge`.
   case working
-  /// Its checked return is `ready-to-merge`, or it has merged and its merge gate is running.
+  /// Its checked return is `ready-to-merge` and it hasn't merged.
   case gating
+  /// Its merge is on `main` and no GREEN merge gate is recorded after it.
+  case merged
+  /// Its merge is on `main` with a GREEN merge gate recorded after it: only the steps after a
+  /// merge gate are left.
+  case landed
   /// Never started: `pending`, or `blocked` before it ran.
   case notStarted = "not-started"
 }
@@ -199,15 +204,17 @@ public enum CutoffRule {
   /// `final` (111 s there) plus `build finish`, the checkout's removal and the report.
   public static let finalAndReportSeconds = 180
 
-  /// 1 decision per task, in `tasks`' order. A gating task finishes its merge when that merge
-  /// gate, every merge already chosen before it, and `final` with the report all fit before the
-  /// box ends; any other running task is abandoned with the reason.
+  /// 1 decision per task, in `tasks`' order. A task already merged always finishes: its merge
+  /// is on `main`, and abandoning it there would leave its code merged under an `abandoned` task.
+  /// A merged task whose merge gate isn't GREEN yet holds that gate's time first. A gating task
+  /// finishes its merge when that merge gate, every merge gate held before it, and `final` with
+  /// the report all fit before the box ends; any other running task is abandoned with the reason.
   public static func decide(tasks: [CutoffTask], timeBox: RunTimeBox, now: Date)
     -> [CutoffDecision]
   {
     let left = timeBox.secondsLeft(at: now)
     let ends = timeBox.deadlines.endsAt.formatted(.iso8601)
-    var merging = 0
+    var merging = tasks.filter { $0.stage == .merged }.count * mergeGateSeconds
     return tasks.map { task in
       switch task.stage {
       case .notStarted:
@@ -220,6 +227,16 @@ public enum CutoffRule {
           task: task.id, action: .abandon,
           reason: "still working at the cutoff, \(left) s before the box ends at \(ends); its "
             + "merge wouldn't fit beside final and the report")
+      case .landed:
+        return CutoffDecision(
+          task: task.id, action: .finishMerge,
+          reason: "its merge and a GREEN merge gate are recorded: only the steps after its merge "
+            + "gate are left")
+      case .merged:
+        return CutoffDecision(
+          task: task.id, action: .finishMerge,
+          reason: "its merge is on main: finish its merge gate (\(mergeGateSeconds) s) and the "
+            + "steps after it, \(left) s before the box ends")
       case .gating:
         let available = left - merging
         guard mergeGateSeconds + finalAndReportSeconds <= available else {

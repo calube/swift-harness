@@ -1,0 +1,19 @@
+{
+  "at" : "2026-10-05T00:21:51Z",
+  "decisions" : [
+    {
+      "action" : "abandon",
+      "reason" : "its merge gate (120 s) plus final and the report (180 s) doesn't fit in the 253 s left in the box",
+      "task" : "confirm-downloads-setting"
+    }
+  ],
+  "timeBox" : {
+    "limits" : {
+      "budgetMin" : 45,
+      "finalReserveMin" : 5,
+      "source" : "config",
+      "stopStartsBeforeMin" : 13
+    },
+    "startedAt" : "2026-10-04T23:41:05Z"
+  }
+}

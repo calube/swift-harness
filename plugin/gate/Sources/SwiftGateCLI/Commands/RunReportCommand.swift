@@ -11,8 +11,14 @@ struct RunReportOutcome: Sendable, Equatable, Encodable {
   var path: String?
   var report: BrownfieldRunReport?
   var message = ""
+  /// The run's report page, rewritten from the plan's newest build run; `nil` when none was.
+  var runReport: String?
+  /// Why no report page was written; `nil` when one was.
+  var runReportNote: String?
 
-  private enum CodingKeys: String, CodingKey { case command, plan, verdict, path, report, message }
+  private enum CodingKeys: String, CodingKey {
+    case command, plan, verdict, path, report, message, runReport, runReportNote
+  }
 
   /// Every key is always present; an absent value is `null`.
   func encode(to encoder: any Encoder) throws {
@@ -23,6 +29,8 @@ struct RunReportOutcome: Sendable, Equatable, Encodable {
     try c.encode(path, forKey: .path)
     try c.encode(report, forKey: .report)
     try c.encode(message, forKey: .message)
+    try c.encode(runReport, forKey: .runReport)
+    try c.encode(runReportNote, forKey: .runReportNote)
   }
 }
 
@@ -35,8 +43,10 @@ enum BrownfieldRunReportRun {
   /// newest `qa run` over every row, then writes `<plan-dir>/REPORT.md`. A source that can't be
   /// read is a line in its section; only a clone with no brownfield config or no such plan
   /// writes nothing.
+  /// - Parameter pluginRoot: where `viewer/` lives, for the run's report page.
   static func write(
-    slug: String, planBranch: String?, base: String?, root: URL, runner: any ProcessRunner
+    slug: String, planBranch: String?, base: String?, root: URL, runner: any ProcessRunner,
+    pluginRoot: URL? = nil, now: Date = Date()
   ) async -> RunReportOutcome {
     var outcome = RunReportOutcome(plan: slug)
     let git = LiveGit(runner: runner, repositoryRoot: root.path)
@@ -77,6 +87,14 @@ enum BrownfieldRunReportRun {
       outcome.message = "reading the plan branch \(branch): \(error)"
       return outcome
     }
+    let build = await build(slug: slug, git: git)
+    switch build {
+    case .read(let run):
+      (outcome.runReport, outcome.runReportNote) = await BuildFinishRun.writeRunReport(
+        run: run.record.runID, root: root, pluginRoot: pluginRoot, git: git, now: now)
+    case .missing: outcome.runReportNote = "no build run to report"
+    case .unreadable(_, let reason): outcome.runReportNote = "the build run didn't read: \(reason)"
+    }
     let report = BrownfieldRunReport.make(
       BrownfieldRunReportInputs(
         slug: slug, planBranch: branch, planBranchHead: head,
@@ -84,7 +102,7 @@ enum BrownfieldRunReportRun {
         baseline: await baseline(
           layout: layout, base: base, branchExists: head != nil, branch: branch,
           git: git, runner: runner, root: root),
-        discover: discover(layout: layout), build: await build(slug: slug, git: git),
+        discover: discover(layout: layout), build: build,
         ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) },
         validation: files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName)
           ? QAFiles.newestWholeRun(
@@ -212,7 +230,7 @@ enum BrownfieldRunReportRun {
         switch event {
         case .merge(let merge): merge.task
         case .transition(let transition): transition.task
-        case .undo, .gate, .returnCheck: nil
+        case .undo, .gate, .returnCheck, .finish: nil
         }
       }
       return Dictionary(
@@ -263,7 +281,10 @@ struct RunReportCommand: AsyncParsableCommand {
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let outcome = await BrownfieldRunReportRun.write(
-      slug: slug, planBranch: planBranch, base: base, root: root, runner: LiveProcessRunner())
+      slug: slug, planBranch: planBranch, base: base, root: root, runner: LiveProcessRunner(),
+      pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
+        URL(filePath: $0, directoryHint: .isDirectory)
+      })
     Console.write(BrownfieldRunReportRun.render(outcome, json: json))
     if outcome.verdict != .green { throw ExitCode(outcome.verdict.exitCode) }
   }

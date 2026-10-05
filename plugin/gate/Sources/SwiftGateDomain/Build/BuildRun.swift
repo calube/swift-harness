@@ -154,6 +154,7 @@ public enum BuildEvent: Sendable, Equatable {
   case undo(Undo)
   case gate(Gate)
   case returnCheck(ReturnCheck)
+  case finish(Finish)
 
   public struct Transition: Sendable, Equatable {
     public let task: String
@@ -253,9 +254,19 @@ public enum BuildEvent: Sendable, Equatable {
     }
   }
 
+  /// `build finish` closed the run. A ledger event after it means the build resumed.
+  public struct Finish: Sendable, Equatable {
+    public let at: Date
+
+    public init(at: Date) {
+      self.at = at
+    }
+  }
+
   public enum Kind: String, Sendable, Codable, CaseIterable {
     case transition, merge, undo, gate
     case returnCheck = "return-check"
+    case finish
   }
 
   public var kind: Kind {
@@ -265,10 +276,11 @@ public enum BuildEvent: Sendable, Equatable {
     case .undo: .undo
     case .gate: .gate
     case .returnCheck: .returnCheck
+    case .finish: .finish
     }
   }
 
-  /// `nil` for the final gate, which belongs to no task.
+  /// `nil` for the final gate and the finish, which belong to no task.
   public var task: String? {
     switch self {
     case .transition(let transition): transition.task
@@ -280,6 +292,7 @@ public enum BuildEvent: Sendable, Equatable {
       case .final: nil
       }
     case .returnCheck(let check): check.task
+    case .finish: nil
     }
   }
 }
@@ -335,6 +348,8 @@ extension BuildEvent: Codable {
           commit: try container.decodeIfPresent(String.self, forKey: .commit),
           checkID: try container.decode(String.self, forKey: .checkID),
           rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at))
+    case .finish:
+      self = .finish(Finish(at: at))
     }
   }
 
@@ -377,6 +392,8 @@ extension BuildEvent: Codable {
       try container.encode(check.checkID, forKey: .checkID)
       try container.encode(check.rules, forKey: .rules)
       try container.encode(check.at, forKey: .at)
+    case .finish(let finish):
+      try container.encode(finish.at, forKey: .at)
     }
   }
 }
@@ -406,7 +423,7 @@ public struct BuildEventLog: Sendable, Equatable {
       switch event {
       case .merge(let merge): return merge.postCommit
       case .undo(let undo): return undo.toCommit
-      case .transition, .gate, .returnCheck: continue
+      case .transition, .gate, .returnCheck, .finish: continue
       }
     }
     return nil
@@ -422,10 +439,27 @@ public struct BuildEventLog: Sendable, Equatable {
         tasks.removeAll { $0 == merge.task }
         tasks.append(merge.task)
       case .undo(let undo): tasks.removeAll { $0 == undo.task }
-      case .transition, .gate, .returnCheck: continue
+      case .transition, .gate, .returnCheck, .finish: continue
       }
     }
     return tasks
+  }
+
+  /// How far `task`'s merge got: `nil` when it isn't on `main`, ``CutoffTaskStage/landed`` once a
+  /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
+  public func mergeStage(task: String) -> CutoffTaskStage? {
+    var stage: CutoffTaskStage?
+    for event in events {
+      switch event {
+      case .merge(let merge) where merge.task == task: stage = .merged
+      case .undo(let undo) where undo.task == task: stage = nil
+      case .gate(let gate):
+        guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
+        stage = gate.verdict == .green ? .landed : .merged
+      case .merge, .undo, .transition, .returnCheck, .finish: continue
+      }
+    }
+    return stage
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

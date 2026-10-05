@@ -71,4 +71,34 @@ struct RunReportCommandTests {
     #expect(report.validation == .init(runID: runID, verdict: .green, rows: 3, verified: 0))
     #expect(report.text.contains("validation: 0 of 3 rows verified"))
   }
+
+  @Test(
+    "run report rewrites the plan's newest build run's report page, which reads done once build finish recorded the end — catches a brownfield run whose saved page is a mid-run snapshot"
+  )
+  func reportRewritesTheRunPage() async throws {
+    let clone = try await TemporaryClone(fixture: "usememos-memos")
+    defer { clone.remove() }
+    _ = try await DiscoverCommand.apply(
+      directory: clone.root, edits: [],
+      dependencies: clone.dependencies(readers: EcosystemReaders.all))
+    let git = LiveGit(runner: clone.runner, repositoryRoot: clone.root.path)
+    let store = try await BuildRunStore.create(
+      plan: "spec", presetName: "brownfield", preset: Discover.brownfieldPreset,
+      startedAt: Date(timeIntervalSince1970: 0), git: git, suffix: 1)
+    try await store.append(.finish(.init(at: Date(timeIntervalSince1970: 60))))
+
+    let outcome = await BrownfieldRunReportRun.write(
+      slug: "spec", planBranch: nil, base: "main", root: clone.root, runner: clone.runner,
+      pluginRoot: Fixture.checkoutRoot, now: Date(timeIntervalSince1970: 120))
+
+    let page = try #require(outcome.runReport, "\(outcome.runReportNote ?? outcome.message)")
+    #expect(page.hasSuffix("reports/\(store.runID)/index.html"), "\(page)")
+    let url = page.hasPrefix("/") ? URL(filePath: page) : clone.root.appending(path: page)
+    let html = try String(contentsOf: url, encoding: .utf8)
+    let view = try #require(
+      JSONSerialization.jsonObject(with: Data(try ReportCommandTests.dataBlock(html).utf8))
+        as? [String: Any])
+    #expect((view["run"] as? [String: Any])?["state"] as? String == "done")
+    #expect((view["run"] as? [String: Any])?["snapshotAt"] is NSNull)
+  }
 }

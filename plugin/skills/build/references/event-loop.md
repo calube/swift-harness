@@ -381,7 +381,7 @@ orchestrator watches from outside. After each launch, run this with `run_in_back
 d=<dir>; m=<stall minutes>; e="${d%/subagents/workflows/*}/workflows/${d##*/}.json"; while /bin/sleep 60; do [ -e "$e" ] && { echo "ended: $d"; exit 0; }; [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
 ```
 
-`<stall minutes>` is `stallMin` from `build next`'s report, or 15 when the report has none. Every
+`<stall minutes>` is `stallMin` from `build next`'s report: the preset's `stall_min`, or 15, the run viewer's stall badge too. Every
 tool call and result appends to an agent's transcript, so that long with no change means no agent in
 that workflow has moved. The Workflow tool writes `workflows/<id>.json` in the session directory
 once the workflow ends, so the watch stops on its own then and prints `ended: <dir>`, which needs

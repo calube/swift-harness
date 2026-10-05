@@ -534,14 +534,14 @@ struct DiscoverTests {
   }
 
   @Test(
-    "a first discovery writes a 45-minute box with starts stopping 13 minutes before its end — catches a brownfield run with no budget"
+    "a first discovery writes a 40-minute box with starts stopping 13 minutes before its end — catches a brownfield run with no budget"
   )
   func freshPresetHasABox() throws {
     let config = Discover.config(
       from: DiscoverProposal(head: "abc", areas: [], dirty: []), keeping: nil)
 
     let preset = try #require(config.buildPresets["brownfield"])
-    #expect(preset.timeBudgetMin == 45)
+    #expect(preset.timeBudgetMin == 40)
     #expect(preset.stopStartsBeforeMin == 13)
   }
 
@@ -565,7 +565,7 @@ struct DiscoverTests {
     let filled = Discover.config(from: proposal, keeping: existing([:]))
 
     #expect(kept.buildPresets == ["brownfield": edited])
-    #expect(filled.buildPresets["brownfield"]?.timeBudgetMin == 45)
+    #expect(filled.buildPresets["brownfield"]?.timeBudgetMin == 40)
   }
 
   @Test(
