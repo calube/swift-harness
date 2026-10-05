@@ -7,9 +7,12 @@ plan's ledger and the task returns, and never writes.
 
 ## Commands
 
-- `swiftgate report --html <build run id> [--out <path>]` writes 1 self-contained page, with its styles,
-  scripts and data inlined, to `reports/<build run id>.html` under the run's state root unless `--out` names a
-  path. It loads nothing from the network.
+- `swiftgate report --html <build run id> [--out <folder>]` writes the report folder, `reports/<build run
+  id>/` under the run's state root unless `--out` names one: `index.html`, 1 self-contained page that loads
+  nothing from the network; `view.json`, the guarded run view it embeds; and under `runs/` a copy of each
+  video and contact sheet its flows link. Nothing else: no event store, ledger or spec page.
+- `swiftgate report --html --from <folder>` writes `index.html` again from the folder's `view.json`, with no
+  plan state or run store.
 - `swiftgate report --json <build run id> [--out <path>]` prints the run view, or writes it to `--out`.
 - `swiftgate view [--build-run <id>] [--port <n>]` serves the page live on `127.0.0.1`, for the newest build
   run and on a free port unless told otherwise, and runs until interrupted.
@@ -76,16 +79,10 @@ stopped. Its Open task opens the drawer: the brief, properties, links and activi
 
 See also [validation rows](run-viewer-validation.md).
 
-## Live mode
+## Live pages and saved reports
 
-`view` answers `GET /`, `/view.json`, `/changes?after=<cursor>` (rows changed since it, a new
-cursor), and each flow's linked `/runs/` file; else 404. A changed row comes whole, its failure or block reason
-included. An unknown cursor gets the whole view. A request whose `Host` isn't
-`127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere can't reach it through a rebound name.
-
-The page polls `/changes` each second, merges rows by id, keeps the open tab and scroll, and keeps polling after
-a failure, which it shows under the title. A now strip shows each running task's open phase, elapsed time and last event age, a stall
-badge once the preset's `stall_min` passes with no event of that task, and a halt badge until the resume.
+When a report is final, what a live page polls, and what a missing file means mid-run: see
+[live pages and saved reports](run-viewer-live.md).
 
 ## Privacy
 
