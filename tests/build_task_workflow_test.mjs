@@ -493,6 +493,18 @@ const tests = {
     assert.deepEqual([...seen].sort(), ['fix', 'review', 'verify', 'worker'])
   },
 
+  async 'a stage prompt with 3 span lines says each runs as its own Bash call, never joined with `;` or `&&` — catches send-money-7\'s reviewers chaining the backstop end and their own start into 1 refused call'() {
+    const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    const chained = calls.filter(c => /^0\. First, even before step 1, run `/m.test(c.prompt))
+    assert.ok(chained.length > 0, 'no stage prompt carried a backstop end')
+    for (const c of calls) {
+      assert.match(c.prompt, /Run each of these commands as its own Bash call, exactly as written: never join 2 with `;` or `&&`, and add no `cd`, pipe or redirection\./, `${c.opts.label}: no 1-command-per-call rule`)
+    }
+  },
+
   async 'a stage that returns without ending its span has it ended by the stage after it, with the outcome its own rule gives — catches send-money-4\'s review span left open after its reviewer returned findings'() {
     // send-money-4's account-client review: the test-quality reviewer returned a minor finding and
     // never ran its span end; its verifier ran next.

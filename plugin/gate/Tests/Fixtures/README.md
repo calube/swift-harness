@@ -4663,3 +4663,32 @@ with the `test-only not run:` line its result printed: a `tool_use` whose `comma
 with its `tool_result`. The first call's output went through `grep`, so it kept no refusal line.
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-6's waiting totals and test-only forms, send-money-7's qa events
+
+price-tracker-6's before-merge runs after detail-feature and after watchlist-feature took only
+their own rows, all waiting on app-navigation, and reported `0 of 5` and `0 of 6` rows verified on
+a plan of 8. A worker's `test-only AppCoreTests/WatchlistFeatureTests` on a SwiftPM area exited 0
+with no test matched, where `AppCoreTests.WatchlistFeatureTests` ran. send-money-7's `qa.check`
+events time each qa run's rows. `T` and `U` are the trials' folders under the harness runs, with
+each clone's state copied to `state/`:
+
+```sh
+S=$T/state U=$U/state F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/runs/20261005T114433Z-6a6298b3/qa/report.json $F/price-tracker-6-qa-before-detail-feature.json
+cp $S/runs/20261005T114521Z-c03715c2/qa/report.json $F/price-tracker-6-qa-before-watchlist-feature.json
+cp $S/plans/spec/validation.json $F/price-tracker-6-validation.json
+cp $S/runs/20261005T115233Z-3257a6a5/test-only.junit.xml $F/price-tracker-6-test-only-no-match.junit.xml
+cp $S/runs/20261005T115233Z-3257a6a5/test-only.junit-swift-testing.xml \
+  $F/price-tracker-6-test-only-no-match.junit-swift-testing.xml
+cp $U/events/qa.jsonl $F/send-money-7-qa-events.jsonl
+ls ~/.cache/swift-harness/locks | grep 'run-device.borrow' > $F/borrow-locks-left.txt
+```
+
+`price-tracker-6-test-only-calls.json` is each `swiftgate test-only` argument in the trial's
+subagent transcripts, `$T/transcripts/<session>/subagents/**/*.jsonl`, other than `--help`, paired
+by `tool_use_id` with its result's verdict and its first `test-only not run:`, `exited 0, but no
+test matched …` or `failed, exit N` text. `borrow-locks-left.txt` lists the borrow lock files the
+machine's lock directory held after price-tracker-6 ended: 5 earlier runs' and 1 running trial's.
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
