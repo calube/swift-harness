@@ -47,9 +47,10 @@ const tests = {
   'the span agents run each span line as its own Bash call and read code with Read, Grep and Glob, never cat, grep or ls — catches send-money-7\'s 8 guard.reviewer-bash refusals for a chained span end and start, or a file read through Bash'() {
     for (const name of SPAN_AGENTS) {
       const body = read(`agents/${name}.md`)
-      assert.match(body, /each span line is 1 Bash call of its own, run exactly as written/, `${name}: no 1-command-per-call rule`)
-      assert.match(body, /never joined to another command with `;`, `&&` or `\|`, and never after a `cd`/, `${name}: chaining not named`)
-      assert.match(body, /Read a file with Read, never `cat`, `head` or `sed`; search with Grep or Glob, never `grep`, `find` or `ls`/, `${name}: file reads through Bash not ruled out`)
+      const prose = body.replace(/\s+/g, ' ')
+      assert.ok(prose.includes('Each span line is 1 Bash call of its own, run exactly as written'), `${name}: no 1-command-per-call rule`)
+      assert.ok(prose.includes('never joined to another command with `;`, `&&` or `|`, and never after a `cd`'), `${name}: chaining not named`)
+      assert.ok(prose.includes('Read a file with Read, never `cat`, `head` or `sed`; search with Grep or Glob, never `grep`, `find` or `ls`'), `${name}: file reads through Bash not ruled out`)
     }
   },
 
