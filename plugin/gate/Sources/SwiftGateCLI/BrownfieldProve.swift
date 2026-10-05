@@ -21,7 +21,8 @@ enum BrownfieldProve {
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
     /// How many tests a reverted run ran, from the reports it left.
     var testCounts = AreaTestCountReader()
-    /// Proves that passed on the same reverted tree, which this prove takes without running;
+    /// Proves that passed on the same reverted tree, or at the same head tree with the same
+    /// changed tests, which this prove takes without running;
     /// `nil` runs every area's.
     var reuse: ProveReuse? = nil
 
@@ -282,8 +283,8 @@ enum BrownfieldProve {
           let run = await execute(
             plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies,
             derivedData: built, waits: waits, timed: timed)
-          if let reuse = dependencies.reuse, let key = taken.keys[plan.area.name] {
-            record(run, key: key, reuse: reuse)
+          if let reuse = dependencies.reuse, let keys = taken.keys[plan.area.name] {
+            record(run, keys: keys, reuse: reuse)
           }
           total = total + run
         }
@@ -295,13 +296,14 @@ enum BrownfieldProve {
     return outcome(ran, derivedData: built, lockWait: waits.milliseconds)
   }
 
-  /// The plans left to run once each area whose prove passed on the same reverted tree is taken
-  /// from its pass, the key each plan left records its own pass under, and what the taken areas
-  /// came to. With no ``Dependencies/reuse``, or no renames read, every plan is left.
+  /// The plans left to run once each area whose prove passed on the same reverted tree, or at
+  /// the same head tree with the same changed tests, is taken from its pass, the keys each plan
+  /// left records its own pass under, and what the taken areas came to. With no
+  /// ``Dependencies/reuse``, or no renames read, every plan is left.
   private static func reused(
     _ plans: [AreaPlan], tests: [String], mergeBase: String, root: URL,
     dependencies: Dependencies
-  ) async -> (left: [AreaPlan], keys: [String: String], run: AreaRun) {
+  ) async -> (left: [AreaPlan], keys: [String: [String]], run: AreaRun) {
     guard let reuse = dependencies.reuse, let renames = await reuse.renames(mergeBase) else {
       return (plans, [:], AreaRun())
     }
@@ -311,50 +313,72 @@ enum BrownfieldProve {
         dependencies.readFile(root.appending(path: path)).map { GateReuse.digest(Data($0.utf8)) })
     }
     var left: [AreaPlan] = []
-    var keys: [String: String] = [:]
+    var keys: [String: [String]] = [:]
     var run = AreaRun()
     for plan in plans {
       let template =
         switch plan.command {
         case .selected(let template), .whole(let template): template
         }
-      let key = GateReuse.proveKey(
-        reuse.inputs, mergeBase: mergeBase, area: plan.area.name,
-        command: "\(plan.step.rawValue) \(template)",
-        tests: plan.ids.map { "\($0.file) \($0.selector)" }, copied: copied, renames: renames)
-      guard let pass = reuse.store.pass(key) else {
+      let command = "\(plan.step.rawValue) \(template)"
+      let selectors = plan.ids.map { "\($0.file) \($0.selector)" }
+      let revertedKey = GateReuse.proveKey(
+        reuse.inputs, mergeBase: mergeBase, area: plan.area.name, command: command,
+        tests: selectors, copied: copied, renames: renames)
+      let headKey = GateReuse.proveHeadKey(
+        reuse.inputs, area: plan.area.name, command: command, tests: selectors, copied: copied)
+      let found =
+        reuse.store.pass(revertedKey).map { ($0, Credit.revertedTree) }
+        ?? reuse.store.pass(headKey).map { ($0, Credit.headTree) }
+      guard let (pass, credit) = found else {
         left.append(plan)
-        keys[plan.area.name] = key
+        keys[plan.area.name] = [revertedKey, headKey]
         continue
       }
       run =
         run
         + AreaRun(
           judgement: ChangedTestJudgement(
-            findings: pass.findings + reusedNote(plan.area, pass: pass), blocked: false),
+            findings: pass.findings + reusedNote(plan.area, pass: pass, credit: credit),
+            blocked: false),
           proven: pass.proven, total: pass.total, proved: pass.proved)
     }
     return (left, keys, run)
   }
 
-  /// Keeps `run` for a later gate on the same reverted tree when it proved every changed test it
-  /// ran and nothing it found gates.
-  private static func record(_ run: AreaRun, key: String, reuse: ProveReuse) {
+  /// Keeps `run` under each of `keys` for a later gate on the same reverted tree, or at the same
+  /// head tree with the same changed tests, when it proved every changed test it ran and nothing
+  /// it found gates.
+  private static func record(_ run: AreaRun, keys: [String], reuse: ProveReuse) {
     guard run.total > 0, run.proven == run.total, run.judgement.verdict == .green else { return }
-    reuse.store.record(
-      ProvePass(
-        runID: reuse.runID, tier: reuse.tier.rawValue, proved: run.proved,
-        findings: run.judgement.findings, proven: run.proven, total: run.total),
-      key: key)
+    let pass = ProvePass(
+      runID: reuse.runID, tier: reuse.tier.rawValue, proved: run.proved,
+      findings: run.judgement.findings, proven: run.proven, total: run.total)
+    for key in keys { reuse.store.record(pass, key: key) }
+  }
+
+  /// Which of an earlier pass's keys a prove matched.
+  private enum Credit {
+    /// ``GateReuse/proveKey(_:mergeBase:area:command:tests:copied:renames:)``.
+    case revertedTree
+    /// ``GateReuse/proveHeadKey(_:area:command:tests:copied:)``.
+    case headTree
   }
 
   /// A prove taken from an earlier pass, named so the run says what it didn't run.
-  private static func reusedNote(_ area: BrownfieldArea, pass: ProvePass) -> [Finding] {
+  private static func reusedNote(_ area: BrownfieldArea, pass: ProvePass, credit: Credit)
+    -> [Finding]
+  {
+    let same =
+      switch credit {
+      case .revertedTree: "on the same reverted tree, command and binary"
+      case .headTree: "at the same head tree with the same changed tests, command and binary"
+      }
     let finding = try? Finding(
       ruleID: GateReuse.ruleID, severity: .nit, file: area.root, line: nil,
       message:
         "prove: \(area.name)'s changed tests were proven in \(pass.tier) gate run \(pass.runID) "
-        + "on the same reverted tree, command and binary, so they didn't run again",
+        + "\(same), so they didn't run again",
       failureScenario: nil)
     return finding.map { [$0] } ?? []
   }

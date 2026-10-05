@@ -5144,3 +5144,24 @@ git -C $R merge-tree --write-tree 3f48493d7a2624df62cf4d05545ff7b55eee9745 \
 tip merged into the moved plan branch. It equals both the first run's `merged-tree-run.json` tree
 and the tree of the merge commit `build merge` then made. `grep -niE '/Users|/private|caleb'` on
 the fixtures matched nothing.
+
+## Brownfield trial: final re-proving the last merge's head
+
+In a practice brownfield trial (2026-10-05) the last merge gate proved the app area's changed UI
+test in 85 s, measured from the merge's first parent, then `final` on the same head commit and
+tree proved it again in 77 s, measured from the plan base. Each stored its pass under a different
+prove key. `last-merge-prove-gate-events.jsonl` holds, for the merge gate then the final, its
+`gate.run` event, its `prove` step event and its `prove.result` events. From the trial clone's
+state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+for r in 20261005T163430Z-8dfcee9d 20261005T163642Z-8c038743; do
+  grep -h '"kind":"gate.run"' $S/runs/$r/events/gate.jsonl
+  grep -h '"step":"prove"' $S/runs/$r/events/gate.jsonl
+  grep -h '"kind":"prove.result"' $S/runs/$r/events/test.jsonl
+done > $F/last-merge-prove-gate-events.jsonl
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/last-merge-prove-gate-events.jsonl`
+matched nothing.

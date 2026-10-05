@@ -178,3 +178,92 @@ extension GateReuseTests {
     #expect(Set(others + [merge]).count == others.count + 1, "\(others)")
   }
 }
+
+extension GateReuseTests {
+  /// A trial's last merge gate and its final on the same head: each `gate.run`, and the merge base
+  /// its prove reverted to, from its `prove.result`.
+  static func lastMergeProves() throws -> [(run: GateRunEvent, proofBase: String)] {
+    let events = try Fixture.text("BrownfieldTrial/last-merge-prove-gate-events.jsonl")
+      .split(separator: "\n").map { line in
+        try JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] ?? [:]
+      }
+    return try events.filter { $0["kind"] as? String == "gate.run" }.map { event in
+      let payload = event["payload"] as? [String: Any]
+      let source = event["source"] as? [String: Any]
+      let binary = source?["binary"] as? [String: Any]
+      let runID = event["runID"] as? String
+      let proof = events.first {
+        $0["kind"] as? String == "prove.result" && $0["runID"] as? String == runID
+      }
+      guard let runID, let tier = (source?["tier"] as? String).flatMap(CheckTier.init(rawValue:)),
+        let command = payload?["command"] as? String, let base = event["base"] as? String,
+        let head = event["head"] as? String, let treeHash = payload?["treeHash"] as? String,
+        let sourceHash = binary?["sourceHash"] as? String,
+        let verdict = (payload?["verdict"] as? String).flatMap(Verdict.init(rawValue:)),
+        let dirty = payload?["dirty"] as? Bool,
+        let proofBase = (proof?["payload"] as? [String: Any])?["proofBase"] as? String
+      else { throw FixtureShape(line: "\(event)") }
+      return (
+        GateRunEvent(
+          runID: runID, tier: tier, command: command, base: base, head: head,
+          treeHash: treeHash, sourceHash: sourceHash, verdict: verdict, dirty: dirty),
+        proofBase
+      )
+    }
+  }
+
+  @Test(
+    "a trial's last merge gate and its final proved the same UI test at the same head tree from 2 merge bases, so their reverted-tree keys differ while their head keys match; another head tree, test bytes, test file set, selectors, command, binary or config each key apart — catches final re-proving for 77 s a test the merge gate proved at that head, and a head credit standing in for different code or different tests"
+  )
+  func proveHeadKeyNamesTheHeadAndTheChangedTests() throws {
+    let proves = try Self.lastMergeProves()
+    try #require(proves.map(\.run.tier) == [.merge, .final])
+    let (merge, final) = (proves[0], proves[1])
+    #expect(merge.run.head == final.run.head && merge.run.treeHash == final.run.treeHash)
+    #expect(merge.proofBase != final.proofBase)
+
+    let test = "UITests/LaunchFlowUITests.swift"
+    let blob: String? = "f7ee87b460b1e3bc4166c0afdc1cdbc41fa951f9"
+    func inputs(
+      _ run: GateRunEvent, proofBase: String, tree: String? = nil, binary: String? = nil,
+      config: String = "c1"
+    ) -> GateReuse.Inputs {
+      GateReuse.Inputs(
+        tier: run.tier, treeHash: tree ?? run.treeHash, mergeBase: proofBase,
+        sourceHash: binary ?? run.sourceHash,
+        stateFiles: ["config": config, "baseline": run.tier.rawValue])
+    }
+    func headKey(
+      _ inputs: GateReuse.Inputs, command: String = "test xcodebuild test", tests: [String]? = nil,
+      copied: [String: String?]? = nil
+    ) -> String {
+      GateReuse.proveHeadKey(
+        inputs, area: "InterviewStarter", command: command, tests: tests ?? ["\(test) \(test)"],
+        copied: copied ?? [test: blob])
+    }
+    let mergeInputs = inputs(merge.run, proofBase: merge.proofBase)
+    let finalInputs = inputs(final.run, proofBase: final.proofBase)
+    let reverted = [mergeInputs, finalInputs].map {
+      GateReuse.proveKey(
+        $0, mergeBase: $0.mergeBase, area: "InterviewStarter", command: "test xcodebuild test",
+        tests: ["\(test) \(test)"], copied: [test: blob], renames: [:])
+    }
+    #expect(reverted[0] != reverted[1], "the trial's 2 passes were stored apart")
+
+    let mergeKey = headKey(mergeInputs)
+    #expect(mergeKey.count == 64)
+    #expect(headKey(finalInputs) == mergeKey)
+
+    let others = [
+      headKey(inputs(final.run, proofBase: final.proofBase, tree: "ea69da61")),
+      headKey(finalInputs, copied: [test: "e27767e9"]),
+      headKey(finalInputs, copied: [test: nil]),
+      headKey(finalInputs, copied: [test: blob, "UITests/SendFlowUITests.swift": "0b1c2d3e"]),
+      headKey(finalInputs, tests: ["\(test) \(test)", "UITests/SendFlowUITests.swift x"]),
+      headKey(finalInputs, command: "test xcodebuild test -quiet"),
+      headKey(inputs(final.run, proofBase: final.proofBase, binary: "436cadb577503dd6")),
+      headKey(inputs(final.run, proofBase: final.proofBase, config: "c2")),
+    ]
+    #expect(Set(others + [mergeKey]).count == others.count + 1, "\(others)")
+  }
+}
