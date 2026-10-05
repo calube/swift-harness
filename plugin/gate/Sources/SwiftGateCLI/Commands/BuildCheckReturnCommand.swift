@@ -136,18 +136,59 @@ enum BuildCheckReturnRun {
     let notRecorded: [String]
   }
 
-  /// ``run(file:plan:fix:git:profile:)``, then its verdict recorded as `build.return-checked` in
-  /// the main checkout's store, the one `directory` belongs to.
+  /// ``run(file:plan:fix:git:profile:)``; a task's GREEN return then stored in the plan's newest
+  /// build run's returns store, and the verdict recorded as `build.return-checked` in the main
+  /// checkout's store, the one `directory` belongs to. A GREEN return that can't be stored is
+  /// BLOCKED: dependents' packs would find no notes.
   static func check(
     file: String, plan: String?, fix: Bool = false, git: any Git,
     profile: RepositoryProfile = .owned,
     directory: String = FileManager.default.currentDirectoryPath
   ) async -> Checked {
-    let report = await run(file: file, plan: plan, fix: fix, git: git, profile: profile)
+    var report = await run(file: file, plan: plan, fix: fix, git: git, profile: profile)
+    if report.verdict == .green, !fix {
+      do throws(Blocked) {
+        report.stored = try await store(file: file, report: report, git: git)
+      } catch {
+        report = BuildCheckReturnReport(
+          command: command, plan: report.plan, task: report.task, verdict: .blocked,
+          findings: [], warnings: report.warnings, message: error.message)
+      }
+    }
     return Checked(
       report: report,
       notRecorded: await record(
         report, fix: fix, git: git, profile: profile, directory: directory))
+  }
+
+  /// Writes `file`'s bytes, atomically and over any return already there, to the plan's newest
+  /// build run's `returns/<task>.json`, so the orchestrator never copies a store file itself.
+  /// Returns that path, or `nil` for a plan with no build run, which ``record`` names.
+  private static func store(file: String, report: BuildCheckReturnReport, git: any Git)
+    async throws(Blocked) -> String?
+  {
+    guard let task = report.task, let plan = report.plan, RunID.isValid(task) else {
+      throw Blocked("the return passed but names no task it can be stored under")
+    }
+    let run: BuildRunStore?
+    do {
+      run = try await BuildRunStore.latest(plan: plan, git: git)
+    } catch {
+      throw Blocked("the return passed but plan `\(plan)`'s build runs can't be listed: \(error)")
+    }
+    guard let run else { return nil }
+    let destination = run.layout.returnFile(task: task)
+    do {
+      let bytes = try Data(contentsOf: URL(filePath: file))
+      try FileManager.default.createDirectory(
+        atPath: run.layout.returnsDirectory, withIntermediateDirectories: true)
+      try bytes.write(to: URL(filePath: destination), options: .atomic)
+    } catch {
+      throw Blocked(
+        "the return passed but wasn't stored at \(destination), where dependents' packs read "
+          + "its notes: \(error)")
+    }
+    return destination
   }
 
   /// Appends `report` to the plan's newest build run as a `return-check` event, which `build
@@ -762,6 +803,7 @@ enum BuildCheckReturnRun {
         ["\(report.command): \(report.verdict.rawValue) \(report.message)"]
         + report.findings.map { "  \($0.rule.rawValue): \($0.message)" }
         + report.warnings.map { "  warning: \($0)" }
+        + (report.stored.map { ["  stored: \($0)"] } ?? [])
       return lines.joined(separator: "\n")
     }
   }
@@ -789,8 +831,11 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
       + "which build merge requires GREEN at the branch tip it merges, and as build.return-checked "
       + "in the main checkout's store: the task, the verdict, the rule ids and each finding's "
       + "message on 1 line, cut and with machine paths taken out; a failed write prints 1 line "
-      + "and changes nothing. Exits 0 when every claim holds, 1 for any finding, and 2 when the return or plan "
-      + "state can't be read.")
+      + "and changes nothing. A task's GREEN return is stored, byte for byte and replacing any "
+      + "there, as returns/<task>.json in the plan's newest build run, where dependents' context "
+      + "packs read its notes; a fixer's or a failing return isn't stored. Exits 0 when every "
+      + "claim holds, 1 for any finding, and 2 when the return or plan state can't be read or a "
+      + "passing return can't be stored.")
 
   @Argument(help: "Path to the task's return JSON file.")
   var file: String
