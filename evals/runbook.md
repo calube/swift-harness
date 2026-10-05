@@ -90,9 +90,8 @@ Be blunt. A finding that the evals aren't worth their cost is a useful result.
 | `evals/results/<date>-<suite>/` | `summary.md` and `summary.json`. Raw transcripts stay out of git; the summary names where the run kept them |
 | `tests/*_test.mjs` | workflow orchestration cases. They are deterministic, so they live with the push-tier tests, not here |
 
-Until the packaging wave moves the plugin into `plugin/`, the repo root is the plugin root, so
-`claude plugin eval .` reads `evals/` by default and finds `evals/cases/**`. After the move, run
-`claude plugin eval plugin --eval-dir evals` from the repo root so the fixtures never ship inside
+The plugin lives in `plugin/` and the cases live outside it, so run
+`claude plugin eval plugin --eval-dir evals` from the repo root; the fixtures never ship inside
 `plugin/`. Check the flag against `claude plugin eval --help` before relying on it.
 
 ## Build a case
