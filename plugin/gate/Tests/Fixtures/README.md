@@ -3656,9 +3656,9 @@ git -C $R show 0eb5b82:$P > BrownfieldTrial/send-money-3-AppFeatureTests-base.sw
 git -C $R show spec/send-views:$P > BrownfieldTrial/send-money-3-AppFeatureTests-emptied.swift
 ```
 
-`send-money-3-prove-new-target/` is prove's reverted run of the contract's 4 tests, captured
-again in a scratch clone of the trial repository (`$SCRATCH/newtarget`) with the contract's
-non-test changes reverted to its merge base, as prove's scratch tree holds them;
+`send-money-3-prove-new-target/` is prove's reverted run of the contract's 4 tests. Its capture
+ran again in a scratch clone of the trial repository (`$SCRATCH/newtarget`), with the contract's
+non-test changes reverted to its merge base, as prove's scratch tree holds them.
 `send-money-3-prove-new-target/head/` is the same command in a second clone (`$SCRATCH/seeded`)
 at the contract commit, where the target exists. Each ran with Apple Swift 6.2 on macOS 26:
 
@@ -3689,7 +3689,7 @@ git -C $R show d676ad6:Packages/APIClient/Tests/AccountClientTests/AccountClient
 git -C $R diff 0eb5b82 d676ad6 -- Packages/APIClient/Package.swift > $D/Package.swift.diff
 ```
 
-The reverted run exits 0 with "No matching test cases were run", and both of its reports hold
+The reverted run exits 0 and warns that no test case matched, and both of its reports hold
 `tests="0"`; the head run exits 0 with the 4 tests passing in its Swift Testing report. Both
 built the package from no `.build`. `grep -rniE '/Users|/private|/var/folders|caleb'` over
 these files matched nothing.
