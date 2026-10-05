@@ -82,7 +82,7 @@ enum BuildNoRepairRun {
     let (cause, name): (BuildEvent.RowsUnverified.Cause, String?) =
       switch noRepair.cause {
       case .contractGap(let name): (.contractGap, name)
-      case .appAtFault: (.appAtFault, nil)
+      case .appAtFault, .appDefect: (.appAtFault, nil)
       }
     var recorded = false
     if decision.action == .mergeUnverified {
@@ -103,6 +103,7 @@ enum BuildNoRepairRun {
       case .amendContract: nil
       case .mergeUnverified: BuildResumeAnswer.merge.rawValue
       case .continue: BuildResumeAnswer.continue.rawValue
+      case .fixAgain: BuildResumeAnswer.retry.rawValue
       }
     return BuildLoopResult(
       command: command, plan: slug, verdict: .green,
