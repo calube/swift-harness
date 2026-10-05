@@ -54,7 +54,10 @@ public struct FinalPassRecorder: Sendable {
   /// This recorder for a run that records only when it costs the flow nothing: it takes the
   /// `sim-record` slot only when the slot is free, and never waits out a busy Mac recorder.
   public func withoutWaiting() -> FinalPassRecorder {
-    self
+    var dependencies = dependencies
+    dependencies.lockWait = .zero
+    dependencies.retriesBusyRecorder = false
+    return FinalPassRecorder(dependencies: dependencies)
   }
 
   /// Runs `batch` with a `record start` first, then `record stop` and the contact sheet. A
@@ -105,6 +108,10 @@ public struct FinalPassRecorder: Sendable {
       guard failure.reason == .appleSimulatorRecordingBusy else {
         lease.release()
         return await unrecorded(.recordFailed, "record start failed: \(failure.message)")
+      }
+      guard dependencies.retriesBusyRecorder else {
+        lease.release()
+        return await unrecorded(.recorderBusy, "the Mac's recorder was busy: \(failure.message)")
       }
       switch RecordingRetry.decision(elapsed: clock.now() - first) {
       case .retry(let wait):

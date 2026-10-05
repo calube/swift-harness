@@ -13,6 +13,8 @@
 .qa-why { margin-left: auto; }
 .qa-output pre { margin: 0; max-height: 220px; overflow: auto; font: 11px/1.45 var(--font-mono); background: var(--sunken); border-radius: var(--radius-sm); padding: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .qa-flow { flex-basis: 100%; display: grid; gap: 4px; padding-left: 4px; }
+.qa-last-pass { flex-basis: 100%; display: grid; gap: 4px; padding-left: 4px; border-left: 2px solid var(--line); }
+.qa-last-pass-label { margin: 0; }
 .qa-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; }
 .qa-step { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .qa-step .num { margin-left: auto; }

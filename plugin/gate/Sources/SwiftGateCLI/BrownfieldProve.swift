@@ -51,36 +51,10 @@ enum BrownfieldProve {
     }
   }
 
-  /// Whether the prove DerivedData of each `xcode` area in `areas` already holds a build; `none`
-  /// when none is an `xcode` area, since a scratch tree's other builds start in a fresh folder.
-  static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
-    -> GateDerivedData
-  {
-    GateStepCollector.derivedData(
-      buildDirectories: areas.filter { $0.kind == .xcode }.map {
-        URL(
-          filePath: XcodeDerivedData.provePath(area: $0.name, layout: layout) + "/Build",
-          directoryHint: .isDirectory)
-      })
-  }
-
   /// What a prove decided, and how its reverted runs built: `none` when it ran none.
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
     let derivedData: GateDerivedData
-  }
-
-  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, with the build its runs
-  /// started from: `cold` when any started from a build directory that didn't exist yet.
-  static func prove(
-    root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    proofs: ProveResultCollector, dependencies: Dependencies
-  ) async -> Outcome {
-    Outcome(
-      judgement: await run(
-        root: root, base: base, config: config, junitDirectory: junitDirectory, proofs: proofs,
-        dependencies: dependencies),
-      derivedData: .none)
   }
 
   /// - Parameters:
@@ -92,19 +66,36 @@ enum BrownfieldProve {
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
     proofs: ProveResultCollector, dependencies: Dependencies
   ) async -> ChangedTestJudgement {
+    await prove(
+      root: root, base: base, config: config, junitDirectory: junitDirectory, proofs: proofs,
+      dependencies: dependencies
+    ).judgement
+  }
+
+  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by how its reverted
+  /// runs built: `cold` when any started without its build directory, `warm` when each found
+  /// one, and `none` when none ran or none builds where the harness can tell.
+  static func prove(
+    root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
+    proofs: ProveResultCollector, dependencies: Dependencies
+  ) async -> Outcome {
+    func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
+      Outcome(judgement: judgement, derivedData: .none)
+    }
     let git = dependencies.git
     let mergeBase: String
     let changed: [String]
     let added: [AddedLines]
     do throws(GitError) {
       guard let found = try await git.mergeBase("HEAD", base) else {
-        return blocked("HEAD and \(base) share no history, so there is no tree to revert to")
+        return unbuilt(
+          blocked("HEAD and \(base) share no history, so there is no tree to revert to"))
       }
       mergeBase = found
       changed = try await git.changedFiles(since: mergeBase)
       added = try await git.addedLines(since: mergeBase)
     } catch {
-      return blocked("git: \(error)")
+      return unbuilt(blocked("git: \(error)"))
     }
     let tests = changed.filter { path in
       config.areas.contains { ChangedTestIDs.isTestFile(path, of: $0) }
@@ -129,7 +120,7 @@ enum BrownfieldProve {
       }
     }
     guard !plans.isEmpty else {
-      return judgement.merged(with: note("prove: no new or changed tests since \(base)"))
+      return unbuilt(judgement.merged(with: note("prove: no new or changed tests since \(base)")))
     }
     // A plan whose run the box leaves too little time isn't started: it would only be killed.
     plans = plans.filter { plan in
@@ -143,11 +134,12 @@ enum BrownfieldProve {
           file: plan.ids.first?.file ?? "."))
       return false
     }
-    guard !plans.isEmpty else { return judgement }
+    guard !plans.isEmpty else { return unbuilt(judgement) }
     let reverted = changed.filter { !tests.contains($0) }
     guard !reverted.isEmpty else {
-      return judgement.merged(
-        with: note("prove: only tests changed since \(base), so there is nothing to revert"))
+      return unbuilt(
+        judgement.merged(
+          with: note("prove: only tests changed since \(base), so there is nothing to revert")))
     }
     let request = ScratchTreeRequest(
       revision: "HEAD", revertTo: mergeBase, copiedPaths: tests, revertedPaths: reverted)
@@ -164,13 +156,15 @@ enum BrownfieldProve {
         return total
       }
     } catch {
-      return judgement.merged(with: blocked("scratch worktree: \(error)"))
+      return unbuilt(judgement.merged(with: blocked("scratch worktree: \(error)")))
     }
     proofs.record(ran.proved)
-    return judgement.merged(with: ran.judgement).merged(
-      with: note(
-        "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
-          + "reverted"))
+    return Outcome(
+      judgement: judgement.merged(with: ran.judgement).merged(
+        with: note(
+          "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
+            + "reverted")),
+      derivedData: ran.built.contains(.cold) ? .cold : ran.built.contains(.warm) ? .warm : .none)
   }
 
   /// How 1 area's changed tests run.
@@ -200,11 +194,14 @@ enum BrownfieldProve {
     var proven = 0
     var total = 0
     var proved: [ProvedTest] = []
+    /// How each run started, in run order.
+    var built: [GateDerivedData] = []
 
     static func + (lhs: AreaRun, rhs: AreaRun) -> AreaRun {
       AreaRun(
         judgement: lhs.judgement.merged(with: rhs.judgement), proven: lhs.proven + rhs.proven,
-        total: lhs.total + rhs.total, proved: lhs.proved + rhs.proved)
+        total: lhs.total + rhs.total, proved: lhs.proved + rhs.proved,
+        built: lhs.built + rhs.built)
     }
   }
 
@@ -266,6 +263,7 @@ enum BrownfieldProve {
     // Read again for each run: the box's time left shrinks between them.
     var bound: AreaCommandBound?
     var runs = 0
+    var built: [GateDerivedData] = []
     func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> AreaCommandOutcome {
       runs += 1
       bound = dependencies.bound?(area.name, step)
@@ -282,8 +280,10 @@ enum BrownfieldProve {
       let request = AreaCommandRequest(
         area: area.name, step: step, command: command, workingDirectory: directory.path,
         deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
-      return await dependencies.runner.run(
-        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request)
+      let proving =
+        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request
+      built.append(Self.derivedData(proving, kind: area.kind, layout: dependencies.layout))
+      return await dependencies.runner.run(proving)
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement
@@ -316,7 +316,31 @@ enum BrownfieldProve {
     return AreaRun(
       judgement: judgement, proven: proven, total: plan.ids.count,
       proved: BrownfieldProofs.proved(
-        area: area.name, outcomes: outcomes, whole: whole, proofBase: proofBase))
+        area: area.name, outcomes: outcomes, whole: whole, proofBase: proofBase), built: built)
+  }
+
+  /// Whether `request`'s build directories exist before it runs: an `xcodebuild` whose prove
+  /// DerivedData is missing still starts warm when its seed holds a build to copy in.
+  private static func derivedData(
+    _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout?
+  ) -> GateDerivedData {
+    guard let layout else {
+      return kind == .swiftpm
+        ? GateStepCollector.derivedData(
+          buildDirectories: [
+            URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
+              .appending(path: ".build", directoryHint: .isDirectory)
+          ]) : .none
+    }
+    let directories = XcodeDerivedData.buildDirectories(request, kind: kind, layout: layout)
+    let label = GateStepCollector.derivedData(
+      buildDirectories: directories.map { URL(filePath: $0, directoryHint: .isDirectory) })
+    guard label == .cold, let seed = request.derivedDataSeed else { return label }
+    return GateStepCollector.derivedData(
+      buildDirectories: [
+        URL(filePath: seed.seed, directoryHint: .isDirectory).appending(
+          path: "Build", directoryHint: .isDirectory)
+      ]) == .warm ? .warm : .cold
   }
 
   private static func blocked(_ message: String, file: String = ".") -> ChangedTestJudgement {

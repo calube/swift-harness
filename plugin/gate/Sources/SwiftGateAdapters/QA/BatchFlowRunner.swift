@@ -397,6 +397,22 @@ public actor QAFlowRunner {
       batch = recorded.outcome
       record = recorded.record
       finalFiles = recorded.files
+    } else if let recorder {
+      let stepsFile = row.stepsFile
+      let directory = row.directory
+      let (outcome, recording) = await recorder.record(
+        on: target, directory: directory, relativeDirectory: row.relativeDirectory
+      ) { recordTo in
+        await runner.run(
+          stepsFile: stepsFile, on: target, store: store, flowDirectory: directory,
+          recordTo: recordTo)
+      }
+      batch = outcome
+      var made = recording
+      made.videoGap = nil
+      made.sheetGap = nil
+      record = outcome.record.recorded(made)
+      finalFiles = Self.paths(made)
     } else {
       batch = await runner.run(
         stepsFile: row.stepsFile, on: target, store: store, flowDirectory: row.directory)
@@ -414,7 +430,9 @@ public actor QAFlowRunner {
       }
     }
     evidence += finalFiles
-    evidence.append("\(row.relativeDirectory)/sim/\(SimStep.logFileName)")
+    if FileManager.default.fileExists(atPath: store.stepLog.path) {
+      evidence.append("\(row.relativeDirectory)/sim/\(SimStep.logFileName)")
+    }
 
     if batch.stop == nil || row.atBase {
       await state(Self.environment(started, simDirectory: simDirectory))

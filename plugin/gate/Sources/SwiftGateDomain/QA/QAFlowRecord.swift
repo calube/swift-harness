@@ -34,9 +34,10 @@ public struct QAFlowRecord: Sendable, Equatable, Codable {
   public let source: QAFlowSource
   /// The steps that ran, in order: every step up to and including the one that failed.
   public let steps: [QAFlowStep]
-  /// Run-relative path of the flow's video; `nil` until a final pass records one.
+  /// Run-relative path of the flow's video; `nil` until a final pass or an `--after` run records
+  /// one.
   public let video: String?
-  /// Run-relative path of the video's contact sheet; `nil` until a final pass makes one.
+  /// Run-relative path of the video's contact sheet; `nil` until a recording makes one.
   public let sheet: String?
   /// Why a final pass left no video: the video reads `unverified`. `nil` outside a final pass.
   public let videoUnverified: QARecordingGapReason?

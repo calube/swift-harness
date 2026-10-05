@@ -4,7 +4,8 @@
 // lists each run, newest first, with its own Why button and flow. A red row opens "Why it
 // failed"; an unverified or abandoned row, or a flow missing its video or sheet, "Why
 // unverified". A flow
-// lists its steps, each linked to the video at its offset, and links its contact sheet. Each
+// lists its steps, each linked to the video at its offset, and links its contact sheet. A row
+// whose newest run isn't the pass to show also shows its last passing run's flow, labelled. Each
 // row lists its evidence; a report links only the files its folder holds and names the rest by
 // path. Nothing is embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
@@ -97,8 +98,14 @@
       <span class="mono">row ${row.row}</span><span class="qa-layer">${esc(row.layer)}</span>
       <span class="qa-req mono">${esc(row.requirement)}</span>
       ${row.check != null ? `<code class="qa-check">${esc(row.check)}</code>` : ""}
-      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${evidenceHtml(row.qaRun, row.evidence)}${historyHtml(row, key)}</li>`;
+      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${lastPassHtml(row.lastPass)}${evidenceHtml(row.qaRun, row.evidence)}${historyHtml(row, key)}</li>`;
   }
+
+  // The newest passing run of a row whose own result isn't that pass, or recorded no video: its
+  // label names the run, and its flow links that run's video.
+  const lastPassHtml = (pass) => (pass
+    ? `<div class="qa-last-pass" data-run="${esc(pass.qaRun)}"><p class="sub qa-last-pass-label">${esc(pass.label)}</p>${pass.flow ? flowHtml(pass.flow) : ""}</div>`
+    : "");
 
   function keptHtml(k, key) {
     const test = k.test != null ? k.test : "a test the guard dropped";

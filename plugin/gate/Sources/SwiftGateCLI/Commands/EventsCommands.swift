@@ -294,8 +294,10 @@ enum EventsIngestRun {
     // describe 1 subagent the session launched itself, and only that transcript is read: any
     // other subagent may belong to a workflow still running, which its own ingest tags.
     // A Workflow agent read through the session, and with worker transcripts the session's own
-    // Agent-tool subagents, may still be running and belong to no tag given here: their messages
-    // are stored with no role, for their own ingest to retag, and their tool calls wait for it.
+    // Agent-tool subagents, may still be running and belong to no tag given here. With worker
+    // transcripts they are left out: their own ingest, or the session's ingest at the run's end,
+    // stores each message once with its tags. Without, a Workflow agent's messages are stored
+    // with no role, for a later ingest to retag, and its tool calls wait for that ingest.
     let sessionTags: (role: AgentRole?, task: String?) =
       options.workflowTranscripts == nil ? (options.role, options.task) : (.orchestrator, nil)
     var transcripts: [UsageTranscript] = []
@@ -323,7 +325,9 @@ enum EventsIngestRun {
         for file in session where file.agentID.map({ !workers.contains($0) }) ?? true {
           if file.agent == .main {
             files.append((file, sessionTags.role, sessionTags.task, true))
-          } else if file.workflow || options.workflowTranscripts != nil {
+          } else if options.workflowTranscripts != nil {
+            continue
+          } else if file.workflow {
             files.append((file, nil, nil, false))
           } else {
             files.append((file, sessionTags.role, sessionTags.task, true))
@@ -423,9 +427,10 @@ struct EventsIngestCommand: ParsableCommand {
       + "A message or window already stored for the session is skipped, so ingesting again adds "
       + "nothing, except that a message stored with no role is retagged by an ingest that gives "
       + "it one. With --workflow-transcripts, --role and --task tag the workers and the session's "
-      + "own messages are tagged orchestrator; without, they tag the session's. A Workflow agent "
-      + "read through the session, and with --workflow-transcripts the session's own subagents, "
-      + "are stored with no role, for their own ingest to tag. With "
+      + "own messages are tagged orchestrator; without, they tag the session's. With "
+      + "--workflow-transcripts, the session's other subagents and Workflow agents are left to "
+      + "their own ingest; without, a Workflow agent read through the session is stored with no "
+      + "role, for its own ingest to tag. With "
       + "--agent-id, only that subagent of the session is read, and --role (required) and "
       + "--task tag it: the merge fixer the build skill launches itself. "
       + "Exit 0 stored; 2 when [telemetry] enabled = false, outside a project, for a bad flag "

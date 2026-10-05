@@ -435,9 +435,12 @@ enum RunViewValidationFold {
       }
       guard let index = entries.firstIndex(where: { !$0.check.atBase }) ?? entries.indices.first
       else { return nil }
-      return row(
+      var shown = row(
         entries[index].check, shown: history[index], history: history,
         read: qaRuns[history[index].qaRun], damage: &damage)
+      shown.lastPass = lastPass(
+        shown: history[index], history: history, qaRuns: qaRuns, damage: &damage)
+      return shown
     }
     var counts = RunViewValidation.Counts()
     for row in rows {
@@ -645,6 +648,51 @@ enum RunViewValidationFold {
       milliseconds: shown.milliseconds, evidence: shown.evidence, waitingOn: shown.waitingOn,
       qaRun: shown.qaRun, at: shown.at, output: shown.output, outputCut: shown.outputCut,
       flow: shown.flow, atBase: check.atBase, history: history)
+  }
+
+  /// The newest passing check with a video, or, for a row whose shown check didn't pass, the
+  /// newest passing check; `nil` when that is the shown check itself, or none passed. At-base
+  /// checks never count: they ran the merge base, not the change.
+  private static func lastPass(
+    shown: RunViewValidation.Attempt, history: [RunViewValidation.Attempt],
+    qaRuns: [String: RunViewQARun], damage: inout [RunView.Damage]
+  ) -> RunViewValidation.LastPass? {
+    let passes = history.filter { $0.result == .pass && $0.stage != .atBase }
+    guard
+      let pass = passes.first(where: { $0.flow?.video != nil })
+        ?? (shown.result == .pass ? nil : passes.first),
+      pass.qaRun != shown.qaRun
+    else { return nil }
+    let branch = qaRuns[pass.qaRun]?.report?.trialMerge.flatMap { merge -> String? in
+      let branch = merge.branch
+      guard let reason = EventPayloadGuard.rejection(inJSON: branch) else { return branch }
+      damage.append(
+        RunView.Damage(
+          source: "qa run \(pass.qaRun)", reason: "trialMerge.branch: \(reason.rawValue)"))
+      return nil
+    }
+    let how =
+      switch pass.stage {
+      case .after:
+        branch.map { "before merge of \($0)" } ?? pass.after.map { "after \($0)" }
+          ?? "after a task"
+      case .final: "in the final pass"
+      case .run, .atBase: "in a qa run"
+      }
+    var label = "passed \(how), qa run \(pass.qaRun)"
+    if pass.qaRun != shown.qaRun {
+      let stage =
+        switch shown.stage {
+        case .atBase: "at-base"
+        case .after: "after"
+        case .final: "final"
+        case .run: "later"
+        }
+      label +=
+        "; \(stage) qa run \(shown.qaRun) read \(shown.result.rawValue)"
+        + (shown.message.map { ": \($0)" } ?? "")
+    }
+    return RunViewValidation.LastPass(qaRun: pass.qaRun, label: label, flow: pass.flow)
   }
 
   /// A check that answered, `pass` or `red`, as a span ending at its event; `nil` for a row that

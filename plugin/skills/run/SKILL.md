@@ -113,11 +113,12 @@ before the run started; no task writes them and nothing stages them.
 
 ## 3. Explore and draft at once
 
-Open the phase: `"$SG" events span start --phase explore --build-run <slug>`, kept as `<span>`.
-
 With 1 touched area, or a repository small enough to read in a few minutes, read the code yourself
-and skip the explorers. Otherwise launch 1 `swift-harness:brownfield-explorer` per touched area with
-the Agent tool, all in 1 message and in the background (`run_in_background: true`). Each prompt
+and skip the explorers. That reading is planning: open step 5's phase now,
+`"$SG" events span start --phase plan --build-run <slug>`, kept as `<span>`, and open no explore
+span. Otherwise launch 1 `swift-harness:brownfield-explorer` per touched area with the Agent
+tool, all in 1 message and in the background (`run_in_background: true`), opening the phase just
+before: `"$SG" events span start --phase explore --build-run <slug>`, kept as `<span>`. Each prompt
 names the area, its `root`, its commands from `<config>`, the absolute path of `<spec>`, and the
 requirements that touch it. Note the time you launched them.
 
@@ -130,7 +131,7 @@ While they run, draft the plan skeleton: the contract task, 1 task per requireme
 requirement crosses, their dependencies, and the goal line of each. Fill in write sets, tests and
 acceptance as reports arrive.
 
-Close the phase: `"$SG" events span end <span> --outcome ok`.
+Close the explore phase, when you opened one: `"$SG" events span end <span> --outcome ok`.
 
 ## 4. Fix the commands before planning ends
 
@@ -162,7 +163,8 @@ Never edit `<config>` by hand.
 
 ## 5. Write `PLAN.md`
 
-Open the phase: `"$SG" events span start --phase plan --build-run <slug>`, kept as `<span>`.
+Open the phase: `"$SG" events span start --phase plan --build-run <slug>`, kept as `<span>`,
+unless step 3 left it already open.
 
 Write `<plan-dir>/PLAN.md` in the shape [`references/plan-shape.md`](references/plan-shape.md)
 fixes: `## Requirements` with 1 `- req-<name>: <requirement>` bullet per requirement from step 1,
