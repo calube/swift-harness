@@ -31,6 +31,24 @@ public enum HookOutput {
     return encode(["hookSpecificOutput": output])
   }
 
+  /// PreToolUse: run the call with `toolInput`, the whole `tool_input` object, in place of the
+  /// one Claude sent. With `allow`, the call is also allowed with that reason shown to the user;
+  /// without it, the call goes on to the normal permission flow. `context`, when given, is shown
+  /// to Claude next to the tool result.
+  public static func rewrite(
+    toolInput: [String: Any], allow: String? = nil, context: String? = nil
+  ) -> String {
+    var output: [String: Any] = [
+      "hookEventName": HookEvent.preToolUse.claudeName, "updatedInput": toolInput,
+    ]
+    if let allow {
+      output["permissionDecision"] = "allow"
+      output["permissionDecisionReason"] = allow
+    }
+    if let context { output["additionalContext"] = context }
+    return encode(["hookSpecificOutput": output])
+  }
+
   /// PostToolUse: put `reason` next to the tool result as a problem to fix. Stop: refuse to stop
   /// and give Claude `reason` as what to do next.
   public static func block(_ reason: String) -> String {
@@ -43,7 +61,8 @@ public enum HookOutput {
   }
 
   private static func encode(_ object: [String: Any]) -> String {
-    // Only strings and nested string dictionaries reach here, which always serialize.
+    // Only JSON values reach here: strings, numbers, booleans and dictionaries of them, which
+    // always serialize.
     guard
       let data = try? JSONSerialization.data(
         withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])
