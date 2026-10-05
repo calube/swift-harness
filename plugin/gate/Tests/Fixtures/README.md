@@ -3871,3 +3871,27 @@ task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`.
 leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
 differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: flow rows held until the last of their tasks merged
+
+The fourth send-money trial's 8 flow rows each ran after all 3 build tasks. All 3 returns were
+checked before the first merge, yet the rows first ran on the last task's trial merge, where 2
+screen bugs read red. `BrownfieldTrial/send-money-4-validation.json` is that plan's table,
+`send-money-4-build-events.jsonl` its build run's `events.jsonl`,
+`send-money-4-qa-before-account-client.json` the first task's `qa run --after account-client
+--before-merge` report (every row `waiting`), `send-money-4-qa-before-send-flow-core.json` the last
+task's (rows 1 and 7 red), and `send-money-4-qa-at-base.json` the JSON the orchestrator's
+`qa run --plan spec --at-base --json` printed, kept in the plan's `out/`. From
+`plugin/gate/Tests/Fixtures`, with `S` the clone's state the trial's run folder kept:
+
+```sh
+S=<send-money-4 run folder>/state
+F=BrownfieldTrial
+cp $S/plans/spec/validation.json $F/send-money-4-validation.json
+cp $S/plans/spec/build/20261005T055912Z-33c711cb/events.jsonl $F/send-money-4-build-events.jsonl
+cp $S/runs/20261005T060956Z-bdf9713a/qa/report.json $F/send-money-4-qa-before-account-client.json
+cp $S/runs/20261005T061244Z-0883dbbe/qa/report.json $F/send-money-4-qa-before-send-flow-core.json
+cp $S/plans/spec/out/qa-at-base.json $F/send-money-4-qa-at-base.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-4-*` matched nothing.
