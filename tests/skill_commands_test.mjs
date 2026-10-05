@@ -1155,7 +1155,7 @@ const callerQAFiles = () => Object.fromEntries(callerQAFileNames.map(name =>
 function codingKeys(source, typeName) {
   const type = source.split(new RegExp(`\\bstruct ${typeName}\\b`))[1] ?? ''
   const body = (type.split(/enum CodingKeys: String, CodingKey \{/)[1] ?? '').split('}')[0]
-  return [...body.matchAll(/case ([^\n]+)/g)].flatMap(m => m[1].split(',')).map(part => {
+  return [...body.matchAll(/case ([^\n]+(?:\n\s+(?!case\b)[^\n]+)*)/g)].flatMap(m => m[1].split(',')).map(part => {
     const raw = /= "([^"]+)"/.exec(part)
     return raw ? raw[1] : part.trim()
   }).filter(Boolean)
