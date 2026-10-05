@@ -287,6 +287,75 @@ struct BuildMergeTests {
   }
 
   @Test(
+    "--undo records the red merge gate that ran at the merge it undoes, before the undo, once, and leaves out a gate run at any other commit — catches a red merge gate that sends a task to the fixer missing from the build run's gates"
+  )
+  func undoRecordsTheRedMergeGate() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    let merged = await scenario.merge("t1")
+    let post = try #require(merged.postCommit)
+    let runs = RunStore(worktreeRoot: scenario.checkout)
+    for (runID, verdict, head) in [
+      ("20260927T190000Z-00000001", Verdict.green, pre),
+      ("20260927T190100Z-00000002", Verdict.red, post),
+    ] {
+      try runs.record(
+        RunReport(
+          runID: runID, durationMilliseconds: 1000,
+          tiers: [TierResult(tier: .t1, verdict: verdict, durationMilliseconds: 1000, testCounts: nil)],
+          findings: []),
+        finishedAt: MergeScenario.at, command: "check ready", headCommit: head)
+    }
+
+    let report = await scenario.undo("t1")
+
+    #expect(report.status == .undone, "\(report.message)")
+    #expect(report.gateRunId == "20260927T190100Z-00000002")
+    let events = try scenario.run.events().events.suffix(2)
+    #expect(
+      Array(events) == [
+        .gate(
+          .init(
+            stage: .merge(task: "t1"), tier: .ready, verdict: .red,
+            runID: "20260927T190100Z-00000002", at: MergeScenario.at)),
+        .undo(.init(task: "t1", fromCommit: post, toCommit: pre, at: MergeScenario.at)),
+      ])
+  }
+
+  @Test(
+    "--undo records nothing when the merge gate at the undone merge is already in the log — catches 1 gate counted twice"
+  )
+  func undoKeepsARecordedGateOnce() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let merged = await scenario.merge("t1")
+    let runID = "20260927T190100Z-00000002"
+    try RunStore(worktreeRoot: scenario.checkout).record(
+      RunReport(
+        runID: runID, durationMilliseconds: 1000,
+        tiers: [TierResult(tier: .t1, verdict: .red, durationMilliseconds: 1000, testCounts: nil)], findings: []),
+      finishedAt: MergeScenario.at, command: "check ready", headCommit: merged.postCommit)
+    try await scenario.run.append(
+      .gate(
+        .init(
+          stage: .merge(task: "t1"), tier: .ready, verdict: .red, runID: runID,
+          at: MergeScenario.at)))
+
+    let report = await scenario.undo("t1")
+
+    #expect(report.status == .undone, "\(report.message)")
+    #expect(report.gateRunId == nil)
+    let gates = try scenario.run.events().events.filter {
+      if case .gate = $0 { return true }
+      return false
+    }
+    #expect(gates.count == 1)
+  }
+
+  @Test(
     "--undo after main moved past the merge exits 1 and changes nothing — catches an undo that drops another session's merge"
   )
   func undoAfterMainMovedRefused() async throws {

@@ -54,12 +54,12 @@ struct QACheckJudgementTests {
   }
 
   @Test(
-    "the captured bundle of 1 real test that passed passes on exit 0 — catches every bundle read as running nothing"
+    "the captured bundle of 1 real test that passed passes on exit 0 and says 1 test passed — catches every bundle read as running nothing, and a pass that hides how many tests it ran"
   )
   func bundleWithOneTestPasses() throws {
     #expect(
       Self.xcode(.exited(0), try Self.bundle("one-test"), atBase: true)
-        == QACheckJudgement(result: .pass, message: "exit 0"))
+        == QACheckJudgement(result: .pass, message: "exit 0, 1 test passed"))
   }
 
   @Test(
@@ -92,12 +92,28 @@ struct QACheckJudgementTests {
   }
 
   @Test(
-    "the captured passing swift test report, which ran 2 tests, passes on exit 0 — catches a count read from the wrong element"
+    "the captured passing swift test report, which ran 2 tests, passes on exit 0 and says 2 tests passed — catches a count read from the wrong element"
   )
   func passingReportPasses() throws {
     let judgement = QACheckJudgement.judge(Self.input(.exited(0), report: try Self.report("pass")))
 
-    #expect(judgement == QACheckJudgement(result: .pass, message: "exit 0"))
+    #expect(judgement == QACheckJudgement(result: .pass, message: "exit 0, 2 tests passed"))
+  }
+
+  @Test(
+    "captured reports of 2 passing and 2 skipped Swift Testing cases pass, counting only the 2 that ran as passed and naming the skips apart — catches a skipped test counted as a pass"
+  )
+  func passingReportCountsSkipsApart() throws {
+    let report = JUnitReports.combined([
+      try Fixture.data("SwiftTest/pass.xml"),
+      try Fixture.data("SwiftTest/pass-swift-testing.xml"),
+      try Fixture.data("SwiftTest/skip-swift-testing.xml"),
+    ])
+
+    let judgement = QACheckJudgement.judge(Self.input(.exited(0), report: report))
+
+    #expect(
+      judgement == QACheckJudgement(result: .pass, message: "exit 0, 2 tests passed, 2 skipped"))
   }
 
   @Test(
