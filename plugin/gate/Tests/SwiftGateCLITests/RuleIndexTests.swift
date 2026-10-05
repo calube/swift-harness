@@ -92,7 +92,7 @@ struct RuleIndexTests {
       BashGuard.simctlAllRuleID, SimulatorSelection.baseAmbiguousRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       BashGuard.validationFlowByHandRuleID, BashGuard.bareStdinReaderRuleID,
-      BashGuard.processMatchWaitRuleID,
+      BashGuard.processMatchWaitRuleID, BashGuard.qaRunTruncatedRuleID,
       FixerGateCapGuard.ruleID,
       BuildAgentLaunchGuard.ruleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,

@@ -1,0 +1,8 @@
+[
+  {
+    "command": "cd /CLONE-spec.slot-3 && git commit -qam \"Show the contact search field with its accessibility identifier\n\nReplace the system .searchable field, which carries no identifier, with a\nvisible Search text field at the top of the contact list bound to the same\nsearchTextChanged action, so contact search stays reachable by id.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\" && git rev-parse --short HEAD && /HARNESS/plugin/bin/swiftgate qa run --plan spec --after send-flow --before-merge --fix --json 2>&1 | tail -60"
+  },
+  {
+    "command": "cd /CLONE-spec; SG=\"/HARNESS/plugin/bin/swiftgate\"; S=f43f6be3-b6fa-45df-8258-3a3f1f577f4c; O=/CLONE/.git/swift-harness/plans/spec/out\n\"$SG\" qa run --plan spec --after send-flow --before-merge --json > $O/qa-sf.json; python3 -c \"\nimport json;d=json.load(open('$O/qa-sf.json'))\nprint(d.get('verdict'),d.get('runID'),d.get('message'))\nfor r in d.get('rows',[]): print(r.get('requirement'),r.get('result'),r.get('reusedFrom'))\"\n\"$SG\" build merge spec send-flow --session $S --json | grep -E '\"reason\"|\"status\"|\"message\"|fixWorktree|fixBranch'"
+  }
+]

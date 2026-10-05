@@ -1,0 +1,58 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-contact-search",
+      "runsAfter" : [
+        "send-flow"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-success",
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure",
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the account-fake unit tests prove the balance, contacts and failing send; the send flows exercise it in the app",
+      "requirement" : "req-account-fake"
+    },
+    {
+      "reason" : "the amount-input unit tests prove each keypad rule",
+      "requirement" : "req-keypad-rules"
+    },
+    {
+      "reason" : "the amount-input unit tests prove the display format",
+      "requirement" : "req-amount-format"
+    },
+    {
+      "reason" : "the amount-input unit tests prove the Continue bounds",
+      "requirement" : "req-continue-rule"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

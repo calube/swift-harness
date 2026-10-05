@@ -1,0 +1,17 @@
+{"at":"2026-10-05T07:47:21Z","from":"pending","kind":"transition","task":"spec-validation","to":"in-progress"}
+{"at":"2026-10-05T07:47:21Z","from":"pending","kind":"transition","task":"send-flow","to":"in-progress"}
+{"at":"2026-10-05T07:47:21Z","from":"pending","kind":"transition","task":"amount-input","to":"in-progress"}
+{"at":"2026-10-05T07:47:22Z","from":"pending","kind":"transition","task":"account-fake","to":"in-progress"}
+{"at":"2026-10-05T07:53:55Z","from":"in-progress","kind":"transition","task":"spec-validation","to":"done"}
+{"at":"2026-10-05T07:57:57Z","checkId":"31AF9190-0BA4-4DE7-BEC8-2EADB3B70DB0","commit":"353aee75889e9ddaa9240fb562f5ef2e5a251588","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"amount-input","verdict":"GREEN"}
+{"at":"2026-10-05T07:58:03Z","kind":"merge","postCommit":"650cea4126d41541987839408ccd0bba7ea9d892","preCommit":"656b75662891ec0970368618feed0e9ad23607f5","task":"amount-input"}
+{"at":"2026-10-05T07:58:56Z","gate":"merge","kind":"gate","runId":"20261005T075810Z-e46c1818","task":"amount-input","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T07:58:56Z","from":"in-progress","kind":"transition","task":"amount-input","to":"done"}
+{"at":"2026-10-05T07:59:04Z","checkId":"ECAD4615-D43F-4979-92FC-1A3819803C63","commit":"200112c4f2b39230858c0737da0f936eb03aedd5","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"account-fake","verdict":"GREEN"}
+{"at":"2026-10-05T07:59:05Z","checkId":"C38B2723-DE1A-46D7-8DBC-3B1A4E14FC61","commit":"a09da6e99afc5d579e25de57158f5569e9051249","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"send-flow","verdict":"GREEN"}
+{"at":"2026-10-05T08:02:53Z","kind":"merge","postCommit":"d9541751f82d6d9d6f58e30612208437c29b9bc4","preCommit":"650cea4126d41541987839408ccd0bba7ea9d892","task":"account-fake"}
+{"at":"2026-10-05T08:03:37Z","gate":"merge","kind":"gate","runId":"20261005T080256Z-bf76915e","task":"account-fake","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T08:03:37Z","from":"in-progress","kind":"transition","task":"account-fake","to":"done"}
+{"at":"2026-10-05T08:13:46Z","from":"in-progress","kind":"transition","task":"send-flow","to":"blocked"}
+{"at":"2026-10-05T08:14:19Z","gate":"final","kind":"gate","runId":"20261005T081356Z-5e1a11f3","tier":"final","verdict":"GREEN"}
+{"at":"2026-10-05T08:14:27Z","kind":"finish","qaRun":"20261005T081419Z-d9878a1e","validation":"RED"}

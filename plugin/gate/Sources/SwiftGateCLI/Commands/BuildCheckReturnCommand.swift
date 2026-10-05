@@ -53,9 +53,9 @@ enum BuildCheckReturnRun {
     do {
       taskReturn = try TaskReturnJSON.decode(try Data(contentsOf: URL(filePath: file)))
     } catch let error as DecodingError {
-      return blocked(nil, "\(file) isn't a task return: \(describe(error))")
+      return blocked(namedTask(in: file), "\(file) isn't a task return: \(describe(error))")
     } catch {
-      return blocked(nil, "\(file) isn't a task return: \(error)")
+      return blocked(namedTask(in: file), "\(file) isn't a task return: \(error)")
     }
     guard let plan else {
       return blocked(taskReturn.task, "--plan is required: the slug of the task's plan")
@@ -155,8 +155,11 @@ enum BuildCheckReturnRun {
     directory: String
   ) async -> [String] {
     let notRecorded = "the verdict wasn't recorded"
-    guard let task = report.task, let plan = report.plan else {
-      return ["\(notRecorded): the check names no task and plan"]
+    guard let task = report.task else {
+      return ["\(notRecorded): the return names no task (\(report.message))"]
+    }
+    guard let plan = report.plan else {
+      return ["\(notRecorded): no --plan names the task's plan"]
     }
     guard RunID.isValid(task) else { return ["\(notRecorded): task `\(task)` isn't an id"] }
     let store: BuildRunStore
@@ -298,7 +301,12 @@ enum BuildCheckReturnRun {
         addedTests = try await brownfieldTests(
           changed, tip: branchTip, worktree: worktree, git: git, warnings: &warnings)
       }
-      outside = WriteSet.outsideChanges(changed, writeSet: task.writeSet)
+      let writeSet =
+        fix
+        ? try await carriedWriteSet(
+          task, ledger: ledger, slug: slug, tip: branchTip, git: git, profile: profile)
+        : task.writeSet
+      outside = WriteSet.outsideChanges(changed, writeSet: writeSet)
       if !outside.isEmpty {
         warnings.append(
           "the task branch changed \(outside.count) file(s) outside its write set: "
@@ -309,7 +317,8 @@ enum BuildCheckReturnRun {
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
-      changedFiles: changed, explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
+      changedFiles: changed, explainedEditsAllowed: fix, unrunGateAllowed: fix,
+      proofRequired: !fix && taskProof == .perTask,
       surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
       planSurface: manifests, testBuild: testBuild, lastCommit: lastCommit,
       addedTests: addedTests)
@@ -526,6 +535,35 @@ enum BuildCheckReturnRun {
 
   /// Files the task branch changed since it forked from the checkout's `HEAD`, which is `main`
   /// when the orchestrator runs this.
+  /// `task`'s write set, joined by the write set of each other task whose branch tip the fix
+  /// branch at `tip` holds and the checkout's `HEAD` lacked when the fix left it: a fix worktree
+  /// cut for a RED run over several tasks takes their branches in, so its fixer may edit their
+  /// files.
+  private static func carriedWriteSet(
+    _ task: LedgerTask, ledger: Ledger, slug: String, tip: String, git: any Git,
+    profile: RepositoryProfile
+  ) async throws(Blocked) -> [String] {
+    var writeSet = task.writeSet
+    do {
+      guard let head = try await git.revision("HEAD"),
+        let base = try await git.mergeBase(tip, head)
+      else { return writeSet }
+      let common = try await git.commonDirectory()
+      for other in ledger.tasks where other.id != task.id {
+        let names = try TaskWorktree(
+          commonDirectory: common, plan: slug, task: other.id, profile: profile)
+        guard let otherTip = try await git.revision("refs/heads/\(names.branch)"),
+          try await git.isAncestor(otherTip, of: tip),
+          try await !git.isAncestor(otherTip, of: base)
+        else { continue }
+        writeSet += other.writeSet
+      }
+    } catch {
+      throw Blocked("reading the task branches the fix branch holds: \(error)")
+    }
+    return writeSet
+  }
+
   private static func branchChanges(tip: String, git: any Git) async throws(Blocked) -> [String] {
     do {
       guard let head = try await git.revision("HEAD"),
@@ -625,9 +663,22 @@ enum BuildCheckReturnRun {
     }
   }
 
+  /// The `task` a return that doesn't decode still names, so its BLOCKED check is recorded
+  /// under that task; `nil` when the file holds no such string.
+  private static func namedTask(in file: String) -> String? {
+    guard let data = try? Data(contentsOf: URL(filePath: file)),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return nil }
+    return object["task"] as? String
+  }
+
   /// Names the key and, for a bad value, what was there, so the worker can fix its return.
   private static func describe(_ error: DecodingError) -> String {
     switch error {
+    case .valueNotFound(_, let context)
+    where context.codingPath.map(\.stringValue) == ["gate", "runId"]:
+      return "`gate.runId` is null, but only a BLOCKED gate may name no run; a return whose gate "
+        + "never ran writes `\"gate\": null`"
     case .dataCorrupted(let context), .typeMismatch(_, let context), .valueNotFound(_, let context):
       let path = context.codingPath.map(\.stringValue).joined(separator: ".")
       return path.isEmpty
@@ -707,10 +758,11 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
     let checked = await BuildCheckReturnRun.check(
       file: file, plan: plan, fix: fix, git: git, profile: BuildPresetCatalog.profile(root: root),
       directory: root.path)
-    for note in checked.notRecorded {
+    let report = checked.report
+    let blocked = report.verdict == .blocked ? ["BLOCKED: \(report.message)"] : []
+    for note in blocked + checked.notRecorded {
       FileHandle.standardError.write(Data("swiftgate build check-return: \(note)\n".utf8))
     }
-    let report = checked.report
     Console.write(BuildCheckReturnRun.render(report, format: output.format))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
