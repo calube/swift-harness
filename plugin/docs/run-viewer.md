@@ -16,6 +16,8 @@ plan's ledger and the task returns, and never writes.
 - `swiftgate report --json <build run id> [--out <path>]` prints the run view, or writes it to `--out`.
 - `swiftgate view [--build-run <id>] [--port <n>]` serves the page live on `127.0.0.1`, for the newest build
   run and on a free port unless told otherwise, and runs until interrupted.
+- `swiftgate view --ensure` prints the URL of the repository's 1 live viewer, starting it detached
+  when none answers: see [the live server](run-viewer-live.md#the-live-server).
 - `swiftgate events span start --phase <phase> --build-run <id> [--task <id>] [--role <role>] [--parent <span id>]`
   prints the new 16-hex span id alone on stdout; empty stdout means telemetry is off.
   `swiftgate events span end <span id> --outcome ok|red|halted|abandoned` reads that start and records the ms
@@ -81,8 +83,8 @@ See also [validation rows](run-viewer-validation.md).
 
 ## Live pages and saved reports
 
-When a report is final, what a live page polls, and what a missing file means mid-run: see
-[live pages and saved reports](run-viewer-live.md).
+When a report is final, what a live page polls, how the live server starts and stops, and what a
+missing file means mid-run: see [live pages and saved reports](run-viewer-live.md).
 
 ## Privacy
 

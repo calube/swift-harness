@@ -1575,9 +1575,9 @@ The file holds the 4 lines written, unedited. `grep -ciE '/Users|/private|/var/f
 printed 0.
 
 `RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
-`RunView/build-run-1` once its final report was written, for the live view's snapshot test. The test
-drops `cursor`, a digest of file times. Captured at the commit that adds `/final`, from `plugin/gate`
-after `swift build`:
+`RunView/build-run-1` once `report --html` had written its final report, for the live view's
+snapshot test. The test drops `cursor`, a digest of file times. Captured at the commit that adds
+`/final`, from `plugin/gate` after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)

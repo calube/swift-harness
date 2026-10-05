@@ -17,13 +17,42 @@ names no spec page: no damage, and the Spec tab says so.
 
 ## Live mode
 
-`view` answers `GET /`, `/view.json`, `/changes?after=<cursor>` (rows changed since it, a new
-cursor), and each flow's linked `/runs/` file; else 404. A changed row comes whole, its failure or block reason
-included. An unknown cursor gets the whole view. A request whose `Host` isn't
-`127.0.0.1` or `localhost` at its port gets 403, so a page elsewhere can't reach it through a rebound name.
+`view` answers `GET /`, `/view.json`, `/final`, `/server` and each flow's linked `/runs/` file; else
+404. A request whose `Host` isn't `127.0.0.1` or `localhost` at its port gets 403, so a page
+elsewhere can't reach it through a rebound name.
 
-The page polls `/changes` each second, merges rows by id, keeps the open tab and scroll, and keeps polling after
-a failure, which it shows under the title. `damage` and `unwritten` come whole when they change, so a healed
-row leaves the footer. A now strip shows each running task's open phase, elapsed time and last event age, a stall
-badge once `stallMin` passes with no event of that task, and a halt badge until the resume. `stallMin` is the
-preset's `stall_min`, or 15, the value `build next` hands the stall watch.
+The page polls `/view.json?after=<token>` each second, naming the token of the view it holds. The
+server answers 204 when none of the run's files moved since that token, and otherwise the whole
+view under a new token, which the page puts in place of its own. An unknown token gets the whole
+view. A redraw keeps the open tab, scroll, popover and drawer. The page keeps polling after a
+failure, which it shows under the title. A now strip shows each running task's open phase, elapsed
+time and last event age, a stall badge once `stallMin` passes with no event of that task, and a
+halt badge until the resume. `stallMin` is the preset's `stall_min`, or 15, the value `build next`
+hands the stall watch.
+
+Once the run is done and `report --html` has written its final report, the view's `finalReport` is `/final`, which
+serves that report, and the page shows an end banner linking it in place of the now strip. A ledger
+line after the report, as in a resumed build, takes both back.
+
+## The live server
+
+`swiftgate view --ensure` prints the URL of the repository's live viewer and nothing else. It
+reuses the server that `swift-harness/view-server.json` in the git common dir names while that
+server answers `/server` with its own pid. Otherwise it starts `view --detached` from the main
+checkout, in a session of its own, on the saved port when it's free, and waits for the server to
+save its port and pid. The server's output goes to `view-server.log` beside the record.
+
+The server follows the newest build run of any plan, and answers `/view.json` with 503 until one
+exists. It exits 10 minutes after the run's final report exists, or after 2 hours with no request
+and no change to the run. `SWIFTGATE_VIEW=off`, or `0`, `false` or `no`, starts nothing and prints
+no URL, only a note on stderr.
+
+The build skill calls `view --ensure` after `build start`, and the run skill at launch; each
+prints `Live: <url>`.
+
+## What a poll reads
+
+The reader reads events from a day before the build run's start, or from an older gate run the
+run names or the plan's launch, so a store's sealed history stays shut. The reader leaves out an
+event of the run from more than a day before its start, such as the usage of a session that began
+a day before `build start`.
