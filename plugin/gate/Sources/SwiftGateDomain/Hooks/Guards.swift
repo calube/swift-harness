@@ -787,7 +787,19 @@ public enum UserCheckoutGuard {
   public static func evaluate(writes: [String], userCheckout: String, planCheckout: String?)
     -> GuardViolation?
   {
-    nil
+    let root = userCheckout.hasSuffix("/") ? String(userCheckout.dropLast()) : userCheckout
+    for path in writes where path.hasPrefix(root + "/") {
+      let inside = path.dropFirst(root.count + 1)
+      guard inside != ".git", !inside.hasPrefix(".git/") else { continue }
+      let checkout = planCheckout.map { "the plan checkout `\($0)`" } ?? "the plan checkout"
+      return GuardViolation(
+        ruleID: ruleID,
+        reason:
+          "`\(path)` is in the user's checkout, which a run never writes. Commit, keep task "
+          + "returns under `.harness/build/`, and put scratch files in \(checkout); a gate's or "
+          + "`qa run`'s JSON goes in the plan's `out/` folder.")
+    }
+    return nil
   }
 }
 

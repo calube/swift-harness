@@ -181,7 +181,10 @@ reads red until a task adds the name.
 
 1. Write the workflow's return, byte for byte, to `.harness/build/<run>/<task>.json`. Take it from
    the `result` key of the task's output file, the path the completion notice names. The notice
-   text HTML-escapes the return, so `->` arrives as `-&gt;`, and a copy of it is corrupt.
+   text HTML-escapes the return, so `->` arrives as `-&gt;`, and a copy of it is corrupt. In a
+   brownfield run that path is under the plan checkout: the hook denies a run's write to the
+   user's checkout as `guard.run-user-checkout`. The check measures the task branch against the
+   branch tasks merge into, from whichever checkout runs it.
 2. `"$SG" build check-return .harness/build/<run>/<task>.json --plan <slug> --session <session> --json`.
    Exit 0 is `verdict` GREEN. Exit 1 lists `findings` as `{rule, message}`: the return claims more
    than git or the run store shows. Exit 2 means the file is unreadable or isn't a task return.

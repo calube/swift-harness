@@ -352,7 +352,7 @@ public struct BuildMerge: Sendable {
       }
       try await checkReturn(command, context)
       try await checkCarried(command, context)
-      try await checkFlows(command, context, main: pre)
+      let unverified = try await checkFlows(command, context, main: pre)
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
         let subject = try await merger.subject(of: "refs/heads/\(branch)", in: main)
@@ -373,7 +373,8 @@ public struct BuildMerge: Sendable {
         return report(
           command, context, .merged, .green, mainCheck: mainCheck, pre: pre, post: post,
           message: "merged \(branch) into \(context.names.baseBranch): \(pre) → \(post)"
-            + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : ""))
+            + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : "")
+            + (unverified.map { "; \($0)" } ?? ""))
       case .conflicted(let files):
         try await abort(command, context, pre: pre)
         if fix {
@@ -678,6 +679,25 @@ public struct BuildMerge: Sendable {
     }
   }
 
+  /// Says that `task` merges with no validation row verified when rows run after it and each
+  /// still waits on another unmerged task; `nil` when no row runs after it.
+  static func unverifiedNote(table: ValidationTable, merged: Set<String>, task: String) -> String? {
+    let rows = table.rows.enumerated().filter { $0.element.runsAfter.contains(task) }
+    guard !rows.isEmpty else { return nil }
+    var waiting: [String] = []
+    for name in rows.flatMap({ $0.element.runsAfter })
+    where name != task && !merged.contains(name) && !waiting.contains(name) {
+      waiting.append(name)
+    }
+    let numbers = rows.map { String($0.offset + 1) }.joined(separator: ", ")
+    let one = rows.count == 1
+    let names = waiting.map { "`\($0)`" }.joined(separator: ", ")
+    return "no validation row verified `\(task)`: \(one ? "row" : "rows") \(numbers) "
+      + "\(one ? "runs" : "run") after it and \(one ? "waits" : "wait") on \(names), so "
+      + "\(one ? "it first runs" : "they first run") on the trial merge of "
+      + "\(waiting.count == 1 ? "that task" : "those tasks")"
+  }
+
   /// Refuses while a validation row runs after this task with every other task it waits on
   /// merged, unless the newest `qa run --before-merge` that took the branch at its tip on `main`'s
   /// commit passed it, or conflicted, which the merge then shows. A row whose other unmerged
@@ -689,14 +709,18 @@ public struct BuildMerge: Sendable {
   /// does, unless this merges the fixer's branch, whose worktree exists; that fixer's branch sets
   /// the task aside, so the other tasks' merges no longer wait on it. A plan with no table, or one
   /// whose state doesn't read, needs no run here: `qa run` itself reports that table.
+  ///
+  /// - Returns: what the merge report says when a row runs after this task and none ran before
+  ///   it lands, since each still waits on another task; `nil` otherwise.
   private func checkFlows(_ command: String, _ context: Context, main: String)
-    async throws(Stop)
+    async throws(Stop) -> String?
   {
     let readiness: QAMergeReadiness
     let tip: String
     let alongside: [String]
     let merged: Set<String>
     let reports: [QAReport]
+    let table: ValidationTable
     var awaited: [QAPendingReturn] = []
     var noNewStartsAt: Date?
     do {
@@ -704,8 +728,8 @@ public struct BuildMerge: Sendable {
       guard
         let data = FileManager.default.contents(
           atPath: plan.directory + "/" + ValidationTable.fileName)
-      else { return }
-      let table = try ValidationTableJSON.decode(data)
+      else { return nil }
+      table = try ValidationTableJSON.decode(data)
       let progress = try PlanStateStore(plan: plan).ledgerProgress()
       let log = try context.run.events()
       tip = try await merger.commit(
@@ -728,7 +752,7 @@ public struct BuildMerge: Sendable {
           now: clock.now(), noNewStartsAt: noNewStartsAt)
       }
     } catch {
-      return
+      return nil
     }
     if !awaited.isEmpty {
       let gatedAt = awaited.map(\.gatedAt).max() ?? clock.now()
@@ -753,8 +777,10 @@ public struct BuildMerge: Sendable {
     let run =
       "`swiftgate qa run --plan \(plan) --after \(tasks) --before-merge\(fix ? " --fix" : "")`"
     switch readiness {
-    case .notNeeded, .checked, .conflicts:
-      return
+    case .checked, .conflicts:
+      return nil
+    case .notNeeded:
+      return Self.unverifiedNote(table: table, merged: merged, task: task)
     case .unchecked(let rows):
       throw stop(
         command, context, .refused,
@@ -787,7 +813,8 @@ public struct BuildMerge: Sendable {
       if let red = reports.first(where: { $0.runID == runID }), let after = red.after,
         let merge = red.trialMerge
       {
-        let taken = [QATrialMerge.Branch(task: after, branch: merge.branch, tip: merge.tip)]
+        let taken =
+          [QATrialMerge.Branch(task: after, branch: merge.branch, tip: merge.tip)]
           + merge.alongside
         carried = taken.filter {
           $0.task != task && owners.contains($0.task) && !merged.contains($0.task)
