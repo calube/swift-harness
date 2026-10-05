@@ -32,10 +32,13 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
   var unblocks: [Unblocked] = []
   /// Why a `--repair` adopt took nothing.
   var findings: [Finding] = []
+  /// The worktree's prepared folder, once a GREEN adopt has taken it and removed it; `nil` when
+  /// it stays, as on a refusal.
+  var removed: String?
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, worktree, verdict, adopted, repaired, unblocks, findings, message
+    case command, worktree, verdict, adopted, repaired, unblocks, findings, removed, message
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -47,6 +50,7 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
     try c.encode(repaired, forKey: .repaired)
     try c.encode(unblocks, forKey: .unblocks)
     try c.encode(findings, forKey: .findings)
+    try c.encode(removed, forKey: .removed)
     try c.encode(message, forKey: .message)
   }
 }
