@@ -220,7 +220,7 @@ A merge gate can hang, so it never runs as a foreground call with no deadline. A
    `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json > <plans>/<slug>/out/merge-<task>.json`.
    Step 2's `"$SG" build gate-wait` holds the turn in the foreground while it runs.
 2. In the foreground, with the Bash tool's `timeout` at 600000:
-   `"$SG" build gate-wait <slug> --tier <mergeGate> --output <plans>/<slug>/out/merge-<task>.json --json`.
+   `"$SG" build gate-wait <slug> --tier <mergeGate> --output <plans>/<slug>/out/merge-<task>.json --session <session> --json`.
    It budgets the gate from the tier's recent runs, or from the warm-up's build and test times
    before the first one, waits up to 2 minutes and prints an `action`:
 
@@ -230,6 +230,9 @@ A merge gate can hang, so it never runs as a foreground call with no deadline. A
   its return so it joins the queue, then run `build gate-wait` again. Never end the turn while the
   gate runs, and never wait on it another way, such as a sleep: a headless session that ends its
   turn kills the gate.
+- `worker-returned`: a Workflow run of this session ended while the gate ran; `returned` names
+  its task. Its completion notice arrives with this result: check its return so it joins the
+  queue, then run `build gate-wait` again.
 - `overrun`: the gate passed its deadline, 3 times its expected time. `TaskStop` its Bash task and
   treat it as a RED merge gate whose finding is the watch's `message`:
   `"$SG" build halt --run <run> --task <task> --reason gate-red`, then

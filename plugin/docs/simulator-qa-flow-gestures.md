@@ -22,6 +22,20 @@ least 350 pt lower on screen, then the flow waits for what the refresh changes:
 - A `scroll` step is never a pull to refresh. `scroll up` starts its finger near the top edge,
   often inside the navigation bar, and moves in 400 ms. On the captured list it never refreshed at
   `amount: 0.8`, and at most 3 runs in 4 at other amounts.
-- When no element sits that far below the top row, as on a list of 2 rows, the validation worker
-  returns the lower element it needs as a missing contract name, such as an id on the list's
-  footer.
+
+### A short list
+
+A list of a few rows has no element 350 pt below its top row, and `agent-device` drags only between
+2 targets: a drag by an offset from 1 id isn't a step it has. So the contract pins a 1 pt id to the
+bottom of the refreshable screen's safe area, and the drag ends there:
+
+`.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`
+
+`{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top row>\"", "destination": "id=\"<bottom id>\""}}`
+
+- The id goes on the list after any identifier the list itself carries: an identifier applied
+  later to the whole view replaces it.
+- On the captured 3-row list, under `gate/Tests/Fixtures/AgentDevice/pull-to-refresh-short/`, the
+  drag from the top row to the pinned id moved 594 pt and refreshed, and the drag to the last row
+  moved 104 pt and didn't. The pinned id sits above the home indicator on a list of any length, so
+  a refresh flow can always end its drag there.

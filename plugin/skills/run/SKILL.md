@@ -386,8 +386,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      [merge queue](../build/references/event-loop.md#merge-queue) says. Each merge gate is
      `"$SG" check --tier merge --base <base> --json > <out>/merge-<task>.json`, launched with
      `run_in_background: true`, then watched in the foreground with
-     `"$SG" build gate-wait <slug> --tier merge --output <out>/merge-<task>.json --json` until it
-     reads. An `overrun` is a RED merge gate: undo it, then merge the next task in `readyToMerge`
+     `"$SG" build gate-wait <slug> --tier merge --output <out>/merge-<task>.json --session <session> --json`
+     until it reads. A `worker-returned` means a task's Workflow ended: check its return, then
+     watch again. An `overrun` is a RED merge gate: undo it, then merge the next task in `readyToMerge`
      before its fixer returns. At the cutoff it gets no fixer, as a RED merge gate doesn't.
    - Stop at its step 4; this skill's step 8 replaces it.
    - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
