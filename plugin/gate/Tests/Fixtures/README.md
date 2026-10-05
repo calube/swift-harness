@@ -3230,6 +3230,48 @@ cp $P/validation.json $F/; cp $R/run.json $F/; cp $R/events.jsonl $F/
 The repair worker's reply arrived at 2026-10-05T15:23:00.391Z, the time the tests decide at.
 `grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair` matched nothing.
 
+## Build returns: a no-repair contract gap past no new starts
+
+`BuildReturn/no-repair-late/` is what a brownfield practice trial on an app whose state advances on
+a clock left when its flow repair worker returned `no repair: <requirement>: contract gap: held:`
+for 1 row 366 s before the cutoff, after no new starts, and `build no-repair` merged the task with
+that row unverified. `repair-reply.txt` is that reply, `qa-red.json` the fixer's before-merge
+`qa run --fix`, red on row 6 alone, and `qa-first.json` the task's first before-merge run, the
+slowest that took it. `fix-gate.jsonl` is the `gate.run` event of the fix branch's slice gate,
+`rows-unverified.jsonl` the build run's `rows-unverified` event, whose `at` is when the command
+decided, and `run.json` the build run's record. `C` is the trial clone's state directory
+(`.git/swift-harness`), `J` the orchestrator's stream-json log and `SCRUB` a rename script outside
+this repository, since its pairs name the app; it maps each app-specific noun, label, scenario,
+requirement and task id to a generic one, such as `req-ended`, `Chances: 3`, `Start again` and
+`target-fall-held`, and rewrites any home path to `<path>`. From this directory:
+
+```sh
+F=BuildReturn/no-repair-late R=$C/plans/spec/build/20261005T202420Z-d318457a
+mkdir -p $F
+python3 $SCRUB $R/run.json > $F/run.json
+python3 $SCRUB $C/runs/20261005T204446Z-126de225/qa/report.json > $F/qa-red.json
+python3 $SCRUB $C/runs/20261005T203359Z-9e69c57f/qa/report.json > $F/qa-first.json
+grep 20261005T204415Z-12c13d21 $C/events/gate.jsonl | grep '"kind":"gate.run"' \
+  | python3 $SCRUB /dev/stdin > $F/fix-gate.jsonl
+grep '"kind":"rows-unverified"' $R/events.jsonl | python3 $SCRUB /dev/stdin > $F/rows-unverified.jsonl
+J=$J python3 - <<'PY' | python3 $SCRUB /dev/stdin > $F/repair-reply.txt
+import json, os
+for line in open(os.environ["J"]):
+    try: d = json.loads(line)
+    except ValueError: continue
+    for c in (d.get("message") or {}).get("content") or []:
+        if isinstance(c, dict) and c.get("type") == "tool_use":
+            cmd = c["input"].get("command", "")
+            if "no-repair-" in cmd and "contract gap: held:" in cmd:
+                i = cmd.find("no repair: ")
+                print(cmd[i:cmd.find("\nEOF", i)]); raise SystemExit
+PY
+```
+
+The slice gate took 16.65 s and the slowest before-merge run's rows 132.5 s, so 1 more fix round
+measures 150 s, and the red row's proof 39.2 s.
+`grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair-late` matched nothing.
+
 ## Build returns: a no-repair red run made in a fixer's slot
 
 `BuildReturn/no-repair-slot/` is what a brownfield trial left when a fixer's before-merge
@@ -5463,6 +5505,26 @@ and `moving` are as captured. The clone's `config.toml` differs from
 `price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
 `price-tracker-1-base-files.txt`, so the import test reads those 2.
 `grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
+
+## Brownfield trial: a check after a restart of a held clock
+
+`BrownfieldTrial/clock-restart-1-PLAN.md` is the `PLAN.md` a 2026-10-05 brownfield practice trial
+on the iOS app starter left at its run's end. Its contract reads `-harness-scenario` and names a
+`launch-held` scenario that holds the clock until the first input, and its screen task runs a
+repeating timer effect. One flow row's requirement presses `Start again`, which starts a new
+session on a live clock, and its check after the press raced that clock: the row ended
+unverified. `C` is the trial clone's state directory and `SCRUB` the rename script of
+`BuildReturn/no-repair-late`:
+
+```sh
+python3 $SCRUB $C/plans/spec/PLAN.md \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/clock-restart-1-PLAN.md
+```
+
+Line numbers, the table's shape, the `slice` gate tier, and each brief's words for the timer, the
+clock and `held` are as captured.
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/clock-restart-1-PLAN.md` matched
+nothing.
 
 ## Build return: a worker's commits listed newest first
 

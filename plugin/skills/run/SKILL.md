@@ -294,9 +294,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      1. From `<checkout>`, `"$SG" qa adopt <worktree> --session <session> --json` copies its
         `.harness/qa/<slug>/` into `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN
         adopt is 1 report line. Its `unblocks` names each checked return that waited on this
-        task, with the exact `build merge` command.
-     2. `/bin/rm -rf <worktree>/.harness/qa`, then
-        `"$SG" ledger set <slug> <task> done --session <session> --json` and
+        task, with the exact `build merge` command. A GREEN adopt removes
+        `<worktree>/.harness/qa` itself.
+     2. `"$SG" ledger set <slug> <task> done --session <session> --json` and
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
         `"$SG" qa run --plan <slug> --at-base --json --output <out>/qa-at-base.json` in
@@ -354,8 +354,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      build while time remains: before `cutoffAt`, send the row back to the repair worker with the
      refusal's messages, which say what would pass, and adopt again. A `no repair:` return goes
      to `build no-repair`, as [the build loop's no repair](../build/references/event-loop.md#no-repair)
-     says: take its `action` as the answer. It amends the contract while there's time, sends an
-     app defect the frames show back to the fixer while a fix round fits, or merges the task with
+     says: take its `action` as the answer. It has the fixer amend the contract while a round
+     fits before the cutoff, sends an app defect the frames show back to the fixer while a fix round fits, or merges the task with
      that row unverified when its gate and other rows are GREEN, and never stops the build. Add 1 assumption naming the row and the action.
    - Where it halts and asks, decide yourself: take the option it marks recommended, never stop
      the build before `cutoffAt` over 1 task, record the

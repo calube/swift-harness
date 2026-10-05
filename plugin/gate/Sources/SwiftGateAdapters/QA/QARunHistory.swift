@@ -9,7 +9,7 @@ public enum QARunHistory {
   /// that doesn't decode is passed over, and 1 run read twice counts once.
   public static func beforeMergeReports(worktree: URL, plan: String) -> [QAReport] {
     var seen = Set<String>()
-    return stateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
+    return qaStateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
       .compactMap { data -> QAReport? in
         guard let report = try? QAReportJSON.decode(data), report.plan == plan,
           report.trialMerge != nil, seen.insert(report.runID ?? "").inserted
@@ -23,7 +23,7 @@ public enum QARunHistory {
   /// twice counts once.
   public static func atBaseReports(worktree: URL, plan: String) -> [QAReport] {
     var seen = Set<String>()
-    return stateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
+    return qaStateRoots(sharing: worktree).flatMap { files(QAReport.fileName, state: $0) }
       .compactMap { data -> QAReport? in
         guard let report = try? QAReportJSON.decode(data), report.plan == plan, report.atBase,
           let runID = report.runID, seen.insert(runID).inserted
@@ -37,7 +37,7 @@ public enum QARunHistory {
   /// decode is passed over, and 1 run read twice counts once.
   public static func mergedTreeRuns(worktree: URL) -> [QAMergedTreeRun] {
     var seen = Set<String>()
-    return stateRoots(sharing: worktree).flatMap { files(QAMergedTreeRun.fileName, state: $0) }
+    return qaStateRoots(sharing: worktree).flatMap { files(QAMergedTreeRun.fileName, state: $0) }
       .compactMap { try? QAMergedTreeRun.decode($0) }
       .filter { seen.insert($0.run.runID).inserted }
   }
@@ -73,16 +73,32 @@ public enum QARunHistory {
     return roots
   }
 
-  /// The `qa/report.json` of `runID` in the first of `worktrees` whose runs hold one that
-  /// decodes.
+  /// The store a `qa run` in `worktree` writes to, ``StateRootResolver/qaRuns(worktree:)``,
+  /// then each of ``stateRoots(sharing:)``, where a checkout's own runs and a removed
+  /// checkout's kept runs lie.
+  static func qaStateRoots(sharing worktree: URL) -> [StateRoot] {
+    var roots = [StateRootResolver.qaRuns(worktree: worktree)]
+    for root in stateRoots(sharing: worktree) {
+      let directory = root.directory.standardizedFileURL
+      if !roots.contains(where: { $0.directory.standardizedFileURL == directory }) {
+        roots.append(root)
+      }
+    }
+    return roots
+  }
+
+  /// The `qa/report.json` of `runID` that decodes, from the first store that holds one among
+  /// each of `worktrees`' ``qaStateRoots(sharing:)``: a run any checkout of the clone made reads
+  /// from every other.
   public static func report(runID: String, worktrees: [URL]) -> QAReport? {
     guard RunID.isValid(runID) else { return nil }
     for worktree in worktrees {
-      let file = RunStore(worktreeRoot: worktree).state.url(
-        RunLayout.runDirectory(for: runID), directoryHint: .isDirectory
-      ).appending(path: "\(QAReport.directory)/\(QAReport.fileName)")
-      if let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data) {
-        return report
+      for state in qaStateRoots(sharing: worktree) {
+        let file = state.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+          .appending(path: "\(QAReport.directory)/\(QAReport.fileName)")
+        if let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data) {
+          return report
+        }
       }
     }
     return nil

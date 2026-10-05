@@ -486,6 +486,36 @@ export function flowRepairProblems(loop, run) {
   return problems
 }
 
+/**
+ * Every way the event loop `loop` and the fixer's prompt `fixer` leave a contract amendment
+ * without its 1 sanctioned path: `amend-contract` priced against no new starts instead of the
+ * cutoff, an amendment or a fixer's return the orchestrator writes itself, or a fixer that never
+ * lands the name on the fix branch with each file it changed named in its notes.
+ */
+export function amendContractProblems(loop, fixer) {
+  const problems = []
+  const noRepair = (loop.split('\n## ').find(p => p.startsWith('No repair')) ?? '').replace(/\s+/g, ' ')
+  const amend = (noRepair.split(' - `amend-contract`:')[1] ?? '').split(' - `merge-unverified`:')[0]
+  if (!amend) return ['`build no-repair`\'s `amend-contract` has no step']
+  if (!/`cutoffAt`/.test(amend) || /`noNewStartsAt`/.test(amend)) problems.push('`amend-contract` is priced against no new starts, not the cutoff')
+  if (!/never write the amendment or the fixer's return yourself/.test(amend)) problems.push('the orchestrator may write the amendment or the fixer\'s return itself')
+  if (!/\[flow repair\]\(#flow-repair\) round again from step 1/.test(amend)) problems.push('the row is never repaired again against the new name')
+  if (!/launch the fixer again[^.]*amendment round/.test(amend)) problems.push('the fixer is never relaunched to land the amendment')
+  if (!/commits it on the fix branch/.test(amend)) problems.push('the amendment never lands on the fix branch')
+  if (!/names each file that commit changed in its notes/.test(amend)) problems.push('the fixer\'s notes never name the amendment\'s files')
+  if (!/`check-return --fix`/.test(amend)) problems.push('the fixer\'s amendment return is never checked')
+  const rule = (fixer.replace(/\s+/g, ' ').split('- **An amendment round.**')[1] ?? '').split(' - **')[0]
+  if (!rule) {
+    problems.push('the fixer has no amendment round')
+  } else {
+    if (!/`amend-contract`/.test(rule)) problems.push('the fixer\'s amendment round never names `amend-contract`')
+    if (!/commit it on the fix branch/.test(rule)) problems.push('the fixer never commits the amendment on the fix branch')
+    if (!/`amendment: <name>: <file>/.test(rule)) problems.push('the fixer\'s notes never name the amendment\'s files')
+    if (!/`qa run --fix`|`--before-merge --fix`/.test(rule)) problems.push('the fixer never runs the before-merge `qa run --fix` after the amendment')
+  }
+  return problems
+}
+
 /** Every way the event loop `loop` and the run skill `run` let a fixer's committed but unconfirmed
  * fix be blocked by hand instead of checked: no `verify` answer for it, no gate and before-merge
  * `qa run --fix` the orchestrator runs itself, no `check-return --fix` of the result, or a run
@@ -844,6 +874,21 @@ const tests = {
 
   'a fixer\'s flow row goes to a repair worker and back through qa adopt --repair, retried with the refusal\'s messages rather than halted while the cutoff is ahead — catches a one-shot run stopped by its own flow file'() {
     assert.deepEqual(flowRepairProblems(read('skills/build/references/event-loop.md'), read('skills/run/SKILL.md')), [])
+  },
+
+  'a contract gap with a fix round left before the cutoff is amended by the relaunched fixer on the fix branch, never by the orchestrator or a hand-written return — catches an amendment committed by the orchestrator with the fixer\'s return rewritten by hand'() {
+    assert.deepEqual(amendContractProblems(read('skills/build/references/event-loop.md'), read('agents/build-fixer.md')), [])
+    const old = '\n## No repair\n\n- `amend-contract`: a contract gap with time before `noNewStartsAt`. In the fix worktree, add the name to the contract and commit it on the fix branch.\n- `merge-unverified`: x'
+    assert.deepEqual(amendContractProblems(old, ''), [
+      '`amend-contract` is priced against no new starts, not the cutoff',
+      'the orchestrator may write the amendment or the fixer\'s return itself',
+      'the row is never repaired again against the new name',
+      'the fixer is never relaunched to land the amendment',
+      'the amendment never lands on the fix branch',
+      'the fixer\'s notes never name the amendment\'s files',
+      'the fixer\'s amendment return is never checked',
+      'the fixer has no amendment round',
+    ])
   },
 
   'a fixer\'s committed fix that no gate checked is verified by the orchestrator before the cutoff, never blocked on time — catches send-flow blocked 215 s before the cutoff with its fix unchecked'() {

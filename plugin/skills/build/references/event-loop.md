@@ -170,9 +170,8 @@ surface, and says to work in that worktree and follow
 1. `"$SG" qa adopt <worktree> --session <session> --json` copies its `.harness/qa/<slug>/` into
    `<plans>/<slug>/qa/`, where `qa run` reads every check. A non-GREEN adopt halts that task. Its
    `unblocks` lists each checked return that waited on this task, with the exact `build merge`
-   command as `next`.
-2. `/bin/rm -rf <worktree>/.harness/qa`, then
-   `"$SG" ledger set <slug> <task> done --session <session> --json` and
+   command as `next`. A GREEN adopt removes `<worktree>/.harness/qa` itself; never remove it.
+2. `"$SG" ledger set <slug> <task> done --session <session> --json` and
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
 3. Confirm each check fails before its tasks merge:
    `"$SG" qa run --plan <slug> --at-base --json --output <plans>/<slug>/out/qa-at-base.json`, in
@@ -536,7 +535,9 @@ another in the same fix worktree, starting with the row whose step failed first.
    "$SG" qa adopt <fixWorktree> --repair <requirement> --build-run <run> --cause <cause> --reason "<why>" --red-run <run id> --red-run <run id> --json
    ```
 
-   `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
+   `<why>` is the `flow row:` line's reason, on 1 line. Read its verdict first: a GREEN adopt
+   removes `<fixWorktree>/.harness/qa` itself and a RED one leaves it for the next attempt, so
+   never remove it yourself.
    - GREEN: go on to the next requirement's round, if any. Once every round is taken, launch the
      fixer again, 1 more attempt with its own span, ingest and check, given its last return and
      each adopt's `repaired` record. Quote the evidence of its newest red run as its first brief
@@ -568,15 +569,19 @@ main checkout:
 the fixer's slot included; so is the run `build merge --fix` credits. Quote its `why`. It never answers stop
 the build. Its `action`:
 
-- `amend-contract`: a contract gap with time before `noNewStartsAt` for the repair's proof and
-  the fixer's run. No halt. In the fix worktree, add the name to the contract, a `held` scenario
-  for an in-flight state, or for a screen whose state advances on a clock a `held` scenario whose
-  clock starts at the first input or a seeded one that places an entity, as the contract step
-  shapes it, and commit it on the fix branch. Then
-  take the requirement's [flow repair](#flow-repair) round again from step 1, its prompt naming
-  the new name, and launch the fixer again once it adopts; its brief says to name each file that
-  commit changed in its notes, since `check-return --fix` passes a fixer's edit outside its write
-  set only when its notes name it.
+- `amend-contract`: a contract gap, with time before `cutoffAt` for the repair's proof of the red
+  row and 1 more measured fix round: the task already started, so no new starts doesn't stop it.
+  No halt. The fixer lands the amendment, the 1 path for it: never write the amendment or the
+  fixer's return yourself. Take the requirement's [flow repair](#flow-repair) round again from
+  step 1, its prompt naming the new name and saying the fixer adds it to the contract next. Once
+  it adopts, launch the fixer again as that section says, as an amendment round: its brief also
+  quotes the `no repair:` line and the decision's `why`. It adds the name to the contract, a
+  `held` scenario for an in-flight state, or for a screen whose state advances on a clock a `held`
+  scenario whose clock starts at the first input or a seeded one that places an entity, as the
+  contract step shapes it and as the repaired flow launches it. It commits it on the fix branch,
+  names each file that commit changed in its notes, since `check-return --fix` passes a fixer's
+  edit outside its write set only when its notes name it, and runs its gate and the before-merge
+  `qa run --fix`. Check its return with `check-return --fix` as any fixer's.
 - `merge-unverified`: the fixer's gate is GREEN and every other row of the run passed. The
   command recorded `rows` as left unverified: `build merge --fix` takes a run red on those rows
   alone, and the final `qa run` reports them `unverified` with the reason, unrun.

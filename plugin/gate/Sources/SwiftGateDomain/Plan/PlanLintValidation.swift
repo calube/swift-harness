@@ -116,6 +116,37 @@ public enum PlanLintValidation {
     text.contains(scenarioArgument) && words(text).contains("held")
   }
 
+  /// Whether a requirement's title or a row's reason describes an action that starts the
+  /// clock-driven state over, such as a restart, a reset, `Start again` or "starts a new session":
+  /// a check after it reads a clock that no launch scenario held.
+  public static func restartsClock(_ text: String) -> Bool {
+    let all = words(text)
+    for (index, word) in all.enumerated() {
+      if restartWords.contains(word) { return true }
+      let before = all[max(0, index - 2)..<index]
+      if word == "again", let last = before.last, startWords.contains(last) { return true }
+      if word == "new", before.contains(where: startWords.contains) { return true }
+    }
+    return false
+  }
+
+  private static let restartWords: Set<String> = [
+    "restart", "restarts", "restarted", "restarting", "reset", "resets", "replay", "replays",
+  ]
+
+  /// Verbs that, before `again`, or a word or 2 before `new`, start the state over.
+  private static let startWords: Set<String> = [
+    "start", "starts", "starting", "begin", "begins", "try", "play", "plays",
+  ]
+
+  /// Whether a line of a brief holds the clock after a restart too: it names a restart, as
+  /// ``restartsClock(_:)`` reads it, together with the word `held` or `holds`.
+  public static func holdsClockAfterRestart(_ text: String) -> Bool {
+    text.split(separator: "\n").contains { line in
+      restartsClock(String(line)) && words(line).contains { $0 == "held" || $0 == "holds" }
+    }
+  }
+
   /// Whether a plan's briefs give its engine a seed or a launch scenario, so a scenario can place
   /// an entity at a known spot.
   public static func takesSeedOrScenario(_ text: String) -> Bool {
@@ -245,7 +276,7 @@ public enum PlanLintValidation {
       titles: requirementTitles)
     findings += try clockFindings(
       table: table, tasks: tasks, screenTasks: screenTasks, appAreas: appAreas,
-      contractTask: contractTask, file: file, rowLines: rowLines)
+      contractTask: contractTask, file: file, rowLines: rowLines, titles: requirementTitles)
     let flagged = Set(findings.map { String($0.message.prefix { $0 != " " }) })
     findings += try seedableFindings(
       table: table, requirements: requirements.filter { !flagged.contains($0) }, tasks: tasks,
@@ -260,15 +291,31 @@ public enum PlanLintValidation {
   /// 1 finding per task, in task order, whose brief says a clock drives a screen or feature it
   /// writes in an `xcode` area while a `flow` row checks its work, when the contract's brief, or
   /// with no contract every brief, gives no ``holdsClock(_:)`` seam. The finding sits on the
-  /// first such row.
+  /// first such row. A seam that holds the clock at launch alone, with no line that
+  /// ``holdsClockAfterRestart(_:)``, takes ``restartFindings``.
   private static func clockFindings(
     table: ValidationTable, tasks: [TaskWrites], screenTasks: [TaskWrites], appAreas: [AppArea],
-    contractTask: String?, file: String, rowLines: [Int]
+    contractTask: String?, file: String, rowLines: [Int], titles: [String: String]
   ) throws(ReportContractViolation) -> [Finding] {
     let contract = contractTask.flatMap { id in tasks.first { $0.id == id } }
     let seamTasks = contract.map { [$0] } ?? tasks
-    guard !appAreas.isEmpty, !seamTasks.contains(where: { holdsClock($0.text) }) else {
-      return []
+    guard !appAreas.isEmpty else { return [] }
+    let (read, target) =
+      contract.map {
+        (
+          "the Title, Scope and Acceptance lines of \(file)'s `### \($0.id)` section",
+          "that section"
+        )
+      }
+      ?? (
+        "the Title, Scope and Acceptance lines of every task section in \(file)",
+        "the task section that adds the seam"
+      )
+    guard !seamTasks.contains(where: { holdsClock($0.text) }) else {
+      guard !seamTasks.contains(where: { holdsClockAfterRestart($0.text) }) else { return [] }
+      return try restartFindings(
+        table: table, screenTasks: screenTasks, appAreas: appAreas, file: file,
+        rowLines: rowLines, titles: titles, read: read, target: target)
     }
     var findings: [Finding] = []
     for task in screenTasks where drivesClock(task.text) {
@@ -278,17 +325,6 @@ public enum PlanLintValidation {
             && (task.covers.contains(row.requirement) || row.runsAfter.contains(task.id))
         })
       else { continue }
-      let (read, target) =
-        contract.map {
-          (
-            "the Title, Scope and Acceptance lines of \(file)'s `### \($0.id)` section",
-            "that section"
-          )
-        }
-        ?? (
-          "the Title, Scope and Acceptance lines of every task section in \(file)",
-          "the task section that adds the seam"
-        )
       findings.append(
         try Finding(
           ruleID: clockUnheldRuleID, severity: .major, file: file,
@@ -306,6 +342,43 @@ public enum PlanLintValidation {
           failureScenario:
             "the flow reads the starting state after the clock moved it, so the row reads red on "
             + "a correct app, and a fixer retunes the product's pacing to win the race"))
+    }
+    return findings
+  }
+
+  /// With a seam that holds the clock at launch alone: 1 finding per `flow` row, in table order,
+  /// whose requirement's title or own reason ``restartsClock(_:)``, while a task that drives a
+  /// clock on an `xcode` screen covers that requirement or runs before the row. The restart
+  /// starts a live clock that no launch scenario holds.
+  private static func restartFindings(
+    table: ValidationTable, screenTasks: [TaskWrites], appAreas: [AppArea], file: String,
+    rowLines: [Int], titles: [String: String], read: String, target: String
+  ) throws(ReportContractViolation) -> [Finding] {
+    var findings: [Finding] = []
+    for (index, row) in table.rows.enumerated() where row.layer == .flow {
+      guard restartsClock(titles[row.requirement] ?? "") || restartsClock(row.reason ?? ""),
+        let (task, path, area) = screenTasks.lazy.filter({ task in
+          drivesClock(task.text)
+            && (task.covers.contains(row.requirement) || row.runsAfter.contains(task.id))
+        }).compactMap({ task in onScreenPath(task, appAreas).map { (task.id, $0.path, $0.area) } })
+          .first
+      else { continue }
+      findings.append(
+        try Finding(
+          ruleID: clockUnheldRuleID, severity: .major, file: file,
+          line: index < rowLines.count ? rowLines[index] : nil,
+          message:
+            "`\(task)` drives `\(path)` in the xcode area `\(area.name)` on a clock, and "
+            + "\(row.requirement)'s flow row checks it after an action that starts that clock "
+            + "over, but no line among \(read) names that restart together with `held`: a "
+            + "`held` scenario that holds only the launch leaves the restarted clock live, so a "
+            + "check after it reads what the clock already moved. This rule reads the plan's "
+            + "text, not the source. Add a Scope line to \(target), such as \"`launch-held` also "
+            + "holds the clock after a restart, until the next input\", and land it in the "
+            + "contract commit",
+          failureScenario:
+            "the check after the restart reads a state the live clock already moved, so the row "
+            + "reads red on a correct app and merges unverified"))
     }
     return findings
   }
