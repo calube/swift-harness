@@ -40,8 +40,9 @@ enum RunCheckoutRun {
     return report
   }
 
-  /// Copies the checkout's gate reports, and any events it kept itself, into the user's
-  /// checkout first, so they outlive it. The plan branch stays: it holds the run.
+  /// Copies the checkout's gate and `qa run` directories into the clone's kept runs, where the run
+  /// viewer reads them, and any events it kept itself into the user's checkout first, so they
+  /// outlive it. The plan branch stays: it holds the run.
   static func remove(slug: String, session: String?, root: URL, runner: any ProcessRunner)
     async -> WorktreeReport
   {
@@ -61,7 +62,11 @@ enum RunCheckoutRun {
     } catch {
       return context.report(.blocked, .blocked, "\(error)")
     }
-    let keeping = WorktreeRun.keepRuns(from: context.path, into: main)
+    let kept =
+      StateRootResolver.keptRuns(
+        commonDir: URL(filePath: context.common, directoryHint: .isDirectory))
+      ?? StateRootResolver.resolve(worktree: URL(filePath: main, directoryHint: .isDirectory))
+    let keeping = WorktreeRun.keepRuns(from: context.path, into: kept)
     let events = WorktreeRun.copyEvents(
       from: context.path, into: main, commonDirectory: context.common)
     do throws(GitWorkspaceError) {

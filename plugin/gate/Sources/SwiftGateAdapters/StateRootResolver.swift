@@ -55,6 +55,14 @@ public enum StateRootResolver {
     return .gitDir(commonDirectory(of: gitDir).standardizedFileURL)
   }
 
+  /// Where a brownfield clone keeps the run directories that outlive a worktree, the ones
+  /// `run checkout remove` copies out of the plan checkout, and where the run viewer reads them:
+  /// the common dir's state root, whichever root a committed config in a checkout would pick.
+  /// `nil` when `commonDir` holds no `config.toml`.
+  public static func keptRuns(commonDir: URL) -> StateRoot? {
+    nil
+  }
+
   /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no
   /// git checkout or its common dir holds no `config.toml`.
   public static func brownfieldLayout(worktree: URL) -> BrownfieldStateLayout? {

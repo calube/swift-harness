@@ -165,7 +165,10 @@ struct RunViewContractTests {
       plan: "p", counts: RunViewValidation.Counts(red: 1),
       rows: [
         RunViewValidation.Row(
-          row: 1, requirement: "req-a", layer: .acceptance, result: .red, qaRun: "q1", at: start),
+          row: 1, requirement: "req-a", layer: .acceptance, result: .red, qaRun: "q1", at: start,
+          history: [
+            RunViewValidation.Attempt(qaRun: "q1", stage: .atBase, result: .red, at: start)
+          ]),
         RunViewValidation.Row(
           row: 2, requirement: "req-a", layer: .flow, result: .pass, qaRun: "q1", at: start,
           flow: RunViewFlow(
@@ -182,14 +185,24 @@ struct RunViewContractTests {
       JSONSerialization.jsonObject(with: try RunViewJSON.encode(view)) as? [String: Any])
     let validation = try #require(object["validation"] as? [String: Any])
     #expect(keys(validation) == ["plan", "counts", "rows", "keptFlows"])
-    #expect(keys(validation["counts"]) == ["pass", "red", "unverified", "waiting", "abandoned"])
+    #expect(
+      keys(validation["counts"]) == ["pass", "red", "unverified", "waiting", "abandoned", "atBase"])
     let row = first(validation["rows"])
     #expect(
       keys(row) == [
         "row", "requirement", "layer", "check", "runsAfter", "result", "message", "exitStatus",
-        "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut", "flow",
+        "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut", "flow", "atBase",
+        "history",
       ])
     #expect(row["flow"] is NSNull)
+    let attempt = first(row["history"])
+    #expect(
+      keys(attempt) == [
+        "qaRun", "stage", "after", "result", "message", "exitStatus", "ms", "evidence",
+        "waitingOn", "reusedFrom", "at", "output", "outputCut", "flow",
+      ])
+    #expect(attempt["stage"] as? String == "at-base")
+    #expect(attempt["reusedFrom"] is NSNull)
     #expect(row["check"] is NSNull)
     #expect(row["exitStatus"] is NSNull)
     #expect(row["result"] as? String == "red")

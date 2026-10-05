@@ -398,12 +398,19 @@ enum WorktreeRun {
   /// outlives the worktree. A run it can't copy is named; removal still goes ahead, since the
   /// branch is merged and a report is diagnostics, not work.
   static func keepRuns(from path: String, into mainCheckout: String) -> KeptRuns {
-    let main = RunStore(worktreeRoot: URL(filePath: mainCheckout, directoryHint: .isDirectory))
-    let into = main.state.url(RunLayout.runsDirectory).path
+    keepRuns(
+      from: path,
+      into: StateRootResolver.resolve(
+        worktree: URL(filePath: mainCheckout, directoryHint: .isDirectory)))
+  }
+
+  /// ``keepRuns(from:into:)`` into the runs of the state root `destination`.
+  static func keepRuns(from path: String, into destination: StateRoot) -> KeptRuns {
+    let into = destination.url(RunLayout.runsDirectory).path
     let outcome: RunKeepOutcome
     do throws(RunStoreError) {
       outcome = try RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
-        .keepRuns(in: main)
+        .keepRuns(into: destination)
     } catch {
       return KeptRuns(message: "; kept no gate reports, listing them failed: \(error)")
     }

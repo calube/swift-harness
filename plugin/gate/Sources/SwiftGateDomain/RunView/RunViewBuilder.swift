@@ -16,7 +16,7 @@ public enum RunViewBuilder {
     let lastTime = times.max()
     let state: RunView.RunState =
       !BuildHalts.open(in: events).isEmpty
-      ? .halted : endOfRun(ledgerEvents) == nil ? .running : .done
+      ? .halted : endOfRun(ledgerEvents, record: input.join?.record) == nil ? .running : .done
     let runEnd = state == .done ? lastTime : nil
 
     let runSpan = RunViewSpans.runSpan(start: startedAt, state: state, end: lastTime, join: join)
@@ -79,9 +79,10 @@ public enum RunViewBuilder {
   }
 
   /// When the run ended: its newest ledger event is `build finish`'s, so nothing resumed after
-  /// it. A log written before `build finish` recorded its end ends at a GREEN final gate
-  /// instead; any other newest event, a red final's fix loop included, means it still runs.
-  static func endOfRun(_ events: [BuildEvent]) -> Date? {
+  /// it. A run whose record predates the `finish` event, or that has no record, ends at a GREEN
+  /// final gate instead; any other newest event, a red final's fix loop included, means it still
+  /// runs.
+  static func endOfRun(_ events: [BuildEvent], record: BuildRunRecord?) -> Date? {
     switch events.last {
     case .finish(let finish): finish.at
     case .gate(let gate) where gate.stage == .final && gate.verdict == .green: gate.at

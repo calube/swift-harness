@@ -1,7 +1,8 @@
 import Foundation
 
 /// The run viewer's Validation tab: the newest result of each validation row a `qa run` checked
-/// during the build run, with the counts its summary strip shows.
+/// during the build run, every earlier `qa run`'s result of it, and the counts its summary strip
+/// shows.
 public struct RunViewValidation: Sendable, Equatable, Encodable {
   /// How many lines of a red check's saved output the view keeps: the last ones.
   public static let maxOutputLines = 12
@@ -12,15 +13,74 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var unverified: Int
     public var waiting: Int
     public var abandoned: Int
+    /// Rows only a `qa run --at-base` checked, which are expected to fail there.
+    public var atBase: Int
 
     public init(
-      pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0, abandoned: Int = 0
+      pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0, abandoned: Int = 0,
+      atBase: Int = 0
     ) {
       self.pass = pass
       self.red = red
       self.unverified = unverified
       self.waiting = waiting
       self.abandoned = abandoned
+      self.atBase = atBase
+    }
+  }
+
+  /// Which kind of `qa run` checked a row.
+  public enum Stage: String, Sendable, Equatable, Encodable {
+    case atBase = "at-base"
+    case after
+    case final
+    /// A `qa run` with none of `--at-base`, `--after` or `--final`, or one whose report didn't
+    /// read.
+    case run
+  }
+
+  /// 1 `qa run`'s check of a row, as the row's history lists it.
+  public struct Attempt: Sendable, Equatable, Encodable {
+    public var qaRun: String
+    public var stage: Stage
+    /// The task a `--after` run named; `nil` for another run, or when the guard rejected it.
+    public var after: String?
+    public var result: QAResult
+    /// `nil` when the report didn't read or the guard rejected it.
+    public var message: String?
+    public var exitStatus: Int?
+    public var milliseconds: Int
+    /// Run-relative paths under ``qaRun``'s run directory, each passed by the payload guard.
+    public var evidence: [String]
+    public var waitingOn: [String]
+    /// The prepared at-base run whose result this check took instead of running.
+    public var reusedFrom: String?
+    public var at: Date
+    /// The last lines of a red check's saved output, as ``Row/output`` holds them.
+    public var output: [String]
+    public var outputCut: Bool
+    public var flow: RunViewFlow?
+
+    public init(
+      qaRun: String, stage: Stage, after: String? = nil, result: QAResult,
+      message: String? = nil, exitStatus: Int? = nil, milliseconds: Int = 0,
+      evidence: [String] = [], waitingOn: [String] = [], reusedFrom: String? = nil, at: Date,
+      output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil
+    ) {
+      self.qaRun = qaRun
+      self.stage = stage
+      self.after = after
+      self.result = result
+      self.message = message
+      self.exitStatus = exitStatus
+      self.milliseconds = milliseconds
+      self.evidence = evidence
+      self.waitingOn = waitingOn
+      self.reusedFrom = reusedFrom
+      self.at = at
+      self.output = output
+      self.outputCut = outputCut
+      self.flow = flow
     }
   }
 
@@ -54,12 +114,17 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     /// The flow the row's newest check drove, from its `qa.flow`; `nil` for a row of another
     /// layer, or a flow row that never reached its device.
     public var flow: RunViewFlow?
+    /// Whether only a `qa run --at-base` checked the row, so its result is the merge base's.
+    public var atBase: Bool
+    /// Every kept `qa run`'s check of the row, newest first, the merge base's included.
+    public var history: [Attempt]
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
-      at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil
+      at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil,
+      atBase: Bool = false, history: [Attempt] = []
     ) {
       self.row = row
       self.requirement = requirement
@@ -77,6 +142,8 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.output = output
       self.outputCut = outputCut
       self.flow = flow
+      self.atBase = atBase
+      self.history = history
     }
   }
 
@@ -214,7 +281,7 @@ extension RunViewKeptFlow {
 extension RunViewValidation.Row {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence
-    case waitingOn, qaRun, at, output, outputCut, flow
+    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history
     case milliseconds = "ms"
   }
 
@@ -232,6 +299,34 @@ extension RunViewValidation.Row {
     try c.encode(evidence, forKey: .evidence)
     try c.encode(waitingOn, forKey: .waitingOn)
     try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(at, forKey: .at)
+    try c.encode(output, forKey: .output)
+    try c.encode(outputCut, forKey: .outputCut)
+    try c.encode(flow, forKey: .flow)
+    try c.encode(atBase, forKey: .atBase)
+    try c.encode(history, forKey: .history)
+  }
+}
+
+extension RunViewValidation.Attempt {
+  private enum CodingKeys: String, CodingKey {
+    case qaRun, stage, after, result, message, exitStatus, evidence, waitingOn, reusedFrom, at
+    case output, outputCut, flow
+    case milliseconds = "ms"
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(stage, forKey: .stage)
+    try c.encode(after, forKey: .after)
+    try c.encode(result, forKey: .result)
+    try c.encode(message, forKey: .message)
+    try c.encode(exitStatus, forKey: .exitStatus)
+    try c.encode(milliseconds, forKey: .milliseconds)
+    try c.encode(evidence, forKey: .evidence)
+    try c.encode(waitingOn, forKey: .waitingOn)
+    try c.encode(reusedFrom, forKey: .reusedFrom)
     try c.encode(at, forKey: .at)
     try c.encode(output, forKey: .output)
     try c.encode(outputCut, forKey: .outputCut)
