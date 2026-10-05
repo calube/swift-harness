@@ -15,10 +15,21 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   let counts: [String: Int]
   let unfinished: [Unfinished]
   let resume: String
+  /// The final run report page `build finish` wrote, relative to the checkout; `nil` when it
+  /// wrote none.
+  var runReport: String? = nil
+  /// Why no run report page was written, or `nil` when one was.
+  var runReportNote: String? = nil
 }
 
 enum BuildFinishRun {
-  static func run(slug: String, session: String?, git: any Git) async
+  /// - Parameters:
+  ///   - root: the checkout whose state root holds the report; `nil` writes no report.
+  ///   - pluginRoot: where `viewer/` lives.
+  static func run(
+    slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
+    root: URL? = nil, pluginRoot: URL? = nil
+  ) async
     -> BuildLoopResult<BuildFinishReport>
   {
     let command = "build finish"

@@ -16,8 +16,11 @@ struct ReportCommand: AsyncParsableCommand {
   @Flag(help: "Print the run view as JSON.")
   var json = false
 
-  @Argument(help: "The build run id.")
-  var buildRun: String
+  @Argument(help: "The build run id; absent with --from.")
+  var buildRun: String?
+
+  @Option(help: "A report folder to write the page again from, with no plan state.")
+  var from: String?
 
   @Option(
     help: "Where to write the page; reports/<build run>.html under the state root when absent.")
@@ -25,6 +28,9 @@ struct ReportCommand: AsyncParsableCommand {
 
   func validate() throws {
     guard html != json else { throw ValidationError("pass exactly 1 of --html and --json") }
+    guard (buildRun == nil) != (from == nil) else {
+      throw ValidationError("pass exactly 1 of a build run id and --from")
+    }
   }
 
   func run() async throws {
@@ -41,8 +47,9 @@ struct ReportCommand: AsyncParsableCommand {
       URL(filePath: $0, directoryHint: .isDirectory)
     }
     let outcome = ReportRun.run(
-      buildRun: buildRun, format: html ? .html : .json, out: out, root: root,
-      commonDirectory: URL(filePath: common, directoryHint: .isDirectory), pluginRoot: pluginRoot)
+      buildRun: buildRun, from: from, format: html ? .html : .json, out: out, root: root,
+      commonDirectory: URL(filePath: common, directoryHint: .isDirectory), pluginRoot: pluginRoot,
+      now: Date())
     switch outcome {
     case .wrote(let path):
       Console.write("report: wrote \(path)")
@@ -76,13 +83,16 @@ enum ReportRun {
   ///   - root: the checkout `report` runs in; a relative `out` resolves against it.
   ///   - commonDirectory: the git common dir, absolute.
   ///   - pluginRoot: where `viewer/` lives; `nil` when unknown, which only `--html` needs.
+  ///   - from: a report folder, whose `view.json` replaces reading the plan state.
+  ///   - now: when a report of a run that hasn't ended says it was taken.
   static func run(
-    buildRun: String, format: Format, out: String?, root: URL, commonDirectory: URL,
-    pluginRoot: URL?
+    buildRun: String?, from: String? = nil, format: Format, out: String?, root: URL,
+    commonDirectory: URL, pluginRoot: URL?, now: Date = Date()
   ) -> Outcome {
     let blocked = { (message: String) in
       Outcome.blocked("report: \(Verdict.blocked.rawValue) \(message)")
     }
+    guard let buildRun else { return blocked("--from isn't read yet") }
     guard RunID.isValid(buildRun) else {
       return blocked("`\(buildRun)` is not a build run id")
     }

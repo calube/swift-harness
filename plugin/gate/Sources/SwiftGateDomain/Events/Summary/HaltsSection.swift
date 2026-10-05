@@ -217,6 +217,7 @@ public struct HaltsSection: EventSummarySection {
     case .undo(let undo): undo.at
     case .gate(let gate): gate.at
     case .returnCheck(let check): check.at
+    case .finish(let finish): finish.at
     }
   }
 

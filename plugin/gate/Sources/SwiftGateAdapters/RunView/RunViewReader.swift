@@ -508,7 +508,7 @@ public struct RunViewReader: RunViewReading {
         if let index = fixes.firstIndex(where: { $0.task == merge.task && $0.end == nil }) {
           fixes[index].end = merge.at
         }
-      case .gate, .returnCheck:
+      case .gate, .returnCheck, .finish:
         continue
       }
     }

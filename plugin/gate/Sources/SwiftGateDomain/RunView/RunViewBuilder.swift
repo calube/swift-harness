@@ -93,7 +93,7 @@ public enum RunViewBuilder {
       case .merge(let merge): mergedAt = merge.at
       case .undo: mergedAt = nil
       case .gate(let gate): mergeGateRun = gate.runID
-      case .transition, .returnCheck: continue
+      case .transition, .returnCheck, .finish: continue
       }
     }
     // Usage is ingested when a worker finishes, so a task not yet finished has none to sum.

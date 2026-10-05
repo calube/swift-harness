@@ -21,6 +21,8 @@ public struct BuildPreset: Sendable, Equatable {
   /// Minutes a worker may go without progress before the stall watch acts; `nil` when the
   /// preset doesn't say.
   public let stallMin: Int?
+  /// The stall watch's minutes when the preset names none.
+  public static let defaultStallMin = 15
   /// Whether the build's `validate` stage runs simulator QA on the screens a change touched
   /// (simulator QA design §8.2).
   public let simQA: SimQA

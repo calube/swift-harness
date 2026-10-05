@@ -53,6 +53,8 @@ public struct RunViewChanges: Sendable, Equatable, Encodable {
   /// The whole validation section when any of it changed: the page replaces it.
   public var validation: RunViewValidation?
   public var damage: [RunView.Damage]?
+  /// The whole list when it changed, so a file written since drops out: the page replaces it.
+  public var unwritten: [RunView.Damage]?
 
   public init(cursor: String) {
     self.cursor = cursor
