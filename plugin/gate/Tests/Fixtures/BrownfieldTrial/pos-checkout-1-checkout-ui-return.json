@@ -1,0 +1,35 @@
+{
+  "commits": [
+    "6938fd1",
+    "cd878fd"
+  ],
+  "designConflict": null,
+  "gate": {
+    "runId": "20261005T122608Z-5826650c",
+    "tier": "slice",
+    "verdict": "GREEN"
+  },
+  "notes": "AppView now shows CheckoutView(store: store.scope(state: \\.checkout, action: \\.checkout)) and no longer sends .task. CheckoutView shows the grid, cart, tip buttons, totals and Charge, all with CheckoutID ids. The receipt sheet is presented while store.receipt != nil, and ReceiptView's New sale button sends .newSaleTapped. LaunchFlowUITests.testLaunchShowsTheCheckoutCatalogue waits for the button catalogue.item.latte. The InterviewStarter UI test was not run: slice only builds that area, because its warm test run exceeds the slice budget.\nreview: classified at medium by swiftgate judge diff-risk",
+  "outcome": "ready-to-merge",
+  "review": {
+    "findings": [
+      {
+        "category": "missing-edge-case",
+        "evidence": "LaunchFlowUITests.swift:14 `XCTAssertTrue(app.buttons[\"catalogue.item.latte\"].waitForExistence(timeout: 20))` is the only assertion. CheckoutView.swift:53-63 (receipt sheet), :110-117 (Charge), and the cart identifiers have no UI-level check.",
+        "failure_scenario": "CheckoutView wires .chargeTapped and .newSaleTapped, and the receipt sheet is driven by a Binding whose setter is a no-op. If the sheet binding broke (store.receipt != nil returns false) or Charge were never enabled, testLaunchShowsTheCheckoutCatalogue still passes, because it only waits for catalogue.item.latte to exist.",
+        "file": "UITests/LaunchFlowUITests.swift",
+        "fix": "Add one UI test that taps the latte, asserts the cart line and the Charge button are enabled, taps Charge, and asserts the receipt sheet appears. Then tap New Sale and assert the cart is empty.",
+        "kind": "defect",
+        "line": 10,
+        "severity": "minor",
+        "title": "Only launch is tested; tap-to-charge-to-receipt wiring is unpinned",
+        "verification_note": "The quoted code is accurate. LaunchFlowUITests.swift:10-15 only waits for the Latte button. CheckoutView.swift:53-63 holds the sheet with get `store.receipt != nil` and a no-op set, and :110-117 holds Charge with `.disabled(!store.canCharge)`. But the finding names no wrong outcome I can reproduce. The current wiring is correct: the sheet shows whenever receipt is non-nil, New sale sends .newSaleTapped, and Charge sends .chargeTapped. The scenario is a hypothetical future regression that would go uncaught, not a failure in this code. The task's PLAN entry in the context pack also limits the UI test on purpose: 'the launch UI test asserts the catalogue's Latte button appears at launch'. Its acceptance is 'LaunchFlowUITests passes at merge with the checkout first'. Reducer behaviour is out of scope, and the 'Does' line says the layout is built 'so flows can reach every id', which points to flow coverage outside this task. No standards rule was cited, so this can't stand as a standards violation either. It is a coverage suggestion, not a verified defect.",
+        "verified": false
+      }
+    ],
+    "mode": "classified"
+  },
+  "surfaceCommit": null,
+  "task": "spec-checkout-ui",
+  "testsAdded": []
+}

@@ -1,0 +1,158 @@
+[
+  {
+    "command": "open",
+    "input": {
+      "app": "com.example.InterviewStarter",
+      "relaunch": true
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"catalogue.item.latte\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"catalogue.item.latte\""
+      }
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"catalogue.item.muffin\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"cart.line.muffin\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"cart.line.muffin.quantity\"",
+      "value": "1"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.subtotal\"",
+      "value": "$8.00"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"cart.line.muffin.increment\""
+      }
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"cart.line.muffin.quantity\"",
+      "value": "2"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.subtotal\"",
+      "value": "$11.25"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.total\"",
+      "value": "$12.25"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"cart.line.muffin.decrement\""
+      }
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"cart.line.muffin.quantity\"",
+      "value": "1"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.subtotal\"",
+      "value": "$8.00"
+    }
+  },
+  {
+    "command": "press",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"cart.line.latte.remove\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "absent",
+      "absent": "id=\"cart.line.latte\"",
+      "timeoutMs": 10000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.subtotal\"",
+      "value": "$3.25"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.tax\"",
+      "value": "$0.29"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"totals.total\"",
+      "value": "$3.54"
+    }
+  }
+]

@@ -8,6 +8,16 @@ You build 1 task of a swift-harness plan. The orchestrator, the main session tha
 scheduled it, cut its worktree and branch, and will check and merge what you return. You write the
 code and tests, prove them green, commit, and hand back 1 JSON object.
 
+3 rules come first. The hook refuses each break, and each refusal costs you a turn:
+
+- Work in your worktree, at the absolute path the prompt gives. Run every command there, and name
+  every file you read or write by its absolute path under it. A write to the user's checkout is
+  refused.
+- Never run a bare `ls`: in this shell it waits on stdin and hangs. Name the folder, as in
+  `ls <worktree>`.
+- In a brownfield clone, run 1 test with `swiftgate test-only --area <area> <Target>/<Class>`, never
+  a raw `swift build` or `swift test`.
+
 ## Inputs
 
 The prompt gives:

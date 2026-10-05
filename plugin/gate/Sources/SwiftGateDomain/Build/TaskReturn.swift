@@ -886,3 +886,34 @@ public enum TaskReturnCheck {
     return findings
   }
 }
+
+/// A return whose commits a worker mistyped or left out, refilled from the branch itself, so no
+/// agent hand-edits a return file to fix a sha.
+public enum TaskReturnCommitRefill {
+  /// `taskReturn` with its commits replaced by `branchCommits`, the branch's commits past its
+  /// base oldest first, and a `notes` line naming what didn't resolve and the `range` read; `nil`
+  /// when every listed commit resolves, or when `branchCommits` is empty, so the check still
+  /// flags what it can't refill. A ready-to-merge return listing none is refilled too.
+  public static func refill(
+    _ taskReturn: TaskReturn, states: [String: TaskReturnEvidence.CommitState],
+    branchCommits: [String], range: String
+  ) -> TaskReturn? {
+    guard !branchCommits.isEmpty else { return nil }
+    let unresolved = taskReturn.commits.filter { (states[$0] ?? .missing) == .missing }
+    let why: String
+    if !unresolved.isEmpty {
+      let named = unresolved.joined(separator: ", ")
+      why = "\(named) \(unresolved.count == 1 ? "doesn't" : "don't") resolve to a commit"
+    } else if taskReturn.commits.isEmpty, taskReturn.outcome == .readyToMerge {
+      why = "the return listed none"
+    } else {
+      return nil
+    }
+    let note = "commits: \(why); filled from git log \(range)"
+    return TaskReturn(
+      task: taskReturn.task, outcome: taskReturn.outcome, commits: branchCommits,
+      gate: taskReturn.gate, review: taskReturn.review, testsAdded: taskReturn.testsAdded,
+      notes: [taskReturn.notes, note].filter { !$0.isEmpty }.joined(separator: "\n"),
+      designConflict: taskReturn.designConflict, surfaceCommit: taskReturn.surfaceCommit)
+  }
+}

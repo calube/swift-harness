@@ -10,13 +10,21 @@ import Foundation
 public enum SimAuditScope: Sendable, Equatable {
   /// Every interactive element in each step's tree.
   case everyControl
-  /// Only the interactive elements one of these selectors names by identifier.
-  case targeted([SimSelector])
+  /// Only the interactive elements one of these selectors names by identifier; `pressed` are the
+  /// selectors the flow presses, whose controls' tap targets are measured.
+  case targeted([SimSelector], pressed: [SimSelector] = [])
   /// No element, with why.
   case unaudited(reason: String)
 
   /// The nit that counts what a narrowed audit left out. It never gates.
   public static let untargetedRuleID = "sim.a11y-untargeted"
+
+  /// The nit naming each pressed control drawn smaller than ``minimumTapTarget`` on a side. It
+  /// never gates.
+  public static let tapTargetRuleID = "sim.tap-target"
+
+  /// The smallest tap target the Human Interface Guidelines allow, in points, on either side.
+  public static let minimumTapTarget = 44.0
 
   /// Why a brownfield clone's `sim verify` with no flow judges no control.
   public static let noFlowReason =
@@ -29,35 +37,51 @@ public enum SimAuditScope: Sendable, Equatable {
     switch (profile, flowSteps) {
     case (.owned, _): .everyControl
     case (.brownfield, nil): .unaudited(reason: noFlowReason)
-    case (.brownfield, let steps?): .targeted(SimSelector.all(in: steps))
+    case (.brownfield, let steps?):
+      .targeted(SimSelector.all(in: steps), pressed: SimSelector.pressed(in: steps))
     }
   }
 
-  /// The 1 note for the findings this scope left out: `count` on controls no step selects, and
-  /// `navigated` on controls steps select only to move through the app. `nil` when it judged
-  /// every control or left nothing out.
+  /// The 1 note for the controls this scope left out with a finding: `count` controls no step
+  /// selects, and `navigated` controls steps select only to move through the app, each counted
+  /// once however many steps show it. `nil` when it judged every control or left nothing out.
   func note(untargeted count: Int, navigated: Int) -> SimVerifyNote? {
     let total = count + navigated
-    let findings = total == 1 ? "1 finding" : "\(total) findings"
+    let controls = total == 1 ? "1 control" : "\(total) controls"
     switch self {
     case .everyControl:
       return nil
     case .targeted where total == 0:
       return nil
     case .targeted:
-      let through =
-        navigated == 0 ? "" : " (\(navigated) on controls the flow only navigates through)"
+      let through = navigated == 0 ? "" : " (\(navigated) the flow only navigates through)"
       return SimVerifyNote(
         rule: Self.untargetedRuleID,
-        message: "\(findings) on controls no flow step selects by id\(through), each a missing "
-          + "accessibility identifier or readable label: a brownfield clone judges only the "
-          + "controls its flow's id= selectors name")
+        message: "\(controls) no flow step selects by id\(through) lack an accessibility "
+          + "identifier or a readable label: a brownfield clone judges only the controls its "
+          + "flow's id= selectors name")
     case .unaudited(let reason):
       return SimVerifyNote(
         rule: Self.untargetedRuleID,
-        message: "accessibility not judged (\(findings) on controls missing an identifier or a "
-          + "readable label): \(reason)")
+        message: "accessibility not judged (\(controls) missing an identifier or a readable "
+          + "label): \(reason)")
     }
+  }
+
+  /// The 1 note naming each pressed control drawn under ``minimumTapTarget`` on a side, with
+  /// its size in points; `nil` when none is.
+  static func tapTargetNote(_ small: [SimControl: SimFrame]) -> SimVerifyNote? {
+    guard !small.isEmpty else { return nil }
+    let named = small.map { control, frame in
+      "\(control.name) \(Int(frame.width.rounded()))×\(Int(frame.height.rounded())) pt"
+    }.sorted()
+    let side = Int(minimumTapTarget)
+    let count = small.count == 1 ? "1 pressed control is" : "\(small.count) pressed controls are"
+    return SimVerifyNote(
+      rule: tapTargetRuleID,
+      message: "\(count) under \(side)×\(side) pt, too small to hit reliably: "
+        + named.joined(separator: ", ") + "; give each a frame or `.contentShape` of at least "
+        + "\(side)×\(side) pt")
   }
 }
 
@@ -131,6 +155,16 @@ public struct SimSelector: Sendable, Equatable {
       }
     }
     for step in steps { visit(.object(step.input), key: nil) }
+    return found
+  }
+
+  /// The selector each `press` step of `steps` presses, in step order and once each.
+  public static func pressed(in steps: [FlowStep]) -> [SimSelector] {
+    var found: [SimSelector] = []
+    for selector in steps.filter({ $0.command == "press" }).flatMap({ all(in: [$0]) })
+    where !found.contains(where: { $0.raw == selector.raw }) {
+      found.append(selector)
+    }
     return found
   }
 

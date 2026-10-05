@@ -1,0 +1,19 @@
+{
+  "blocked" : null,
+  "checkoutHead" : "30980a13434ba5eeba4b1d3cc1637de3916df472",
+  "command" : "sim verify",
+  "findings" : [
+
+  ],
+  "headCommit" : "30980a13434ba5eeba4b1d3cc1637de3916df472",
+  "notes" : [
+    {
+      "message" : "144 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "rule" : "sim.a11y-untargeted"
+    }
+  ],
+  "runID" : "20261005T123527Z-658b917a-row2",
+  "schemaVersion" : 1,
+  "stepCount" : 13,
+  "verdict" : "GREEN"
+}

@@ -28,11 +28,17 @@ term matches it, even if a `label=` selector reaches it too.
 A control the flow reaches only by `role=`, `label=`, `value=` or `text=` is existing UI it
 navigates through, such as a tab it taps by its title. Its findings don't gate.
 
-Every finding left out becomes 1 `sim.a11y-untargeted` nit that gives the count, with the
-navigated ones counted apart, such as "179 findings on controls no flow step selects by id (5 on
-controls the flow only navigates through)". A standalone `sim verify` in a brownfield clone has no
-flow, so it judges no control, and its nit says why.
+Every control left out with a finding becomes part of 1 `sim.a11y-untargeted` nit that gives the
+count, with the navigated ones counted apart, such as "9 controls no flow step selects by id (1 the
+flow only navigates through) lack an accessibility identifier or a readable label". A control
+counts once however many steps show it: the same role, identifier and label, or, with neither, the
+same frame. A standalone `sim verify` in a brownfield clone has no flow, so it judges no control,
+and its nit says why.
 
-The nit never changes the verdict. `sim/report.json` lists it under `notes` as `{rule, message}`,
+A control a `press` step selects is measured too. Any drawn under 44×44 pt on a side earns 1
+`sim.tap-target` nit naming each with its size, such as "Button cart.line.muffin.increment 20×19
+pt".
+
+Neither nit changes the verdict. `sim/report.json` lists it under `notes` as `{rule, message}`,
 the text prints it as a `nit` line, the history line carries it as a nit-severity finding, and a
 flow row's message ends with it.

@@ -1,0 +1,153 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "fc84e9497cd664dc1167981810960a9ee8f1e757",
+  "final" : true,
+  "findings" : [
+
+  ],
+  "message" : "6 of 9 rows verified (3 reason-only): 6 pass, 0 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "qa run 20261005T123527Z-658b917a ran on this same tree 12c91fdfc5fd in a trial merge",
+    "6 rows (1, 2, 3, 4, 5, 6) reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/catalogue-grid.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 102 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-catalogue-grid",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 1,
+      "runsAfter" : [
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/cart-quantities.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 13 steps; nit sim.a11y-untargeted: 144 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-cart-quantities",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 2,
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/subtotal-tax.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 8 steps; nit sim.a11y-untargeted: 92 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-subtotal-tax",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 3,
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/tip.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 14 steps; nit sim.a11y-untargeted: 164 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-tip",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 4,
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/empty-cart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 104 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-empty-cart",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 5,
+      "runsAfter" : [
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/receipt.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T123527Z-658b917a by spec-checkout-feature at 30980a13434b: batch passed; sim verify GREEN over 17 steps; nit sim.a11y-untargeted: 96 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-receipt",
+      "result" : "pass",
+      "reusedFrom" : "20261005T123527Z-658b917a",
+      "row" : 6,
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T124225Z-b49370a4",
+  "schemaVersion" : 1,
+  "settled" : true,
+  "verdict" : "GREEN"
+}

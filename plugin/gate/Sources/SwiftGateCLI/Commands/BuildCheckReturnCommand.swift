@@ -49,7 +49,7 @@ enum BuildCheckReturnRun {
         command: command, plan: plan, task: task, verdict: .blocked, findings: [], warnings: [],
         message: message)
     }
-    let taskReturn: TaskReturn
+    var taskReturn: TaskReturn
     do {
       taskReturn = try TaskReturnJSON.decode(try Data(contentsOf: URL(filePath: file)))
     } catch let error as DecodingError {
@@ -62,8 +62,16 @@ enum BuildCheckReturnRun {
     }
     do throws(Blocked) {
       var warnings: [String] = []
+      let listed = taskReturn
       let evidence = try await gather(
-        taskReturn, plan: plan, fix: fix, git: git, profile: profile, warnings: &warnings)
+        &taskReturn, plan: plan, fix: fix, git: git, profile: profile, warnings: &warnings)
+      if taskReturn != listed {
+        do {
+          try TaskReturnJSON.encode(taskReturn).write(to: URL(filePath: file))
+        } catch {
+          warnings.append("the refilled commits weren't written back to \(file): \(error)")
+        }
+      }
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
       let verdict: Verdict = findings.isEmpty ? .green : .red
       var rules: [TaskReturnFinding.Rule] = []
@@ -213,8 +221,10 @@ enum BuildCheckReturnRun {
     return []
   }
 
+  /// Refills `taskReturn`'s commits from its branch when 1 doesn't resolve, or a ready-to-merge
+  /// return lists none, so the check judges the commits the branch holds.
   private static func gather(
-    _ taskReturn: TaskReturn, plan slug: String, fix: Bool, git: any Git,
+    _ taskReturn: inout TaskReturn, plan slug: String, fix: Bool, git: any Git,
     profile: RepositoryProfile, warnings: inout [String]
   ) async throws(Blocked) -> TaskReturnEvidence {
     let store: PlanStateStore
@@ -268,6 +278,17 @@ enum BuildCheckReturnRun {
     if let branchTip {
       for commit in taskReturn.commits {
         commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
+      }
+      if let refilled = try await refill(
+        taskReturn, states: commits, tip: branchTip, names: names, git: git)
+      {
+        warnings.append(
+          refilled.notes.split(separator: "\n").last.map(String.init) ?? "commits refilled")
+        taskReturn = refilled
+        commits = [:]
+        for commit in taskReturn.commits {
+          commits[commit] = try await state(of: commit, onBranchAt: branchTip, git: git)
+        }
       }
       if let last = taskReturn.commits.last, commits[last] == .onBranch {
         do {
@@ -617,6 +638,27 @@ enum BuildCheckReturnRun {
     switch record.preset.taskGate {
     case .ledger: return (task.gate, proof)
     case .tier(let tier): return (tier, proof)
+    }
+  }
+
+  /// ``TaskReturnCommitRefill`` over the branch's commits past its merge base with the branch it
+  /// was cut from; `nil` when nothing needs refilling or the base doesn't resolve.
+  private static func refill(
+    _ taskReturn: TaskReturn, states: [String: TaskReturnEvidence.CommitState], tip: String,
+    names: TaskWorktree, git: any Git
+  ) async throws(Blocked) -> TaskReturn? {
+    let unresolved = taskReturn.commits.contains { (states[$0] ?? .missing) == .missing }
+    guard unresolved || (taskReturn.commits.isEmpty && taskReturn.outcome == .readyToMerge)
+    else { return nil }
+    do {
+      guard let head = try await git.revision("refs/heads/\(names.baseBranch)"),
+        let base = try await git.mergeBase(tip, head)
+      else { return nil }
+      return TaskReturnCommitRefill.refill(
+        taskReturn, states: states, branchCommits: try await git.commits(from: base, to: tip),
+        range: "\(names.baseBranch)..\(names.branch)")
+    } catch {
+      throw Blocked("listing \(names.branch)'s commits: \(error)")
     }
   }
 

@@ -182,6 +182,7 @@ extension RuleIndexTests {
       FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
       FlowRules.idsUnknownRuleID, FlowRules.kindKeyRuleID, SimAuditScope.untargetedRuleID,
+      SimAuditScope.tapTargetRuleID,
       QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,
       QAFlowRepair.capRuleID, QAFlowRepair.outsideRowRuleID, QAFlowRepair.weakensRuleID,
       QAFlowRepair.unchangedRuleID, QAFlowRepair.notRedRuleID, QAFlowRepair.wrongRedRuleID,

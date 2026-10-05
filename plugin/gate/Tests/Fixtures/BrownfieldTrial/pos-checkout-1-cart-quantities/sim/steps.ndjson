@@ -1,0 +1,13 @@
+{"elapsedMs":1220,"label":"after step 2: wait selector id=\"catalogue.item.latte\"","n":1,"screenshot":"steps\/001.png","settled":true,"target":"id=\"catalogue.item.latte\"","tree":"steps\/001.tree.json"}
+{"elapsedMs":1225,"label":"after step 5: wait selector id=\"cart.line.muffin\"","n":2,"screenshot":"steps\/002.png","settled":true,"target":"id=\"cart.line.muffin\"","tree":"steps\/002.tree.json"}
+{"assert":"1","elapsedMs":1174,"label":"after step 6: is text id=\"cart.line.muffin.quantity\" \"1\"","n":3,"screenshot":"steps\/003.png","settled":true,"target":"id=\"cart.line.muffin.quantity\"","tree":"steps\/003.tree.json"}
+{"assert":"$8.00","elapsedMs":1160,"label":"after step 7: is text id=\"totals.subtotal\" \"$8.00\"","n":4,"screenshot":"steps\/004.png","settled":true,"target":"id=\"totals.subtotal\"","tree":"steps\/004.tree.json"}
+{"assert":"2","elapsedMs":1200,"label":"after step 9: is text id=\"cart.line.muffin.quantity\" \"2\"","n":5,"screenshot":"steps\/005.png","settled":true,"target":"id=\"cart.line.muffin.quantity\"","tree":"steps\/005.tree.json"}
+{"assert":"$11.25","elapsedMs":1185,"label":"after step 10: is text id=\"totals.subtotal\" \"$11.25\"","n":6,"screenshot":"steps\/006.png","settled":true,"target":"id=\"totals.subtotal\"","tree":"steps\/006.tree.json"}
+{"assert":"$12.25","elapsedMs":1210,"label":"after step 11: is text id=\"totals.total\" \"$12.25\"","n":7,"screenshot":"steps\/007.png","settled":true,"target":"id=\"totals.total\"","tree":"steps\/007.tree.json"}
+{"assert":"1","elapsedMs":1168,"label":"after step 13: is text id=\"cart.line.muffin.quantity\" \"1\"","n":8,"screenshot":"steps\/008.png","settled":true,"target":"id=\"cart.line.muffin.quantity\"","tree":"steps\/008.tree.json"}
+{"assert":"$8.00","elapsedMs":1169,"label":"after step 14: is text id=\"totals.subtotal\" \"$8.00\"","n":9,"screenshot":"steps\/009.png","settled":true,"target":"id=\"totals.subtotal\"","tree":"steps\/009.tree.json"}
+{"elapsedMs":1150,"label":"after step 16: wait absent \"id=\"cart.line.latte\"\"","n":10,"screenshot":"steps\/010.png","settled":true,"tree":"steps\/010.tree.json"}
+{"assert":"$3.25","elapsedMs":1180,"label":"after step 17: is text id=\"totals.subtotal\" \"$3.25\"","n":11,"screenshot":"steps\/011.png","settled":true,"target":"id=\"totals.subtotal\"","tree":"steps\/011.tree.json"}
+{"assert":"$0.29","elapsedMs":1224,"label":"after step 18: is text id=\"totals.tax\" \"$0.29\"","n":12,"screenshot":"steps\/012.png","settled":true,"target":"id=\"totals.tax\"","tree":"steps\/012.tree.json"}
+{"assert":"$3.54","elapsedMs":1189,"label":"after step 19: is text id=\"totals.total\" \"$3.54\"","n":13,"screenshot":"steps\/013.png","settled":true,"target":"id=\"totals.total\"","tree":"steps\/013.tree.json"}

@@ -29,6 +29,7 @@ public final class FakeGit: Git {
   private let history: [String: [String]]
   private let tracked: [String]
   private let ancestorRefs: Set<String>
+  private let commitRange: [String]
   private let refReads = Mutex<[String]>([])
   private let reads = Mutex<[String]>([])
   private let changedSince = Mutex<[String]>([])
@@ -47,6 +48,7 @@ public final class FakeGit: Git {
   ///   - history: what ``revisions(of:)`` answers per path, newest first; others are `[]`.
   ///   - ancestors: the refs ``isAncestor(_:of:)`` answers `true` for, whatever the other ref.
   ///   - tracked: what ``trackedFiles()`` answers.
+  ///   - commits: what ``commits(from:to:)`` answers for any pair of refs.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
     prefix: String = "", addedSince: [AddedLines] = [], revisions: [String: String] = [:],
@@ -55,8 +57,10 @@ public final class FakeGit: Git {
     history: [String: [String]] = [:],
     ancestors: Set<String> = [],
     tracked: [String] = [],
+    commits: [String] = [],
     failure: GitError? = nil
   ) {
+    self.commitRange = commits
     self.tracked = tracked
     self.ancestorRefs = ancestors
     self.contentsAtRef = contentsAtRef
@@ -173,5 +177,10 @@ public final class FakeGit: Git {
   public func trackedFiles() async throws(GitError) -> [String] {
     if let failure { throw failure }
     return tracked
+  }
+
+  public func commits(from base: String, to tip: String) async throws(GitError) -> [String] {
+    if let failure { throw failure }
+    return commitRange
   }
 }
