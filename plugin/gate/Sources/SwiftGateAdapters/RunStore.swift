@@ -195,9 +195,12 @@ public struct RunStore: Sendable {
     return RunHistoryJSON.decode(data)
   }
 
-  /// The run history files a lookup from `worktree` reads, `worktree`'s own first.
+  /// The run history file of each checkout of `worktree`'s clone, `worktree`'s own first: a gate
+  /// run in the plan checkout is in its history, not the user's checkout's.
   public static func historyFiles(sharing worktree: URL) -> [URL] {
-    [RunStore(worktreeRoot: worktree).historyFile]
+    QARunHistory.stateRoots(sharing: worktree).map {
+      $0.url(RunLayout.historyFile, directoryHint: .notDirectory).standardizedFileURL
+    }
   }
 
   /// The last history line of `runID` in the first of ``historyFiles(sharing:)`` that holds one;
