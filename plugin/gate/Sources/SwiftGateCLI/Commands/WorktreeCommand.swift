@@ -151,8 +151,13 @@ enum WorktreeRun {
         try await workspace.addWorktree(
           at: names.path, branch: names.branch, from: names.baseBranch)
       case .brownfield:
+        // The validation task writes only checks and builds no area.
+        let builds =
+          (try? context.ledger().get())?.tasks.first { $0.id == task }
+          .map { !$0.writesOnlyValidationChecks } ?? true
         let slot = try await WorktreePool(commonDirectory: names.commonDirectory, plan: slug)
-          .checkOut(branch: names.branch, from: names.baseBranch, workspace: workspace)
+          .checkOut(
+            branch: names.branch, from: names.baseBranch, builds: builds, workspace: workspace)
         path = slot.path
         reusedSlot = slot.reused
       }
