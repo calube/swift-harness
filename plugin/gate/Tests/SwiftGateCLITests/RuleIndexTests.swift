@@ -88,6 +88,7 @@ struct RuleIndexTests {
       BashGuard.rawXcodebuildRuleID,
       BashGuard.simctlAllRuleID, SimulatorSelection.baseAmbiguousRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
+      BashGuard.validationFlowByHandRuleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
       SubagentScopeGuard.protectedPathRuleID,

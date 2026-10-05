@@ -18,6 +18,7 @@ public enum BashGuard {
   public static let simctlAllRuleID = "guard.simctl-all"
   public static let snapshotRecordRuleID = "guard.snapshot-record"
   public static let globalDerivedDataRuleID = "guard.global-derived-data"
+  public static let validationFlowByHandRuleID = "guard.validation-flow-by-hand"
 
   public static func evaluate(_ command: String) -> GuardViolation? {
     for simple in ShellSyntax.simpleCommands(in: command) {

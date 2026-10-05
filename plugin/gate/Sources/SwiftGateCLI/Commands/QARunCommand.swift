@@ -17,6 +17,9 @@ enum QARunRun {
     var atBase = false
     /// Every ready row, with each flow recorded and its logs saved.
     var final = false
+    /// With `atBase`, only the rows this task writes, read from the checkout's prepared
+    /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
+    var preparedBy: String?
   }
 
   struct Dependencies: Sendable {
@@ -503,7 +506,8 @@ enum QARunRun {
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]`.
+/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final]
+/// [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -521,6 +525,11 @@ struct QARunCommand: AsyncParsableCommand {
   @Flag(help: "Run every ready row, recording each flow and saving its logs: the final pass.")
   var final = false
 
+  @Option(
+    help:
+      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
+  var preparedBy: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -529,7 +538,8 @@ struct QARunCommand: AsyncParsableCommand {
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(plan: plan, after: after, atBase: atBase, final: final),
+      root: root, options: QARunRun.Options(
+        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,

@@ -6,6 +6,9 @@ public enum FlowIDs: Sendable, Equatable {
   case declared(source: String, ids: Set<String>)
   /// No module is configured; the reason becomes the `qa.flow-ids-unknown` note.
   case unconfigured(reason: String)
+  /// The profile has nowhere to declare an id module, as a brownfield clone's config: ids go
+  /// unchecked with no note, since nothing the repository could hold would clear it.
+  case undeclarable
 }
 
 /// The 5 batch steps file rules (simulator QA amendment §6.1), each `RED`, and the note that says
