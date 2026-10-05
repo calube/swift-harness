@@ -759,7 +759,7 @@ public enum BrownfieldBuildGuard {
           + "and every gate build each swiftpm area in 1 scratch path the clone shares, which "
           + "already holds its build. Gate the change with `\"$SG\" check --tier slice --base "
           + "<base>`, which builds every area it touches warm, or run a test with "
-          + "`\(AcceptanceTestReference.testOnlyCommand(area: "<area>", id: "<Target>/<Class>"))`. "
+          + "`\(AcceptanceTestReference.testOnlyCommand(area: "<area>", id: AcceptanceTestReference.filterSpelling(of: .swiftpm)))`. "
           + "To only build, add `--scratch-path \(scratch)`. `<area>` is the area's name in the "
           + "run's config.")
     }

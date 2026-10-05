@@ -13,7 +13,9 @@ public enum ReviewerBashGuard {
   ]
 
   /// The value options each span subcommand takes, as `events span <sub> --help` lists them.
-  static let startOptions: Set<String> = ["--phase", "--build-run", "--task", "--role", "--parent"]
+  static let startOptions: Set<String> = [
+    "--phase", "--build-run", "--task", "--role", "--parent", "--end-parent",
+  ]
   static let endOptions: Set<String> = ["--outcome"]
 
   /// The violation when a reviewer's command is anything but one span command, else `nil`.

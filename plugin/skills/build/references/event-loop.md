@@ -12,6 +12,7 @@ Contents:
 - [Returns](#returns): where each file goes
 - [Merge queue](#merge-queue): 1 merge at a time, in `build next`'s order
 - [Merge gate watch](#merge-gate-watch): a background merge gate and its deadline
+- [qa run watch](#qa-run-watch): a background `--at-base` or before-merge `qa run`
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Before each merge](#before-each-merge): the validation rows a merge makes ready
 - [Flow repair](#flow-repair): a flow row its own flow file keeps red, rewritten once
@@ -164,10 +165,9 @@ surface, and says to work in that worktree and follow
 2. `/bin/rm -rf <worktree>/.harness/qa`, then
    `"$SG" ledger set <slug> <task> done --session <session> --json` and
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
-3. Confirm each check fails before its tasks merge: `"$SG" qa run --plan <slug> --at-base --json`,
-   in the foreground with the Bash tool's `timeout` at 600000, though a flow row boots a leased
-   device: a headless session ends with its turn when only background Bash work is left, and
-   kills that work. This `--at-base` run is never skipped, and no task that a row's `Runs after`
+3. Confirm each check fails before its tasks merge:
+   `"$SG" qa run --plan <slug> --at-base --json --output <plans>/<slug>/out/qa-at-base.json`, in
+   the background under the [qa run watch](#qa-run-watch). This `--at-base` run is never skipped, and no task that a row's `Runs after`
    names merges before it has run: such a task that finishes first keeps its checked return and
    merges once this run is done. It takes each row the worker's `--prepared-by` run proved from
    the `at-base-run.json` the adopt copied while its check is byte-identical, naming that run in
@@ -251,6 +251,29 @@ A merge gate can hang, so it never runs as a foreground call with no deadline. A
   behind the slow merge lands first, and the slow one comes back through its fixer.
 - `cutoff`: a `swiftgate run`'s cutoff passed with the gate still running. Run `build cutoff` as
   the run skill says, then `build gate-wait` again.
+
+## qa run watch
+
+A `qa run` with flow rows holds a device for minutes, so the `--at-base` run and each
+before-merge run go in the background, and a worker's return never waits behind one. Run 1 at a
+time: a second borrows the same device and only queues.
+
+1. `mkdir -p <plans>/<slug>/out`, then `/bin/rm -f <file>` and launch the run with
+   `run_in_background: true`, its report going to `--output <file>`, where `<file>` is
+   `<plans>/<slug>/out/qa-<name>.json` and `<name>` is `at-base` or the run's task list. The run
+   makes the file new and empty as it starts and writes its report there as it ends.
+2. In the foreground, with the Bash tool's `timeout` at 600000:
+   `"$SG" build gate-wait <slug> --qa --output <file> --session <session> --json`. It budgets
+   the run from the newest runs' rows and prints an `action`, as for a merge gate:
+
+- `read`: the run wrote its report. Read its `verdict`, `rows` and `runID` from the file and go
+  on as the step that launched it says.
+- `wait` or `worker-returned`: check any return whose notice arrived, so it joins the queue,
+  then run `build gate-wait --qa` again. Never end the turn while the run goes on: a headless
+  session that ends its turn kills it.
+- `overrun`: `TaskStop` its Bash task. Its rows are unchecked: launch it once more, and treat a
+  second overrun as a RED run whose finding is the watch's `message`.
+- `cutoff`: run `build cutoff` as the run skill says, then `build gate-wait --qa` again.
 
 ## Conflict or red main
 
@@ -338,7 +361,7 @@ read the output file the notice names, which is the fixer's whole transcript:
 
 - The check passes and `outcome` is `ready-to-merge`: wait until `build next` lists it in
   `readyToMerge` with `merging` absent. With a `validation.json`,
-  `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json` first, as
+  `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json --output <plans>/<slug>/out/qa-<task>.json` first, as
   [before each merge](#before-each-merge) says. A flow row RED there goes to
   [flow repair](#flow-repair) with `--cause still-red`, and any other RED one halts as below. Then
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, as its own command after the
@@ -361,7 +384,7 @@ read the output file the notice names, which is the fixer's whole transcript:
      run or `gate-red` for a RED one, then check it:
      `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
   3. A GREEN check goes on as the `ready-to-merge` bullet says, from
-     `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json`. A RED gate, or a
+     `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json --output <plans>/<slug>/out/qa-<task>.json`. A RED gate, or a
      second BLOCKED one, takes the bullet below.
 
   Verifying starts no task, so no new starts doesn't stop it. When the cutoff comes first,
@@ -374,11 +397,11 @@ read the output file the notice names, which is the fixer's whole transcript:
 
 A plan with a `validation.json` runs the rows a task's merge makes ready before `build merge`,
 once the [merge queue](#merge-queue) lists the task first, on the task's branch merged into
-`main`'s tip in a scratch tree, from the main checkout, in the foreground with the Bash tool's
-`timeout` at 600000:
+`main`'s tip in a scratch tree, from the main checkout, in the background under the
+[qa run watch](#qa-run-watch):
 
 ```
-"$SG" qa run --plan <slug> --after <task> --before-merge --json
+"$SG" qa run --plan <slug> --after <task> --before-merge --json --output <plans>/<slug>/out/qa-<task>.json
 ```
 
 It runs only the rows whose `Runs after` names `<task>` and whose other tasks are merged, in layer
@@ -395,7 +418,7 @@ at its branch tip, it runs before the first of them merges, on 1 trial merge of 
 onto `main`'s tip, each at its checked commit:
 
 ```
-"$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json
+"$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json --output <plans>/<slug>/out/qa-<task>.json
 ```
 
 `build merge` of any of those tasks refuses `flows-unchecked` until a run took every one of their

@@ -114,9 +114,22 @@ public struct GateBudget: Sendable, Equatable, Encodable {
   /// ``historyRuns`` runs that ran a row, each the sum of its rows' times, which hold the run's
   /// device, build and install setup.
   public static func estimateQARun(events: [HarnessEvent]) -> GateBudget {
-    GateBudget(
-      tier: qaRunTier, expectedSeconds: defaultExpectedSeconds, source: .default, areas: [],
-      basis: [])
+    var order: [String] = []
+    var totals: [String: Int] = [:]
+    for event in events {
+      guard case .qaCheck(let check) = event.payload, let runID = event.runID else { continue }
+      if totals[runID] == nil { order.append(runID) }
+      totals[runID, default: 0] += check.milliseconds
+    }
+    let runs = order.filter { (totals[$0] ?? 0) > 0 }.suffix(historyRuns).reversed()
+    guard let slowest = runs.compactMap({ totals[$0] }).max() else {
+      return GateBudget(
+        tier: qaRunTier, expectedSeconds: defaultExpectedSeconds, source: .default, areas: [],
+        basis: [])
+    }
+    return GateBudget(
+      tier: qaRunTier, expectedSeconds: seconds(slowest), source: .history, areas: [],
+      basis: Array(runs))
   }
 
   /// Each area's milliseconds from its first step's start to its last step's end. A step with no

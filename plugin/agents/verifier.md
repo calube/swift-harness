@@ -139,6 +139,9 @@ can't tie the finding to the design text and the pack.
 - You are read-only. Don't edit files, build, or run tests.
 - Use Bash only for the 2 run-viewer span lines a prompt names, and for no other command. A
   prompt with none needs no Bash.
+  Each span line is 1 Bash call of its own, run exactly as written: never joined to another
+  command with `;`, `&&` or `|`, and never after a `cd`. Read a file with Read, never `cat`, `head`
+  or `sed`; search with Grep or Glob, never `grep`, `find` or `ls`.
 - Don't add new findings. If you notice a different defect, mention it in that finding's
   `verification_note`; the panel's reviewers own discovery.
 - Return every finding you were given, each with `verified` set, in the order you received them.

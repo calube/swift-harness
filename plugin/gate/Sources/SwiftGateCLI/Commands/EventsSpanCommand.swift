@@ -17,29 +17,23 @@ enum SpanRun {
     parent: String?, endParent: String? = nil
   ) -> Output {
     let command = "events span start"
-    guard let phaseValue = SpanPhase(rawValue: phase) else {
-      return refused(command, "--phase \(phase) is not one of \(allowed(SpanPhase.self))")
-    }
-    if !RunID.isValid(buildRun) {
-      return refused(command, "--build-run \(buildRun) is not a build run id")
-    }
-    if let task, !RunID.isValid(task) {
-      return refused(command, "--task \(task) is not a task id")
-    }
-    var roleValue: AgentRole?
-    if let role {
-      guard let parsed = AgentRole(rawValue: role) else {
-        return refused(command, "--role \(role) is not one of \(allowed(AgentRole.self))")
-      }
-      roleValue = parsed
-    }
-    if let parent, !SpanStartEvent.isValidID(parent) {
-      return refused(command, "--parent \(parent) is not a span id")
+    let parsed: Parsed
+    switch parse(
+      phase: phase, buildRun: buildRun, task: task, role: role, parent: parent,
+      endParent: endParent)
+    {
+    case .success(let value): parsed = value
+    case .failure(let refusal): return refusal.output
     }
     if !enabled { return telemetryOff(command) }
+    if let parent, let endParent {
+      // A parent already ended, or never started here, is no reason to drop this start.
+      _ = end(log: log, enabled: enabled, spanID: parent, outcome: endParent)
+    }
     do throws(SpanLogError) {
       let event = try log.start(
-        phase: phaseValue, buildRun: buildRun, task: task, role: roleValue, parentSpan: parent)
+        phase: parsed.phase, buildRun: buildRun, task: task, role: parsed.role,
+        parentSpan: parent)
       guard case .spanStart(let start) = event.payload else {
         return Output(stdout: "", stderr: "swiftgate \(command): wrote no span.start\n", status: 2)
       }
@@ -47,6 +41,52 @@ enum SpanRun {
     } catch {
       return failed(command, error)
     }
+  }
+
+  private struct Parsed {
+    let phase: SpanPhase
+    let role: AgentRole?
+  }
+
+  private struct Refusal: Error {
+    let output: Output
+  }
+
+  /// A start's values, or the refusal naming the first that isn't valid.
+  private static func parse(
+    phase: String, buildRun: String, task: String?, role: String?, parent: String?,
+    endParent: String?
+  ) -> Result<Parsed, Refusal> {
+    let command = "events span start"
+    func refuse(_ why: String) -> Result<Parsed, Refusal> {
+      .failure(Refusal(output: refused(command, why)))
+    }
+    guard let phaseValue = SpanPhase(rawValue: phase) else {
+      return refuse("--phase \(phase) is not one of \(allowed(SpanPhase.self))")
+    }
+    if !RunID.isValid(buildRun) {
+      return refuse("--build-run \(buildRun) is not a build run id")
+    }
+    if let task, !RunID.isValid(task) {
+      return refuse("--task \(task) is not a task id")
+    }
+    var roleValue: AgentRole?
+    if let role {
+      guard let parsed = AgentRole(rawValue: role) else {
+        return refuse("--role \(role) is not one of \(allowed(AgentRole.self))")
+      }
+      roleValue = parsed
+    }
+    if let parent, !SpanStartEvent.isValidID(parent) {
+      return refuse("--parent \(parent) is not a span id")
+    }
+    if let endParent {
+      guard parent != nil else { return refuse("--end-parent needs --parent") }
+      guard SpanOutcome(rawValue: endParent) != nil else {
+        return refuse("--end-parent \(endParent) is not one of \(allowed(SpanOutcome.self))")
+      }
+    }
+    return .success(Parsed(phase: phaseValue, role: roleValue))
   }
 
   static func end(log: SpanLog, enabled: Bool, spanID: String, outcome: String) -> Output {
@@ -79,12 +119,22 @@ enum SpanRun {
     in directory: String, phase: String, buildRun: String, task: String?, role: String?,
     parent: String?, endParent: String? = nil, index: SpanStoreIndex = SpanStoreIndex()
   ) async -> Output {
+    if case .failure(let refusal) = parse(
+      phase: phase, buildRun: buildRun, task: task, role: role, parent: parent,
+      endParent: endParent)
+    {
+      return refusal.output
+    }
+    if let parent, let endParent {
+      // The parent may have started in another checkout's store; a failed end drops no start.
+      _ = await end(in: directory, spanID: parent, outcome: endParent, index: index)
+    }
     switch await BuildHaltRun.store(command: "events span start", directory: directory) {
     case .refused(let output): return output
     case .found(let root, let enabled):
       let output = start(
         log: SpanLog(root: root), enabled: enabled, phase: phase, buildRun: buildRun, task: task,
-        role: role, parent: parent)
+        role: role, parent: parent, endParent: nil)
       if output.status == 0, !output.stdout.isEmpty {
         index.record(spanID: output.stdout, root: root)
       }
@@ -150,9 +200,12 @@ struct EventsSpanStartCommand: AsyncParsableCommand {
     abstract: "Record a span's start and print its id.",
     discussion:
       "Writes span.start to the main checkout's span stream, whichever worktree the command "
-      + "starts in, and prints the new 16-hex span id alone on stdout. Exit 0 recorded, or "
+      + "starts in, and prints the new 16-hex span id alone on stdout. With --end-parent, it "
+      + "first ends the --parent span with that outcome when it is still open; a parent already "
+      + "ended or never started doesn't stop the start. Exit 0 recorded, or "
       + "nothing to record with [telemetry] enabled = false; 2 for a phase or role outside "
-      + "its list, a --build-run, --task or --parent that isn't an id, or a store that can't "
+      + "its list, a --build-run, --task or --parent that isn't an id, an --end-parent outcome "
+      + "outside its list or with no --parent, or a store that can't "
       + "be read or written.")
 
   @Option(

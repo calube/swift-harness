@@ -71,13 +71,27 @@ enum BuildGateWaitRun {
     } catch {
       return .blocked(command, slug, "reading plan `\(slug)`'s build run: \(error)")
     }
+    let endedBefore = Set(endedWorkflows().keys)
+    var waited = 0
+    // A backgrounded `qa run` makes its output file once it starts, a moment after its launch.
+    if target == .qaRun {
+      while !FileManager.default.fileExists(atPath: output.path), waited < maxWait {
+        let step = min(pollSeconds, maxWait - waited)
+        await sleep(step)
+        waited += step
+      }
+    }
     guard
       let attributes = try? FileManager.default.attributesOfItem(atPath: output.path),
       let startedAt = attributes[.creationDate] as? Date
     else {
       return .blocked(
         command, slug,
-        "no gate output at \(output.path): launch the gate with its JSON redirected there first")
+        target == .qaRun
+          ? "no qa run output at \(output.path) after \(waited) s: launch `qa run` with "
+            + "`--output` there first"
+          : "no gate output at \(output.path): launch the gate with its JSON redirected there "
+            + "first")
     }
     let budget: GateBudget
     switch target {
@@ -85,8 +99,6 @@ enum BuildGateWaitRun {
     case .qaRun: budget = GateBudget.estimateQARun(events: events())
     }
     let cutoffFile = store.layout.directory + "/" + CutoffRecord.fileName
-    let endedBefore = Set(endedWorkflows().keys)
-    var waited = 0
     while true {
       let verdict = finishedGate(output)
       var watch = GateWatch.decide(
@@ -153,12 +165,15 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
     commandName: "gate-wait",
     abstract: "Watch a gate running in the background and say what to do next.",
     discussion:
-      "Reads the JSON file a background `check` writes. Its creation time is the gate's start. "
-      + "The expected time comes from the tier's recent gate runs in the event store, else "
+      "Reads the JSON file a background `check` writes, or with --qa the --output file a "
+      + "background `qa run` makes empty at its start and fills at its end, waited for while it "
+      + "doesn't exist yet. Its creation time is the start. A `qa run`'s expected time is the "
+      + "slowest of its recent runs' rows; a gate's comes from the tier's recent gate runs "
+      + "in the event store, else "
       + "from the warm-up's build and test times. The gate overruns at 3 times that, or "
       + "earlier when the time box needs the time for final and the report. Waits up to "
       + "--max-wait seconds, then prints `action`: `read` (the verdict is in), `wait` (call "
-      + "again), `overrun` (stop the gate and treat it as RED), `cutoff` (run `build "
+      + "again), `overrun` (stop it and treat it as RED), `cutoff` (run `build "
       + "cutoff` first) or, with --session, `worker-returned` (a Workflow run of the session "
       + "ended during the call: handle its notice, then call again). Writes nothing. Exits 0 with the report, and 2 for a missing output "
       + "file, no build run, or a --max-wait outside 0 to 540.")
@@ -208,7 +223,8 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
       maxWait: maxWait, git: BuildLoop.git(), clock: LiveBuildClock(),
       events: {
         EventStoreReader(files: LiveEventStoreFiles(root: directory))
-          .read(EventQuery(kinds: [.gateRun, .gateStep, .warmupRun])).events.map(\.event)
+          .read(EventQuery(kinds: [.gateRun, .gateStep, .warmupRun, .qaCheck])).events.map(
+            \.event)
       },
       endedWorkflows: { workflows.map { WorkflowRecords.ended(in: $0) } ?? [:] },
       sleep: { seconds in try? await Task.sleep(for: .seconds(seconds)) })
