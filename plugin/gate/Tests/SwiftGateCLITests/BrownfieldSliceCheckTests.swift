@@ -41,11 +41,12 @@ struct BrownfieldSliceCheckTests {
 
   private static func area(
     _ name: String, kind: AreaKind = .python, language: AreaLanguage = .python,
-    lint: String? = nil, build: String? = "build", xcode: XcodeAreaConfig? = nil
+    lint: String? = nil, build: String? = "build", xcode: XcodeAreaConfig? = nil,
+    testFiles: String? = "check {files}"
   ) -> BrownfieldArea {
     BrownfieldArea(
       name: name, root: name, language: language, kind: kind, test: "test-all",
-      testFiles: "check {files}", lint: lint, build: build, e2e: nil,
+      testFiles: testFiles, lint: lint, build: build, e2e: nil,
       testGlobs: ["\(name)/tests/**"], packs: [], xcode: xcode)
   }
 
@@ -87,7 +88,7 @@ struct BrownfieldSliceCheckTests {
       baseline: BaselineStore(layout: clone.layout, runner: runner, scratch: scratch),
       prove: BrownfieldProve.Dependencies(
         git: git, scratch: scratch, runner: runner,
-        readFile: { known[clone.relative($0)] }, deadline: .seconds(5)),
+        readFile: { known[clone.relative($0)] }, deadline: .seconds(5), layout: clone.layout),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
       warmTestMilliseconds: { area, tree in
         tree == "tree0" ? warm[area.name] : warmByTree[tree]?[area.name]
@@ -212,7 +213,7 @@ struct BrownfieldSliceCheckTests {
   }
 
   @Test(
-    "an area whose warm test time is 45 s only builds and says so, while a 1 s area runs its changed tests — catches a slice that blows its 30 s budget on slow areas"
+    "an area whose warm test time is 45 s and whose test_files can't narrow a run only builds and says so, while a 1 s area runs its changed tests — catches a slice that blows its 30 s budget on slow areas"
   )
   func slowAreaBuildsOnly() async throws {
     let clone = try Clone()
@@ -227,7 +228,8 @@ struct BrownfieldSliceCheckTests {
     let context = GateRun.Context(runID: "run", directory: clone.base)
 
     let parts = try await Self.run(
-      clone, areas: [Self.area("app"), Self.area("api"), Self.area("cli")],
+      clone,
+      areas: [Self.area("app", testFiles: nil), Self.area("api"), Self.area("cli", testFiles: nil)],
       changes: [
         Change(path: "app/src/load.py", text: "x = 1\n", added: [1...1]),
         Change(path: "app/tests/test_load.py", text: test, added: [2...2]),
@@ -620,7 +622,7 @@ extension BrownfieldSliceCheckTests {
   }
 
   @Test(
-    "the trial's xcode area builds and tests at the head in the worktree's own DerivedData seeded from the area's seed, and prove's scratch tree doesn't — catches a task worktree's first slice compiling cold in Xcode's path-keyed default, or a scratch tree overwriting the worktree's build",
+    "the trial's xcode area builds and tests at the head in the worktree's own DerivedData seeded from the area's seed, and prove's scratch tree in the worktree's prove DerivedData — catches a task worktree's first slice compiling cold in Xcode's path-keyed default, or a scratch tree overwriting the worktree's build",
     arguments: [45_700, 10_000])
   func xcodeHeadRunsUseTheWorktreeDerivedData(warm: Int) async throws {
     let clone = try Clone()
@@ -653,9 +655,163 @@ extension BrownfieldSliceCheckTests {
       #expect(request.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: own))
     }
     #expect(runner.requests.contains(where: inScratch) == (warm < 30_000))
+    let prove = clone.layout.worktreeRoot.appending(
+      path: "derived-data/prove/Aidoku", directoryHint: .notDirectory
+    ).path(percentEncoded: false)
     #expect(
       runner.requests.filter(inScratch).allSatisfy {
-        !$0.command.contains(XcodeDerivedData.option) && $0.derivedDataSeed == nil
+        $0.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' ")
+          && $0.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: prove)
+      }, "prove builds in the worktree's prove DerivedData, never the worktree's own or Xcode's")
+  }
+
+  /// `text` as a `Change` that adds every line of a file the merge base lacks.
+  private static func newFile(_ path: String, _ text: String) -> Change {
+    Change(
+      path: path, text: text,
+      added: [1...text.split(separator: "\n", omittingEmptySubsequences: false).count - 1],
+      existed: false)
+  }
+
+  /// Fails a selected run in the scratch tree, as the task's tests do with its source reverted,
+  /// and passes everything else.
+  private static func failsReverted(_ clone: Clone) -> FakeAreaCommandRunner {
+    FakeAreaCommandRunner { request in
+      request.step == .testFiles && Self.inScratchTree(request, clone)
+        ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
+    }
+  }
+
+  @Test(
+    "both trials' swiftpm areas narrow test_files to the changed tests and their xcode areas can't — catches slice and merge disagreeing on which area's changed tests slice runs"
+  )
+  func capturedAreasSelect() throws {
+    for name in ["price-tracker-1", "send-money-2"] {
+      let config = try TOMLConfigDecoder().decodeBrownfield(
+        try Fixture.text("BrownfieldTrial/\(name)-config.toml"))
+      let selecting = config.areas.filter(\.selectsChangedTests).map(\.name)
+      #expect(selecting == ["APIClient", "AppFeature", "LogClient"], "\(name)")
+    }
+  }
+
+  @Test(
+    "price-tracker's AppFeature, over the 30 s budget at its 31.7 s warm test, still runs the app-core task's new detail tests at the head through test_files --filter and proves them, and never runs its whole suite — catches a build-only slice that leaves a new test, such as the spin that hung the merge gate, to run first at merge"
+  )
+  func overBudgetAreaRunsChangedTests() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    let runner = Self.failsReverted(clone)
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: [
+        Change(
+          path: "Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift",
+          text: "let chart = 1\n", added: [1...1]),
+        Self.newFile(
+          "Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift",
+          try Fixture.text("BrownfieldTrial/price-tracker-1-AssetDetailFeatureTests.swift")),
+      ],
+      runner: runner, warm: ["AppFeature": 31_700], context: context)
+
+    let head = runner.requests.filter { $0.area == "AppFeature" && !Self.inScratchTree($0, clone) }
+    let selected = try #require(head.first { $0.step == .testFiles }, "\(head.map(\.command))")
+    #expect(selected.command.contains("--filter"))
+    #expect(selected.command.contains("dismissCancelsChart"))
+    #expect(!runner.requests.contains { $0.area == "AppFeature" && $0.step == .test })
+    #expect(context.steps.steps.contains { $0.step == .areaTest && $0.area == "AppFeature" })
+    #expect(
+      context.proofs.results.filter { $0.target == "AppFeature" }.count == 3,
+      "\(context.proofs.results.map(\.test))")
+    #expect(
+      !parts.findings.contains {
+        $0.ruleID == BrownfieldRuleID.buildOnly.rawValue && $0.file == "Packages/AppFeature"
       })
+    #expect(Self.verdict(parts) == .green)
+  }
+
+  @Test(
+    "send-money's AppFeature, measured at 27.4 s before its files changed, whose build then takes the slice past its 30 s budget, still runs and proves the amount-entry task's new tests — catches slice deferring them to a merge that, judging by the warm time alone, never proves them"
+  )
+  func staleAreaOverBudgetRunsChangedTests() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-2-config.toml"))
+    let warmup = try #require(
+      try JSONSerialization.jsonObject(
+        with: Data(try Fixture.text("BrownfieldTrial/send-money-2-warmup.json").utf8))
+        as? [String: Any])
+    let areas = try #require(warmup["areas"] as? [String: [String: Any]])
+    let warmTest = try #require(areas["AppFeature"]?["testMs"] as? Int)
+    let tree = try #require(warmup["tree"] as? String)
+    let source = "Packages/AppFeature/Sources/AppCore/AmountInput.swift"
+    let budget = Duration.milliseconds(30_000 - warmTest + 100)
+    let runner = FakeAreaCommandRunner { request in
+      if request.step == .build, request.area == "AppFeature" {
+        // A build that takes the slice past its budget, measured on the gate's own clock.
+        let end = ContinuousClock.now + budget
+        while ContinuousClock.now < end {}
+      }
+      return request.step == .testFiles && Self.inScratchTree(request, clone)
+        ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    let parts = try await Self.run(
+      clone, areas: config.areas,
+      changes: [
+        Change(path: source, text: "let amount = 1\n", added: [1...1]),
+        Self.newFile(
+          "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift",
+          try Fixture.text("BrownfieldTrial/send-money-2-AmountInputTests.swift")),
+      ],
+      runner: runner,
+      history: [
+        CommitTree(commit: "base0", tree: "tree0"), CommitTree(commit: "warm0", tree: tree),
+      ],
+      warmByTree: [tree: ["AppFeature": warmTest]], changedSince: ["warm0": [source]],
+      context: context)
+
+    let head = runner.requests.filter { $0.area == "AppFeature" && !Self.inScratchTree($0, clone) }
+    #expect(head.map(\.step) == [.build, .testFiles])
+    #expect(context.proofs.results.filter { $0.target == "AppFeature" }.count == 8)
+    #expect(
+      !parts.findings.contains {
+        $0.ruleID == BrownfieldRuleID.buildOnly.rawValue && $0.file == "Packages/AppFeature"
+      }, "\(parts.findings.map(\.message))")
+  }
+
+  @Test(
+    "a slice step that builds labels its DerivedData: price-tracker's xcode build warm when the worktree's Build folder exists, AppFeature's swiftpm build cold with no .build, and the neutral rules none — catches every step labelled none, so telemetry can't tell a 133 s cold build from a warm one"
+  )
+  func buildStepsLabelTheirDerivedData() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
+    try FileManager.default.createDirectory(
+      atPath: XcodeDerivedData.path(area: "InterviewStarter", layout: clone.layout) + "/Build",
+      withIntermediateDirectories: true)
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    _ = try await Self.run(
+      clone, areas: config.areas,
+      changes: [
+        Change(path: "App/RootView.swift", text: "let root = 1\n", added: [1...1]),
+        Change(
+          path: "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+          text: "let list = 1\n", added: [1...1]),
+      ],
+      runner: FakeAreaCommandRunner { _ in .passed },
+      warm: ["InterviewStarter": 76_800, "AppFeature": 31_700], context: context)
+
+    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
+    #expect(labels.contains("InterviewStarter area-build warm"), "\(labels)")
+    #expect(labels.contains("AppFeature area-build cold"), "\(labels)")
+    #expect(labels.contains("AppFeature neutral none"), "\(labels)")
   }
 }

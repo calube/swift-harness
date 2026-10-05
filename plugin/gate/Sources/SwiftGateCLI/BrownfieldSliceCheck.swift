@@ -38,6 +38,8 @@ enum BrownfieldSliceCheck {
       @Sendable (_ candidate: AssertionCandidate, _ source: String) async -> AssertionJudgement
     /// Per command run.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
 
     /// A selected test run that fits the budget warm still gets room on a cold store.
     static let liveDeadline: Duration = .seconds(600)
@@ -299,8 +301,10 @@ enum BrownfieldSliceCheck {
   /// 1 touched area: the neutral rules, Xcode membership and lint on its changed files, then its
   /// changed tests and their prove when a warm test run fits the budget, else its build. An area
   /// changed since the warm-up that measured it builds first, so its tests never run on caches
-  /// the warm-up left behind its code. A change that selects no test builds instead, so its code
-  /// still compiles.
+  /// the warm-up left behind its code. An area whose `test_files` narrows a run to the changed
+  /// tests runs and proves them whatever its whole suite takes: over the budget means not running
+  /// the whole suite, never running no test. A change that selects no test builds instead, so its
+  /// code still compiles.
   private static func run(
     _ area: BrownfieldArea, warm: WarmTestTime, change: Change, root: URL, base: String,
     context: GateRun.Context, dependencies: Dependencies
@@ -377,6 +381,13 @@ enum BrownfieldSliceCheck {
           "its build failed, and its files changed since the warm-up at \(at.commit) measured its "
           + "tests, so no test runs on the stale build"
       } else if build.milliseconds + milliseconds > budget {
+        if area.selectsChangedTests {
+          result.add(
+            await tests(
+              area, change: change, root: root, base: base, context: context,
+              dependencies: dependencies))
+          return result
+        }
         why =
           "its build took \(seconds(build.milliseconds)) s and its warm test run, measured at "
           + "\(at.commit) before its files changed, takes \(seconds(milliseconds)) s: together "
@@ -399,6 +410,19 @@ enum BrownfieldSliceCheck {
       why =
         "no warm-up on the first-parent history of the merge base \(change.mergeBase) measured "
         + "its tests"
+    }
+    if area.selectsChangedTests {
+      let tested = await tests(
+        area, change: change, root: root, base: base, context: context,
+        dependencies: dependencies)
+      result.add(tested)
+      guard tested.runs.isEmpty else { return result }
+      if let build = await build(area, root: root, context: context, dependencies: dependencies) {
+        result.runs.append(build.run)
+      } else {
+        result.findings += stepDropped(area)
+      }
+      return result
     }
     result.findings += buildOnly(testable, because: why)
     if let build = await build(testable, root: root, context: context, dependencies: dependencies) {
@@ -548,12 +572,12 @@ enum BrownfieldSliceCheck {
         area, step: .build, repositoryRoot: root.path(percentEncoded: false), files: [],
         dependencies: dependencies)
     else { return nil }
-    let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(atHead(prepared.request, dependencies))
-    }
+    let request = atHead(prepared.request, dependencies)
+    let derivedData = Self.derivedData(request, kind: area.kind, dependencies)
+    let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(request) }
     context.steps.record(
       .areaBuild, tier: nil, milliseconds: milliseconds,
-      verdict: outcome == .passed ? .green : .red, area: area.name)
+      verdict: outcome == .passed ? .green : .red, derivedData: derivedData, area: area.name)
     let run = StepRun(
       area: area, step: .build, template: template, selection: [], outcome: outcome,
       rerun: { scratch in
@@ -598,12 +622,15 @@ enum BrownfieldSliceCheck {
         plan, template: template, step: step, repositoryRoot: repositoryRoot,
         dependencies: dependencies)
     }
-    let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(atHead(request(root), dependencies))
+    let head = atHead(request(root), dependencies)
+    let derivedData = Self.derivedData(head, kind: area.kind, dependencies)
+    let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(head) }
+    if let counts = await dependencies.testCounts.counts(of: head) {
+      context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
     }
     context.steps.record(
       .areaTest, tier: nil, milliseconds: milliseconds,
-      verdict: outcome == .passed ? .green : .red, area: area.name)
+      verdict: outcome == .passed ? .green : .red, derivedData: derivedData, area: area.name)
     // A test file the merge base lacks fails there for being missing, which would read as the
     // same whole-step failure and hide the head's.
     let rerunnable = !files.contains { change.new.contains($0.path) }
@@ -616,6 +643,7 @@ enum BrownfieldSliceCheck {
       brownfield: dependencies.config.brownfield, areas: [area],
       allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
       judge: dependencies.config.judge)
+    let proveDerivedData = BrownfieldProve.derivedData([area], layout: dependencies.layout)
     let (judgement, proveMilliseconds) = await GateRun.timed {
       await BrownfieldProve.run(
         root: root, base: base, config: config,
@@ -625,7 +653,7 @@ enum BrownfieldSliceCheck {
     }
     context.steps.record(
       .prove, tier: nil, milliseconds: proveMilliseconds, verdict: judgement.verdict,
-      area: area.name)
+      derivedData: proveDerivedData, area: area.name)
     result.findings += judgement.findings
     result.blocked = result.blocked || judgement.verdict == .blocked
     return result
@@ -683,6 +711,16 @@ enum BrownfieldSliceCheck {
     -> AreaCommandRequest
   {
     XcodeDerivedData.request(request, layout: dependencies.layout)
+  }
+
+  /// Whether the step's build directories already exist, read before it runs.
+  private static func derivedData(
+    _ request: AreaCommandRequest, kind: AreaKind, _ dependencies: Dependencies
+  ) -> GateDerivedData {
+    GateStepCollector.derivedData(
+      buildDirectories: XcodeDerivedData.buildDirectories(
+        request, kind: kind, layout: dependencies.layout
+      ).map { URL(filePath: $0, directoryHint: .isDirectory) })
   }
 
   private static func environment(_ area: BrownfieldArea, _ dependencies: Dependencies)

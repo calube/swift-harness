@@ -1,0 +1,51 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 160159,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "Packages/APIClient",
+      "line" : null,
+      "message" : "APIClient has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/AppFeature",
+      "line" : null,
+      "message" : "AppFeature has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "InterviewStarter has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: no new or changed tests since 81b5d7e92b4f3b3bbdc36d62d6af65b50a606ffb",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    }
+  ],
+  "runID" : "20261005T025653Z-e59bdc49",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 160002,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "GREEN"
+    }
+  ],
+  "verdict" : "GREEN"
+}

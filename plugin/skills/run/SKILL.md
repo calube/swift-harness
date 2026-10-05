@@ -76,9 +76,14 @@ with it: a gate cut short leaves no run and no verdict. On a cold cache, the fir
 call also builds the binary, which can take minutes, so before step 1 warm it with
 `"$SG" --version`. That call and every `check`, `qa run`, `build cutoff` and area command run in
 the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
-`run_in_background` to one and never end one with a shell `&`. The 1 kind of background work in a
-run is the Workflow and Agent tool calls, which keep the session alive until they return; no timer
-runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
+`run_in_background` to one and never end one with a shell `&`.
+
+The merge gates and `final` are the exception, since a hung test can hold one for an hour. Each
+runs with `run_in_background: true`, its JSON redirected to `<out>`. Then `"$SG" build gate-wait`
+holds the turn in the foreground until it ends or overruns its deadline, as the build loop's
+[merge gate watch](../build/references/event-loop.md#merge-gate-watch) says.
+The other background work in a run is the Workflow and Agent tool calls, which keep the session
+alive until they return; no timer runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
 passes `run_in_background: true`: a foreground one blocks every merge and start until it returns.
 
 ## 1. Read the spec
@@ -146,9 +151,11 @@ what it has recorded so far with `"$SG" events list --kind warmup.run`. Each eve
 - **A tool isn't installed** (`not-installed`, or a gate's `area.step-dropped` saying so). Drop the
   step with that reason; installing toolchains is outside a run.
 - **Build-only areas.** An area whose warm test run takes longer than `slice_budget_s` in
-  `<config>`'s `[brownfield]` builds only at `slice` (an `xcode` area's slice runs
-  `build-for-testing`, so its test targets compile); its tests and their proof run at `merge`,
-  which proves only the tests that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
+  `<config>`'s `[brownfield]` doesn't run its whole suite at `slice`. If its `test_files` narrows a
+  run to the changed tests (`{tests}` or `{files}`), `slice` still runs and proves the task's
+  changed tests. Otherwise it builds only (an `xcode` area's slice runs `build-for-testing`, so its
+  test targets compile), and its tests and their proof run at `merge`, which proves only the tests
+  that merge brought, and at `final`. Mark it build-only in `## Areas`. An area with no warm time yet, because the warm-up is still
   running, is marked as unknown; `slice` measures it.
 
 Never edit `<config>` by hand.
@@ -177,16 +184,21 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
-- A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
-  when an acceptance UI test also checks it, so `qa run` records its journey and proves it red
-  first. A
-  task writes a screen when a `Writes` path inside the area's root has a folder or file named
-  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
-  `.storyboard` or `.xib`; the contract's stubs don't count. A requirement no flow can check opens
-  its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
+- A requirement whose task writes a screen or a feature of an `xcode` area has at least 1 `flow`
+  row, even when an acceptance UI test also checks it, so `qa run` records its journey and proves
+  it red first. A screen is a `Writes` path inside the area's root with a folder or file named
+  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or a
+  `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
+  `…Reducer` or `…ViewModel`. The contract's stubs don't count. A requirement no flow can check
+  opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
   `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
   least 1 `flow` row. The import fails naming each requirement and area that breaks this.
+- A screen fed by a dependency client, a `…Client` module such as `APIClient`, runs its flows
+  against a fake of that client chosen by the `-harness-scenario <name>` launch argument, never
+  the live service; `network:` excuses none of its journeys. The contract adds that seam when the
+  app has none, and a task or the contract gives the fake 1 scenario per journey: loading, error,
+  retry and refresh are flow rows. The reference's "Network-fed screens" has the shape.
 - A task whose own check exercises another task's work depends on that task: an acceptance row's
   `Writer` on every other `Runs after` task, a task on any task whose files its `Acceptance`
   names, and a UI test's writer on every task whose behaviour the test shows, such as a fake's
@@ -318,8 +330,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         where it stands: a task already merged skips `build merge`, and one in `landed` skips
         its merge gate too, going straight to `ledger set … done` and `worktree remove` (with
         `--fix` after a fix merge). A task not yet merged runs its `qa run --before-merge` first.
-        A conflict, a `flows-red` refusal or a RED `merge` gate gets no fixer at the cutoff:
-        `build merge --undo` when the merge landed, then
+        A conflict, a `flows-red` refusal, a RED `merge` gate or one `build gate-wait` reads as
+        `overrun` gets no fixer at the cutoff: `build merge --undo` when the merge landed, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
         `worktree remove … --abandoned` as item 1 says.
      3. Start nothing else, and go to step 8.
@@ -345,6 +357,14 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      **Stop** is recommended only when widening can't resolve it: the conflict needs a change to
      work already done, such as the contract or a merged task, or a path a running task owns. A
      task that conflicts again after its retry stays `blocked`: go on without it.
+   - **Merges follow `build next`'s queue, and each merge gate has a deadline.** Merge the first
+     task in `readyToMerge`, only while `merging` is absent, as the build loop's
+     [merge queue](../build/references/event-loop.md#merge-queue) says. Each merge gate is
+     `"$SG" check --tier merge --base <base> --json > <out>/merge-<task>.json`, launched with
+     `run_in_background: true`, then watched in the foreground with
+     `"$SG" build gate-wait <slug> --tier merge --output <out>/merge-<task>.json --json` until it
+     reads. An `overrun` is a RED merge gate: undo it, then merge the next task in `readyToMerge`
+     before its fixer returns. At the cutoff it gets no fixer, as a RED merge gate doesn't.
    - Stop at its step 4; this skill's step 8 replaces it.
    - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
      each task's diff `low`, `medium` or `high`, and paths in `[brownfield] sensitive` are always
@@ -364,8 +384,13 @@ gates whatever merged, the contract alone when nothing else did. A run whose `pl
 
 Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
 
-1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
-   `lint` and `build` against the baseline, plus each area's `e2e`. A test step that also fails
+1. In `<checkout>`, `"$SG" check --tier final --base <base> --json > <out>/final.json`, launched
+   with `run_in_background: true` and watched in the foreground with
+   `"$SG" build gate-wait <slug> --tier final --output <out>/final.json --json` until it reads,
+   as a merge gate is. Its deadline is never past the box's end. An `overrun` is a RED `final`
+   with no run to record: `TaskStop` it, skip item 2 and go on from item 3, and the report names
+   the overrun. It runs every area's `test`, `lint` and `build` against the baseline, plus each
+   area's `e2e`. A test step that also fails
    whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
    names where the head's and the merge base's output tail and report were kept: read those first.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
@@ -425,4 +450,5 @@ a failed summary prints 1 line. Merging
   call is the 1 exception: that tool takes only aliases.
 - Every gate is a `swiftgate` command. Never hand-write a check or read a gate's verdict from its
   exit status alone; read its JSON, kept under `<out>` when kept in a file.
-- Gates and `qa run` run in the foreground, never in the background (Foreground work).
+- Gates and `qa run` run in the foreground, except the merge gates and `final`, which run in the
+  background while `build gate-wait` watches them in the foreground (Foreground work).

@@ -60,6 +60,9 @@ public protocol Git: Sendable {
   /// with no history (untracked or unknown) has none. Empty or NUL-bearing paths throw
   /// ``GitError/invalidPath(_:)``.
   func revisions(of path: String) async throws(GitError) -> [String]
+
+  /// Every file the index tracks, toplevel-relative, in git's order.
+  func trackedFiles() async throws(GitError) -> [String]
 }
 
 /// Every case means git could not answer, which is never evidence about the code: `blocked`.

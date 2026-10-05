@@ -712,4 +712,46 @@ import Testing
     #expect(lines("Time box", in: met).contains("the cutoff never came"), "\(met)")
     #expect(!none.contains("## Time box"))
   }
+
+  /// A captured brownfield run whose undone merge ended abandoned: its record, its ledger log,
+  /// each stored return and its ledger.
+  private static func undoneTrial(_ fixture: String) throws -> (
+    ledger: Ledger, build: RunReportBuild
+  ) {
+    let directory = Fixture.directory.appending(path: "RunView/\(fixture)")
+    let ledger = try LedgerJSON.decode(Data(contentsOf: directory.appending(path: "ledger.json")))
+    let record = try BuildRunJSON.decode(Data(contentsOf: directory.appending(path: "run.json")))
+    let log = BuildEventJSON.decode(
+      try Data(contentsOf: directory.appending(path: "ledger-events.jsonl")))
+    var returns: [String: RunReportInput<TaskReturn>] = [:]
+    let folder = directory.appending(path: "returns")
+    for name in try FileManager.default.contentsOfDirectory(atPath: folder.path) {
+      returns[String(name.dropLast(".json".count))] = .read(
+        try TaskReturnJSON.decode(Data(contentsOf: folder.appending(path: name))))
+    }
+    return (ledger, RunReportBuild(record: record, log: log, returns: returns))
+  }
+
+  @Test(
+    "a task whose merge was undone and that ended abandoned never reads merged under review depth, in the price-tracker and send-money trials — catches app-core and send-ui reported merged after their undo"
+  )
+  func undoneMergeIsNotMerged() throws {
+    for (fixture, undone, merged) in [
+      ("price-tracker-1", "app-core", ["tracker-ui"]),
+      ("send-money-2", "send-ui", ["amount-entry", "send-flow", "account-fake"]),
+    ] {
+      let trial = try Self.undoneTrial(fixture)
+      let report = BrownfieldRunReport.make(
+        Self.inputs(ledger: .read(trial.ledger), build: .read(trial.build)))
+      let items = report.reviewDepths.items
+      #expect(
+        !items.contains { $0.hasPrefix("\(undone) (merged)") }, "\(fixture): \(items)")
+      #expect(
+        items.contains { $0.hasPrefix("\(undone) (abandoned, merge undone): ") },
+        "\(fixture): \(items)")
+      for task in merged {
+        #expect(items.contains { $0.hasPrefix("\(task) (merged): ") }, "\(fixture): \(task)")
+      }
+    }
+  }
 }

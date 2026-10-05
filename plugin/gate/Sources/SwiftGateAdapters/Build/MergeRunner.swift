@@ -214,6 +214,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The merge gate run `--undo` recorded in the build run's log for the commit it undid; `nil`
   /// when the log already held it or no `check` run started at that commit.
   public let gateRunId: String?
+  /// The branches `--undo` kept the work it took off `main` on, or an earlier fix branch it set
+  /// aside before cutting the new one, as `<plan>/fix-<task>-<n>`; `nil` when it kept none.
+  public let keptBranches: [String]?
   public let message: String
 
   public init(
@@ -221,7 +224,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     verdict: Verdict, holder: String? = nil, runId: String? = nil, branch: String? = nil,
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
-    conflictedFiles: [String]? = nil, gateRunId: String? = nil, message: String
+    conflictedFiles: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
+    message: String
   ) {
     self.command = command
     self.plan = plan
@@ -240,6 +244,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.fixBranch = fixBranch
     self.conflictedFiles = conflictedFiles
     self.gateRunId = gateRunId
+    self.keptBranches = keptBranches
     self.message = message
   }
 }
@@ -401,7 +406,7 @@ public struct BuildMerge: Sendable {
           reason: .undoRefused)
       }
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
-      try await checkFixIsFree(command, context)
+      let removed = try await removeFixWorktree(command, context)
       let main = context.names.mainCheckout
       let gate = await recordMergeGate(context, at: lastMerge.postCommit)
       try await step(command, context, "resetting \(main)") {
@@ -422,13 +427,19 @@ public struct BuildMerge: Sendable {
             + "`main` moved until the log says where main is.", pre: lastMerge.preCommit,
           post: lastMerge.postCommit)
       }
+      let kept = try await keepUndoneWork(command, context, undone: lastMerge)
       let (files, detail) = try await cutFix(command, context)
+      let keptNote =
+        kept.isEmpty
+        ? ""
+        : " Kept the work it took off \(context.names.baseBranch) on "
+          + "\(kept.joined(separator: ", ")); merge it into the fix worktree to build on it."
       return report(
         command, context, .undone, .green, mainCheck: .atLastMerge, pre: lastMerge.preCommit,
         post: lastMerge.postCommit, conflicted: files.isEmpty ? nil : files,
-        gateRunId: gate.runID,
+        gateRunId: gate.runID, keptBranches: kept.isEmpty ? nil : kept,
         message: "reset \(context.names.baseBranch) from \(lastMerge.postCommit) to "
-          + "\(lastMerge.preCommit).\(gate.note) \(detail)")
+          + "\(lastMerge.preCommit).\(gate.note)\(removed)\(keptNote) \(detail)")
     } catch {
       return error.report
     }
@@ -696,6 +707,107 @@ public struct BuildMerge: Sendable {
     }
   }
 
+  /// Removes the fix worktree an earlier undo or conflict cut, so this undo can cut a fresh one
+  /// from the reset `main`. Its gate reports and events are kept first. A worktree with
+  /// uncommitted changes blocks before `main` moves: the fixer's edits would go with it. Its
+  /// branch stays until ``keepUndoneWork(_:_:undone:)`` sets it aside.
+  /// - Returns: a sentence for the message, empty when there was no fix worktree.
+  private func removeFixWorktree(_ command: String, _ context: Context) async throws(Stop)
+    -> String
+  {
+    let fix = context.fix
+    guard FileManager.default.fileExists(atPath: fix.path) else { return "" }
+    let dirty = try await step(command, context, "reading \(fix.path)") {
+      () async throws(GitWorkspaceError) in
+      try await merger.dirtyPaths(in: fix.path)
+    }
+    guard dirty.isEmpty else {
+      throw stop(
+        command, context, .blocked,
+        "the fix worktree \(fix.path) has uncommitted changes in "
+          + "\(dirty.joined(separator: ", ")); commit or discard them, then undo again")
+    }
+    let kept = Self.keepEvidence(of: fix)
+    try await step(command, context, "removing the fix worktree \(fix.path)") {
+      () async throws(GitWorkspaceError) in
+      try await workspace.removeWorktree(at: fix.path, force: false)
+    }
+    return " Removed the earlier fix worktree \(fix.path)\(kept)."
+  }
+
+  /// Copies a worktree's gate reports where the run report reads them, and its own events into
+  /// the main checkout's imports. A copy that fails is named and never stops the removal: the
+  /// worktree's commits stay on its branch, and its reports are diagnostics.
+  private static func keepEvidence(of worktree: TaskWorktree) -> String {
+    let root = URL(filePath: worktree.path, directoryHint: .isDirectory)
+    let destination = StateRootResolver.keptRuns(
+      commonDir: URL(filePath: worktree.commonDirectory, directoryHint: .isDirectory),
+      mainCheckout: URL(filePath: worktree.mainCheckout, directoryHint: .isDirectory))
+    var note = ""
+    do throws(RunStoreError) {
+      let outcome = try RunStore(worktreeRoot: root).keepRuns(into: destination)
+      if !outcome.kept.isEmpty { note += ", keeping its \(outcome.kept.count) gate report(s)" }
+      if !outcome.unkept.isEmpty {
+        note += ", losing gate report(s) \(outcome.unkept.map(\.runID).joined(separator: ", "))"
+      }
+    } catch {
+      note += ", keeping no gate report: \(error)"
+    }
+    let events = EventCopyUp(
+      source: root,
+      destination: URL(filePath: worktree.mainCheckout, directoryHint: .isDirectory))
+    do throws(EventCopyUpError) {
+      _ = try events.run()
+    } catch {
+      note += ", losing its events: \(error)"
+    }
+    return note
+  }
+
+  /// After the reset, keeps every commit the undone merge brought onto a branch. A standing fix
+  /// branch that `main` no longer holds moves to the first free `<plan>/fix-<task>-<n>`, and one
+  /// it still holds is deleted. Then, when no branch holds the undone merge's second parent, the
+  /// tip it merged, as when its fix branch was deleted once merged, that tip gets one too.
+  /// - Returns: the branches made, in the order made.
+  private func keepUndoneWork(
+    _ command: String, _ context: Context, undone: BuildEvent.Merge
+  ) async throws(Stop) -> [String] {
+    let fix = context.fix.branch
+    let base = context.names.baseBranch
+    let main = context.names.mainCheckout
+    return try await step(
+      command, context, "keeping the undone work on a branch", pre: undone.preCommit
+    ) { () async throws(GitWorkspaceError) in
+      var kept: [String] = []
+      func free() async throws(GitWorkspaceError) -> String {
+        var n = 1
+        while try await workspace.branchExists("\(fix)-\(n)") { n += 1 }
+        return "\(fix)-\(n)"
+      }
+      if try await workspace.branchExists(fix) {
+        if try await !workspace.isMerged(fix, into: base) {
+          let name = try await free()
+          try await workspace.createBranch(
+            name, at: try await merger.commit(of: "refs/heads/\(fix)", in: main))
+          kept.append(name)
+        }
+        try await workspace.deleteBranch(fix)
+      }
+      let tip: String
+      do {
+        tip = try await merger.commit(of: "\(undone.postCommit)^2", in: main)
+      } catch {
+        return kept
+      }
+      if try await workspace.branches(containing: tip).isEmpty {
+        let name = try await free()
+        try await workspace.createBranch(name, at: tip)
+        kept.append(name)
+      }
+      return kept
+    }
+  }
+
   private func checkFixIsFree(_ command: String, _ context: Context) async throws(Stop) {
     if FileManager.default.fileExists(atPath: context.fix.path) {
       throw stop(
@@ -771,7 +883,8 @@ public struct BuildMerge: Sendable {
     _ command: String, _ context: Context, _ status: BuildMergeReport.Status, _ verdict: Verdict,
     reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
     pre: String? = nil, post: String? = nil,
-    conflicted: [String]? = nil, gateRunId: String? = nil, cut: Bool = false, message: String
+    conflicted: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
+    cut: Bool = false, message: String
   ) -> BuildMergeReport {
     let cut = cut || status == .conflicted || status == .undone
     return BuildMergeReport(
@@ -780,6 +893,6 @@ public struct BuildMerge: Sendable {
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? context.fix.path : nil,
       fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted,
-      gateRunId: gateRunId, message: message)
+      gateRunId: gateRunId, keptBranches: keptBranches, message: message)
   }
 }

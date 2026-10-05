@@ -8,6 +8,7 @@ public final class FakeGitWorkspace: GitWorkspace {
     case addWorktree(path: String, branch: String, base: String)
     case removeWorktree(path: String, force: Bool)
     case deleteBranch(String)
+    case createBranch(String, commit: String)
     case cloneWarmBuild(paths: [String], source: String, destination: String)
   }
 
@@ -62,6 +63,18 @@ public final class FakeGitWorkspace: GitWorkspace {
       $0.calls.append(.deleteBranch(branch))
       $0.branches.remove(branch)
     }
+  }
+
+  public func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+    state.withLock {
+      $0.calls.append(.createBranch(branch, commit: commit))
+      $0.branches.insert(branch)
+    }
+  }
+
+  /// Holds no commits, so it answers as if every branch held `commit`.
+  public func branches(containing commit: String) async throws(GitWorkspaceError) -> [String] {
+    state.withLock { $0.branches.sorted() }
   }
 
   public func cloneWarmBuild(

@@ -1,0 +1,162 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 6 tasks in 4 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-existing-tests"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 220,
+      "gate" : "slice",
+      "id" : "spec-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-spec-contract",
+      "writeSet" : [
+        "Packages/APIClient/Sources/APIClient/APIClient.swift",
+        "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+        "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/WatchlistView.swift",
+        "Packages/AppFeature/Sources/AppUI/AssetDetailView.swift",
+        "Packages/AppFeature/Sources/AppUI/TrackerID.swift"
+      ]
+    },
+    {
+      "branch" : "spec/client-live",
+      "covers" : [
+        "req-client"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 180,
+      "gate" : "slice",
+      "id" : "client-live",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-client-live",
+      "writeSet" : [
+        "Packages/APIClient/Sources/APIClientLive/APIClientLive.swift",
+        "Packages/APIClient/Tests/APIClientLiveTests/CoinGeckoLiveTests.swift",
+        "Packages/APIClient/Tests/APIClientLiveTests/Fixtures/simple-price.json",
+        "Packages/APIClient/Tests/APIClientLiveTests/Fixtures/market-chart.json"
+      ]
+    },
+    {
+      "branch" : "spec/app-core",
+      "covers" : [
+        "req-load-states",
+        "req-refresh",
+        "req-chart-states",
+        "req-chart-cancel"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "app-core",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-app-core",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/WatchlistFeatureTests.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/tracker-ui",
+      "covers" : [
+        "req-watchlist",
+        "req-detail"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 220,
+      "gate" : "slice",
+      "id" : "tracker-ui",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-tracker-ui",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppUI/WatchlistView.swift",
+        "Packages/AppFeature/Sources/AppUI/AssetDetailView.swift"
+      ]
+    },
+    {
+      "covers" : [
+        "req-watchlist"
+      ],
+      "deps" : [
+        "tracker-ui",
+        "app-core",
+        "client-live"
+      ],
+      "estLines" : 50,
+      "gate" : "slice",
+      "id" : "launch-wiring",
+      "status" : "pending",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-launch-wiring",
+      "writeSet" : [
+        "App/InterviewStarterApp.swift",
+        "UITests/LaunchFlowUITests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-watchlist",
+        "req-detail"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 80,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "spec-contract"
+    ],
+    [
+      "app-core",
+      "client-live",
+      "spec-validation"
+    ],
+    [
+      "tracker-ui"
+    ],
+    [
+      "launch-wiring"
+    ]
+  ]
+}

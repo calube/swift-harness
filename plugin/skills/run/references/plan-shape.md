@@ -16,8 +16,8 @@ task and the line.
   isn't listed here fails the import naming it. A plan with no requirements section has no
   `Covers` lines.
 - `## Areas`: 1 bullet per touched area: its name, its warm test time from the warm-up, and
-  `build-only` when that time exceeds `slice_budget_s`, or `unknown` while the warm-up hasn't
-  reached it. The importer ignores this section; the report and the workers read it.
+  `build-only` when that time exceeds `slice_budget_s` and its `test_files` can't narrow a run
+  to the changed tests, or `unknown` while the warm-up hasn't reached it. The importer ignores this section; the report and the workers read it.
 - `## Validation`: the checks that prove each requirement once its tasks merge; see
   [The validation table](#the-validation-table). A plan without it imports with a note that no
   checks will run after each merge, unless its tasks write an `xcode` area's screens: then it
@@ -117,19 +117,38 @@ Serve the report as CSV.
   With more than 1 area that runs tests, name the area: `test <area>: <id>`. A bare test file
   path in `Check` fails the import, and a raw `xcodebuild` line bypasses swiftgate.
 - **flow** drives a user journey in the running app. It runs for `xcode` areas only. Every
-  requirement a task covers while writing a screen needs 1: a `Writes` path inside an `xcode`
-  area's root with a folder or file named `…View`, `…Views`, `…Screen`, `…Screens`,
-  `…ViewController`, `…UI` or `…UITests`, or a `.storyboard` or `.xib`; the contract task's stub
-  screens don't count. An acceptance UI test doesn't replace it, since only a flow records a video
-  and runs red at the base. A requirement no flow can check opens its `Reason` with what stops
-  one, `network:`, `hardware:`, `account:`, `data:` or `system:`, then what the simulator lacks,
-  such as `data: needs a source with 50 chapters`. A reason saying unit or acceptance tests cover
-  it excuses nothing. A reason excuses 1 requirement, never the app: each `xcode` area whose
-  screens a task writes has at least 1 `flow` row whose `Runs after` or covering task writes in
-  that area.
+  requirement a task covers while writing a screen or a feature needs 1: a `Writes` path inside
+  an `xcode` area's root with a folder or file named `…View`, `…Views`, `…Screen`, `…Screens`,
+  `…ViewController`, `…UI` or `…UITests`, or a `.storyboard` or `.xib`, or, for the state a screen
+  shows, `…Feature`, `…Features`, `…Reducer`, `…Reducers`, `…ViewModel` or `…ViewModels`. Under a
+  `Sources` or `Tests` folder only the module and its files count, and a `Package.swift` never
+  does; the contract task's stubs don't count, on a first import or a re-import. An acceptance UI
+  test doesn't replace it, since only a flow records a video and runs red at the base. A
+  requirement no flow can check opens its `Reason` with what stops one, `network:`, `hardware:`,
+  `account:`, `data:` or `system:`, then what the simulator lacks, such as `data: needs a source
+  with 50 chapters`. A reason saying unit or acceptance tests cover it excuses nothing. A reason
+  excuses 1 requirement, never the app: each `xcode` area whose screens a task writes has at
+  least 1 `flow` row whose `Runs after` or covering task writes in that area.
 - **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
   straight after a `flow` row for the same requirement and `Runs after` tasks; in a repository
   with no `xcode` area, an `acceptance` row takes the flow's place.
+
+### Network-fed screens
+
+A screen whose data comes through a dependency client, a `…Client` module in the app's area such
+as `APIClient`, runs its flows against a fake of that client, never the live service. So its
+loading, error, retry and refresh journeys are `flow` rows, and `network:` excuses none of them:
+the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
+
+- The contract adds the seam when the app has none. The composition root reads the argument after
+  `-harness-scenario` in `ProcessInfo.processInfo.arguments` and, before it builds the root store,
+  sets the client to that scenario's fake inside `prepareDependencies`. With no argument the app
+  runs live.
+- A task, or the contract's stubs, gives the fake 1 scenario per journey, such as `success`,
+  `load-failure` and `detail-failure`, each with fixed data. Every flow row's `Runs after` names
+  that task.
+- Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
+  {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 
 Unit tests are each task's own and never get a row. A requirement its tasks' unit tests prove
 alone gets 1 row with `Layer`, `Check`, `Runs after` and `Writer` empty, and a `Reason` saying
@@ -146,7 +165,8 @@ on these `plan-lint` rules:
 | `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
 | `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
-| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen, with no `flow` row and no `Reason` opening with an obstacle kind |
+| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind |
+| `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
 

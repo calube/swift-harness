@@ -261,6 +261,11 @@ public struct LiveGit: Git, DiffReading {
     }
   }
 
+  public func trackedFiles() async throws(GitError) -> [String] {
+    try await run(["ls-files", "-z", "--full-name", ":(top)"]).split(separator: "\0").map(
+      String.init)
+  }
+
   private func run(_ arguments: [String]) async throws(GitError) -> String {
     let output = try await execute(arguments)
     guard output.status.isSuccess else { throw Self.failure(arguments, output) }

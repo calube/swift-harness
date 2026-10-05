@@ -215,6 +215,7 @@ enum BuildCheckReturnRun {
     var manifests: PlanSurfaceManifests?
     var testBuild: ProofBaseTestBuild?
     var lastCommit: String?
+    var addedTests: [TaskReturnEvidence.AddedTest] = []
     let planSurface = try planSurfaceCommit(store, warnings: &warnings)
     if let branchTip {
       for commit in taskReturn.commits {
@@ -241,6 +242,10 @@ enum BuildCheckReturnRun {
             worktree: worktree, git: git, warnings: &warnings)
         }
       }
+      if profile == .brownfield {
+        addedTests = try await brownfieldTests(
+          changed, tip: branchTip, worktree: worktree, git: git, warnings: &warnings)
+      }
       outside = WriteSet.outsideChanges(changed, writeSet: task.writeSet)
       if !outside.isEmpty {
         warnings.append(
@@ -254,7 +259,60 @@ enum BuildCheckReturnRun {
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
       explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
       surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
-      planSurface: manifests, testBuild: testBuild, lastCommit: lastCommit)
+      planSurface: manifests, testBuild: testBuild, lastCommit: lastCommit,
+      addedTests: addedTests)
+  }
+
+  /// The test files the task branch adds or changes and still holds, in the areas that own them,
+  /// for the areas whose `slice` runs changed tests alone. A test in any other area is a warning:
+  /// a slice over the budget only builds it, so it first runs at `merge`.
+  private static func brownfieldTests(
+    _ changed: [String], tip: String, worktree: URL, git: any Git, warnings: inout [String]
+  ) async throws(Blocked) -> [TaskReturnEvidence.AddedTest] {
+    guard !changed.isEmpty else { return [] }
+    let unmatched = "so the branch's tests weren't matched to the areas its gate tested"
+    let config: BrownfieldConfig
+    do {
+      let common = URL(filePath: try await git.commonDirectory(), directoryHint: .isDirectory)
+      guard
+        case .brownfield(let loaded)? = try ConfigLoader().loadProfile(
+          repositoryRoot: worktree, commonDir: common)
+      else {
+        warnings.append("the clone has no brownfield config, \(unmatched)")
+        return []
+      }
+      config = loaded
+    } catch {
+      warnings.append("the clone's brownfield config can't be read (\(error)), \(unmatched)")
+      return []
+    }
+    let tests = changed.filter { path in
+      AreaGating.owner(of: path, in: config.areas).map { ChangedTestIDs.isTestFile(path, of: $0) }
+        ?? false
+    }
+    guard !tests.isEmpty else { return [] }
+    let held: Set<String>
+    do {
+      held = Set(try await git.contents(of: tests, at: tip).keys)
+    } catch {
+      throw Blocked("reading the task branch's test files at \(tip): \(error)")
+    }
+    var added: [TaskReturnEvidence.AddedTest] = []
+    var buildOnly: [String] = []
+    for path in tests where held.contains(path) {
+      guard let area = AreaGating.owner(of: path, in: config.areas) else { continue }
+      if area.selectsChangedTests {
+        added.append(TaskReturnEvidence.AddedTest(path: path, area: area.name))
+      } else {
+        buildOnly.append(path)
+      }
+    }
+    if !buildOnly.isEmpty {
+      warnings.append(
+        "\(buildOnly.joined(separator: ", ")) sit in areas whose test_files can't run changed "
+          + "tests alone, so a slice over the budget only builds them and they first run at merge")
+    }
+    return added
   }
 
   /// Builds the host tests the task branch adds or changes, in scratch trees of its tip, with the
@@ -546,7 +604,9 @@ struct BuildCheckReturnCommand: AsyncParsableCommand {
       + "surface, merged tasks' stubs, the return's surfaceCommit) in scratch worktrees it "
       + "removes: a test file that compiles at none is build-return.test-needs-stub. Re-runs no "
       + "gate. A ready-to-merge or review-blocked return's gate run must have started at the "
-      + "return's last commit on a clean tree (build-return.stale-gate). Records the verdict in "
+      + "return's last commit on a clean tree (build-return.stale-gate). In a brownfield clone, "
+      + "a test file the branch adds or changes in an area whose test_files narrows a run must "
+      + "have run in that gate (build-return.tests-not-run). Records the verdict in "
       + "the plan's newest build run as a return-check event naming the return's last commit, "
       + "which build merge requires GREEN at the branch tip it merges, and as build.return-checked "
       + "in the main checkout's store: the task, the verdict, the rule ids and each finding's "

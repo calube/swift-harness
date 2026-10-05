@@ -287,7 +287,7 @@ enum RunViewSpans {
 }
 
 extension BuildEvent {
-  var at: Date {
+  public var at: Date {
     switch self {
     case .transition(let move): move.at
     case .merge(let merge): merge.at

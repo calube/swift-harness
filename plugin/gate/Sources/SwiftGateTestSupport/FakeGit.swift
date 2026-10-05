@@ -27,6 +27,7 @@ public final class FakeGit: Git {
   private let common: String
   private let blobs: [String: String]
   private let history: [String: [String]]
+  private let tracked: [String]
   private let ancestorRefs: Set<String>
   private let refReads = Mutex<[String]>([])
   private let reads = Mutex<[String]>([])
@@ -45,6 +46,7 @@ public final class FakeGit: Git {
   ///   - blobs: what ``blobContents(_:)`` answers per id; others are `nil`.
   ///   - history: what ``revisions(of:)`` answers per path, newest first; others are `[]`.
   ///   - ancestors: the refs ``isAncestor(_:of:)`` answers `true` for, whatever the other ref.
+  ///   - tracked: what ``trackedFiles()`` answers.
   public init(
     staged: [String: StagedFile] = [:], changed: [String]? = nil, mergeBase: String? = nil,
     prefix: String = "", addedSince: [AddedLines] = [], revisions: [String: String] = [:],
@@ -52,8 +54,10 @@ public final class FakeGit: Git {
     commonDirectory: String = "/fake/.git", blobs: [String: String] = [:],
     history: [String: [String]] = [:],
     ancestors: Set<String> = [],
+    tracked: [String] = [],
     failure: GitError? = nil
   ) {
+    self.tracked = tracked
     self.ancestorRefs = ancestors
     self.contentsAtRef = contentsAtRef
     self.common = commonDirectory
@@ -164,5 +168,10 @@ public final class FakeGit: Git {
   public func revisions(of path: String) async throws(GitError) -> [String] {
     if let failure { throw failure }
     return history[path] ?? []
+  }
+
+  public func trackedFiles() async throws(GitError) -> [String] {
+    if let failure { throw failure }
+    return tracked
   }
 }

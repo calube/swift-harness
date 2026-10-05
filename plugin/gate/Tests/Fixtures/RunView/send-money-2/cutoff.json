@@ -1,0 +1,19 @@
+{
+  "at" : "2026-10-05T03:24:10Z",
+  "decisions" : [
+    {
+      "action" : "finish-merge",
+      "reason" : "its merge and a GREEN merge gate are recorded: only the steps after its merge gate are left",
+      "task" : "send-ui"
+    }
+  ],
+  "timeBox" : {
+    "limits" : {
+      "budgetMin" : 40,
+      "finalReserveMin" : 5,
+      "source" : "config",
+      "stopStartsBeforeMin" : 13
+    },
+    "startedAt" : "2026-10-05T02:44:02Z"
+  }
+}

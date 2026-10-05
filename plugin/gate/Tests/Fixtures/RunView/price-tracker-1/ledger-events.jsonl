@@ -1,0 +1,16 @@
+{"at":"2026-10-05T02:51:49Z","from":"pending","kind":"transition","task":"app-core","to":"in-progress"}
+{"at":"2026-10-05T02:51:50Z","from":"pending","kind":"transition","task":"tracker-ui","to":"in-progress"}
+{"at":"2026-10-05T02:51:50Z","from":"pending","kind":"transition","task":"client-live","to":"in-progress"}
+{"at":"2026-10-05T02:56:29Z","checkId":"70CAFEAB-15FB-47E9-8110-B4E3CDCF1AE8","commit":"43daf2dba0575af134cfc31b474e0f418eba275c","fix":false,"kind":"return-check","rules":[],"task":"tracker-ui","verdict":"GREEN"}
+{"at":"2026-10-05T02:56:33Z","kind":"merge","postCommit":"5745d3d1c17bc5a2ebbd2894791bb02718bae769","preCommit":"81b5d7e92b4f3b3bbdc36d62d6af65b50a606ffb","task":"tracker-ui"}
+{"at":"2026-10-05T02:56:39Z","from":"pending","kind":"transition","task":"spec-validation","to":"in-progress"}
+{"at":"2026-10-05T02:59:47Z","gate":"merge","kind":"gate","runId":"20261005T025653Z-e59bdc49","task":"tracker-ui","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T02:59:48Z","from":"in-progress","kind":"transition","task":"tracker-ui","to":"done"}
+{"at":"2026-10-05T03:00:00Z","checkId":"C120C97D-B65C-4AA4-BCC2-7BA4908FD8A8","commit":"83f5fbb31e03415a871f24460eb109b97a42882f","fix":false,"kind":"return-check","rules":[],"task":"app-core","verdict":"GREEN"}
+{"at":"2026-10-05T03:00:00Z","kind":"merge","postCommit":"8987b02c615cc60d3c4754d4995b3a9e07f4dd28","preCommit":"5745d3d1c17bc5a2ebbd2894791bb02718bae769","task":"app-core"}
+{"at":"2026-10-05T03:10:12Z","from":"in-progress","kind":"transition","task":"spec-validation","to":"done"}
+{"at":"2026-10-05T03:20:41Z","from":"in-progress","kind":"transition","task":"client-live","to":"abandoned"}
+{"at":"2026-10-05T03:20:53Z","fromCommit":"8987b02c615cc60d3c4754d4995b3a9e07f4dd28","kind":"undo","task":"app-core","toCommit":"5745d3d1c17bc5a2ebbd2894791bb02718bae769"}
+{"at":"2026-10-05T03:20:53Z","from":"in-progress","kind":"transition","task":"app-core","to":"abandoned"}
+{"at":"2026-10-05T03:22:51Z","gate":"final","kind":"gate","runId":"20261005T032106Z-911372de","tier":"final","verdict":"GREEN"}
+{"at":"2026-10-05T03:22:56Z","kind":"finish","qaRun":"20261005T032251Z-6351c4bf","validation":"RED"}

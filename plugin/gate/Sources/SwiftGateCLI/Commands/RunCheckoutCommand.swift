@@ -95,10 +95,9 @@ enum RunCheckoutRun {
     } catch {
       return context.report(.blocked, .blocked, "\(error)")
     }
-    let kept =
-      StateRootResolver.keptRuns(
-        commonDir: URL(filePath: context.common, directoryHint: .isDirectory))
-      ?? StateRootResolver.resolve(worktree: URL(filePath: main, directoryHint: .isDirectory))
+    let kept = StateRootResolver.keptRuns(
+      commonDir: URL(filePath: context.common, directoryHint: .isDirectory),
+      mainCheckout: URL(filePath: main, directoryHint: .isDirectory))
     let keeping = WorktreeRun.keepRuns(from: context.path, into: kept)
     let events = WorktreeRun.copyEvents(
       from: context.path, into: main, commonDirectory: context.common)
