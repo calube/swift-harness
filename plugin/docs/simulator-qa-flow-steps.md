@@ -57,10 +57,10 @@ fake's call runs, can come and go between polls. `qa lint` warns `qa.flow-transi
 never gates, when a flow sees a selector appear and then go with only `wait`, `is`, `get`,
 `snapshot` or `screenshot` steps between, under a `-harness-scenario` whose name lacks the word
 `held`. Run such a flow under the contract's `held` scenario, whose call holds the state.
-A screen whose state advances on a clock runs the same race however fast the app settles: `qa run`
-captures a snapshot, a screenshot and a snapshot after each `wait` or `is` step, about 1.2 s and
-over 10 s on a loaded machine. So a check of its starting state runs under the contract's `held`
-scenario, whose clock starts at the first input.
+A screen whose state advances on a clock runs the same race however fast the app settles. After
+each `wait` or `is` step, `qa run` captures a snapshot, a screenshot and a snapshot: about 1.2 s,
+and over 10 s on a loaded machine. So a check of its starting state runs under the contract's
+`held` scenario, whose clock starts at the first input.
 
 ## A state that changes on a clock
 
