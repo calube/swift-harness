@@ -462,7 +462,7 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    as a merge gate is. Its deadline is never past the box's end. An `overrun` is a RED `final`
    with no run to record: `TaskStop` it, skip item 2 and go on from item 3, and the report names
    the overrun. It runs every area's `test`, `lint` and `build` against the baseline, plus each
-   area's `e2e`. A step, or a prove of changed tests on the same reverted tree, that a merge gate
+   area's `e2e`. A step, or a prove of the same changed tests on the same reverted tree or head tree, that a merge gate
    passed on the same inputs is taken, not run, and a `gate.reused` note names that gate. A test step that also fails
    whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
    names where the head's and the merge base's output tail and report were kept: read those first.

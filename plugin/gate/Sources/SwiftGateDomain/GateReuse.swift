@@ -101,7 +101,14 @@ public enum GateReuse {
   public static func proveHeadKey(
     _ inputs: Inputs, area: String, command: String, tests: [String], copied: [String: String?]
   ) -> String {
-    ""
+    var lines = [
+      "prove-head schema 1", "tree \(inputs.treeHash)", "binary \(inputs.sourceHash)",
+      "config \((inputs.stateFiles["config"] ?? nil) ?? "absent")", "area \(area)",
+      "command \(command)",
+    ]
+    lines += tests.sorted().map { "test \($0)" }
+    lines += copied.keys.sorted().map { "copied \($0) \((copied[$0] ?? nil) ?? "absent")" }
+    return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.
