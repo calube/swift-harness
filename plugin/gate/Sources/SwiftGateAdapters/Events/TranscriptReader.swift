@@ -9,12 +9,18 @@ public struct TranscriptFile: Sendable, Equatable {
   /// What a message about the file names: its file name, never its path.
   public let label: String
   public let data: Data
+  /// A Workflow's agent, from `subagents/workflows/<workflow>/`, rather than 1 the session
+  /// launched itself with the Agent tool.
+  public let workflow: Bool
 
-  public init(agent: UsageAgent, agentID: String?, label: String, data: Data) {
+  public init(
+    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false
+  ) {
     self.agent = agent
     self.agentID = agentID
     self.label = label
     self.data = data
+    self.workflow = workflow
   }
 }
 
