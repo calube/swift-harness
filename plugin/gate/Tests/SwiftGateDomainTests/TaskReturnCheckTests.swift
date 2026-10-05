@@ -115,4 +115,30 @@ struct TaskReturnCheckTests {
         evidence(status: .init(task: "t", state: "blocked", report: otherConflict)))
         == [.designConflictMismatch])
   }
+
+  @Test(
+    "a gate-red return citing a GREEN slice gate passes when its notes end with a `flow row:` line naming the red qa runs, and still fails with plain notes or a flow row line naming no runs — catches check-return rejecting the fixer's flow-repair hand-off"
+  )
+  func gateRedWithRedFlowRowPasses() {
+    func rules(notes: String) -> [TaskReturnFinding.Rule] {
+      let taskReturn = TaskReturn(
+        task: "t", outcome: .gateRed, commits: ["abc1"],
+        gate: .init(tier: .slice, verdict: .green, runID: "r1"), review: nil, testsAdded: [],
+        notes: notes, designConflict: nil)
+      let evidence = TaskReturnEvidence(
+        branch: "p/t", branchExists: true, commits: ["abc1": .onBranch],
+        gateRun: .init(tier: .slice, verdict: .green, steps: [], dirty: false), taskGate: .slice,
+        taskStatus: nil, taskGateStepsRequired: true)
+      return TaskReturnCheck.findings(taskReturn, evidence: evidence).map(\.rule)
+    }
+    let flowRow =
+      "flow row: req-3 check-2: step 4 scroll: element not found (qa runs q-101, q-102); "
+      + "flow-side: yes: pull to refresh needs a gesture drag"
+
+    #expect(rules(notes: "the gate is green but the qa row stays red\n" + flowRow) == [])
+    #expect(rules(notes: "the gate is green but I gave up") == [.gateRedOutcomeIsGreen])
+    #expect(
+      rules(notes: "flow row: req-3 check-2: step 4 scroll: element not found; flow-side: no: x")
+        == [.gateRedOutcomeIsGreen])
+  }
 }

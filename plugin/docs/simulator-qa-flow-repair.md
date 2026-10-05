@@ -10,7 +10,8 @@ into plan state with `swiftgate qa adopt --repair`, without anyone stepping in. 
 ## When the build loop repairs a row
 
 A merge fixer that reads 1 flow row red in 2 `qa run`s stops and names the row in its `gate-red`
-notes. It says whether the failing step is the flow's fault: a step the pinned tool can't drive as
+notes, which `build check-return` accepts beside a GREEN gate once a `flow row:` line names
+the red `qa run`s. It says whether the failing step is the flow's fault: a step the pinned tool can't drive as
 written, such as a `scroll` where a pull to refresh needs a `gesture` drag. A selector that names
 the wrong element, or a step the app can't satisfy as written, counts too. The build loop then sends that row
 alone to a validation worker in repair mode. The fixer itself never edits a flow file: they live in

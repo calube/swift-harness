@@ -713,13 +713,29 @@ public enum TaskReturnCheck {
           ))
       }
     }
-    if taskReturn.outcome == .gateRed, run.verdict == .green {
+    if taskReturn.outcome == .gateRed, run.verdict == .green,
+      !namesRedFlowRow(taskReturn.notes)
+    {
       findings.append(
         .init(
           rule: .gateRedOutcomeIsGreen,
           message: "a gate-red return cites gate run \(gate.runID), which is GREEN"))
     }
     return findings
+  }
+
+  /// A fixer whose gate is GREEN still returns `gate-red` when a qa flow row stayed red in 2
+  /// `qa run`s; its notes carry a `flow row:` line naming those runs, which the build loop hands to
+  /// a repair worker.
+  static func namesRedFlowRow(_ notes: String) -> Bool {
+    notes.split(whereSeparator: \.isNewline).contains { line in
+      let line = line.trimmingCharacters(in: .whitespaces)
+      guard line.hasPrefix("flow row:"), let runs = line.range(of: "(qa runs ") else {
+        return false
+      }
+      let ids = line[runs.upperBound...].prefix { $0 != ")" }
+      return ids.split(separator: ",").contains { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+    }
   }
 
   /// A green gate vouches only for the tree it ran on: the return's last commit, with nothing
