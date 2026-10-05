@@ -100,7 +100,49 @@ public struct QAAtBaseRun: Sendable, Equatable {
   /// rows that run on its device are reused together or not at all, since a state check reads
   /// what its flow left on a device that only a run of that flow brings up.
   public func reuse(in plan: QARunPlan, digests: [Int: String]) -> Reuse {
-    Reuse(outcomes: [:], reasons: [:])
+    var outcomes: [Int: QACheckOutcome] = [:]
+    var reasons: [Int: String] = [:]
+    let ready = plan.entries.filter { $0.waitingOn.isEmpty }
+    for entry in ready {
+      let validation = entry.validation
+      let same = rows.filter {
+        $0.requirement == validation.requirement && $0.layer == validation.layer
+          && $0.check == validation.check
+      }
+      guard !same.isEmpty else {
+        reasons[entry.row] = "not in qa run \(runID)"
+        continue
+      }
+      guard let digest = digests[entry.row],
+        let recorded = same.first(where: { $0.digest == digest })
+      else {
+        reasons[entry.row] = "its check changed after qa run \(runID)"
+        continue
+      }
+      guard recorded.result == .pass || recorded.result == .red else {
+        reasons[entry.row] = "it read \(recorded.result.rawValue) in qa run \(runID)"
+        continue
+      }
+      outcomes[entry.row] = QACheckOutcome(
+        result: recorded.result,
+        message: "reused from qa run \(runID) by \(preparedBy)"
+          + (commit.map { " at \($0.prefix(12))" } ?? "") + ": \(recorded.message)",
+        exitStatus: recorded.exitStatus, reusedFrom: runID)
+    }
+    let flowRequirements = Set(
+      ready.filter { $0.validation.layer == .flow }.map(\.validation.requirement))
+    for requirement in flowRequirements {
+      let group = ready.filter {
+        $0.validation.requirement == requirement && $0.validation.layer != .acceptance
+      }
+      guard let rerun = group.first(where: { outcomes[$0.row] == nil }) else { continue }
+      for entry in group where outcomes[entry.row] != nil {
+        outcomes[entry.row] = nil
+        reasons[entry.row] =
+          "row \(rerun.row) of \(requirement) runs again, and its flow and state rows share 1 device"
+      }
+    }
+    return Reuse(outcomes: outcomes, reasons: reasons)
   }
 }
 

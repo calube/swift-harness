@@ -159,7 +159,9 @@ surface, and says to work in that worktree and follow
    device: a headless session ends with its turn when only background Bash work is left, and
    kills that work. This `--at-base` run is never skipped, and no task that a row's `Runs after`
    names merges before it has run: such a task that finishes first keeps its checked return and
-   merges once this run is done. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
+   merges once this run is done. It takes each row the worker's `--prepared-by` run proved from
+   the `at-base-run.json` the adopt copied while its check is byte-identical, naming that run in
+   the row's `reusedFrom`, and runs only the rest. A row that reads `pass` there gets `qa.check-passes-at-base`: its check can't
    tell the change from its absence. Name it in the report, and go on. A row that reads
    `unverified` there has no red run behind it, whatever the worker returned: name it in the
    report as `no red run` with its message.
