@@ -524,6 +524,28 @@ export function cutoffOverrideProblems(run, loop) {
   return problems
 }
 
+/**
+ * Where a plan shape lets 2 parallel tasks own the 2 sides of 1 boundary with no test that joins
+ * them: when tasks in the same wave meet at a shared numeric or geometric boundary or a protocol,
+ * the contract pins it as a named constant or type with a contract test, or the task that depends
+ * on both runs the real producer into the real consumer with no input and asserts no rule fires.
+ * In a build trial 1 task placed new entities below the screen's edge and its sibling removed
+ * whatever was past that edge, each task's tests passed alone, and the composed app removed most
+ * entities on the step they appeared.
+ */
+export function sharedBoundaryProblems(text) {
+  const sentences = text.replace(/\s+/g, ' ').split(/(?<=\.)\s+/)
+  const at = sentences.findIndex(s => /\b(?:same wave|parallel)\b/i.test(s) && /\bboundary\b/i.test(s))
+  if (at === -1) return ['never names 2 parallel tasks meeting at a shared boundary']
+  const near = sentences.slice(at, at + 5).join(' ')
+  const problems = []
+  if (!/\bcontract\b[^.]*\bpins?\b[^.]*\b(?:named constant|type)\b/i.test(near)) problems.push('never has the contract pin the boundary as a named constant or type')
+  if (!/\bcontract test\b/i.test(near)) problems.push('never asks for a contract test of the pinned boundary')
+  if (!/\breal producer\b[^.]*\breal consumer\b/i.test(near)) problems.push('never asks for a test that runs the real producer into the real consumer')
+  if (!/\bno input\b/i.test(near)) problems.push('never runs the composed test with no input')
+  return problems
+}
+
 const tests = {
   'worktree creation installs node dependencies, so the run skill says never to prefix an area command with an install, and no skill, agent or workflow chains one — catches orchestrators and workers paying an install on every slice'() {
     const prose = read('skills/run/SKILL.md').split(/\s+/).join(' ')
@@ -892,6 +914,20 @@ const tests = {
     for (const heading of ['Entry points', 'Files to change', 'Nearby tests', 'Working commands', 'Risks', 'Unknowns']) {
       assert.ok(body.includes(heading), `the explorer's return has no ${heading}`)
     }
+  },
+
+  'the plan shape has a shared boundary between parallel tasks pinned in the contract with a contract test, or tested by running the real producer into the real consumer — catches 2 tasks whose sides of 1 boundary each passed alone and broke together'() {
+    assert.deepEqual(sharedBoundaryProblems(read('skills/run/references/plan-shape.md')), [])
+  },
+
+  'the shared-boundary check names each missing piece — catches a check that passes anything'() {
+    const good = 'When 2 tasks in the same wave meet at a shared boundary, the contract pins it as a named constant with a contract test. Or the task that depends on both runs the real producer into the real consumer with no input.'
+    assert.deepEqual(sharedBoundaryProblems(good), [])
+    assert.deepEqual(sharedBoundaryProblems('Tasks share files.'), ['never names 2 parallel tasks meeting at a shared boundary'])
+    assert.match(sharedBoundaryProblems(good.replace('pins it as a named constant', 'mentions it')).join('\n'), /named constant/)
+    assert.match(sharedBoundaryProblems(good.replace('contract test', 'note')).join('\n'), /contract test/)
+    assert.match(sharedBoundaryProblems(good.replace('real consumer', 'a fake')).join('\n'), /real producer/)
+    assert.match(sharedBoundaryProblems(good.replace('with no input', 'once')).join('\n'), /no input/)
   },
 
   'the plan shape\'s example imports through the real plan import with its assumptions — catches a documented shape the parser rejects'() {

@@ -195,7 +195,9 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   fast the app settles: `qa run` takes a snapshot, a screenshot and a snapshot after each `wait`
   or `is` step, about 1.2 s and over 10 s on a loaded machine, so the clock has moved the state
   before the next step reads it. `plan import` fails such a plan as
-  `plan-lint.validation-clock-unheld`.
+  `plan-lint.validation-clock-unheld`. It reads the contract task's Title, Scope and Acceptance
+  lines in this file, not the source, so a held scenario in code alone doesn't clear it: a Scope
+  line names both `-harness-scenario` and the `held` scenario.
 - When the engine takes a seed, the contract adds a seeded scenario per interaction a requirement
   names, such as `entity-center`: it places 1 entity at a known spot, motionless, with the clock
   held, and gives it an accessibility element and identifier at its frame. The flow launches
@@ -221,7 +223,7 @@ on these `plan-lint` rules:
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind, or with `gate:` on an existing-tests requirement's reason-only row naming `merge` or `final` |
 | `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
-| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract reads no `-harness-scenario` with a `held` scenario |
+| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract's brief in `PLAN.md` names no `-harness-scenario` with a `held` scenario |
 | `plan-lint.validation-obstacle-seedable` | a requirement with no `flow` row whose Reason names a moving or random entity while a brief gives the app a seed or a scenario |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
@@ -275,6 +277,16 @@ check exercises another task's work depends on that task, directly or through ot
 
 `plan import` fails on the first 2 as `plan-lint.check-missing-dependency`. The third is yours to
 check: read each UI test's expected text back to the task that produces it.
+
+## A boundary parallel tasks share
+
+When 2 tasks in the same wave meet at a shared numeric or geometric boundary or a protocol, the
+contract pins it as a named constant or type in the contract commit, with a contract test. Such a
+boundary is where 1 task's output feeds the other's rule: where entities enter and the edge past
+which they're removed, a request's shape and its parser, an id format and its lookup. Otherwise
+the task that depends on both gets, in its `Acceptance`, a test that runs the real producer into
+the real consumer for several steps with no input and asserts no rule fires. Each task's own tests
+pass alone, so a defect between the 2 sides shows only once they compose, in the running app.
 
 ## Write sets from the target graph
 

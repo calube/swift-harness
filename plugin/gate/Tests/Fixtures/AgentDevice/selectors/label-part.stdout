@@ -1,0 +1,116 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 3 (wait): wait timed out for selector: label=\"Step\". Current surface: Step count, Start.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muvo16hj-0983bfb9",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/requests/ef604d8a155ccfd2.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-selectors",
+      "requestId": "ef604d8a155ccfd2"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 3000,
+      "readableCaptures": 4,
+      "captures": 4,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 478,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 781,
+          "durationMs": 471,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1555,
+          "durationMs": 469,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2325,
+          "durationMs": 478,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 3001,
+      "currentSurface": {
+        "labels": [
+          "Step count",
+          "Start",
+          "SelectorProbe"
+        ]
+      },
+      "step": 3,
+      "command": "wait",
+      "positionals": [
+        "label=\"Step\"",
+        "3000"
+      ],
+      "executed": 2,
+      "total": 3,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-selectors",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-selectors",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/requests/ef604d8a155ccfd2.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.SelectorProbe",
+            "appBundleId": "com.example.SelectorProbe",
+            "startup": {
+              "durationMs": 1558,
+              "measuredAt": "2026-10-05T19:51:36.992Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.SelectorProbe",
+              "appBundleId": "com.example.SelectorProbe"
+            },
+            "timing": {
+              "runnerDemand": "none",
+              "openDispatchDurationMs": 750,
+              "launchUrlDurationMs": 0,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 796,
+              "totalDurationMs": 1558
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-37856",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.SelectorProbe"
+          },
+          "durationMs": 1994
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 499,
+            "selector": "id=\"probe.count\""
+          },
+          "durationMs": 502
+        }
+      ]
+    }
+  }
+}

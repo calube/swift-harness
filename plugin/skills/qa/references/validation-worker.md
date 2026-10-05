@@ -49,7 +49,10 @@ exists and fails for the reason the feature is missing.
   `<Target>/<Class>/<method>`, which `qa run` passes to the area's test command as `-only-testing:`.
 - **Flow**: a JSON array of `{"command": "<name>", "input": {...}}` steps for an `agent-device` batch.
   Target elements by `id="…"` selectors whose ids are raw values of the app's `AccessibilityID`
-  module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. Every flow
+  module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. The selector
+  keys (`id`, `label`, `value`, `role`), how a value matches, several terms and `||` alternatives
+  are in `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-selectors.md`; never read the tool's
+  package for them. Every flow
   checks at least 1 thing with a `wait` or `is` step; a `get` reads a value and never counts.
   A `wait` puts its target under the key its `kind` reads, which the tool runs whatever `kind`
   says: `{"kind": "absent", "absent": "id=\"<id>\""}` waits for an element to go, and the same
@@ -96,6 +99,15 @@ exists and fails for the reason the feature is missing.
   "id=\"<id across the screen>\""}}`, then waits for what the interaction changes. A random or
   moving position never excuses it. When the contract has no such scenario or id, return it as a
   missing contract name.
+  A flow for a requirement where 1 event causes an effect first checks the effect has not
+  happened while the cause is still pending. Examples are an entity leaving the screen costing a
+  counter, or a save showing a record. Then the flow waits for or performs the cause, then waits
+  for the effect: a `wait` for `id="<entity>"` beside an `is` on `id="<counter>" value="<start>"`,
+  then the cause, then a `wait` for `id="<counter>" value="<after>"`. A flow that waits only for the end state
+  passes when the app produces the effect without the cause, which is the defect the row exists to
+  catch. So it launches under the contract's held or seeded scenario that holds the cause back
+  until the flow acts, which makes the first check deterministic. When the contract has none,
+  return it as a missing contract name.
   A `.searchable` field takes no identifier, so its 1 step is `{"command": "fill", "input":
   {"target": {"kind": "selector", "selector": "role=searchfield"}, "text": "<query>"}}`, never a
   `fill` or `press` on the list's id. Check the result by the ids of the count and rows.

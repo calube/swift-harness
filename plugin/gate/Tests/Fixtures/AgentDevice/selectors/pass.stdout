@@ -1,0 +1,128 @@
+{
+  "success": true,
+  "data": {
+    "total": 8,
+    "executed": 8,
+    "totalDurationMs": 7298,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-selectors",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-selectors",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/requests/13896576a3341e4c.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-selectors/events.ndjson",
+          "sessionReused": false,
+          "selection": {
+            "reason": "explicit-selector",
+            "source": "local",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.SelectorProbe",
+          "appBundleId": "com.example.SelectorProbe",
+          "startup": {
+            "durationMs": 3323,
+            "measuredAt": "2026-10-05T19:51:31.632Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.SelectorProbe",
+            "appBundleId": "com.example.SelectorProbe"
+          },
+          "timing": {
+            "runnerDemand": "none",
+            "openDispatchDurationMs": 584,
+            "launchUrlDurationMs": 0,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 2738,
+            "totalDurationMs": 3323
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-37856",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.SelectorProbe"
+        },
+        "durationMs": 4135
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 560,
+          "selector": "id=\"probe.count\""
+        },
+        "durationMs": 565
+      },
+      {
+        "step": 3,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 572,
+          "selector": "label=\"Step count\""
+        },
+        "durationMs": 574
+      },
+      {
+        "step": 4,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 559,
+          "selector": "id=\"probe.count\" value=\"3\""
+        },
+        "durationMs": 561
+      },
+      {
+        "step": 5,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 485,
+          "selector": "role=button label=\"Start\""
+        },
+        "durationMs": 487
+      },
+      {
+        "step": 6,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 480,
+          "selector": "label=\"step COUNT\""
+        },
+        "durationMs": 480
+      },
+      {
+        "step": 7,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 486,
+          "selector": "id=\"probe.start\""
+        },
+        "durationMs": 486
+      },
+      {
+        "step": 8,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "exists",
+          "pass": true,
+          "selector": "role=statictext id=\"probe.count\" value=\"3\"",
+          "matches": 1
+        },
+        "durationMs": 10
+      }
+    ]
+  }
+}
