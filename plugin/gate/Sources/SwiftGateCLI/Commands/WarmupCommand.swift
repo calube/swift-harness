@@ -14,6 +14,12 @@ struct WarmupCommand: AsyncParsableCommand {
   @Option(help: "Comma-separated area names; every area when absent.")
   var areas: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "The plan branch's checkout, where each SwiftPM area's build also runs, warming the "
+        + "build the run makes there."))
+  var seedCheckout: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -28,6 +34,8 @@ struct WarmupCommand: AsyncParsableCommand {
     let tree: String
     let timesFile: String
     let areas: [WarmupAreaResult]
+    /// Each SwiftPM area's build in the seed checkout, in config order.
+    let seeded: [WarmupSeedBuild]
     /// Non-gating lines for stderr: a file not written, an event not recorded.
     let notes: [String]
   }
@@ -44,9 +52,9 @@ struct WarmupCommand: AsyncParsableCommand {
   }
 
   /// The warm-up of `areaNames`, or of every area when `nil`, in the clone holding `directory`.
-  static func warm(directory: URL, areaNames: [String]?, dependencies: Dependencies)
-    async throws(SetupError) -> Outcome
-  {
+  static func warm(
+    directory: URL, areaNames: [String]?, seedCheckout: URL? = nil, dependencies: Dependencies
+  ) async throws(SetupError) -> Outcome {
     let process = dependencies.processRunner
     let tracked = GitTrackedTree(runner: process, directory: directory)
     let root: URL
@@ -115,7 +123,7 @@ struct WarmupCommand: AsyncParsableCommand {
           notes.withLock { $0 += lines }
         }))
     return Outcome(
-      tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results,
+      tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results, seeded: [],
       notes: notes.withLock { $0 })
   }
 

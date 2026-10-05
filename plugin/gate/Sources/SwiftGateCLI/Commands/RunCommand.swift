@@ -23,8 +23,9 @@ struct RunStartError: Error, Sendable, Equatable {
 /// Starts `swiftgate warmup` so that it outlives `run` and the orchestrator session, and nothing
 /// waits on it.
 protocol WarmupSpawning: Sendable {
-  /// Starts the warm-up in `directory`, appending its output to `log`. Returns its pid when known.
-  func spawn(directory: URL, log: URL) async throws(RunStartError) -> Int32?
+  /// Starts the warm-up in `directory`, appending its output to `log`, also building each SwiftPM
+  /// area in `seedCheckout` when given. Returns its pid when known.
+  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32?
   /// Stops the warm-up `spawn` started, when the run it was started for never launched.
   func stop(pid: Int32)
 }
@@ -60,6 +61,9 @@ struct RunPrepared: Sendable, Equatable, Encodable {
   let settings: String
   let warmupLog: String
   let warmupPID: Int32?
+  /// The plan branch's checkout `run` made, where the warm-up builds each SwiftPM area too;
+  /// `nil` when it made none.
+  let checkout: String?
   /// Non-gating lines from discovery for stderr.
   let notes: [String]
 }
@@ -253,7 +257,8 @@ extension RunCommand {
         throw RunStartError(message: "git branch \(planBranch) \(base) failed")
       }
       branched = true
-      warmupPID = try await dependencies.warmup.spawn(directory: root, log: warmupLog)
+      warmupPID = try await dependencies.warmup.spawn(
+        directory: root, log: warmupLog, seedCheckout: nil)
     } catch {
       if branched {
         _ = try? await git(
@@ -268,7 +273,7 @@ extension RunCommand {
       slug: slug, session: session, root: rootPath,
       planDirectory: planDirectory.path(percentEncoded: false),
       clock: clock, settings: layout.settings.path(percentEncoded: false),
-      warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID,
+      warmupLog: warmupLog.path(percentEncoded: false), warmupPID: warmupPID, checkout: nil,
       notes: discovered.notes + notes)
   }
 
@@ -424,7 +429,7 @@ struct LiveWarmupSpawner: WarmupSpawning {
   /// the hash from this process's environment, so the child can't inherit it.
   var binary: GateBinary? = GateBinaryScope.current
 
-  func spawn(directory: URL, log: URL) async throws(RunStartError) -> Int32? {
+  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
     do {
       try FileManager.default.createDirectory(
         at: log.deletingLastPathComponent(), withIntermediateDirectories: true)

@@ -181,6 +181,24 @@ public struct WarmupTimesFile: Sendable, Equatable {
   }
 }
 
+/// 1 SwiftPM area's build in the plan checkout, which warms the `.build` the run's own builds
+/// use there. Nothing is recorded from it: the times and baseline come from the base tree's run.
+public struct WarmupSeedBuild: Sendable, Equatable {
+  public let area: String
+  public let milliseconds: Int
+  /// `passed`, `failed` or `notInstalled`.
+  public let outcome: WarmupOutcome
+  /// The end of the build's output when it didn't pass.
+  public let detail: String?
+
+  public init(area: String, milliseconds: Int, outcome: WarmupOutcome, detail: String?) {
+    self.area = area
+    self.milliseconds = milliseconds
+    self.outcome = outcome
+    self.detail = detail
+  }
+}
+
 /// Runs every area's generate, build and test at the base tree, all areas at once, each to its
 /// end, so the shared caches fill and the times and baseline serve the run that follows.
 public enum Warmup {
@@ -277,6 +295,16 @@ public enum Warmup {
       record: record(area.name, steps: steps, known: dependencies.known))
     await dependencies.finished(result)
     return result
+  }
+
+  /// `area`'s build in `checkout`, the plan branch's checkout: SwiftPM keeps its build in each
+  /// package's `.build`, keyed by the sources' absolute paths, so only a build there warms the
+  /// builds the run makes there. `nil` for an area of another kind or with no build command.
+  public static func seedRequest(
+    area: BrownfieldArea, checkout: String, layout: BrownfieldStateLayout,
+    tree: TrackedTreeSnapshot, deadline: Duration
+  ) -> AreaCommandRequest? {
+    nil
   }
 
   /// Whether the repository commits `xcode`'s generated project, so generating it in place would

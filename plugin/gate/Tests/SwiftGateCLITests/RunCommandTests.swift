@@ -173,7 +173,7 @@ private final class FakeWarmup: WarmupSpawning {
     self.config = config
   }
 
-  func spawn(directory: URL, log: URL) async throws(RunStartError) -> Int32? {
+  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
     let existed = FileManager.default.fileExists(atPath: config.path)
     calls.withLock { $0.append((directory, log, existed)) }
     steps.append("warmup")
@@ -656,7 +656,7 @@ struct RunCommandTests {
     let spawner = LiveWarmupSpawner(
       runner: clone.runner, executable: fake.path, arguments: ["warmup"])
 
-    let pid = try await spawner.spawn(directory: clone.root, log: log)
+    let pid = try await spawner.spawn(directory: clone.root, log: log, seedCheckout: nil)
 
     let alive = try #require(pid)
     #expect(kill(alive, 0) == 0, "the warm-up is still blocked on its gate")
@@ -858,7 +858,8 @@ struct RunCommandTests {
       !FileManager.default.fileExists(
         atPath: clone.root.appending(path: RunLayout.treeDirectory).path))
     let events = clone.layout.cloneRoot.appending(path: "events", directoryHint: .isDirectory)
-    let written = (FileManager.default.enumerator(at: events, includingPropertiesForKeys: nil)?
+    let written =
+      (FileManager.default.enumerator(at: events, includingPropertiesForKeys: nil)?
       .compactMap { $0 as? URL } ?? [])
       .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
     #expect(written.contains { $0.contains("discover.run") }, "nothing under \(events.path)")
