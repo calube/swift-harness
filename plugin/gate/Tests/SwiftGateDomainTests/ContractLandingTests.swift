@@ -138,10 +138,12 @@ enum PriceTracker3 {
   /// Each file under `folder` (`base`, `contract` or `seam`), by its repository path.
   static func files(_ folder: String) throws -> [String: String] {
     let root = directory.appending(path: folder, directoryHint: .isDirectory)
-    let walker = try #require(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+    let walker = try #require(
+      FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
     var files: [String: String] = [:]
     for case let url as URL in walker where !url.hasDirectoryPath {
-      let path = String(url.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1))
+      let path = String(
+        url.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1))
       files[path] = try String(contentsOf: url, encoding: .utf8)
     }
     return files
@@ -187,8 +189,10 @@ struct ContractLandingCommitTests {
     let files = changed + ["Sources/Other/Model.swift", "README.md"]
     #expect(
       ContractLanding.unlandedWrites(
-        ["Sources/Feature", "Sources/Other", "Sources/*.swift", "Sources/Feature/View.swift",
-         "README.md"],
+        [
+          "Sources/Feature", "Sources/Other", "Sources/*.swift", "Sources/Feature/View.swift",
+          "README.md",
+        ],
         changedFiles: changed, files: files) == ["README.md"])
   }
 
@@ -196,8 +200,11 @@ struct ContractLandingCommitTests {
     "the trial's plan launches its flows through -harness-scenario, and the memos plan, with no such argument, does not — catches the seam demanded of a plan whose flows never pass it"
   )
   func trialPlanNeedsTheSeam() throws {
-    #expect(ContractLanding.needsScenarioSeam(planText: try PriceTracker3.planText(), hasFlowRows: true))
-    #expect(!ContractLanding.needsScenarioSeam(planText: try PriceTracker3.planText(), hasFlowRows: false))
+    #expect(
+      ContractLanding.needsScenarioSeam(planText: try PriceTracker3.planText(), hasFlowRows: true))
+    #expect(
+      !ContractLanding.needsScenarioSeam(planText: try PriceTracker3.planText(), hasFlowRows: false)
+    )
     let memos = try String(
       contentsOf: Fixture.directory.appending(path: "BrownfieldTrial/memos-4-PLAN.md"),
       encoding: .utf8)
@@ -211,7 +218,8 @@ struct ContractLandingCommitTests {
     let contract = try #require(try PriceTracker3.commit().appSources)
     #expect(contract.values.contains { $0.contains(SimSession.scenarioArgument) })
     #expect(!ContractLanding.readsScenarioArgument(contract))
-    let fixed = try #require(try PriceTracker3.commit(adding: PriceTracker3.files("seam")).appSources)
+    let fixed = try #require(
+      try PriceTracker3.commit(adding: PriceTracker3.files("seam")).appSources)
     #expect(ContractLanding.readsScenarioArgument(fixed))
   }
 
@@ -220,9 +228,13 @@ struct ContractLandingCommitTests {
   )
   func appSourcesSkipTests() {
     #expect(ContractLanding.isAppSource(PriceTracker3.appFile, appRoots: ["."]))
-    #expect(ContractLanding.isAppSource("Packages/APIClient/Sources/APIClient/Scenarios.swift", appRoots: ["."]))
+    #expect(
+      ContractLanding.isAppSource(
+        "Packages/APIClient/Sources/APIClient/Scenarios.swift", appRoots: ["."]))
     #expect(!ContractLanding.isAppSource("UITests/LaunchFlowUITests.swift", appRoots: ["."]))
-    #expect(!ContractLanding.isAppSource("Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift", appRoots: ["."]))
+    #expect(
+      !ContractLanding.isAppSource(
+        "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift", appRoots: ["."]))
     #expect(!ContractLanding.isAppSource("App/Info.plist", appRoots: ["."]))
     #expect(!ContractLanding.isAppSource("Server/main.swift", appRoots: ["App"]))
     #expect(ContractLanding.isAppSource("App/Root.swift", appRoots: ["App"]))
@@ -247,6 +259,7 @@ struct ContractLandingCommitTests {
     #expect(
       ContractLanding.checked(
         PriceTracker3.done, writes: writes,
-        commit: try PriceTracker3.commit(adding: PriceTracker3.files("seam"))) == PriceTracker3.done)
+        commit: try PriceTracker3.commit(adding: PriceTracker3.files("seam"))) == PriceTracker3.done
+    )
   }
 }

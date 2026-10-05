@@ -20,7 +20,7 @@ public struct GuardViolation: Sendable, Equatable {
 
   /// The reason shown for a denied `tool` call: a Bash call's ends with ``commandNotRunNote``.
   public func denialReason(forTool tool: String?) -> String {
-    reason
+    tool == "Bash" ? reason + " " + Self.commandNotRunNote : reason
   }
 }
 

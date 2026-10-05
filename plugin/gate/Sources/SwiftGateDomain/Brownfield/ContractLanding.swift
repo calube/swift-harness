@@ -88,7 +88,31 @@ public enum ContractLanding {
   /// `outcome`, kept `pending` when the contract commit leaves a file of the task's `writes`
   /// untouched, or when the plan's flows need the scenario seam and no app source reads it.
   public static func checked(_ outcome: Outcome, writes: [String], commit: Commit) -> Outcome {
-    outcome
+    guard case .done = outcome else { return outcome }
+    var gaps: [String] = []
+    let unlanded = unlandedWrites(writes, changedFiles: commit.changedFiles, files: commit.files)
+    if !unlanded.isEmpty {
+      let named = unlanded.map { "`\($0)`" }.joined(separator: ", ")
+      let them = unlanded.count == 1 ? "it" : "them"
+      let gap: String =
+        "\(unlandedWriteRuleID): the contract task writes \(named), but the contract commit "
+        + "\(commit.tip) leaves \(them) as at \(commit.base). A write in a Bash call a guard "
+        + "denied never ran; write \(them) again"
+      gaps.append(gap)
+    }
+    if let sources = commit.appSources, !readsScenarioArgument(sources) {
+      gaps.append(
+        "\(scenarioSeamRuleID): the plan's flows launch the app with "
+          + "`\(SimSession.scenarioArgument) <name>`, but no Swift source in an `xcode` area at "
+          + "\(commit.tip) reads that argument outside a comment, so every flow would run "
+          + "against the live service. Add the seam to the composition root: read the argument "
+          + "after `\(SimSession.scenarioArgument)` in `ProcessInfo.processInfo.arguments` and "
+          + "set the client to that scenario's fake before the root store is built")
+    }
+    guard !gaps.isEmpty else { return outcome }
+    return .pending(
+      reason: gaps.joined(separator: "; ")
+        + "; commit the fix, gate it in the plan checkout and import with that run")
   }
 
   /// The literal file paths in `writes` that `changedFiles` lacks. A `/`-terminated entry, a
@@ -97,25 +121,56 @@ public enum ContractLanding {
   public static func unlandedWrites(_ writes: [String], changedFiles: [String], files: [String])
     -> [String]
   {
-    []
+    let changed = Set(changedFiles)
+    return writes.filter { path in
+      guard !path.hasSuffix("/"), !path.contains(where: { "*?[{".contains($0) }) else {
+        return false
+      }
+      let inside = path + "/"
+      guard !files.contains(where: { $0.hasPrefix(inside) }),
+        !changedFiles.contains(where: { $0.hasPrefix(inside) })
+      else { return false }
+      return !changed.contains(path)
+    }
   }
 
   /// Whether the plan's flows launch the app through ``SimSession/scenarioArgument``: the plan
   /// names it and has at least 1 `flow` row.
   public static func needsScenarioSeam(planText: String, hasFlowRows: Bool) -> Bool {
-    false
+    hasFlowRows && planText.contains(SimSession.scenarioArgument)
   }
 
   /// Whether `path` is a Swift source under 1 of `appRoots` (an `xcode` area's root, `.` for the
   /// repository) and outside every folder named `…Tests`, where a UI test passes the argument
   /// rather than reading it.
   public static func isAppSource(_ path: String, appRoots: [String]) -> Bool {
-    false
+    guard path.hasSuffix(".swift") else { return false }
+    let folders = path.split(separator: "/").dropLast()
+    guard !folders.contains(where: { $0.hasSuffix("Tests") }) else { return false }
+    return appRoots.contains { root in
+      let trimmed = root.hasSuffix("/") ? String(root.dropLast()) : root
+      return trimmed == "." || trimmed.isEmpty || path.hasPrefix(trimmed + "/")
+    }
   }
 
   /// Whether a source reads the scenario argument: it names it, with or without its leading
   /// `-`, outside a comment. A doc comment describing the seam doesn't read it.
   public static func readsScenarioArgument(_ sources: [String: String]) -> Bool {
-    false
+    let name = String(SimSession.scenarioArgument.drop(while: { $0 == "-" }))
+    guard let lexer = NeutralLexer(language: .swift) else { return false }
+    return sources.values.contains { text in
+      guard text.contains(name) else { return false }
+      let lines = text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().map {
+        NeutralSourceLine(number: $0.offset + 1, text: String($0.element))
+      }
+      return lexer.lex(lines).contains { line in
+        occurrences(of: name, in: String(line.raw))
+          > line.comments.reduce(0) { $0 + occurrences(of: name, in: $1) }
+      }
+    }
+  }
+
+  private static func occurrences(of name: String, in text: String) -> Int {
+    text.components(separatedBy: name).count - 1
   }
 }
