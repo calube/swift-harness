@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>"}. Each stage agent opens and closes its own run-viewer span in that build run, and runs every swiftgate command through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>", cutoffAt?: "<ISO 8601 UTC time of a swiftgate run\'s cutoff>"}. Each stage agent opens and closes its own run-viewer span in that build run, and runs every swiftgate command through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
@@ -77,7 +77,7 @@ const SEVERITY_RANK = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun', 'cutoffAt']
 // A brownfield worktree keeps its state in its git dir's `swift-harness/`, never in the tree.
 const GIT_DIR_STATE = '/swift-harness'
 
@@ -90,6 +90,8 @@ const SHA = /^[0-9a-f]{7,40}$/
 const RUN_ID = /^[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$/
 // A build run id goes into a shell command, so only id characters pass.
 const BUILD_RUN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
+// A `swiftgate run`'s cutoff as `run clock --json` prints it. It goes into a prompt, so only a time passes.
+const CUTOFF_AT = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z$/
 // The span id `swiftgate events span start` prints: 16 lowercase hex, never wrapped in quotes.
 const SPAN_ID = /^[0-9a-f]{16}$/
 // Every stage agent returns the id of the span it opened; the workflow strips it from what it keeps.
@@ -182,6 +184,9 @@ function validateArgs(a) {
         ? 'buildRun is required: the runId `build start` printed, which every stage span names'
         : `buildRun must be a build run id, got ${JSON.stringify(a.buildRun)}`,
     )
+  }
+  if (a.cutoffAt !== undefined && !(typeof a.cutoffAt === 'string' && CUTOFF_AT.test(a.cutoffAt))) {
+    invalid(`cutoffAt must be an ISO 8601 UTC time such as 2026-10-05T06:28:02Z, got ${JSON.stringify(a.cutoffAt)}`)
   }
   return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main' }
 }
@@ -517,6 +522,13 @@ const brief = () =>
     `Context pack: ${A.contextPack}. Read it first.`,
   ].join('\n')
 
+// A worker in a `swiftgate run` stops at the run's cutoff, when the orchestrator decides every task.
+const deadlineLines = () =>
+  A.cutoffAt === undefined
+    ? ''
+    : `\nDeadline: the run's cutoff is ${A.cutoffAt}. Start no gate or qa run that can't finish by then; ` +
+      'at that time, return what you have, gate-red with redReason environment if your gate is not GREEN.'
+
 // At the Bash tool's default 120 s timeout a gate moves to the background, and a worker left to
 // improvise the wait has polled with `pgrep -f`, which matches its own shell and never ends.
 const gateRunLines = () => {
@@ -534,7 +546,7 @@ const gateRunLines = () => {
 
 function workerPrompt(fix, parent) {
   const span = spanLines(fix ? 'fix' : 'worker', 'build-worker', parent, SPAN_END_RULES.worker)
-  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${brief()}\n${gateRunLines()}\n\n${span}`
+  const base = `Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n${brief()}\n${gateRunLines()}${deadlineLines()}\n\n${span}`
   if (!fix) return base
   return (
     `${base}\n\nThis is the fix pass, the only one: an earlier attempt worked in this same worktree and branch. ` +
@@ -564,6 +576,7 @@ async function runWorker(fix, parent) {
     return { defect: `it failed: ${error && error.message ? error.message : String(error)}`, span: null }
   }
   const span = stageSpan(stage, result)
+  if (span) spanOutcomes.set(span, workerSpanOutcome(result))
   const defect = workerDefect(result)
   if (defect) return { defect, span }
   // A return that is well formed but for its redReason still names real commits on the branch.
@@ -629,14 +642,32 @@ const SPAN_END_RULES = {
   verify: '`red` when you return any finding verified true at severity blocker or major, else `ok`',
 }
 const shellWord = value => `'${String(value).replace(/'/g, `'\\''`)}'`
+// The outcome each stage's span ends with by its own rule, by span id, from what the stage
+// returned. The stage after it ends that span first, since an agent can return without its own
+// end, and a script can't run the command itself.
+const spanOutcomes = new Map()
+const workerSpanOutcome = r =>
+  r && typeof r === 'object' ? { 'ready-to-merge': 'ok', 'gate-red': 'red', 'design-conflict': 'abandoned' }[r.outcome] ?? 'red' : 'red'
+const verifySpanOutcome = checked =>
+  checked && Array.isArray(checked.findings) &&
+  checked.findings.some(f => f && f.verified === true && BLOCKING.includes(f.severity))
+    ? 'red'
+    : 'ok'
 function spanLines(phase, role, parent, endRule) {
+  const backstop = parent
+    ? [
+        `0. First, even before step 1, run \`${SG} events span end ${parent} --outcome ${spanOutcomes.get(parent) ?? 'ok'}\`. ` +
+          'It ends the stage before yours in case that stage never ended it; exit 1 means it already ended, so go on.',
+      ]
+    : []
   const start = [
     `${SG} events span start --phase ${phase} --build-run ${A.buildRun}`,
     `--task ${shellWord(A.task)} --role ${role}`,
     ...(parent ? [`--parent ${parent}`] : []),
   ].join(' ')
   return [
-    'Run-viewer span: telemetry only. These 2 commands never change your work or your return.',
+    `Run-viewer span: telemetry only. These ${parent ? 3 : 2} commands never change your work or your return.`,
+    ...backstop,
     `1. Before anything else, run \`${start}\`. It prints your span id alone: return it as "span". ` +
       'Empty output means telemetry is off and a failed command means no span: either way return "span": null and skip step 2.',
     `2. Last, once your return is decided, run \`${SG} events span end <span> --outcome <outcome>\` with your span id, ` +
@@ -671,6 +702,7 @@ async function reviewAndVerify(reviewer, commits, parent) {
     return { failed: `${reviewer} returned no findings (${failure(error)})`, span: null }
   }
   const reviewSpan = stageSpan(`review:${reviewer}`, value)
+  if (reviewSpan) spanOutcomes.set(reviewSpan, 'ok')
   if (!value || !Array.isArray(value.findings)) return { failed: `${reviewer} returned no findings`, span: reviewSpan }
   const bad = value.findings.map(findingDefect).find(Boolean)
   if (bad) return { failed: `${reviewer} returned a malformed finding (${bad})`, span: reviewSpan }
@@ -690,7 +722,9 @@ async function reviewAndVerify(reviewer, commits, parent) {
     log(`span: the verify:${reviewer} stage recorded no span`)
     return { failed: `the verifier of ${reviewer} failed; its findings are unverified (${failure(error)})`, span: reviewSpan }
   }
-  const span = stageSpan(`verify:${reviewer}`, checked) ?? reviewSpan
+  const verifySpan = stageSpan(`verify:${reviewer}`, checked)
+  if (verifySpan) spanOutcomes.set(verifySpan, verifySpanOutcome(checked))
+  const span = verifySpan ?? reviewSpan
   if (!checked || !Array.isArray(checked.findings)) {
     return { failed: `the verifier of ${reviewer} returned nothing; its findings are unverified`, span }
   }

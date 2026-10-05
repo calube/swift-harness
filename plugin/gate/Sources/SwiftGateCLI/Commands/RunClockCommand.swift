@@ -49,7 +49,34 @@ enum RunClockRun {
     until deadline: String, slug: String, root: URL, runner: any ProcessRunner,
     now: @Sendable () -> Date, sleep: @Sendable (Duration) async throws -> Void
   ) async -> Outcome {
-    await run(slug: slug, root: root, runner: runner, now: now())
+    guard deadlineNames.contains(deadline) else {
+      return .refused(
+        message: "--wait-until \(deadline) is not 1 of \(deadlineNames.joined(separator: ", "))",
+        status: 2)
+    }
+    while true {
+      let outcome = await run(slug: slug, root: root, runner: runner, now: now())
+      guard case .report(let report) = outcome else { return outcome }
+      let left = date(of: deadline, in: report.deadlines).timeIntervalSince(report.now)
+      if left <= 0 { return outcome }
+      let step = min(Duration.milliseconds(Int64((left * 1000).rounded(.up))), waitStep)
+      do {
+        try await sleep(step)
+      } catch {
+        return outcome
+      }
+    }
+  }
+
+  private static func date(of deadline: String, in deadlines: RunTimeBox.Deadlines) -> Date {
+    switch deadline {
+    case "exploreBy": deadlines.exploreBy
+    case "planBy": deadlines.planBy
+    case "contractBy": deadlines.contractBy
+    case "noNewStartsAt": deadlines.noNewStartsAt
+    case "cutoffAt": deadlines.cutoffAt
+    default: deadlines.endsAt
+    }
   }
 
   static func run(slug: String, root: URL, runner: any ProcessRunner, now: Date) async -> Outcome {

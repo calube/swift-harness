@@ -149,11 +149,19 @@ public struct RunReportFolder: Sendable {
       guard let source = Self.source(relative, in: runs) else { continue }
       let target = directory.appending(path: Self.evidenceBase + relative)
       let exists = FileManager.default.fileExists(atPath: target.path)
-      if exists, Self.bytes(target) == Self.bytes(source) { continue }
+      let rewritten = Self.rewrittenEvidence(source, relative: relative)
+      if exists {
+        if let rewritten, (try? Data(contentsOf: target)) == rewritten { continue }
+        if rewritten == nil, Self.bytes(target) == Self.bytes(source) { continue }
+      }
       try makeDirectory(target.deletingLastPathComponent())
       let staging = staged(target)
       do {
-        try FileManager.default.copyItem(at: source, to: staging)
+        if let rewritten {
+          try rewritten.write(to: staging)
+        } else {
+          try FileManager.default.copyItem(at: source, to: staging)
+        }
       } catch {
         try? FileManager.default.removeItem(at: staging)
         throw Failure(
@@ -165,6 +173,16 @@ public struct RunReportFolder: Sendable {
     }
     try publish(view, as: Self.viewName)
     try publish(page, as: Self.pageName)
+  }
+
+  /// A carried JSON file's bytes with its machine paths rewritten; `nil` for a folder, a file of
+  /// another kind, or one that doesn't parse, which is copied as it is.
+  static func rewrittenEvidence(_ source: URL, relative: String) -> Data? {
+    guard RunEvidenceJSON.rewrites(source.lastPathComponent), !isDirectory(source),
+      let runID = relative.split(separator: "/").first.map(String.init),
+      let data = try? Data(contentsOf: source)
+    else { return nil }
+    return RunEvidenceJSON.relativized(data, runID: runID)
   }
 
   /// The view a folder's page was written from.

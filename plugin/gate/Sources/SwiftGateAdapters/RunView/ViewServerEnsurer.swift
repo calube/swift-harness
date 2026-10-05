@@ -50,7 +50,10 @@ public struct ViewServerShutdown: Sendable {
   /// Stops the saved server when it still answers as itself; returns its record, or `nil` when
   /// no saved server answers or the signal couldn't be sent.
   public func stop() async -> ViewServerRecord? {
-    nil
+    guard let record = registry.read(), record.pid > 1, await probe.answers(record),
+      signal(record.pid)
+    else { return nil }
+    return record
   }
 }
 

@@ -316,10 +316,16 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      and what you chose. An option that stops the build starts nothing new: let running tasks
      merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is
      never one of these halts: the next bullet decides it by rule.
-   - **The time box replaces the build skill's cutoff timer and its halt.** No timer runs: the
-     cutoff is a check at every step of the loop. `build next` reports the box in `timeBox`, and
+   - **The time box replaces the build skill's cutoff timer and its halt.** The cutoff is a
+     check at every step of the loop. `build next` reports the box in `timeBox`, and
      `"$SG" run clock <slug> --json` reports its `phase`. Read `run clock` at each completion
-     notice, before each merge and its merge gate, and before each `qa run`. Run
+     notice, before each merge and its merge gate, and before each `qa run`. Before you end a
+     turn to wait on a background agent, a worker, fixer or the validation task, arm the cutoff
+     wake if none is running: `"$SG" run clock <slug> --wait-until cutoffAt --json` with
+     `run_in_background: true`. It exits once `cutoffAt` has passed, and its completion notice
+     wakes you to read the clock. Arm 1 at a time, never as a
+     foreground call, and only while an agent runs: a turn left with nothing but it in the
+     background ends the run. Run
      `"$SG" build cutoff <slug> --session <session> --json` when `run clock` or any `build next`
      reports `phase` `cutoff`, or when a `build next` reports `no-new-starts` with nothing in
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:

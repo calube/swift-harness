@@ -104,6 +104,12 @@ enum BuildFinishRun {
       if let root {
         (report.runReport, report.runReportNote) = await writeRunReport(
           run: run?.layout.runID, root: root, pluginRoot: pluginRoot, git: git, now: clock.now())
+        if let viewer, let runID = run?.layout.runID, report.runReport != nil,
+          finalReportExists(buildRun: runID, root: root),
+          let stopped = await viewer.stop()
+        {
+          report.viewerFinal = stopped.url + String(ViewRun.finalPath.dropFirst())
+        }
       }
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
@@ -181,6 +187,13 @@ enum BuildFinishRun {
     }
   }
 
+  /// Whether the run's report folder holds its final report: written from the done run.
+  private static func finalReportExists(buildRun: String, root: URL) -> Bool {
+    let folder = StateRootResolver.resolve(worktree: root).url(
+      "\(RunLayout.reportsDirectory)/\(buildRun)", directoryHint: .isDirectory)
+    return RunReportFolder(directory: folder).isFinal
+  }
+
   static func render(_ result: BuildLoopResult<BuildFinishReport>, format: OutputFormat) -> String {
     BuildLoop.render(result, format: format) { report in
       let tally = report.counts.keys.sorted().map { "\($0) \(report.counts[$0] ?? 0)" }
@@ -189,9 +202,24 @@ enum BuildFinishRun {
         report.runReport.map { "; report \($0)" } ?? report.runReportNote.map {
           "; no report: \($0)"
         } ?? ""
+      let viewer =
+        report.viewerFinal.map { "; viewer stopped (it served \($0)): open the report page" } ?? ""
       return
         "build finish: index \(report.indexStatus.rawValue) (\(tally)); \(report.resume)\(page)"
+        + viewer
     }
+  }
+}
+
+extension BuildFinishCommand {
+  /// The repository's viewer server, which the finish stops; `nil` when the git common dir
+  /// doesn't resolve.
+  static func viewer() async -> ViewServerShutdown? {
+    guard let common = try? await BuildLoop.git().commonDirectory() else { return nil }
+    return ViewServerShutdown(
+      registry: ViewServerRegistry(
+        commonDirectory: URL(filePath: common, directoryHint: .isDirectory)),
+      probe: LiveViewServerProbe())
   }
 }
 
@@ -227,7 +255,7 @@ struct BuildFinishCommand: AsyncParsableCommand {
       root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory),
       pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
         URL(filePath: $0, directoryHint: .isDirectory)
-      }, qaRun: qaRun)
+      }, qaRun: qaRun, viewer: await Self.viewer())
     Console.write(BuildFinishRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

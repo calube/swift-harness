@@ -100,6 +100,9 @@ Workflow({
 })
 ```
 
+In a `swiftgate run`, also pass `cutoffAt`: `deadlines.cutoffAt` from `run clock --json`, an
+ISO 8601 UTC time. The worker and its fix pass get it as their deadline. Leave it out elsewhere.
+
 - `taskGate`: the preset's `taskGate` when it names a tier; under `ledger`, the task's own `gate`.
   The workflow tells the worker to run it as `check --tier <taskGate> --base main`, with
   `--proof-base <surface commit>` when the task adds API, and adds `--prove --mutate` under
@@ -287,7 +290,9 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
   or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
   passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
-  (`guard.fixer-gate-cap`).
+  (`guard.fixer-gate-cap`);
+- in a `swiftgate run`, the `cutoffAt` time `run clock` reports, as its deadline: it starts no
+  gate or `qa run` it can't finish by then, and at that time returns what it has.
 
 Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
 end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `ready-to-merge`,
