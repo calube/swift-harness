@@ -59,7 +59,7 @@ public enum RunViewBuilder {
           + RunViewSpans.brownfieldSpans(
             events: events, parent: runSpan?.id, baselines: input.warmupBaselines)),
       gates: gates.gates,
-      halts: halts(events),
+      halts: halts(events, ledger: ledgerEvents),
       damage: damage, unwritten: unwritten)
     view = RunViewEmittedEvents.fold(events, into: view)
     RunViewValidationFold.fold(
@@ -156,7 +156,9 @@ public enum RunViewBuilder {
       endsAt: deadlines.endsAt)
   }
 
-  private static func halts(_ events: [HarnessEvent]) -> [RunView.Halt] {
+  /// A `budget` halt the cutoff answered `continue` for a task the run abandoned after it reads
+  /// `abandon`: the cutoff let it finish, and it didn't. Ledger times are whole seconds.
+  private static func halts(_ events: [HarnessEvent], ledger: [BuildEvent]) -> [RunView.Halt] {
     var resumes: [String: BuildResumeEvent] = [:]
     for event in events {
       if case .buildResume(let resume) = event.payload, let parent = event.parentID {
@@ -166,8 +168,18 @@ public enum RunViewBuilder {
     return events.compactMap { event in
       guard case .buildHalt(let halt) = event.payload else { return nil }
       let resume = resumes[event.eventID]
+      var answer = resume?.answer
+      if halt.reason == .budget, answer == .continue, let task = halt.task,
+        ledger.contains(where: { later in
+          guard case .transition(let move) = later else { return false }
+          return move.task == task && move.to == .abandoned
+            && move.at >= event.time.addingTimeInterval(-1)
+        })
+      {
+        answer = .abandon
+      }
       return RunView.Halt(
-        task: halt.task, reason: halt.reason, at: event.time, answer: resume?.answer,
+        task: halt.task, reason: halt.reason, at: event.time, answer: answer,
         waitMs: resume?.waitMilliseconds)
     }
   }

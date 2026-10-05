@@ -1,8 +1,8 @@
 import Foundation
-import Synchronization
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI

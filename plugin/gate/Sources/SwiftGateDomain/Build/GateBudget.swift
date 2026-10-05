@@ -60,9 +60,76 @@ public struct GateBudget: Sendable, Equatable, Encodable {
   /// The budget for a `tier` gate from a clone's events: its `gate.run` and `gate.step` events,
   /// and its `warmup.run` events.
   public static func estimate(tier: CheckTier, events: [HarnessEvent]) -> GateBudget {
-    GateBudget(
-      tier: tier.rawValue, expectedSeconds: defaultExpectedSeconds, source: .default, areas: [],
-      basis: [])
+    var steps: [String: [GateStepEvent]] = [:]
+    for event in events {
+      if case .gateStep(let step) = event.payload, let parent = event.parentID {
+        steps[parent, default: []].append(step)
+      }
+    }
+    let runs = events.compactMap { event -> (id: String, ms: Int, steps: [GateStepEvent])? in
+      guard case .gateRun(let run) = event.payload, event.source.tier == tier,
+        let own = steps[event.eventID], own.contains(where: { $0.area != nil })
+      else { return nil }
+      return (event.runID ?? event.eventID, run.milliseconds, own)
+    }.suffix(historyRuns).reversed()
+    if !runs.isEmpty {
+      var areas: [String: Int] = [:]
+      for run in runs {
+        for (area, span) in areaSpans(run.steps) { areas[area] = max(areas[area] ?? 0, span) }
+      }
+      return GateBudget(
+        tier: tier.rawValue, expectedSeconds: seconds(runs.map(\.ms).max() ?? 0),
+        source: .history, areas: rows(areas), basis: runs.map(\.id))
+    }
+    var build: [String: Int] = [:]
+    var test: [String: Int] = [:]
+    for event in events {
+      guard case .warmupRun(let run) = event.payload, run.outcome == .passed else { continue }
+      switch run.step {
+      case .build: build[run.area] = run.milliseconds
+      case .test: test[run.area] = run.milliseconds
+      case .generate, .install: continue
+      }
+    }
+    // A test-running tier also proves the change's tests at the merge base: the test again.
+    let testRuns = tier == .slice ? 1 : 2
+    var areas: [String: Int] = [:]
+    for area in Set(build.keys).union(test.keys) {
+      areas[area] = (build[area] ?? 0) + testRuns * (test[area] ?? 0)
+    }
+    guard let slowest = areas.values.max() else {
+      return GateBudget(
+        tier: tier.rawValue, expectedSeconds: defaultExpectedSeconds, source: .default,
+        areas: [], basis: [])
+    }
+    return GateBudget(
+      tier: tier.rawValue, expectedSeconds: seconds(slowest), source: .warmup,
+      areas: rows(areas), basis: [])
+  }
+
+  /// Each area's milliseconds from its first step's start to its last step's end. A step with no
+  /// start time follows the area's previous one.
+  private static func areaSpans(_ steps: [GateStepEvent]) -> [String: Int] {
+    var bounds: [String: (start: Int, end: Int)] = [:]
+    for step in steps {
+      guard let area = step.area else { continue }
+      let start = step.startMs ?? bounds[area]?.end ?? 0
+      let end = start + step.milliseconds
+      let known = bounds[area] ?? (start, end)
+      bounds[area] = (min(known.start, start), max(known.end, end))
+    }
+    return bounds.mapValues { $0.end - $0.start }
+  }
+
+  private static func rows(_ milliseconds: [String: Int]) -> [Area] {
+    milliseconds.keys.sorted().map {
+      Area(area: $0, expectedSeconds: seconds(milliseconds[$0] ?? 0))
+    }
+  }
+
+  /// Whole seconds, rounded up, so a deadline never falls short of a measured run.
+  private static func seconds(_ milliseconds: Int) -> Int {
+    (milliseconds + 999) / 1_000
   }
 }
 
@@ -106,10 +173,45 @@ public struct GateWatch: Sendable, Equatable, Encodable {
     finished: Bool, startedAt: Date, now: Date, budget: GateBudget, timeBox: RunTimeBox?,
     cutoffDecided: Bool
   ) -> GateWatch {
-    let deadline = startedAt.addingTimeInterval(TimeInterval(budget.deadlineSeconds))
-    return GateWatch(
-      action: finished ? .read : .wait, elapsedSeconds: 0, deadlineAt: deadline,
-      secondsToDeadline: 0, reason: "")
+    let elapsed = max(0, Int(now.timeIntervalSince(startedAt)))
+    var deadline = startedAt.addingTimeInterval(TimeInterval(budget.deadlineSeconds))
+    var why =
+      "\(budget.deadlineSeconds) s after its start: \(GateBudget.overrunFactor) times the "
+      + "\(budget.expectedSeconds) s a \(budget.tier) gate is expected to take (\(budget.source.rawValue))"
+    let final = budget.tier == CheckTier.final.rawValue
+    if let timeBox {
+      // `final` and the report follow every other gate, so only `final` may run to the box's end.
+      let ends = timeBox.deadlines.endsAt
+      let reserve =
+        final ? ends : ends.addingTimeInterval(-TimeInterval(CutoffRule.finalAndReportSeconds))
+      if reserve < deadline {
+        deadline = reserve
+        why =
+          final
+          ? "at the end of the box, \(ends.formatted(.iso8601))"
+          : "\(CutoffRule.finalAndReportSeconds) s before the box ends at "
+            + "\(ends.formatted(.iso8601)), the time final and the report need"
+      }
+    }
+    let left = max(0, Int(deadline.timeIntervalSince(now).rounded(.up)))
+    func watch(_ action: GateWatchAction, _ reason: String) -> GateWatch {
+      GateWatch(
+        action: action, elapsedSeconds: elapsed, deadlineAt: deadline, secondsToDeadline: left,
+        reason: reason)
+    }
+    if finished { return watch(.read, "the gate wrote its verdict after \(elapsed) s") }
+    if now >= deadline {
+      return watch(
+        .overrun,
+        "still running after \(elapsed) s; its deadline was \(why): stop it and treat it as RED")
+    }
+    if let timeBox, !final, !cutoffDecided, timeBox.phase(at: now) == .cutoff {
+      return watch(
+        .cutoff,
+        "the box's cutoff passed at \(timeBox.deadlines.cutoffAt.formatted(.iso8601)) with this "
+          + "gate still running: run build cutoff, then watch again")
+    }
+    return watch(.wait, "running for \(elapsed) s; it overruns \(why)")
   }
 }
 
@@ -122,6 +224,7 @@ public enum StallWatch {
   /// a stall is noticed while there is still time to act on it, never under ``minimumMinutes``
   /// and never over `preset`. With no box, `preset`.
   public static func minutes(preset: Int, secondsToCutoff: Int?) -> Int {
-    preset
+    guard let secondsToCutoff else { return preset }
+    return min(preset, max(minimumMinutes, secondsToCutoff / 120))
   }
 }

@@ -97,7 +97,9 @@ public struct RunViewReader: RunViewReading {
 
     let workerGateRuns =
       join.map {
-        Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns, holders: holders)
+        Self.workerGateRuns(
+          workerEvents, events: $0.events, named: gateRuns, holders: holders,
+          returns: $0.returns)
       } ?? [:]
     gateRuns.formUnion(workerGateRuns.keys)
     let events = EventQuery.merge(batches).map(\.event)
@@ -537,9 +539,14 @@ public struct RunViewReader: RunViewReading {
   }
 
   /// Each `gate.run` of a worker's store that nothing names, by run id, with the task whose
-  /// window holds its end: from the task's move to `in-progress` until it is `done` or
-  /// `abandoned`, or open. A run inside no window, or inside more than 1, stays out: a store copied
-  /// into the main checkout no longer says which task's worktree it came from.
+  /// window holds its start, read from its run id, or its end when the id says no time: from the
+  /// task's move to `in-progress` until it is `done` or `abandoned`, or open. A run inside no
+  /// window, or inside more than 1, stays out: a store copied into the main checkout no longer
+  /// says which task's worktree it came from.
+  ///
+  /// Of several windows, those whose task stored a return listing commits other than the run's
+  /// head drop out, so a task whose return was never stored keeps the runs of its own commits
+  /// beside tasks that ran at the same time. A return that lists the head claims the run.
   ///
   /// A fix window, from a task's `build merge --undo` until its next merge or its task's window
   /// ends, wins over those: the task's fixer runs then, while every task still in progress beside
@@ -550,7 +557,7 @@ public struct RunViewReader: RunViewReading {
   /// where windows alone can't tell their runs apart.
   static func workerGateRuns(
     _ workerEvents: [HarnessEvent], events: [BuildEvent], named: Set<String>,
-    holders: [String: String] = [:]
+    holders: [String: String] = [:], returns: [String: TaskReturn] = [:]
   ) -> [String: String] {
     typealias Window = (task: String, start: Date, end: Date?)
     var windows: [Window] = []
@@ -591,8 +598,15 @@ public struct RunViewReader: RunViewReading {
         tasks[runID] = holder
         continue
       }
-      let fixing = holding(fixes, event.time)
-      let holds = fixing.isEmpty ? holding(windows, event.time) : fixing
+      let started = RunViewEventWindow.startTime(of: runID) ?? event.time
+      let fixing = holding(fixes, started)
+      var holds = fixing.isEmpty ? holding(windows, started) : fixing
+      if holds.count > 1, let head = event.head {
+        let claiming = holds.filter { returns[$0.task]?.commits.contains(head) == true }
+        holds =
+          claiming.count == 1
+          ? claiming : holds.filter { returns[$0.task].map { $0.commits.contains(head) } ?? true }
+      }
       if holds.count == 1, let window = holds.first { tasks[runID] = window.task }
     }
     return tasks

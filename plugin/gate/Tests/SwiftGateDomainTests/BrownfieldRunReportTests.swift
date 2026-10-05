@@ -715,7 +715,9 @@ import Testing
 
   /// A captured brownfield run whose undone merge ended abandoned: its record, its ledger log,
   /// each stored return and its ledger.
-  private static func undoneTrial(_ fixture: String) throws -> (ledger: Ledger, build: RunReportBuild) {
+  private static func undoneTrial(_ fixture: String) throws -> (
+    ledger: Ledger, build: RunReportBuild
+  ) {
     let directory = Fixture.directory.appending(path: "RunView/\(fixture)")
     let ledger = try LedgerJSON.decode(Data(contentsOf: directory.appending(path: "ledger.json")))
     let record = try BuildRunJSON.decode(Data(contentsOf: directory.appending(path: "run.json")))
