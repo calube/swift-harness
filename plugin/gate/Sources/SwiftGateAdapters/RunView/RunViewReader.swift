@@ -23,13 +23,19 @@ public struct RunViewReader: RunViewReading {
   public let stateRoot: StateRoot
   /// Which ``TaskWorktree`` layout names the task worktrees and the checkout merges land in.
   public let profile: RepositoryProfile
+  /// Which commits each task branch alone reaches, so a worker's gate run goes to the task
+  /// whose checkout ran it.
+  public let branchCommits: any BranchCommitReading
 
+  /// - Parameter branchCommits: `nil` reads them with git in `commonDirectory`.
   public init(
-    commonDirectory: URL, stateRoot: StateRoot, profile: RepositoryProfile = .owned
+    commonDirectory: URL, stateRoot: StateRoot, profile: RepositoryProfile = .owned,
+    branchCommits: (any BranchCommitReading)? = nil
   ) {
     self.commonDirectory = commonDirectory
     self.stateRoot = stateRoot
     self.profile = profile
+    self.branchCommits = branchCommits ?? LiveBranchCommits(commonDirectory: commonDirectory)
   }
 
   public func read(buildRun: String) throws -> RunViewInput {
