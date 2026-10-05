@@ -1,0 +1,70 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist",
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-first-load-spinner",
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-error-retry",
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail",
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-chart-failure",
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: the simulator flow driver's pull to refresh needs a drag target at least 350 pt below the top row, which the 3-row watchlist doesn't have; the watchlist feature's unit test proves a refresh reloads and updates last updated",
+      "requirement" : "req-refresh"
+    },
+    {
+      "reason" : "system: a simulator flow can't observe an in-flight request being cancelled; the detail feature's unit test with a never-finishing fake proves it",
+      "requirement" : "req-chart-cancel"
+    },
+    {
+      "reason" : "the client-live task's unit tests decode recorded CoinGecko JSON through a fake transport",
+      "requirement" : "req-client-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite, including the existing tests",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

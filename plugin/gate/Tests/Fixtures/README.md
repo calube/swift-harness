@@ -4111,3 +4111,47 @@ the orchestrator saved. `batch.json` keeps the first 4 of the batch's 26 step re
 `config.toml` differs from `send-money-3-config.toml` only in `discovered_at`, so its prove tests
 use that one. `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched
 nothing.
+
+## Brownfield trials: send-money-5's combined-run merges and price-tracker-4's credited rows
+
+The fifth send-money trial ran account-fake and send-flow on 1 trial merge, RED only in the search
+row, which runs after send-flow alone. `build merge` blamed account-fake for that row, and refused
+send-flow as unchecked because the run named the 2 tasks in the other order. Its keypad task merged
+alone while the other 2 workers' gates had passed and their returns were under review. Its fixer's
+hand-written return, with a `null` gate run id, was refused as naming no task and plan. The fourth
+price-tracker trial's RED run over its list and detail tasks passed the 3 rows the list task owns
+alone, yet the list task's merge asked for a run of its own, and the cutoff read the detail task's
+qa as already GREEN. `T` is each trial's folder under the practice-trial runs, holding the clone's
+state as `state/`, and the transcripts:
+
+```sh
+T=<send-money-5 run folder> S=$T/state F=BrownfieldTrial
+cp $S/plans/spec/validation.json $F/send-money-5-validation.json
+cp $S/plans/spec/build/20261005T074715Z-e542ff56/events.jsonl $F/send-money-5-build-events.jsonl
+cp $S/runs/20261005T075910Z-5adba385/qa/report.json $F/send-money-5-qa-before-account-fake-send-flow.json
+cp $S/runs/20261005T080143Z-67376484/qa/report.json $F/send-money-5-qa-before-send-flow-account-fake.json
+cp $S/runs/20261005T080159Z-d7726b40/qa/report.json $F/send-money-5-qa-before-send-flow.json
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/send-money-5-gate-runs.jsonl
+mkdir -p BuildReturn/send-money-5
+python3 - $T/transcripts/f43f6be3-b6fa-45df-8258-3a3f1f577f4c.jsonl \
+  > BuildReturn/send-money-5/fix-send-flow.json <<'PY'
+import json,sys
+for l in open(sys.argv[1]):
+    c=json.loads(l).get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        cmd=b.get('input',{}).get('command','') if b.get('type')=='tool_use' else ''
+        if 'fix-send-flow.json <<' in cmd:
+            sys.stdout.write(cmd.split("<<'EOF'\n",1)[1].split("\nEOF",1)[0]+"\n")
+PY
+T=<price-tracker-4 run folder> S=$T/state R=20261005T074707Z-2fab1421
+cp $S/plans/spec/validation.json $F/price-tracker-4-validation.json
+cp $S/plans/spec/build/$R/events.jsonl $F/price-tracker-4-build-events.jsonl
+cp $S/plans/spec/build/$R/cutoff.json $F/price-tracker-4-cutoff.json
+cp $S/runs/20261005T080814Z-ffc2a55e/qa/report.json $F/price-tracker-4-qa-before-watchlist-detail.json
+cp $S/runs/20261005T081116Z-e407d716/qa/report.json $F/price-tracker-4-qa-before-watchlist.json
+```
+
+The fixer's return is the heredoc the orchestrator wrote to `fix-send-flow.json` before its
+`check-return --fix`. The gate runs give each worker's GREEN slice at the tip its return check named.
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

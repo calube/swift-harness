@@ -1,0 +1,179 @@
+{
+  "after" : "tracker-watchlist",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "e8c6459864700f32b4da5a006d4fbb0c1e9402a9",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-detail, flow) `qa/detail.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.price\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-chart-failure, flow) `qa/chart-failure.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.chartError\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 9 rows verified (4 reason-only): 3 pass, 2 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 4,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist.flow/steps.json",
+        "qa/01-req-watchlist.flow/batch.json",
+        "qa/01-req-watchlist.flow/flow.json",
+        "qa/01-req-watchlist.flow/video.mp4",
+        "qa/01-req-watchlist.flow/sheet.png",
+        "qa/01-req-watchlist.flow/sim/steps.ndjson",
+        "qa/01-req-watchlist.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 16 steps; nit sim.a11y-untargeted: 128 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 52130,
+      "requirement" : "req-watchlist",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+        "qa/02-req-first-load-spinner.flow/steps.json",
+        "qa/02-req-first-load-spinner.flow/batch.json",
+        "qa/02-req-first-load-spinner.flow/flow.json",
+        "qa/02-req-first-load-spinner.flow/video.mp4",
+        "qa/02-req-first-load-spinner.flow/sheet.png",
+        "qa/02-req-first-load-spinner.flow/sim/steps.ndjson",
+        "qa/02-req-first-load-spinner.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 3 steps",
+      "ms" : 11840,
+      "requirement" : "req-first-load-spinner",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "evidence" : [
+        "qa/03-req-error-retry.flow/steps.json",
+        "qa/03-req-error-retry.flow/batch.json",
+        "qa/03-req-error-retry.flow/flow.json",
+        "qa/03-req-error-retry.flow/video.mp4",
+        "qa/03-req-error-retry.flow/sheet.png",
+        "qa/03-req-error-retry.flow/sim/steps.ndjson",
+        "qa/03-req-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 6 steps; nit sim.a11y-untargeted: 52 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 21521,
+      "requirement" : "req-error-retry",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "evidence" : [
+        "qa/04-req-detail.flow/steps.json",
+        "qa/04-req-detail.flow/batch.json",
+        "qa/04-req-detail.flow/flow.json",
+        "qa/04-req-detail.flow/video.mp4",
+        "qa/04-req-detail.flow/sheet.png",
+        "qa/04-req-detail.flow/sim/steps.ndjson",
+        "qa/04-req-detail.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.price\"",
+      "ms" : 31327,
+      "requirement" : "req-detail",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "evidence" : [
+        "qa/05-req-chart-failure.flow/steps.json",
+        "qa/05-req-chart-failure.flow/batch.json",
+        "qa/05-req-chart-failure.flow/flow.json",
+        "qa/05-req-chart-failure.flow/video.mp4",
+        "qa/05-req-chart-failure.flow/sheet.png",
+        "qa/05-req-chart-failure.flow/sim/steps.ndjson",
+        "qa/05-req-chart-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.chartError\"",
+      "ms" : 31127,
+      "requirement" : "req-chart-failure",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T080814Z-ffc2a55e",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/tracker-detail",
+        "task" : "tracker-detail",
+        "tip" : "17bf2e743011e4b80351372588b552c8a42ac99a"
+      }
+    ],
+    "base" : "562e50679a13e8781b45ee72889cfaad310a3f4e",
+    "branch" : "spec/tracker-watchlist",
+    "conflicts" : [
+
+    ],
+    "tip" : "c818dd3614f4eda70166c998092ec335bcf8fabe"
+  },
+  "verdict" : "RED"
+}

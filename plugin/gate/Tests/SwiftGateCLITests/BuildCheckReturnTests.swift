@@ -230,6 +230,68 @@ struct BuildCheckReturnTests {
   }
 
   @Test(
+    "a fixer's return whose fix branch took in another unmerged task's branch, as a RED run over both cuts it, and edits that task's file passes --fix against both tasks' write sets — catches a fix of the file a red row points at read as an unexplained edit"
+  )
+  func fixOverTwoBranchesUsesBothWriteSets() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let common = try await scenario.git.commonDirectory()
+    let other = try TaskWorktree(
+      commonDirectory: common, plan: ReturnScenario.plan, task: "queue-list")
+    let names = try TaskWorktree(
+      commonDirectory: common, plan: ReturnScenario.plan, task: ReturnScenario.task)
+    let view = "Sources/QueueList/QueueListView.swift"
+    func git(_ arguments: [String], in directory: String) async throws {
+      let output = try await scenario.runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: directory,
+          timeout: .seconds(60)))
+      try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    }
+    func write(_ path: String, in directory: String, _ text: String) throws {
+      let file = URL(filePath: directory).appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(text.utf8).write(to: file)
+    }
+    try await git(
+      ["worktree", "add", "-q", "-b", other.branch, other.path, "main"], in: scenario.main.path)
+    try write(view, in: other.path, "struct QueueListView {}\n")
+    try await git(["add", "-A"], in: other.path)
+    try await git(["commit", "-q", "-m", "list view"], in: other.path)
+    let plan = try PlanStateLayout(commonDirectory: common).plan(ReturnScenario.plan)
+    var ledger = try PlanStateStore(plan: plan).ledger()
+    ledger = Ledger(
+      schemaVersion: ledger.schemaVersion, resume: ledger.resume, maxParallel: ledger.maxParallel,
+      tasks: ledger.tasks + [
+        LedgerTask(
+          id: "queue-list", deps: [], writeSet: ["Sources/QueueList/"], gate: .push, tests: [],
+          covers: ["D2"], estLines: 20, status: .inProgress, worktree: other.path,
+          model: .sonnet, branch: other.branch)
+      ], waves: [[ReturnScenario.task, "queue-list"]])
+    try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+    let (fix, _) = try await scenario.cutFixWorktree()
+    for branch in [names.branch, other.branch] {
+      try await git(["merge", "-q", "--no-ff", "--no-edit", branch], in: fix.path)
+    }
+    try write(view, in: fix.path, "struct QueueListView { let tappable = true }\n")
+    try await git(["commit", "-q", "-am", "fix: the list row takes taps"], in: fix.path)
+    let commit = try #require(
+      try await LiveGit(runner: scenario.runner, repositoryRoot: fix.path).revision("HEAD"))
+    let runID = try await scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
+
+    let report = try await scenario.check(
+      scenario.returnValue(
+        commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: runID),
+        notes: "The row button gets a content shape.", review: nil),
+      fix: true)
+
+    #expect(report.findings == [], "\(report.findings)")
+    #expect(report.verdict == .green)
+  }
+
+  @Test(
     "a fixer's ready-to-merge return with review null passes --fix, and a worker's with review null still fails — catches the fix path rejecting every fixer, or a worker skipping review"
   )
   func fixReturnNeedsNoReview() async throws {
@@ -798,6 +860,29 @@ struct BuildCheckReturnRecordTests {
     #expect(checks.map(\.task) == [ReturnScenario.task, ReturnScenario.task])
     #expect(checks.last?.rules == [.reviewMissing])
     #expect(Set(checks.map(\.checkID)).count == 2)
+  }
+
+  @Test(
+    "a captured fixer return whose gate never ran, written with a null gate.runId, is BLOCKED naming that key and the null gate a return with no gate run writes, and is recorded under its task as the fixer's check — catches a refusal saying the check names no task and plan when both were given"
+  )
+  func undecodableReturnNamesItsTaskAndKey() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let file = try scenario.write(try Fixture.data("BuildReturn/send-money-5/fix-send-flow.json"))
+
+    let result = await BuildCheckReturnRun.check(
+      file: file, plan: ReturnScenario.plan, fix: true, git: scenario.git,
+      directory: scenario.main.path)
+
+    #expect(result.report.verdict == .blocked)
+    #expect(result.report.task == "send-flow")
+    #expect(result.report.message.contains("`gate.runId`"), "\(result.report.message)")
+    #expect(result.report.message.contains("\"gate\": null"), "\(result.report.message)")
+    #expect(result.notRecorded == [], "\(result.notRecorded)")
+    let check = try #require(try await Self.returnChecks(scenario).last)
+    #expect(check.task == "send-flow")
+    #expect(check.fix)
+    #expect(check.verdict == .blocked)
   }
 
   @Test(

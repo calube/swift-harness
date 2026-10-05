@@ -1,0 +1,104 @@
+{
+  "after" : "send-flow",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "fd6b7eed3d7c247612a698c1f06c143afa79b0e4",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-contact-search, flow) `qa/contact-search.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "1 of 8 rows verified (5 reason-only): 0 pass, 1 red, 0 unverified, 2 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 5,
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+        "qa/01-req-contact-search.flow/steps.json",
+        "qa/01-req-contact-search.flow/batch.json",
+        "qa/01-req-contact-search.flow/flow.json",
+        "qa/01-req-contact-search.flow/video.mp4",
+        "qa/01-req-contact-search.flow/sheet.png",
+        "qa/01-req-contact-search.flow/sim/steps.ndjson",
+        "qa/01-req-contact-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"contacts.search\"",
+      "ms" : 30848,
+      "requirement" : "req-contact-search",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "send-flow"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on account-fake",
+      "ms" : 0,
+      "requirement" : "req-send-success",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+        "account-fake"
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on account-fake",
+      "ms" : 0,
+      "requirement" : "req-send-failure",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "account-fake",
+        "amount-input",
+        "send-flow"
+      ],
+      "waitingOn" : [
+        "account-fake"
+      ]
+    }
+  ],
+  "runID" : "20261005T080159Z-d7726b40",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "650cea4126d41541987839408ccd0bba7ea9d892",
+    "branch" : "spec/send-flow",
+    "conflicts" : [
+
+    ],
+    "tip" : "a09da6e99afc5d579e25de57158f5569e9051249"
+  },
+  "verdict" : "RED"
+}
