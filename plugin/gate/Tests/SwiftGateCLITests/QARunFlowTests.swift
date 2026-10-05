@@ -214,6 +214,51 @@ struct QARunFlowTests {
   }
 
   @Test(
+    "the send-money-3 at-base row whose batch stopped at step 2 `wait`, before any capture, is red with sim.no-steps and lists only evidence its run directory holds, so no sim/steps.ndjson — catches the trial's report naming 10 never-written step logs as lost evidence"
+  )
+  func failureBeforeAnySnapListsNoStepLog() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    let batch = try Fixture.data(
+      "RunView/send-money-3-at-base/runs/20261005T042614Z-10957c21/qa/"
+        + "02-req-contact-search.flow/batch.json")
+    let device = LiveAgentDevice(
+      runner: FakeProcessRunner { invocation throws(ProcessRunnerError) in
+        guard invocation.arguments.first == "batch" else {
+          return ProcessOutput(status: .exited(0), stdout: "{}")
+        }
+        return ProcessOutput(
+          status: .exited(1), stdout: CapturedStream(bytes: batch), stderr: CapturedStream(bytes: Data()),
+          elapsed: .zero)
+      })
+    let head = try await repo.git("rev-parse", "HEAD")
+    let simulator = try FakeFlowSimulator(
+      batch: "fail", head: head,
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      agentDevice: device)
+    let run = repo.root.appending(
+      path: ".harness/runs/20261005T042614Z-10957c21", directoryHint: .isDirectory)
+    let relative = "qa/02-req-contact-search.flow"
+    let row = QAFlowRow(
+      row: 2, requirement: "req-contact-search",
+      stepsFile: Fixture.directory.appending(
+        path: "BrownfieldTrial/send-money-3-contact-search.flow.json"),
+      worktree: repo.root, directory: run.appending(path: relative), relativeDirectory: relative,
+      runID: "20261005T042614Z-10957c21-row2", atBase: true)
+
+    let outcome = await QAFlowRunner(simulator: simulator).run(
+      row, lint: FlowLintReport(files: [], findings: []), state: { _ in })
+
+    #expect(outcome.result == .red, "\(outcome.message)")
+    #expect(outcome.message.hasPrefix("step 2 `wait` failed"), "\(outcome.message)")
+    #expect(outcome.message.contains(SimEvidenceRule.noSteps.rawValue), "\(outcome.message)")
+    #expect(!outcome.evidence.isEmpty)
+    for path in outcome.evidence {
+      #expect(FileManager.default.fileExists(atPath: run.appending(path: path).path), "\(path)")
+    }
+  }
+
+  @Test(
     "the captured passing batch with sim verify GREEN passes, its state row runs while the device is still held, then sim down, then sim verify, and the flow leaves its qa.flow record — catches a state check that reads a device already deleted, or a verify that misses the crash reports sim down collects"
   )
   func passingBatchRunsStateOnDevice() async throws {

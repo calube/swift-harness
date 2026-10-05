@@ -1,0 +1,143 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 2 (wait): wait timed out for selector: id=\"home.balance\"",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muur62i5-5a9a8bc2",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row10/requests/60bcda727b58d320.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-20261005T042614Z-10957c21-row10",
+      "requestId": "60bcda727b58d320"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 10000,
+      "readableCaptures": 11,
+      "captures": 12,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 811,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1113,
+          "durationMs": 582,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2640,
+          "durationMs": 617,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3559,
+          "durationMs": 596,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4458,
+          "durationMs": 481,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 5242,
+          "durationMs": 429,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 5978,
+          "durationMs": 460,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 6739,
+          "durationMs": 427,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 7469,
+          "durationMs": 512,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 8281,
+          "durationMs": 507,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 9088,
+          "durationMs": 409,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 9800,
+          "durationMs": 202,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 10002,
+      "step": 2,
+      "command": "wait",
+      "positionals": [
+        "id=\"home.balance\"",
+        "10000"
+      ],
+      "executed": 1,
+      "total": 75,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-20261005T042614Z-10957c21-row10",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row10",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row10/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row10/requests/60bcda727b58d320.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row10/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter",
+            "startup": {
+              "durationMs": 1606,
+              "measuredAt": "2026-10-05T04:31:38.285Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.InterviewStarter",
+              "appBundleId": "com.example.InterviewStarter"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 437,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 1149,
+              "totalDurationMs": 1606
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "swift-harness-3599-842053cf",
+            "id": "D383575E-849D-424A-A6E2-112653AA197A",
+            "kind": "simulator",
+            "device_udid": "D383575E-849D-424A-A6E2-112653AA197A",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.InterviewStarter"
+          },
+          "durationMs": 1806
+        }
+      ]
+    }
+  }
+}

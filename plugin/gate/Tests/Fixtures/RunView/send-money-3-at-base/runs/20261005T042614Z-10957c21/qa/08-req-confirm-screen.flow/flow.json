@@ -1,0 +1,17 @@
+{
+  "source" : "batch",
+  "steps" : [
+    {
+      "label" : "open",
+      "n" : 1,
+      "offsetMs" : 0,
+      "ok" : true
+    },
+    {
+      "label" : "wait selector id=\"home.balance\"",
+      "n" : 2,
+      "offsetMs" : 2293,
+      "ok" : false
+    }
+  ]
+}

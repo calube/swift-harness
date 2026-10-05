@@ -1,0 +1,113 @@
+[
+ {
+  "command": "open",
+  "input": {
+   "app": "com.example.InterviewStarter",
+   "relaunch": true,
+   "launchArgs": [
+    "-harness-scenario",
+    "success"
+   ]
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.search\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "fill",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.search\""
+   },
+   "text": "chl"
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row\" label=\"Chloe Kim\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"Ana Lopez\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"Ben Carter\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"David Osei\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"Emma Novak\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"Farah Haddad\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"George Liu\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row\" label=\"Hannah Berg\""
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.row\" label=\"Chloe Kim\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"amount.display\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$0"
+  }
+ }
+]

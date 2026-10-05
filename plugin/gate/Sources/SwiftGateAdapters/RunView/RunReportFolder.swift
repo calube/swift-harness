@@ -35,7 +35,7 @@ public struct RunReportFolder: Sendable {
     public struct Left: Sendable, Equatable {
       public let relative: String
       /// Why, for a damage row; `nil` when a carried file stands in for it, as a result bundle's
-      /// test summary does.
+      /// test summary does, or when its run recorded that it was never written.
       public let reason: String?
 
       public init(relative: String, reason: String?) {
@@ -56,7 +56,8 @@ public struct RunReportFolder: Sendable {
 
   /// What a report of `linked` carries: `first` (the flows' videos and sheets) before the rest,
   /// each in path order, while `budget` lasts. A path no run directory holds, a result bundle,
-  /// and a file past the budget stay behind.
+  /// and a file past the budget stay behind. A flow's step log whose `sim verify` report counted
+  /// no step was never written, so it stays behind as no damage.
   public static func carriage(
     _ linked: Set<String>, first: Set<String>, under runs: [URL], budget: Int = evidenceBudget
   ) -> Carriage {
@@ -66,6 +67,10 @@ public struct RunReportFolder: Sendable {
     let ordered = first.intersection(linked).sorted() + linked.subtracting(first).sorted()
     for relative in ordered {
       guard let source = source(relative, in: runs) else {
+        if neverWritten(relative, in: runs) {
+          left.append(.init(relative: relative, reason: nil))
+          continue
+        }
         left.append(
           .init(relative: relative, reason: "linked but not in its run directory, so not copied"))
         continue
@@ -93,6 +98,18 @@ public struct RunReportFolder: Sendable {
       carried.append(relative)
     }
     return Carriage(carried: carried, left: left)
+  }
+
+  /// Whether `relative` is a `sim/` step log beside a `sim verify` report that counted no step:
+  /// the batch stopped before its first capture, so `sim snap` never wrote the log.
+  static func neverWritten(_ relative: String, in runs: [URL]) -> Bool {
+    let suffix = "/sim/" + SimStep.logFileName
+    guard relative.hasSuffix(suffix) else { return false }
+    let report = String(relative.dropLast(SimStep.logFileName.count)) + SimVerifyReport.fileName
+    guard let url = source(report, in: runs), let data = try? Data(contentsOf: url),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return false }
+    return (object["stepCount"] as? Int) == 0
   }
 
   /// A file's size, or the sum of a folder's files.

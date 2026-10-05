@@ -1613,7 +1613,7 @@ printed 0.
 `RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
 `RunView/build-run-1` once `report --html` had written its final report, for the live view's
 snapshot test. The test drops `cursor`, a digest of file times. Captured again at the commit that
-adds the view's `evidenceFiles`, from `plugin/gate` after `swift build`:
+adds the view's `cost` and each role's `costUSD`, from `plugin/gate` after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
@@ -3793,3 +3793,38 @@ cp $S/runs/20261005T045133Z-a9767900/qa/report.json \
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-2-*` matched nothing.
+
+## Brownfield trial: send-money-3's plan edits, lost evidence, temp-file gate output and cost
+
+The third send-money trial (2026-10-05) moved `req-existing-tests` onto its done contract to get
+past `plan-lint.validation-screen-without-flow`, left a report with 10 damage rows for flow step
+logs no batch wrote, sent a slice gate's JSON to `/tmp/sv.json`, and showed tokens by role with no
+dollars. `T` is the trial folder under the practice-trial runs folder, holding the clone's state
+copied after the run as `state/`, and its orchestrator transcript. From the repository root:
+
+```sh
+F=plugin/gate/Tests/Fixtures S=$T/state P=$S/plans/spec R=$P/build/20261005T042439Z-4562bb34
+scrub() { LC_ALL=C sed -E -e "s#/Users/[^/\"]*/Developer/trials/practice/send-money-3/#/TRIAL/#g" \
+  -e "s#/Users/[^/\"]*/\.agent-device/#/HOME/.agent-device/#g" "$1" > "$2"; }
+/bin/cp -f $P/PLAN.md $F/BrownfieldTrial/send-money-3-PLAN.md
+/bin/cp -f $P/qa/contact-search.flow.json $F/BrownfieldTrial/send-money-3-contact-search.flow.json
+scrub $P/ledger.json $F/BrownfieldTrial/send-money-3-ledger.json
+Q=20261005T042614Z-10957c21 X=$F/RunView/send-money-3-at-base/runs/$Q/qa
+mkdir -p $X && scrub $S/runs/$Q/qa/report.json $X/report.json
+for d in $S/runs/$Q/qa/*.flow; do n=$(basename $d); mkdir -p $X/$n/sim
+  for f in flow.json steps.json batch.json sim/report.json sim/session.json; do scrub $d/$f $X/$n/$f; done
+done
+Y=$F/RunView/send-money-3; mkdir -p $Y/events $Y/returns
+/bin/cp -f $S/events/{gate,span,build,brownfield,usage,judge}.jsonl $S/events/store.json $Y/events/
+scrub $P/clock.json $Y/clock.json; /bin/cp -f $P/plan.json $Y/
+```
+
+`RunView/send-money-3/` adds these stores, `clock.json` and `plan.json` to the build run state that
+"Run view: a halt that went on without a task with time left" captured there. `Hooks/send-money-3-gate-output-bash.json` holds the orchestrator's 4 Bash calls that ran
+`swiftgate` and named a `/tmp/` path, in order, written by a python script over the transcript's
+`tool_use` inputs that replaced the task worktree with `/WORKTREE`, the clone with `/CLONE`, the
+harness checkout with `/HARNESS`, the Claude projects folder with `/PROJECTS/` and the session's
+task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`. The at-base copy
+leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
+differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

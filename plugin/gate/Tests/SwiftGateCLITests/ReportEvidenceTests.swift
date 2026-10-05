@@ -189,3 +189,38 @@ struct ReportEvidenceTests {
     #expect(reason.contains("result bundle"), "\(reason)")
   }
 }
+
+@Suite("swiftgate report and the files a qa run never wrote")
+struct ReportUnwrittenEvidenceTests {
+  static let run = "20261005T042614Z-10957c21"
+  static let runs = Fixture.gateDirectory.appending(
+    path: "Tests/Fixtures/RunView/send-money-3-at-base/runs", directoryHint: .isDirectory)
+
+  /// Every evidence path the captured at-base run's rows list, as the report links them.
+  static func linked() throws -> Set<String> {
+    let report = try #require(
+      JSONSerialization.jsonObject(
+        with: Data(contentsOf: runs.appending(path: "\(run)/qa/report.json"))) as? [String: Any])
+    let rows = try #require(report["rows"] as? [[String: Any]])
+    return Set(rows.flatMap { ($0["evidence"] as? [String]) ?? [] }.map { "\(run)/\($0)" })
+  }
+
+  @Test(
+    "the send-money-3 at-base run, whose 10 flow rows stopped before any snap so their sim/steps.ndjson was never written, carries every file its rows left and names no damage, while a row whose run folder is gone is still damage — catches the trial's report listing 10 damage rows for files that never existed"
+  )
+  func neverWrittenIsNoDamage() throws {
+    let linked = try Self.linked()
+    #expect(linked.count == 50)
+
+    let carriage = RunReportFolder.carriage(linked, first: [], under: [Self.runs])
+
+    let damaged = carriage.left.filter { $0.reason != nil }
+    #expect(damaged.isEmpty, "\(damaged.map(\.relative))")
+    #expect(carriage.carried.count == 40)
+    #expect(carriage.carried.allSatisfy { !$0.hasSuffix("/sim/steps.ndjson") })
+
+    let gone = "20261005T042614Z-00000000/qa/01-req-account-fake.flow/sim/report.json"
+    let lost = RunReportFolder.carriage([gone], first: [], under: [Self.runs])
+    #expect(lost.left.first?.reason != nil, "\(lost.left)")
+  }
+}
