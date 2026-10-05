@@ -13,8 +13,11 @@
 // every slice the install that worktree creation already ran; a run with no clock for its early
 // steps, a cutoff that halts and asks or skips `final`, and an owned build that loses its halt at
 // the cutoff; a gate, `qa run` or cutoff timer sent to the background, which a headless run kills
-// when its turn ends with only background Bash work left; and gate JSON written to a shared `/tmp`
-// path another run overwrites. Its phase spans are checked with the other skills' telemetry calls.
+// when its turn ends with only background Bash work left, unless `build gate-wait` holds the turn;
+// gate JSON written to a shared `/tmp` path another run overwrites; a merge gate waited on with no
+// deadline, or a stuck one that holds the next ready merge; merges that ignore `build next`'s
+// queue; and a stall watch or slot rule that ignores the box and the validation task. Its phase
+// spans are checked with the other skills' telemetry calls.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -226,6 +229,8 @@ export function timeBoxProblems(text) {
 
 // A gate or `qa run` call, through `$SG` or any path to the swiftgate binary.
 const GATE_CALL = /(?:swiftgate|\$SG)"?\s+(?:check\s|qa\s+run\b)/
+// The foreground watch of a gate running in the background.
+const GATE_WAIT = /(?:swiftgate|\$SG)"?\s+build\s+gate-wait\b/
 // Work sent to the background: the Bash tool's flag, or a shell `&` that isn't `&&` or `>&`.
 const BACKGROUND = /run_in_background|(?:^|[^&>])&\s*(?:$|`|;)/m
 // A sleep that times something, not the poll interval of a `while` loop such as the stall watch.
@@ -261,7 +266,9 @@ export function backgroundWorkProblems(files, { sleepTimers = true } = {}) {
     for (const block of blocks(text)) {
       const where = `${file}:${block.line}`
       const background = BACKGROUND.test(block.text)
-      if (background && GATE_CALL.test(block.text)) problems.push(`${where}: a gate or qa run in the background`)
+      // A gate `build gate-wait` watches keeps the turn alive in the foreground until it ends.
+      const watched = GATE_WAIT.test(block.text)
+      if (background && GATE_CALL.test(block.text) && !watched) problems.push(`${where}: a gate or qa run in the background`)
       if (sleepTimers && background && SLEEP_TIMER.test(block.text)) problems.push(`${where}: a background sleep timer`)
       if (SHARED_TMP.test(block.text)) problems.push(`${where}: a shared /tmp path`)
     }
@@ -304,6 +311,54 @@ export function agentLaunchProblems(files) {
       start = i + 1
     }
   }
+  return problems
+}
+
+/** Every way `files` ({relative path: markdown}) lets a merge gate run with no deadline or hold
+ * the merges behind it, as `…` lines: no `build gate-wait` watch of a background merge gate, a
+ * `Monitor` wait, an action of the watch left unexplained, or an `overrun` that isn't stopped,
+ * undone as a RED gate and followed by the next ready merge. */
+export function gateWatchProblems(files) {
+  const problems = []
+  const named = calls(files)
+  if (!named.some(call => /^build gate-wait <slug> --tier \S+ --output \S+/.test(call))) {
+    problems.push('no gate is watched with `swiftgate build gate-wait --tier --output`')
+  }
+  for (const [file, text] of Object.entries(files)) {
+    for (const block of blocks(text)) {
+      if (/\bMonitor\b/.test(block.text)) problems.push(`${file}:${block.line}: waits with Monitor`)
+      if (GATE_CALL.test(block.text) && GATE_WAIT.test(block.text) && !BACKGROUND.test(block.text)) {
+        problems.push(`${file}:${block.line}: a watched gate launched in the foreground`)
+      }
+    }
+  }
+  const text = Object.values(files).join('\n')
+  for (const action of ['read', 'wait', 'overrun', 'cutoff']) {
+    if (!bulletAt(text, `- \`${action}\``)) problems.push(`no bullet says what \`${action}\` means`)
+  }
+  const overrun = bulletAt(text, '- `overrun`') ?? ''
+  const overrunCalls = extractInvocations(overrun).map(inv => inv.words.join(' '))
+  if (!/\bTaskStop\b/.test(overrun)) problems.push('an `overrun` gate is never stopped with TaskStop')
+  if (!/\bRED\b/.test(overrun)) problems.push('an `overrun` gate is never treated as RED')
+  if (!overrunCalls.some(call => /^build merge <slug> <task> --undo\b/.test(call))) problems.push('an `overrun` merge is never undone')
+  if (!/`readyToMerge`/.test(overrun)) problems.push('an `overrun` never lands the next ready task first')
+  const wait = (bulletAt(text, '- `wait`') ?? '').replace(/\s+/g, ' ')
+  if (!/never end the turn/i.test(wait)) problems.push('a `wait` may end the turn and kill the gate')
+  return problems
+}
+
+/** Every way the build loop `text` merges outside `build next`'s queue, or lets a checked return
+ * or a missing validation task stall the slots. */
+export function mergeQueueProblems(text) {
+  const prose = text.replace(/\s+/g, ' ')
+  const problems = []
+  if (!/`readyToMerge`/.test(prose)) problems.push('never merges from `build next`\'s `readyToMerge`')
+  if (!/`merging`[^.]*absent|absent[^.]*`merging`/.test(prose)) problems.push('never waits for `merging` to clear before the next merge')
+  const validation = (section(text, 'Validation task') ?? '').replace(/\s+/g, ' ')
+  if (!/ahead of every other ready task/.test(validation)) problems.push('never says `build next` starts the validation task first')
+  if (!/holds? no (?:worker )?slot/.test(prose)) problems.push('never says a checked return waiting to merge holds no slot')
+  const stall = (section(text, 'Stall watch') ?? '').replace(/\s+/g, ' ')
+  if (!/`stallMin`[^.]*(?:cutoff|box)/.test(stall)) problems.push('the stall watch never scales with the time left in the box')
   return problems
 }
 
@@ -507,6 +562,31 @@ const tests = {
     assert.deepEqual(flagged('a shared /tmp path'), tmp)
     assert.deepEqual(backgroundWorkProblems({ 'x.md': '- Run `"$SG" check --tier merge --json &` and go on.\n- Then `"$SG" qa run --plan <slug> --json`.' }),
       ['x.md:1: a gate or qa run in the background'])
+  },
+
+  'the build loop and the run skill launch each merge gate in the background and watch it with build gate-wait, which stops an overrun as RED and lands the next ready task — catches the price-tracker orchestrator\'s 608 s foreground wait and 607 s Monitor on a hung merge gate'() {
+    assert.deepEqual(gateWatchProblems(buildSkillFiles()), [])
+    const run = runSkillFiles()
+    assert.ok(calls(run).some(call => call.startsWith('build gate-wait <slug> --tier final --output <out>/final.json')),
+      'the run skill never watches its final gate with build gate-wait')
+    assert.ok(gateWatchProblems(run).every(problem => !/Monitor|foreground/.test(problem)), gateWatchProblems(run).join('\n'))
+    assert.deepEqual(gateWatchProblems({ 'x.md': '- Run `"$SG" check --tier merge --json > o.json` and Monitor its output for GATE.' }), [
+      'no gate is watched with `swiftgate build gate-wait --tier --output`',
+      'x.md:1: waits with Monitor',
+      'no bullet says what `read` means', 'no bullet says what `wait` means', 'no bullet says what `overrun` means', 'no bullet says what `cutoff` means',
+      'an `overrun` gate is never stopped with TaskStop', 'an `overrun` gate is never treated as RED', 'an `overrun` merge is never undone',
+      'an `overrun` never lands the next ready task first', 'a `wait` may end the turn and kill the gate',
+    ])
+    assert.deepEqual(backgroundWorkProblems({ 'x.md': '- Launch `"$SG" check --tier merge --json > o.json` with `run_in_background: true`, then watch it with `"$SG" build gate-wait <slug> --tier merge --output o.json`.' }), [])
+  },
+
+  'the build loop merges from build next\'s queue, frees the slots of returns waiting to merge, starts the validation task first and scales its stall watch to the box — catches client-live idle 1242 s behind a stuck merge and the send-money slot deadlock'() {
+    assert.deepEqual(mergeQueueProblems(read('skills/build/references/event-loop.md')), [])
+    assert.deepEqual(mergeQueueProblems('## Validation task\n\nStart it.\n\n## Stall watch\n\nWait 15 minutes.\n'), [
+      'never merges from `build next`\'s `readyToMerge`', 'never waits for `merging` to clear before the next merge',
+      'never says `build next` starts the validation task first', 'never says a checked return waiting to merge holds no slot',
+      'the stall watch never scales with the time left in the box',
+    ])
   },
 
   'every worker, fixer and explorer the run skill and the build loop launch is a background Agent call with run_in_background: true — catches a foreground fixer holding every merge and start for 481 s'() {
