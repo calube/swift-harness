@@ -1,0 +1,88 @@
+{
+  "after" : "spec-screen",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "b0465f814f70cf0bde9c6ddc29dbb409f2c7e808",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-launch, flow) `qa/launch-state.flow.json`: step 5 `is` failed: Batch failed at step 15 (is): is text failed for selector id=\"entity.count\": expected=\"Count: 3\" actual=\"Count: 0\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "2 of 9 rows verified (7 reason-only): 1 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 7,
+  "rows" : [
+    {
+      "check" : "qa/launch-state.flow.json",
+      "evidence" : [
+        "qa/01-req-launch.flow/steps.json",
+        "qa/01-req-launch.flow/batch.json",
+        "qa/01-req-launch.flow/flow.json",
+        "qa/01-req-launch.flow/video.mp4",
+        "qa/01-req-launch.flow/sheet.png",
+        "qa/01-req-launch.flow/sim/steps.ndjson",
+        "qa/01-req-launch.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 5 `is` failed: Batch failed at step 15 (is): is text failed for selector id=\"entity.count\": expected=\"Count: 3\" actual=\"Count: 0\"",
+      "ms" : 61271,
+      "requirement" : "req-launch",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "spec-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/end-and-restart.flow.json",
+      "evidence" : [
+        "qa/02-req-screen.flow/steps.json",
+        "qa/02-req-screen.flow/batch.json",
+        "qa/02-req-screen.flow/flow.json",
+        "qa/02-req-screen.flow/video.mp4",
+        "qa/02-req-screen.flow/sheet.png",
+        "qa/02-req-screen.flow/sim/steps.ndjson",
+        "qa/02-req-screen.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 10 steps",
+      "ms" : 39645,
+      "requirement" : "req-screen",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "spec-engine",
+        "spec-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T174655Z-334e7e64",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "c82ba10759e358c7ba5302c9ea9a13fa19f16602",
+    "branch" : "spec/fix-spec-screen",
+    "conflicts" : [
+
+    ],
+    "tip" : "2c032f9620edd831e7c332bb4287f7158925d973"
+  },
+  "verdict" : "RED"
+}

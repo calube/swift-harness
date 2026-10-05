@@ -3165,6 +3165,48 @@ cp $P/validation.json $F/; cp $R/run.json $F/; cp $R/events.jsonl $F/
 The repair worker's reply arrived at 2026-10-05T15:23:00.391Z, the time the tests decide at.
 `grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair` matched nothing.
 
+## Build returns: a no-repair red run made in a fixer's slot
+
+`BuildReturn/no-repair-slot/` is what a brownfield trial left when a fixer's before-merge
+`qa run --fix`, made in its pooled slot, was red on row 1 alone and passed row 2, and its flow
+repair worker then returned `no repair:` for row 1. `qa-report.json` is that run's report and
+`build-events.jsonl` the build run's events, whose `rows-unverified` line `build no-repair`
+wrote for row 1. `refusals.jsonl` holds the 2 refusals the orchestrator met, each a command's
+JSON output: `build no-repair` run from the plan checkout, BLOCKED because the run lay in the
+slot's runs, and the following `build merge --fix`, refused `flows-unchecked` on row 2 for the
+same reason. `C` is the trial clone and `S` the trial folder holding the orchestrator's
+`run.jsonl`. The `sed` renames give the app's names neutral ones. From this directory:
+
+```sh
+F=BuildReturn/no-repair-slot P=$C/.git/swift-harness/plans/spec R=$P/build/20261005T173155Z-d1423864
+mkdir -p $F
+scrub() {
+  sed -e "s#$(dirname "$C")#/TRIAL#g" -e 's/<app id prefix>\.<counter id>/entity.count/g' \
+    -e 's/<counter label>: /Count: /g' -e 's/<flow 1 name>/launch-state/g' \
+    -e 's/<flow 2 name>/end-and-restart/g'
+}
+scrub < $C/.git/swift-harness/runs/20261005T174655Z-334e7e64/qa/report.json > $F/qa-report.json
+scrub < $R/events.jsonl > $F/build-events.jsonl
+S=$S F=$F python3 - <<'PY' | scrub > $F/refusals.jsonl
+import json, os
+for line in open(f"{os.environ['S']}/run.jsonl"):
+    try: o = json.loads(line)
+    except ValueError: continue
+    for c in (o.get("message") or {}).get("content") or []:
+        if not (isinstance(c, dict) and c.get("type") == "tool_result"): continue
+        t = c.get("content")
+        t = t if isinstance(t, str) else "\n".join(x.get("text", "") for x in t)
+        blocked = '"command" : "build no-repair"' in t and '"BLOCKED"' in t
+        refused = '"command" : "build merge"' in t and "flows-unchecked" in t
+        if blocked or refused:
+            body = t[t.index("{\n"):]
+            print(json.dumps(json.JSONDecoder().raw_decode(body)[0], sort_keys=True))
+PY
+```
+
+The `<...>` patterns stand for the app's own selector, label and flow names, left out here.
+`grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair-slot` matched nothing.
+
 ## Brownfield trial: a contract landed before import
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
