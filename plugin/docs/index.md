@@ -10,6 +10,7 @@ into a committed file.
 | Writing or reviewing Swift code: module kinds, determinism, clients, errors, logging, SwiftUI, comments | [`standards.md`](standards.md) |
 | Looking up a rule id from a `swiftgate` verdict, such as `det.date-init` or `A2` | [`standards.md` § Rule id index](standards.md#rule-id-index) |
 | Writing or judging a test: tiers T0–T3, naming, red/green proof, snapshots, flows | [`testing-playbook.md`](testing-playbook.md) |
+| Testing a reducer's repeating timer effect on a `TestClock`, and the shapes of such a test that can't fail | [`testing-clock-effects.md`](testing-clock-effects.md) |
 | Reading what a reviewer or verifier returned, or why a finding was dropped | [`review-contract.md`](review-contract.md) |
 | Working out why a Claude Code hook denied, blocked or added context | [`hooks.md`](hooks.md) |
 | Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |

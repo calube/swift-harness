@@ -1,6 +1,6 @@
 # Testing playbook
 
-How to write, place, and judge tests in a swift-harness app. It's for anyone adding a test. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
+How to write, place, and judge tests in a swift-harness app. The code rules (concurrency, architecture, clients, errors, logging) live in [standards.md](standards.md); this file owns everything about tests.
 
 Every rule here names what enforces it:
 
@@ -28,7 +28,7 @@ Gate T1 and `prove` builds skip dSYMs, so links don't stall on `dsymutil`; rerun
 | `push` | T0, T1 on every Core package, T2, `impact`, `coverage`, T1 presence per module |
 | `ready` | `push`, plus T3, `stress`, `prove`, per-test reach, and `mutate` on new or changed code |
 
-Pick the lowest tier that can see the behavior. If a behavior can only be reached from the simulator, the logic is probably in the wrong module: move it into a Core or Client module and test it at T1.
+Pick the lowest tier that can see the behavior. If only the simulator can reach it, its logic is in the wrong module: move it into a Core or Client module and test it at T1.
 
 ## 2. How to name a test
 
@@ -94,8 +94,8 @@ Each rule has the same shape as the standards: **Do** · **Tell** (how you see i
 
 **P7. No real time or swallowed errors in tests.**
 - **Do:** drive time with `TestClock` or `ImmediateClock`. Let errors propagate (`async throws` tests) or record them with `Issue.record`.
-- **Tell:** `Task.sleep` or `usleep` in a test; `try?` or an empty `catch` in a test body.
-- **Enforced by:** `testlint` `test.sleep`, `test.swallowed-error`; Core code is covered by `lint` `det.*` ([standards.md § 3](standards.md#3-dependencies-and-clients), D1) · **Source:** incident: none yet.
+- **Tell:** `Task.sleep`, `usleep` or a counted `Task.yield()` loop in a test; `try?` or an empty `catch` in a test body.
+- **Enforced by:** `testlint` `test.sleep`, `test.yield-loop`, `test.swallowed-error`; Core code is covered by `lint` `det.*` ([standards.md § 3](standards.md#3-dependencies-and-clients), D1) · **Source:** incident: none yet.
 
 **P8. Stress new and changed tests before ready.**
 - **Do:** expect new or changed host tests to run 10 times at the `ready` tier. Any failure is RED. `stress` runs N separate `swift test --parallel` processes over the selected tests. It does not shuffle: `swift test` on Swift 6.2 has no shuffle or repeat option. What varies between runs is scheduling: Swift Testing runs the tests concurrently and XCTest spreads them over worker processes.
@@ -157,6 +157,7 @@ SwiftSyntax over test files. Every rule is RED.
 | `test.asserts-own-double` | Asserting a value the test configured on its own double |
 | `test.swallowed-error` | `try?` or an empty `catch` without `Issue.record` |
 | `test.sleep` | `Task.sleep` or `usleep` |
+| `test.yield-loop` | A counted loop that only awaits `Task.yield()`, a sleep-like wait (P7) |
 | `test.duplicate` | Same normalized body as another test |
 | `test.unnamed` | `@Test` without a display name |
 | `test.non-exhaustive-store` | Non-exhaustive `TestStore` without a same-line justification |
@@ -298,7 +299,7 @@ Why it passes the gate:
 - The backoff is asserted at its edges: nothing at 999ms, a retry at 1s. An off-by-one in the delay, or a retry with no delay at all, fails. This is also the kind of test that kills `<` ↔ `<=` mutants (`mutate`).
 - The comment above the suite is a kept *why*: it explains a footgun a reader can't recover from the code.
 - `.serialized` plus `withMainSerialExecutor` is the P6 incident fix; `.timeLimit` turns a regression of it into a failure rather than a hang.
-- No real sleeps (`test.sleep`); the clock is injected.
+- No real sleeps (`test.sleep`); the clock is injected. A reducer's repeating timer: [testing-clock-effects.md](testing-clock-effects.md).
 
 ### 7.3 Client Live test with a fake transport (T1)
 
