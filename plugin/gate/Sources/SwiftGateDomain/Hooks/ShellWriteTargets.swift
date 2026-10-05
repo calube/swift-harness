@@ -102,9 +102,15 @@ extension ShellSyntax {
   /// A compound command (`if`, `for`, `{ … }`) that holds no directory command or `exit` runs
   /// where it starts and leaves the shell there.
   ///
+  /// A `cd` operand's `$NAME` or `${NAME}` reads the literal value an earlier assignment-only
+  /// command of the line (`NAME=value`, or `export NAME=value`) gave it, when that command ran
+  /// unconditionally on its own and no later command may have changed it: one inside a
+  /// compound, joined by `&&` or `||`, in a pipeline, or naming the variable as a word
+  /// (`read NAME`, `unset NAME`, `for NAME in`) leaves it unknown.
+  ///
   /// From the first command a static reading can't follow on, the map has no entry: any other
-  /// compound command, a subshell, a command sent to the background, or a `cd` to a variable, a
-  /// glob, `~` or `-`, behind `!` or through a wrapper like `env`. A line that defines
+  /// compound command, a subshell, a command sent to the background, or a `cd` to any other
+  /// variable, a glob, `~` or `-`, behind `!` or through a wrapper like `env`. A line that defines
   /// a function or runs `eval`, `source` or `trap` at top level has no entries at all, and neither
   /// has a command no path reaches.
   static func possibleDirectories(
@@ -120,6 +126,7 @@ extension ShellSyntax {
     guard !opaque else { return [:] }
 
     var possible: [Int: [ShellDirectory]] = [:]
+    var variables: [String: String] = [:]
     var succeeded: [ShellDirectory] = [.start]
     var failed: [ShellDirectory] = []
     var position = 0
@@ -136,6 +143,7 @@ extension ShellSyntax {
         if !runs.isEmpty {
           for index in top[position...closer] { possible[index] = runs }
         }
+        for index in top[position...closer] { forget(commands[index], in: &variables) }
         succeeded = runs
         failed = runs
         position = closer + 1
@@ -153,7 +161,7 @@ extension ShellSyntax {
       if pipeline.count > 1 {
         after = (runs, runs)
       } else if isDirectoryCommand(pipeline[0]) {
-        guard let operand = certainDirectory(pipeline[0]) else { break }
+        guard let operand = certainDirectory(pipeline[0], variables: variables) else { break }
         let moved = merged(
           runs.map { directory in
             guard case .path(let base) = directory, !operand.hasPrefix("/") else {
@@ -173,6 +181,15 @@ extension ShellSyntax {
       }
       if !runs.isEmpty {
         for index in top[position..<end] { possible[index] = runs }
+      }
+      if pipeline.count == 1, link == .sequence, let assigned = assignments(pipeline[0]) {
+        for (name, value) in assigned {
+          variables[name] = value.flatMap { expanded($0, variables) }.flatMap { value in
+            value.contains(where: \.isWhitespace) ? nil : value
+          }
+        }
+      } else {
+        for entry in pipeline { forget(entry, in: &variables) }
       }
       switch link {
       case .and:
@@ -249,10 +266,12 @@ extension ShellSyntax {
     unwrapped(entry).name.map(directoryCommands.contains) == true
   }
 
-  /// The operand of a plain `cd` or `pushd` to 1 literal path, without trailing slashes; `nil` for
-  /// any other command, for `cd -`, `~` or a glob, and for a `cd` behind `!`, a wrapper or an
-  /// assignment.
-  private static func certainDirectory(_ entry: ParsedCommand) -> String? {
+  /// The operand of a plain `cd` or `pushd` to 1 literal path, without trailing slashes, after
+  /// `variables` are expanded in it; `nil` for any other command, for `cd -`, `~`, a glob or
+  /// any other expansion, and for a `cd` behind `!`, a wrapper or an assignment.
+  private static func certainDirectory(_ entry: ParsedCommand, variables: [String: String])
+    -> String?
+  {
     guard let name = entry.words.first else { return nil }
     let options: Set<String>
     switch name {
@@ -261,12 +280,72 @@ extension ShellSyntax {
     default: return nil
     }
     let operands = entry.words.dropFirst().drop { options.contains($0) }
-    guard operands.count == 1, let directory = operands.first, isLiteral(directory),
+    guard operands.count == 1, let directory = operands.first.flatMap({ expanded($0, variables) }),
       !directory.contains(where: { "*?[{~\\".contains($0) })
     else { return nil }
     var trimmed = Substring(directory)
     while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed = trimmed.dropLast() }
     return String(trimmed)
+  }
+
+  /// The variables an assignment-only command sets, each with its value as spelled, `nil` for
+  /// an `export` without one; `nil` for any other command.
+  private static func assignments(_ entry: ParsedCommand) -> [(String, String?)]? {
+    var words = entry.words[...]
+    let exported = words.first == "export"
+    if exported { words = words.dropFirst() }
+    guard !words.isEmpty else { return nil }
+    var result: [(String, String?)] = []
+    for word in words {
+      if isAssignment(word) {
+        let parts = word.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+        result.append((String(parts[0]), String(parts[1])))
+      } else if exported, isVariableName(word) {
+        result.append((word, nil))
+      } else {
+        return nil
+      }
+    }
+    return result
+  }
+
+  /// Drops from `variables` each name `entry` spells as a word or assigns, since it may set it.
+  private static func forget(_ entry: ParsedCommand, in variables: inout [String: String]) {
+    for word in entry.words {
+      let name = word.split(separator: "=", maxSplits: 1).first.map(String.init) ?? word
+      variables[name] = nil
+    }
+  }
+
+  private static func isVariableName(_ word: some StringProtocol) -> Bool {
+    guard let head = word.first, head == "_" || (head.isASCII && head.isLetter) else {
+      return false
+    }
+    return word.allSatisfy { $0 == "_" || ($0.isASCII && ($0.isLetter || $0.isNumber)) }
+  }
+
+  /// `word` with each `$NAME` and `${NAME}` it holds replaced by that name's value in
+  /// `variables`; `nil` when any other expansion is left or the result is empty.
+  private static func expanded(_ word: String, _ variables: [String: String]) -> String? {
+    var result = ""
+    var rest = Substring(word)
+    while let dollar = rest.firstIndex(of: "$") {
+      result += rest[..<dollar]
+      var after = rest[rest.index(after: dollar)...]
+      let braced = after.first == "{"
+      if braced { after = after.dropFirst() }
+      let name = after.prefix { $0 == "_" || ($0.isASCII && ($0.isLetter || $0.isNumber)) }
+      guard isVariableName(name), let value = variables[String(name)] else { return nil }
+      after = after.dropFirst(name.count)
+      if braced {
+        guard after.first == "}" else { return nil }
+        after = after.dropFirst()
+      }
+      result += value
+      rest = after
+    }
+    result += rest
+    return isLiteral(result) ? result : nil
   }
 
   private static func isLiteral(_ path: String) -> Bool {
