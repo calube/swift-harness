@@ -206,7 +206,13 @@ enum PlanImportRun {
           "--contract `\(contract.task)` names no task in \(livePath); nothing was written"
         return report
       }
-      landing = await contractLanding(contract, slug: slug, common: common, git: git)
+      landing = await contractLanding(
+        contract, slug: slug, common: common, git: git,
+        writes: livePlan.tasks.first { $0.id == contract.task }?.writes ?? [],
+        needsScenarioSeam: ContractLanding.needsScenarioSeam(
+          planText: String(decoding: liveData, as: UTF8.self),
+          hasFlowRows: livePlan.validation?.table.rows.contains { $0.layer == .flow } ?? false),
+        appRoots: config.areas.filter { $0.kind == .xcode }.map(\.root))
     }
 
     let link = root.appending(path: PlanFile.LivePlanSource.fileName).path
@@ -380,10 +386,12 @@ enum PlanImportRun {
     return report
   }
 
-  /// Reads the contract's gate run from the plan checkout's history and the plan branch's tip.
-  /// Neither failing to read is fatal to the import: the contract just stays pending, saying why.
+  /// Reads the contract's gate run from the plan checkout's history and the plan branch's tip,
+  /// then what the contract commit changed. No failure to read is fatal to the import: the
+  /// contract just stays pending, saying why.
   private static func contractLanding(
-    _ contract: Contract, slug: String, common: String, git: any Git
+    _ contract: Contract, slug: String, common: String, git: any Git, writes: [String],
+    needsScenarioSeam: Bool, appRoots: [String]
   ) async -> ContractLanding.Outcome {
     let branch = BrownfieldRunReport.planBranch(slug: slug)
     let tip: String?
@@ -405,9 +413,52 @@ enum PlanImportRun {
     } catch {
       return .pending(reason: "reading \(runs.historyFile.path): \(error)")
     }
-    return ContractLanding.outcome(
+    let outcome = ContractLanding.outcome(
       task: contract.task, runID: contract.runID, history: history, planBranch: branch,
       planBranchTip: tip)
+    guard case .done = outcome, let tip,
+      let base = ContractLanding.gatedBase(runID: contract.runID, history: history)
+    else { return outcome }
+    let commit: ContractLanding.Commit
+    do throws(GitError) {
+      commit = try await contractCommit(
+        tip: tip, base: base, git: git, needsScenarioSeam: needsScenarioSeam,
+        appRoots: appRoots)
+    } catch {
+      return .pending(reason: "reading what the contract commit \(tip) changed: \(error)")
+    }
+    return ContractLanding.checked(outcome, writes: writes, commit: commit)
+  }
+
+  /// Sources are read a batch at a time, the changed ones first, so a large app stops at the
+  /// first batch that reads the scenario argument.
+  private static let sourceBatch = 200
+
+  private static func contractCommit(
+    tip: String, base: String, git: any Git, needsScenarioSeam: Bool, appRoots: [String]
+  ) async throws(GitError) -> ContractLanding.Commit {
+    let changed = try await git.changedFiles(from: base, to: tip)
+    let files = Array(Set(try await git.trackedFiles()).union(changed)).sorted()
+    var sources: [String: String]?
+    if needsScenarioSeam {
+      let changedApp = changed.filter { ContractLanding.isAppSource($0, appRoots: appRoots) }
+      let changedSet = Set(changedApp)
+      let others = files.filter {
+        ContractLanding.isAppSource($0, appRoots: appRoots) && !changedSet.contains($0)
+      }
+      var read: [String: String] = [:]
+      var remaining = changedApp + others
+      while !remaining.isEmpty {
+        let batch = Array(remaining.prefix(sourceBatch))
+        remaining.removeFirst(batch.count)
+        let contents = try await git.contents(of: batch, at: tip)
+        read.merge(contents) { _, new in new }
+        if ContractLanding.readsScenarioArgument(contents) { break }
+      }
+      sources = read
+    }
+    return ContractLanding.Commit(
+      tip: tip, base: base, changedFiles: changed, files: files, appSources: sources)
   }
 
   /// The contract an earlier import landed, for an import without `--contract`: the 1 task of

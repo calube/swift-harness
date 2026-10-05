@@ -3871,3 +3871,31 @@ task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`.
 leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
 differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-3's contract without its app seam
+
+The third price-tracker trial (2026-10-05) wrote its composition root, the file that reads
+`-harness-scenario`, in the same Bash call as a raw `xcodebuild`. The guard denied the whole call,
+the heredoc never ran, and the contract `e54fcd53` (base `c1388265`, gated GREEN at `slice` as
+`20261005T055628Z-0c95049d`) was committed and imported without the file its `Writes` named. The
+fixer's `44b36870` added the seam. `T` is the trial folder under the practice-trial runs folder,
+with its orchestrator transcript in `transcripts/`, and `G` the trial clone. From the repository
+root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial D=$F/price-tracker-3-contract
+for p in $(git -C $G diff --name-only c138826 e54fcd5) App/InterviewStarterApp.swift; do
+  if git -C $G cat-file -e c138826:$p 2>/dev/null; then
+    mkdir -p $D/base/$(dirname $p); git -C $G show c138826:$p > $D/base/$p; fi
+  mkdir -p $D/contract/$(dirname $p); git -C $G show e54fcd5:$p > $D/contract/$p
+done
+rm -r $D/contract/App   # the contract left it identical to the base
+mkdir -p $D/seam/App; git -C $G show 44b3687:App/InterviewStarterApp.swift > $D/seam/App/InterviewStarterApp.swift
+cp $T/PLAN.md $F/price-tracker-3-PLAN.md; cp $T/state/config.toml $F/price-tracker-3-config.toml
+```
+
+`Hooks/price-tracker-3-blocked-seam-bash.json` is that call's `tool_use` input and its denial
+text, written by a python script over the transcript that looked up tool use
+`toolu_01RENaH9WZdjTUSwczgVdKrs` and its `tool_result`, and replaced the plan checkout's path with
+`/REPO-spec`. `grep -rniE '/Users|/private|/var/folders|caleb'` on every file named here matched
+nothing.
