@@ -116,6 +116,19 @@ public enum PlanLintValidation {
     text.contains(scenarioArgument) && words(text).contains("held")
   }
 
+  /// Whether a requirement's title or a row's reason describes an action that starts the
+  /// clock-driven state over, such as a restart, a reset, `Start again` or "starts a new session":
+  /// a check after it reads a clock that no launch scenario held.
+  public static func restartsClock(_ text: String) -> Bool {
+    false
+  }
+
+  /// Whether a line of a brief holds the clock after a restart too: it names a restart, as
+  /// ``restartsClock(_:)`` reads it, together with the word `held` or `holds`.
+  public static func holdsClockAfterRestart(_ text: String) -> Bool {
+    false
+  }
+
   /// Whether a plan's briefs give its engine a seed or a launch scenario, so a scenario can place
   /// an entity at a known spot.
   public static func takesSeedOrScenario(_ text: String) -> Bool {
