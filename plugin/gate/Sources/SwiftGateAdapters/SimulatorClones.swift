@@ -79,7 +79,10 @@ public struct SimulatorClones: Sendable {
     holding runID: String?, capacity: Int,
     directory: URL = FileCountingLock.defaultDirectory()
   ) -> (any CountingLock)? {
-    FileCountingLock(directory: directory, name: "sim", capacity: capacity)
+    // 1 per build run, so already bounded: it must not fill the slots its own qa runs and gates
+    // need for their clones.
+    if let runID, BuildRunDevice.isHoldRunID(runID) { return nil }
+    return FileCountingLock(directory: directory, name: "sim", capacity: capacity)
   }
 
   public static let randomToken: @Sendable () -> String = {

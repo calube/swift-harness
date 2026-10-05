@@ -311,27 +311,60 @@ enum QARunRun {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
     dependencies.started?(runID, qaDirectory.appending(path: QAReport.fileName))
-    // A build run's device stays booted across its qa runs; a run that can't borrow it, or runs
-    // outside a build, holds its own for its rows.
+    let running = dependencies.running
+    let record = running?.register(
+      pid: getpid(), toplevel: root.path(percentEncoded: false),
+      kind: RunningGateRegistry.qaRunKind, now: dependencies.now())
+    defer { if let record { running?.unregister(record) } }
+    let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
+    // A build run's device stays booted across its qa runs, each queueing for it in turn; a run
+    // outside a build holds its own for its rows.
     let loan: QADeviceLoan =
       dependencies.flows == nil
       ? .own
       : await dependencies.devices?.borrow(
-        plan: slug, until: dependencies.deadline, waiting: {}) ?? .own
-    let borrowed: BorrowedDevice? =
-      if case .borrowed(let device, _) = loan { device } else { nil }
+        plan: slug, until: dependencies.deadline,
+        waiting: {
+          // Written as the wait starts, so a watcher sees the run queued, not stalled.
+          try? events?.append(
+            contentsOf: [
+              HarnessEvent(
+                eventID: dependencies.newEventID(), time: dependencies.now(), runID: runID,
+                head: nil, source: HarnessEventSource(route: nil),
+                payload: .qaSetup(
+                  QASetupEvent(
+                    plan: slug, row: nil, atBase: options.atBase,
+                    setup: QASetupStep(step: .deviceWait, milliseconds: 0))))
+            ])
+        }) ?? .own
+    let borrowed: BorrowedDevice?
+    var deviceWait: QASetupStep?
+    var deviceRefused: String?
+    switch loan {
+    case .borrowed(let device, let waited):
+      borrowed = device
+      deviceWait = waited.map { QASetupStep(step: .deviceWait, milliseconds: $0) }
+    case .own:
+      borrowed = nil
+    case .refused(let message, let waited):
+      borrowed = nil
+      deviceWait = QASetupStep(step: .deviceWait, milliseconds: waited)
+      deviceRefused = message
+    }
     defer { borrowed?.release() }
     let hold =
       borrowed?.hold
       ?? QAFlowDeviceHold(
         runID: "\(runID)-device",
-        directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory))
+        directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory),
+        slotDeadline: dependencies.deadline)
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
       runID: runID, plan: runPlan, atBase: options.atBase, reused: reused, expected: expected,
       areas: testAreas(root: root, common: common, table: table),
       testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
+      deviceRefused: deviceRefused,
       flows: dependencies.flows.map { simulator in
         // An --after run's flows pass or fail before a merge or cutoff the final pass may not
         // reach, so each is recorded too, when the recorder is free at once.
@@ -542,15 +575,15 @@ enum QARunRun {
     let gaps = await checks.gaps()
     let rowSetup = await checks.setupSteps()
     let setupEvents: [QASetupEvent] =
-      (treeSetup.map { [QASetupEvent(plan: slug, row: nil, atBase: options.atBase, setup: $0)] }
-        ?? [])
+      ([deviceWait, treeSetup].compactMap { $0 }.map {
+        QASetupEvent(plan: slug, row: nil, atBase: options.atBase, setup: $0)
+      })
       + rows.flatMap { row -> [QASetupEvent] in
         (rowSetup[row.row] ?? []).map {
           QASetupEvent(plan: slug, row: row.row, atBase: options.atBase, setup: $0)
         }
       }
 
-    let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
     if let events {
       let time = dependencies.now()
       do {
@@ -702,6 +735,8 @@ enum QARunRun {
     /// The clones `test:` rows run on, held across the acceptance rows and given back before the
     /// first flow row brings its own device up.
     let testDevices: HeldTestDevices?
+    /// Why the flow rows have no device: the build run's stayed borrowed past the deadline.
+    let deviceRefused: String?
     let flows: QAFlowRunner?
     /// State rows a flow row already ran on its device, by row.
     let stateResults = StateResults()
@@ -794,6 +829,9 @@ enum QARunRun {
     {
       guard let flows else {
         return QACheckOutcome(result: .unverified, message: QARunPlan.flowRunnerMissing)
+      }
+      if let deviceRefused {
+        return QACheckOutcome(result: .unverified, message: "not run: \(deviceRefused)")
       }
       let row = entry.validation
       let stepsFile = checkFile(row.check)
@@ -1132,7 +1170,9 @@ struct QARunCommand: AsyncParsableCommand {
           FileHandle.standardError.write(Data(line.utf8))
         },
         devices: LiveQADeviceLender(
-          root: root, git: LiveGit(runner: runner, repositoryRoot: root.path))))
+          root: root, git: LiveGit(runner: runner, repositoryRoot: root.path)),
+        running: await (try? GitTrackedTree(runner: runner, directory: root).stateLayout())
+          .map { RunningGateRegistry(layout: $0) }))
     let reportFile = report.runID.flatMap { runID in
       (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
@@ -1162,17 +1202,23 @@ struct LiveQADeviceLender: QADeviceLending {
     let minutes = min(
       QAConfig.sessionTimeoutMinutesRange.upperBound,
       max(QAConfig.defaultSessionTimeoutMinutes, Int(left.rounded(.up)) + 5))
-    guard
-      let lease = await BuildRunDevice.borrow(
-        buildRunID: store.runID, lockDirectory: FileCountingLock.defaultDirectory())
-    else { return .own }
-    return .borrowed(
-      BorrowedDevice(
-        hold: QAFlowDeviceHold(
-          runID: BuildRunDevice.holdRunID(buildRunID: store.runID),
-          directory: BuildRunDevice.logDirectory(commonDirectory: common, buildRunID: store.runID),
-          keptAfterRun: true, timeoutMinutes: minutes),
-        lease: lease), waitedMilliseconds: nil)
+    // Queued rather than given up on: a gate's test step borrows it for about 30 s, and a run
+    // that fell back to a device of its own would wait for a `sim` slot instead.
+    let queue = BuildRunDeviceQueue.live(
+      buildRunID: store.runID, lockDirectory: FileCountingLock.defaultDirectory())
+    switch await queue.take(until: deadline, waiting: waiting) {
+    case .taken(let lease, let waited):
+      return .borrowed(
+        BorrowedDevice(
+          hold: QAFlowDeviceHold(
+            runID: BuildRunDevice.holdRunID(buildRunID: store.runID),
+            directory: BuildRunDevice.logDirectory(
+              commonDirectory: common, buildRunID: store.runID),
+            keptAfterRun: true, timeoutMinutes: minutes, slotDeadline: deadline),
+          lease: lease), waitedMilliseconds: waited)
+    case .timedOut(let message, let waited):
+      return .refused(message, waitedMilliseconds: waited)
+    }
   }
 }
 
@@ -1231,7 +1277,7 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
         simDirectory: request.simDirectory,
         derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
         swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0],
-        device: device))
+        device: device, slotDeadline: request.hold?.slotDeadline))
   }
 
   func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {

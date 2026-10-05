@@ -120,6 +120,8 @@ public final class SimulatorDeviceHold: Sendable {
   public func release() async {
     guard let taken = held.withLock({ held in defer { held = nil }; return held }) else { return }
     taken.release.finish()
+    // A lease still waiting for its device stops waiting.
+    taken.lease.cancel()
     await taken.lease.value
   }
 
@@ -220,11 +222,18 @@ public final class WarmedAreaRunner: AreaCommandRunning {
     guard let destination = XcodeTestDestination.simulator(in: request.command),
       destinations.contains(destination)
     else { return await base.run(request) }
-    switch await devices.device(for: destination) {
-    case .success(let device):
-      return await base.run(request, on: device)
-    case .failure:
-      return await base.run(request)
+    let base = self.base
+    let devices = self.devices
+    return await LeasedDeviceAreaRunner.withinBound(
+      request, clock: base.clock, onTimeout: { await devices.releaseAll() }
+    ) { wait in
+      let device = await devices.device(for: destination)
+      guard let left = wait.handed() else { return nil }
+      let bounded = LeasedDeviceAreaRunner.request(request, deadline: left)
+      switch device {
+      case .success(let device): return await base.run(bounded, on: device)
+      case .failure: return await base.run(bounded)
+      }
     }
   }
 
@@ -240,7 +249,7 @@ public final class WarmedAreaRunner: AreaCommandRunning {
 public struct LeasedDeviceAreaRunner: TestDeviceWarming {
   private let base: any AreaCommandRunning
   private let leases: any TestDeviceLeasing
-  private let clock: SimHoldClock
+  let clock: SimHoldClock
 
   /// - Parameter clock: times the wait for a device, which the step's bound covers.
   public init(
@@ -256,14 +265,107 @@ public struct LeasedDeviceAreaRunner: TestDeviceWarming {
     guard let destination = XcodeTestDestination.simulator(in: request.command) else {
       return await base.run(request)
     }
-    guard case .success(let provider) = await leases.devices(for: destination) else {
-      return await retrying(request)
+    let leases = self.leases
+    return await Self.withinBound(request, clock: clock) { wait in
+      guard case .success(let provider) = await leases.devices(for: destination) else {
+        guard let left = wait.handed() else { return nil }
+        return await retrying(Self.request(request, deadline: left))
+      }
+      do {
+        return try await provider.withDevice { device in
+          guard let left = wait.handed() else {
+            return AreaCommandOutcome.timedOut(tail: Self.deviceWaitTail(request.deadline))
+          }
+          return await run(Self.request(request, deadline: left), on: device)
+        }
+      } catch {
+        guard let left = wait.handed() else { return nil }
+        return await retrying(Self.request(request, deadline: left))
+      }
     }
-    do {
-      return try await provider.withDevice { device in await run(request, on: device) }
-    } catch {
-      return await retrying(request)
+  }
+
+  /// 1 step's wait for its device: when it began, whether the device came, and whether the step
+  /// gave up first.
+  final class DeviceWait: Sendable {
+    private let state = Mutex<(handed: Bool, gaveUp: Bool)>((false, false))
+    private let clock: SimHoldClock
+    private let began: Duration
+    private let bound: Duration
+
+    init(clock: SimHoldClock, bound: Duration) {
+      self.clock = clock
+      began = clock.now()
+      self.bound = bound
     }
+
+    /// The bound left once the device has come; `nil` when the step gave up waiting first, or
+    /// the wait took the whole bound.
+    func handed() -> Duration? {
+      let left = bound - (clock.now() - began)
+      return state.withLock { state in
+        guard !state.gaveUp, left > .zero else {
+          state.gaveUp = true
+          return nil
+        }
+        state.handed = true
+        return left
+      }
+    }
+
+    /// Gives up unless the device has come; `true` when it gave up.
+    func giveUp() -> Bool {
+      state.withLock { state in
+        guard !state.handed else { return false }
+        state.gaveUp = true
+        return true
+      }
+    }
+  }
+
+  /// Runs `work` and gives up on it when no device has come within `request`'s bound: the wait is
+  /// cancelled, `onTimeout` runs, and the step reads timed out naming the wait. `work` answers
+  /// `nil` once the step gave up.
+  static func withinBound(
+    _ request: AreaCommandRequest, clock: SimHoldClock,
+    onTimeout: @escaping @Sendable () async -> Void = {},
+    _ work: @escaping @Sendable (DeviceWait) async -> AreaCommandOutcome?
+  ) async -> AreaCommandOutcome {
+    let wait = DeviceWait(clock: clock, bound: request.deadline)
+    let timedOut = AreaCommandOutcome.timedOut(tail: deviceWaitTail(request.deadline))
+    return await withTaskGroup(of: AreaCommandOutcome?.self) { group in
+      group.addTask { await work(wait) ?? timedOut }
+      group.addTask {
+        try? await clock.sleep(request.deadline)
+        guard !Task.isCancelled, wait.giveUp() else { return nil }
+        await onTimeout()
+        return timedOut
+      }
+      var outcome = timedOut
+      for await answer in group {
+        guard let answer else { continue }
+        outcome = answer
+        group.cancelAll()
+        break
+      }
+      return outcome
+    }
+  }
+
+  /// Why a test step ran nothing: its device didn't come within its bound.
+  static func deviceWaitTail(_ bound: Duration) -> String {
+    "no simulator device came within the test step's \(bound.components.seconds) s bound, so no "
+      + "test ran: the build run's device stayed borrowed or no sim slot came free; the "
+      + "machine's failure, not the code's"
+  }
+
+  /// `request` with `deadline` left for its command.
+  static func request(_ request: AreaCommandRequest, deadline: Duration) -> AreaCommandRequest {
+    AreaCommandRequest(
+      area: request.area, step: request.step, command: request.command,
+      workingDirectory: request.workingDirectory, deadline: deadline,
+      environment: request.environment, junitPath: request.junitPath,
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
   }
 
   public func warmed(for commands: [String]) async -> WarmedAreaRunner {

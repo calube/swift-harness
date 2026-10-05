@@ -436,7 +436,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    --final` and its id: `build finish` refuses, naming that run and its verdict. It records the
    verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
-6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
+6. `"$SG" run checkout remove <slug> --session <session> --json`. It stops any gate or `qa run`
+   still live in a tree it removes, refusing when one won't stop, then keeps the checkout's gate
    reports in the user's checkout, then removes every task and fix worktree the run left, merged
    or not, keeping their branches, and `<plan-branch>` holds every commit.
 

@@ -113,6 +113,11 @@ public struct RunningGateRegistry: Sendable {
     return stopped
   }
 
+  /// Whether `gate`'s process still runs: the same pid, started at the same time.
+  public func isRunning(_ gate: RunningGate) -> Bool {
+    processes.startTime(of: gate.pid) == gate.processStart
+  }
+
   /// Symlinks resolved and no trailing slash, so `/var/…` and `/private/var/…` name 1 worktree.
   static func canonical(_ path: String) -> String {
     URL(filePath: path, directoryHint: .isDirectory).resolvingSymlinksInPath()

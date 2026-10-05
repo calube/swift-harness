@@ -267,7 +267,7 @@ struct QARunCommandTests {
   }
 
   @Test(
-    "a flow row reads unverified, flow runner not built, and its state row unverified behind it, as non-gating notes — catches a flow taken as passed before anything drives it"
+    "a flow row reads unverified, flow runner not built, and its state row unverified behind it, as non-gating notes that leave the run BLOCKED — catches a flow taken as passed before anything drives it"
   )
   func flowUnverified() async throws {
     let repo = try await QARepo()
@@ -286,7 +286,7 @@ struct QARunCommandTests {
     #expect(
       !FileManager.default.fileExists(
         atPath: try repo.runDirectory(report).appending(path: "qa/state-ran").path))
-    #expect(report.verdict == .green)
+    #expect(report.verdict == .blocked)
     #expect(
       report.findings.map(\.ruleID) == Array(repeating: QAReport.checkUnverifiedRuleID, count: 2))
   }

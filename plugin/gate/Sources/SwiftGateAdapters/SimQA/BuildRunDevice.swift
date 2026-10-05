@@ -76,7 +76,31 @@ public struct BuildRunDeviceQueue: Sendable {
   public func take(until deadline: QARunDeadline?, waiting: @Sendable () -> Void) async
     -> Outcome
   {
-    .timedOut("", waitedMilliseconds: 0)
+    if let lease = try? await lock.acquire(timeout: Self.freeAtOnce) {
+      return .taken(lease, waitedMilliseconds: nil)
+    }
+    waiting()
+    let started = now()
+    let limit: Duration =
+      deadline.map { .milliseconds(Int64(($0.at.timeIntervalSince(started) * 1000).rounded())) }
+      ?? Self.undatedWait
+    if limit > .zero, let lease = try? await lock.acquire(timeout: limit) {
+      return .taken(lease, waitedMilliseconds: milliseconds(since: started))
+    }
+    let borrowers = holders()
+    let by =
+      borrowers.isEmpty
+      ? "" : " by PID " + borrowers.map(String.init).joined(separator: ", ")
+    let until =
+      deadline.map { "when \($0.name) came at \($0.at.formatted(.iso8601))" }
+      ?? "after \(Self.undatedWait.components.seconds) s"
+    return .timedOut(
+      "the build run's device was still borrowed\(by) \(until), so no flow row ran",
+      waitedMilliseconds: milliseconds(since: started))
+  }
+
+  private func milliseconds(since start: Date) -> Int {
+    max(0, Int((now().timeIntervalSince(start) * 1000).rounded()))
   }
 }
 
@@ -190,8 +214,25 @@ public struct RunDeviceLender: Sendable {
   ) async
     -> (device: SimulatorDevice, lease: LockLease)?
   {
+    if case .borrowed(let device, let lease) = await take(for: destination, wait: wait) {
+      return (device, lease)
+    }
+    return nil
+  }
+
+  /// What asking for the held device came to.
+  public enum Borrow: Sendable {
+    case borrowed(SimulatorDevice, LockLease)
+    /// This clone's build run holds no live device for the destination.
+    case noHold
+    /// It does, and another borrower still had it after the wait, or the wait was cancelled.
+    case busy
+  }
+
+  /// The held device and the borrow lock, waiting up to `wait` for another borrower to let go.
+  public func take(for destination: XcodeTestDestination, wait: Duration) async -> Borrow {
     let suffix = BuildRunDevice.holdRunID(buildRunID: "")
-    guard let listed = try? leases.all() else { return nil }
+    guard let listed = try? leases.all() else { return .noHold }
     let held = listed.leases.filter { lease in
       lease.runID.hasSuffix(suffix) && isAlive(lease.holderPID)
         && FileManager.default.fileExists(
@@ -200,22 +241,22 @@ public struct RunDeviceLender: Sendable {
             buildRunID: String(lease.runID.dropLast(suffix.count))
           ).path)
     }
-    guard let hold = held.first else { return nil }
+    guard let hold = held.first else { return .noHold }
     let buildRunID = String(hold.runID.dropLast(suffix.count))
     guard
       let device = await devices().first(where: { $0.udid == hold.udid }),
       Self.matches(device, destination)
-    else { return nil }
+    else { return .noHold }
     guard
       let lease = await BuildRunDevice.borrow(
-        buildRunID: buildRunID, lockDirectory: lockDirectory)
-    else { return nil }
+        buildRunID: buildRunID, lockDirectory: lockDirectory, timeout: wait)
+    else { return .busy }
     // Read again under the lock: the hold may have ended while the lock was taken.
     guard (try? leases.read(runID: hold.runID))?.map({ isAlive($0.holderPID) }) == true else {
       lease.release()
-      return nil
+      return .noHold
     }
-    return (device, lease)
+    return .borrowed(device, lease)
   }
 
   /// A booted device of `destination`'s type, on its iOS version when it names one.
@@ -231,8 +272,9 @@ public struct RunDeviceLender: Sendable {
   }
 }
 
-/// ``TestDeviceLeasing`` that hands a test command the build run's idle device first, and leases
-/// a clone from `base` only while that device is busy or there is none.
+/// ``TestDeviceLeasing`` that hands a test command the build run's device, waiting while a `qa run`
+/// borrows it, and leases a clone from `base` only when the build run holds none. The caller's
+/// step bound ends the wait by cancelling it.
 public struct RunDeviceTestLeases: TestDeviceLeasing {
   private let base: any TestDeviceLeasing
   private let lender: RunDeviceLender
@@ -253,12 +295,21 @@ public struct RunDeviceTestLeases: TestDeviceLeasing {
     let base: any TestDeviceLeasing
     let lender: RunDeviceLender
 
+    /// Longer than any step's bound, which cancels the wait first.
+    static let wait: Duration = .seconds(24 * 60 * 60)
+
     func withDevice<T: Sendable>(_ body: @Sendable (SimulatorDevice) async throws -> T)
       async throws -> T
     {
-      if let (device, lease) = await lender.borrow(for: destination) {
+      switch await lender.take(for: destination, wait: Self.wait) {
+      case .borrowed(let device, let lease):
         defer { lease.release() }
         return try await body(device)
+      case .busy:
+        // A clone would queue for a `sim` slot while the run's own device comes free.
+        throw CancellationError()
+      case .noHold:
+        break
       }
       switch await base.devices(for: destination) {
       case .success(let provider): return try await provider.withDevice(body)

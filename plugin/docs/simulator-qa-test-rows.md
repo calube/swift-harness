@@ -25,8 +25,10 @@ run shares. `qa run` holds 1 clone across its acceptance rows and gives it back 
 rows start. With no clone to be had, the command runs as written; a row's message says why.
 
 A brownfield gate leases each area's test clone as the area starts, so the clone boots while the
-area builds, and gives it back once the area is done. While no `qa run` borrows the build run's device, a
-brownfield gate's test step runs on that device instead, and takes no `sim` slot.
+area builds, and gives it back once the area is done. A brownfield gate's test step runs on the
+build run's device instead, and takes no `sim` slot; while a `qa run` borrows it, the step waits for
+it. The step's bound covers that wait, as it does a clone's wait for a slot: a step whose device
+doesn't come in time reads timed out, naming the wait, and runs nothing.
 
 ## 1 device for the flow rows
 
@@ -38,7 +40,12 @@ the app while the device comes up. A row's state rows run before the next row's 
 In a brownfield build run, every `qa run` borrows the build run's own device instead, so only the
 first flow row of the run waits for a clone to boot. Its holder has no owner process and lasts to
 the time box's end; `build finish` and `run checkout remove` release it. 1 `qa run` borrows it at a
-time; another holds its own as above. A brownfield `qa run`'s trial merge or merge-base tree is a
+time; another queues for it until the run's cutoff (`--final`: the box's end), writing a
+`qa.setup` `device-wait` event as it starts waiting and another with the wait's length. A device
+still borrowed then leaves the flow rows `unverified`, naming who borrows it. The build run's device
+takes no `sim` slot: there is 1 per build run, and the slots stay for clones. A run's own holder
+still waiting for a slot at that deadline is stopped, and its row reads `sim.no-slot`, naming the
+slot holders. A brownfield `qa run`'s trial merge or merge-base tree is a
 pooled worktree slot, the same slots task worktrees use, so the app `sim up` builds there stays
 warm for the next run in that slot.
 

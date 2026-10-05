@@ -255,7 +255,11 @@ public struct SimUp: Sendable {
         let holderPID = try launchHolder(
           request, arguments: ["sim", "hold", "--run", request.runID], log: log)
         return .success(
-          (try await waitForLease(runID: request.runID, holderPID: holderPID, log: log), false))
+          (
+            try await waitForLease(
+              runID: request.runID, holderPID: holderPID, log: log,
+              deadline: request.slotDeadline), false
+          ))
       case .shared(let hold):
         return .success(try await sharedHold(hold, request: request))
       }
@@ -322,7 +326,9 @@ public struct SimUp: Sendable {
         + (hold.timeoutMinutes.map { ["--timeout-minutes", String($0)] } ?? []),
       log: hold.logFile)
     return (
-      try await waitForLease(runID: hold.runID, holderPID: holderPID, log: hold.logFile), false
+      try await waitForLease(
+        runID: hold.runID, holderPID: holderPID, log: hold.logFile,
+        deadline: request.slotDeadline), false
     )
   }
 
@@ -538,11 +544,17 @@ public struct SimUp: Sendable {
   }
 
   /// Waits until the holder writes the run's lease. A holder that exits first, or is still
-  /// waiting at the timeout, means no device.
-  private func waitForLease(runID: String, holderPID: Int32, log: URL)
+  /// waiting at the timeout or at `deadline`, means no device.
+  private func waitForLease(
+    runID: String, holderPID: Int32, log: URL, deadline: QARunDeadline? = nil
+  )
     async throws(SimUpFailure) -> SimLease
   {
     let start = dependencies.clock.now()
+    let left = deadline.map { deadline in
+      Duration.milliseconds(
+        Int64((deadline.at.timeIntervalSince(dependencies.now()) * 1000).rounded()))
+    }
     while true {
       let lease: SimLease?
       do {
@@ -554,6 +566,12 @@ public struct SimUp: Sendable {
       if let lease { return lease }
       guard dependencies.isAlive(holderPID) else {
         throw noSlot("the holder (PID \(holderPID)) exited without a device", runID, log)
+      }
+      if let deadline, let left, dependencies.clock.now() - start >= left {
+        dependencies.terminate(holderPID)
+        throw noSlot(
+          "the holder (PID \(holderPID)) had no device when \(deadline.name) came at "
+            + "\(deadline.at.formatted(.iso8601)) and was stopped", runID, log)
       }
       if dependencies.clock.now() - start >= leaseTimeout {
         dependencies.terminate(holderPID)
