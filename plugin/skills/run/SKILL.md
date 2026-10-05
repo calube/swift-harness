@@ -76,9 +76,14 @@ with it: a gate cut short leaves no run and no verdict. On a cold cache, the fir
 call also builds the binary, which can take minutes, so before step 1 warm it with
 `"$SG" --version`. That call and every `check`, `qa run`, `build cutoff` and area command run in
 the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pass
-`run_in_background` to one and never end one with a shell `&`. The 1 kind of background work in a
-run is the Workflow and Agent tool calls, which keep the session alive until they return; no timer
-runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
+`run_in_background` to one and never end one with a shell `&`.
+
+The merge gates and `final` are the exception, since a hung test can hold one for an hour. Each
+runs with `run_in_background: true`, its JSON redirected to `<out>`. Then `"$SG" build gate-wait`
+holds the turn in the foreground until it ends or overruns its deadline, as the build loop's
+[merge gate watch](../build/references/event-loop.md#merge-gate-watch) says.
+The other background work in a run is the Workflow and Agent tool calls, which keep the session
+alive until they return; no timer runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
 passes `run_in_background: true`: a foreground one blocks every merge and start until it returns.
 
 ## 1. Read the spec
@@ -314,8 +319,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      2. Merge each task in `finish`, in order, as the build loop's completion step does, from
         where it stands: a task already merged skips `build merge`, and one in `landed` skips
         its merge gate too, going straight to `qa run --after`, `ledger set … done` and
-        `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
-        gets no fixer at the cutoff: `build merge --undo`, then
+        `worktree remove` (with `--fix` after a fix merge). A conflict, a RED `merge` gate or one
+        `build gate-wait` reads as `overrun` gets no fixer at the cutoff: `build merge --undo`, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
         `worktree remove … --abandoned` as item 1 says.
      3. Start nothing else, and go to step 8.
@@ -341,6 +346,14 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      **Stop** is recommended only when widening can't resolve it: the conflict needs a change to
      work already done, such as the contract or a merged task, or a path a running task owns. A
      task that conflicts again after its retry stays `blocked`: go on without it.
+   - **Merges follow `build next`'s queue, and each merge gate has a deadline.** Merge the first
+     task in `readyToMerge`, only while `merging` is absent, as the build loop's
+     [merge queue](../build/references/event-loop.md#merge-queue) says. Each merge gate is
+     `"$SG" check --tier merge --base <base> --json > <out>/merge-<task>.json`, launched with
+     `run_in_background: true`, then watched in the foreground with
+     `"$SG" build gate-wait <slug> --tier merge --output <out>/merge-<task>.json --json` until it
+     reads. An `overrun` is a RED merge gate: undo it, then merge the next task in `readyToMerge`
+     before its fixer returns. At the cutoff it gets no fixer, as a RED merge gate doesn't.
    - Stop at its step 4; this skill's step 8 replaces it.
    - Review is `classified`: `swiftgate judge diff-risk` asks the `[judge]` in `<config>` to rate
      each task's diff `low`, `medium` or `high`, and paths in `[brownfield] sensitive` are always
@@ -360,8 +373,13 @@ gates whatever merged, the contract alone when nothing else did. A run whose `pl
 
 Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept as `<span>`.
 
-1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
-   `lint` and `build` against the baseline, plus each area's `e2e`. A test step that also fails
+1. In `<checkout>`, `"$SG" check --tier final --base <base> --json > <out>/final.json`, launched
+   with `run_in_background: true` and watched in the foreground with
+   `"$SG" build gate-wait <slug> --tier final --output <out>/final.json --json` until it reads,
+   as a merge gate is. Its deadline is never past the box's end. An `overrun` is a RED `final`
+   with no run to record: `TaskStop` it, skip item 2 and go on from item 3, and the report names
+   the overrun. It runs every area's `test`, `lint` and `build` against the baseline, plus each
+   area's `e2e`. A test step that also fails
    whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
    names where the head's and the merge base's output tail and report were kept: read those first.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
@@ -421,4 +439,5 @@ a failed summary prints 1 line. Merging
   call is the 1 exception: that tool takes only aliases.
 - Every gate is a `swiftgate` command. Never hand-write a check or read a gate's verdict from its
   exit status alone; read its JSON, kept under `<out>` when kept in a file.
-- Gates and `qa run` run in the foreground, never in the background (Foreground work).
+- Gates and `qa run` run in the foreground, except the merge gates and `final`, which run in the
+  background while `build gate-wait` watches them in the foreground (Foreground work).

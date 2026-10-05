@@ -653,8 +653,9 @@ const BUILD_GATE_KINDS = { '<merge_gate>': 'green-main', '<mergeGate>': 'merge',
 // The build skill's gate lines on `main` as they were before a plan could carry a surface, per
 // file in order. A plan without a surface runs exactly these.
 const BUILD_GATE_LINES_WITHOUT_SURFACE = {
-  'skills/build/SKILL.md': ['check --tier <merge_gate>', 'check --tier <mergeGate>', 'check --tier ready'],
-  'skills/build/references/event-loop.md': ['check --tier <mergeGate>', 'check --tier ready <the --proof-base arguments it printed>'],
+  // The merge gate writes its JSON to a file `build gate-wait` watches.
+  'skills/build/SKILL.md': ['check --tier <merge_gate>', 'check --tier <mergeGate> --json', 'check --tier ready'],
+  'skills/build/references/event-loop.md': ['check --tier <mergeGate> --json', 'check --tier ready <the --proof-base arguments it printed>'],
 }
 
 // Every `check` line in the build skill's `files` ({relative path: markdown}) that one of its gates
@@ -1996,14 +1997,14 @@ const tests = {
       '| Name | Value |', '|---|---|', '| `<slug>` | the plan |', '',
       '## 1. Start', '', '1. `"$SG" check --tier <merge_gate>`; with a plan surface, `"$SG" check --tier <merge_gate> --base main`.',
       '2. Read `plan.json` for the plan surface.', '',
-      '## 3. On each completion', '', '4. `"$SG" check --tier <mergeGate> --json` on main.', '',
+      '## 3. On each completion', '', '4. `"$SG" check --tier <mergeGate>` on main.', '',
       '## 4. Finish', '', '1. `"$SG" check --tier ready`; with a plan surface, `"$SG" check --tier ready --base <surfaceCommit>`.',
     ].join('\n')
-    const loop = ['`"$SG" check --tier <mergeGate>` or `"$SG" check --tier <mergeGate> --base <surfaceCommit>`.',
+    const loop = ['`"$SG" check --tier <mergeGate> --json` or `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json`.',
       '```', '"$SG" check --tier ready <the --proof-base arguments it printed>', '```'].join('\n')
     assert.deepEqual(buildGateBaseProblems({ 'skills/build/SKILL.md': skill, 'skills/build/references/event-loop.md': loop }), [
       'skills/build/SKILL.md:7: the green-main gate measures from main, not <surfaceCommit>',
-      'skills/build/SKILL.md: a plan without a surface runs ["check --tier <merge_gate>","check --tier <mergeGate> --json","check --tier ready"], not ["check --tier <merge_gate>","check --tier <mergeGate>","check --tier ready"]',
+      'skills/build/SKILL.md: a plan without a surface runs ["check --tier <merge_gate>","check --tier <mergeGate>","check --tier ready"], not ["check --tier <merge_gate>","check --tier <mergeGate> --json","check --tier ready"]',
       'skills/build/SKILL.md:7: the green-main gate has no `--base <surfaceCommit>` form for a plan with a surface',
       'skills/build/SKILL.md:12: the merge gate has no `--base <surfaceCommit>` form for a plan with a surface',
       'skills/build/references/event-loop.md:3: the final gate has no `--base <surfaceCommit>` form for a plan with a surface',
