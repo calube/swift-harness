@@ -109,3 +109,39 @@ struct RunViewReaderWorkerGatesTests {
     #expect(!input.workerGateRuns.values.contains(Self.validation))
   }
 }
+
+@Suite("live branch commits")
+struct LiveBranchCommitsTests {
+  @Test(
+    "a task's branch and its fixer's name the commits only they reach, and a task whose branches are gone names none — catches a fixer's commits, which its task's branch shares, counted as no task's"
+  )
+  func readsTheCommitsOnlyATasksBranchesReach() async throws {
+    let repository = try await TemporaryGitRepository()
+    defer { repository.remove() }
+    try repository.write("a.txt", "a")
+    try await repository.git("add", "a.txt")
+    try await repository.git("commit", "-q", "-m", "base")
+    try await repository.git("checkout", "-q", "-b", "spec/core")
+    try repository.write("b.txt", "b")
+    try await repository.git("add", "b.txt")
+    try await repository.git("commit", "-q", "-m", "core")
+    let core = try await repository.git("rev-parse", "HEAD")
+    try await repository.git("checkout", "-q", "-b", "spec/fix-core")
+    try repository.write("c.txt", "c")
+    try await repository.git("add", "c.txt")
+    try await repository.git("commit", "-q", "-m", "fix")
+    let fix = try await repository.git("rev-parse", "HEAD")
+    try await repository.git("checkout", "-q", "-b", "spec/ui", "main")
+    try repository.write("d.txt", "d")
+    try await repository.git("add", "d.txt")
+    try await repository.git("commit", "-q", "-m", "ui")
+    let ui = try await repository.git("rev-parse", "HEAD")
+
+    let commits = LiveBranchCommits(
+      commonDirectory: repository.root.appending(path: ".git", directoryHint: .isDirectory),
+      runner: repository.runner)
+    #expect(commits.exclusiveCommits(of: ["spec/core", "spec/fix-core"]) == [core, fix])
+    #expect(commits.exclusiveCommits(of: ["spec/ui", "spec/fix-ui"]) == [ui])
+    #expect(commits.exclusiveCommits(of: ["spec/gone", "spec/fix-gone"]) == [])
+  }
+}
