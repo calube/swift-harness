@@ -1,0 +1,7 @@
+[
+  {"command": "open", "input": {"app": "com.example.RefreshProbe", "relaunch": true}},
+  {"command": "wait", "input": {"selector": "id=\"probe.refreshes\" label=\"Refreshes 0\"", "timeoutMs": 15000}},
+  {"command": "scroll", "input": {"direction": "up", "amount": 0.8, "settle": true}},
+  {"command": "wait", "input": {"selector": "id=\"probe.refreshes\" label=\"Refreshes 1\"", "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "exists", "selector": "id=\"probe.row.0\""}}
+]

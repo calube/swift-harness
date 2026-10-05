@@ -1,0 +1,146 @@
+{
+  "success": true,
+  "data": {
+    "total": 5,
+    "executed": 5,
+    "totalDurationMs": 8084,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-refresh",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-refresh",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/requests/83e9034bac386c71.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/events.ndjson",
+          "sessionReused": false,
+          "selection": {
+            "reason": "explicit-selector",
+            "source": "local",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.RefreshProbe",
+          "appBundleId": "com.example.RefreshProbe",
+          "startup": {
+            "durationMs": 3133,
+            "measuredAt": "2026-10-05T06:50:39.147Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.RefreshProbe",
+            "appBundleId": "com.example.RefreshProbe"
+          },
+          "timing": {
+            "runnerDemand": "required",
+            "runnerPrewarmKind": "session",
+            "runnerPrewarmScheduled": true,
+            "openDispatchDurationMs": 632,
+            "launchUrlDurationMs": 0,
+            "runnerPrewarmWaited": false,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 2488,
+            "totalDurationMs": 3133
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-37357",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.RefreshProbe"
+        },
+        "durationMs": 3267
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 529,
+          "selector": "id=\"probe.refreshes\" label=\"Refreshes 0\""
+        },
+        "durationMs": 530
+      },
+      {
+        "step": 3,
+        "command": "gesture",
+        "ok": true,
+        "data": {
+          "kind": "drag",
+          "durationMs": 1300,
+          "pointerCount": 1,
+          "from": {
+            "x": 201,
+            "y": 194
+          },
+          "to": {
+            "x": 201,
+            "y": 558
+          },
+          "targets": {
+            "source": {
+              "selectorChain": [
+                "id=\"probe.refreshes\"",
+                "role=\"statictext\" label=\"Refreshes 0\"",
+                "label=\"Refreshes 0\""
+              ],
+              "resolution": {
+                "source": "runtime",
+                "phase": "pre-action",
+                "kind": "unique"
+              }
+            },
+            "destination": {
+              "selectorChain": [
+                "id=\"probe.row.6\"",
+                "role=\"statictext\" label=\"Row 6\"",
+                "label=\"Row 6\""
+              ],
+              "resolution": {
+                "source": "runtime",
+                "phase": "pre-action",
+                "kind": "unique"
+              }
+            }
+          },
+          "currentUptimeMs": 334070950.939625,
+          "message": "Dragged id=\"probe.refreshes\" to id=\"probe.row.6\"",
+          "gestureEndUptimeMs": 334070950.777625,
+          "gestureStartUptimeMs": 334069265.3068334,
+          "runnerMainThreadBusy": false,
+          "executionProfile": "timed-pan",
+          "timing": {
+            "executionProfile": "timed-pan",
+            "gestureDurationMs": 1300
+          }
+        },
+        "durationMs": 3801
+      },
+      {
+        "step": 4,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 484,
+          "selector": "id=\"probe.refreshes\" label=\"Refreshes 1\""
+        },
+        "durationMs": 485
+      },
+      {
+        "step": 5,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "exists",
+          "pass": true,
+          "selector": "id=\"probe.row.0\"",
+          "matches": 1
+        },
+        "durationMs": 1
+      }
+    ]
+  }
+}

@@ -25,17 +25,19 @@ enum PreToolUseHook {
     case "Bash"?:
       guard let command = payload.command else { break }
       if let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType) {
-        return deny(violation)
+        return deny(violation, tool: payload.toolName)
       }
       if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
-        return deny(violation)
+        return deny(violation, tool: payload.toolName)
       }
       if let violation = await gateOutput(
         command, payload: payload, root: root, reads: reads, home: home)
       {
-        return deny(violation, note: reads.note)
+        return deny(violation, note: reads.note, tool: payload.toolName)
       }
-      if let violation = fixerGateCap(command, payload: payload) { return deny(violation) }
+      if let violation = fixerGateCap(command, payload: payload) {
+        return deny(violation, tool: payload.toolName)
+      }
       if let brownfield {
         switch DirtyFileRead.read(brownfield.discoverDirty) {
         case .absent: break
@@ -43,7 +45,7 @@ enum PreToolUseHook {
           if let violation = DirtyFileGuard.evaluate(
             command, cwd: payload.cwd, repositoryRoot: root.path, dirty: dirty)
           {
-            return deny(violation)
+            return deny(violation, tool: payload.toolName)
           }
         case .unreadable(let path, let reason):
           context = joined(
@@ -55,14 +57,16 @@ enum PreToolUseHook {
       if let violation = PlanCommandGuard.evaluate(
         command, sessionID: payload.sessionID, agentID: payload.agentID)
       {
-        return deny(violation)
+        return deny(violation, tool: payload.toolName)
       }
       for path in writtenPaths(command, payload: payload, home: home) {
         if let violation = await writeViolation(
           path, payload: payload, root: root, dependencies: dependencies, reads: reads)
         {
           let reason = "this command writes `\(path)`. " + violation.reason
-          return deny(GuardViolation(ruleID: violation.ruleID, reason: reason), note: reads.note)
+          return deny(
+            GuardViolation(ruleID: violation.ruleID, reason: reason), note: reads.note,
+            tool: payload.toolName)
         }
         writes.append(path)
       }
@@ -74,7 +78,7 @@ enum PreToolUseHook {
       if let violation = BuildAgentLaunchGuard.evaluate(
         subagentType: payload.subagentType, runInBackground: payload.runInBackground)
       {
-        return deny(violation)
+        return deny(violation, tool: payload.toolName)
       }
       return nil
     case let tool? where fileTools.contains(tool):
@@ -82,7 +86,7 @@ enum PreToolUseHook {
       if let violation = await writeViolation(
         path, payload: payload, root: root, dependencies: dependencies, reads: reads)
       {
-        return deny(violation, note: reads.note)
+        return deny(violation, note: reads.note, tool: payload.toolName)
       }
       writes.append(path)
     default:
@@ -96,7 +100,7 @@ enum PreToolUseHook {
     if let violation = SubagentScopeGuard.evaluate(
       writes: resolved, agentType: payload.agentType, checkouts: checkouts)
     {
-      return deny(violation, note: reads.note)
+      return deny(violation, note: reads.note, tool: payload.toolName)
     }
     return HookOutput.allow(
       "swiftgate: a background agent can't answer a permission prompt, so the hook decides",
@@ -251,8 +255,8 @@ enum PreToolUseHook {
   }
 
   /// A cache fault's note rides along after the reason; it never changes the decision.
-  static func deny(_ violation: GuardViolation, note: String? = nil) -> String {
-    let reason = "swiftgate \(violation.ruleID): \(violation.reason)"
+  static func deny(_ violation: GuardViolation, note: String? = nil, tool: String?) -> String {
+    let reason = "swiftgate \(violation.ruleID): \(violation.denialReason(forTool: tool))"
     return HookOutput.deny(note.map { reason + "\n\n" + $0 } ?? reason)
   }
 

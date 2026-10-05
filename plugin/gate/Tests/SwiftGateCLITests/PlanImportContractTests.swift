@@ -20,6 +20,12 @@ private struct ContractClone {
   static let session = "a7e1495d-74fe-474b-baf4-ad95d6f7bc65"
   static let contract = "share-view-limit-contract"
   static let planBranch = "swift-harness/spec"
+  /// The literal files the contract task's `Writes` names, which its commit must touch.
+  static let contractFiles = [
+    "proto/api/v1/memo_service.proto", "store/memo_share.go", "store/driver.go",
+    "store/db/sqlite/memo_share.go", "store/db/mysql/memo_share.go",
+    "store/db/postgres/memo_share.go",
+  ]
 
   let parent: URL
   let root: URL
@@ -66,7 +72,14 @@ private struct ContractClone {
     let base = try await git(in: checkout, "rev-parse", "HEAD")
     try Data("package store\n\ntype MemoShare struct{ ViewLimit *int32 }\n".utf8).write(
       to: checkout.appending(path: "store.go"))
-    try await git(in: checkout, "commit", "-q", "-am", "feat(store): declare view limits")
+    for path in Self.contractFiles {
+      let file = checkout.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data("// \(path)\n".utf8).write(to: file)
+    }
+    try await git(in: checkout, "add", "-A")
+    try await git(in: checkout, "commit", "-q", "-m", "feat(store): declare view limits")
     return (try await git(in: checkout, "rev-parse", "HEAD"), base)
   }
 
