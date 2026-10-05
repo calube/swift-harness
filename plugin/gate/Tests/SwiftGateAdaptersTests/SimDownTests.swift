@@ -22,7 +22,9 @@ final class FakeProcess: Sendable {
   }
 }
 
-@Suite("sim down")
+/// Holds and teardowns here end only on a signal, so this limit only turns a broken `sim down`
+/// that leaves a hold behind into a failure instead of a hang.
+@Suite("sim down", .timeLimit(.minutes(5)))
 struct SimDownTests {
   static let base = SimulatorDevice(
     udid: "BASE", name: "iPhone 17",
@@ -32,8 +34,6 @@ struct SimDownTests {
   static let session = SimSession.agentDeviceSessionName(runID: runID)
   static let worktree = "/repos/app-a"
   static let holderPID: Int32 = 4242
-  /// Ends any hold a broken `sim down` leaves behind, so such a test fails instead of hanging.
-  static let holdTimeout = Duration.seconds(10)
 
   let root = TestTemporaryDirectory.root.appending(
     path: "sim-down-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -43,6 +43,8 @@ struct SimDownTests {
       pollInterval: .milliseconds(10))
   }
   var store: SimLeaseStore { SimLeaseStore(directory: root.appending(path: "locks/sim-leases")) }
+  /// What every holder this test makes logs, which says when each lease is written.
+  let holderLog = LogLines()
 
   func simDirectory(_ runID: String) -> URL {
     root.appending(path: "state/runs/\(runID)/sim", directoryHint: .isDirectory)
@@ -60,7 +62,7 @@ struct SimDownTests {
   func down(
     _ agent: FakeAgentDevice, simctl: FakeSimctl, runID: String? = runID,
     worktree: String = worktree, isAlive: @escaping @Sendable (Int32) -> Bool,
-    clock: SimHoldClock = .continuous(), teardownTimeout: Duration = .seconds(20),
+    clock: SimHoldClock = .continuous(), teardownTimeout: Duration = SimHolderTests.forever,
     crashReportWait: Duration = .milliseconds(50)
   ) async -> Result<SimDowned, SimDownFailure> {
     let directories = root
@@ -81,35 +83,49 @@ struct SimDownTests {
 
   /// A real holder on a fake simulator, with the session `sim up` would record in its lease.
   /// The holder's PID reads as alive until the hold returns.
+  ///
+  /// The holder lists sessions on a fake of its own that always shows the run's session, so
+  /// only `sim down` removing the lease ends the hold: a holder that happened to look between
+  /// sim down's close and its lease removal would otherwise end it as a gone session.
   func startHolder(_ simctl: FakeSimctl, agent: FakeAgentDevice) async throws -> (
     lease: SimLease, process: FakeProcess, holding: Task<SimHoldOutcome, any Error>
   ) {
-    let process = FakeProcess(pid: Self.holderPID)
-    let clones = SimulatorClones(
-      simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2"))
-    let holder = SimHolder(
-      devices: clones, leases: store, agentDevice: agent, worktree: Self.worktree,
-      holderPID: Self.holderPID, timeout: Self.holdTimeout,
-      pollInterval: .milliseconds(5), clock: .continuous())
-    let holding = Task {
-      defer { process.exit() }
-      return try await holder.hold(runID: Self.runID)
-    }
-    let deadline = ContinuousClock.now + .seconds(20)
-    while ContinuousClock.now < deadline {
-      if var lease = try store.read(runID: Self.runID) {
-        lease.session = Self.session
-        try store.write(lease)
-        agent.update { $0.sessions = [AgentDeviceSession(name: Self.session, udid: lease.udid)] }
-        return (lease, process, holding)
-      }
-      await Task.yield()
-    }
-    holding.cancel()
-    throw HolderNeverLeased()
+    let (process, holding) = startHold(
+      runID: Self.runID, simctl: simctl,
+      agent: FakeAgentDevice(
+        script: .init(sessions: [AgentDeviceSession(name: Self.session, udid: "any")])))
+    var lease = try await heldLease(Self.runID)
+    lease.session = Self.session
+    try store.write(lease)
+    agent.update { $0.sessions = [AgentDeviceSession(name: Self.session, udid: lease.udid)] }
+    return (lease, process, holding)
   }
 
-  struct HolderNeverLeased: Error {}
+  /// Starts a holder whose hold never times out, so no wall clock can end it under the test.
+  /// Its PID reads as alive until the hold returns.
+  func startHold(
+    runID: String, simctl: FakeSimctl, agent: FakeAgentDevice = FakeAgentDevice()
+  ) -> (process: FakeProcess, holding: Task<SimHoldOutcome, any Error>) {
+    let process = FakeProcess(pid: Self.holderPID)
+    let holder = SimHolder(
+      devices: SimulatorClones(
+        simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2")),
+      leases: store, agentDevice: agent, worktree: Self.worktree, holderPID: Self.holderPID,
+      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous(),
+      log: holderLog.append)
+    let holding = Task {
+      defer { process.exit() }
+      return try await holder.hold(runID: runID)
+    }
+    return (process, holding)
+  }
+
+  /// Waits for the holder of `runID` to log that it holds a device, which it does only once
+  /// its lease is written, and returns that lease.
+  func heldLease(_ runID: String) async throws -> SimLease {
+    try #require(await holderLog.waitFor("run \(runID) holds"))
+    return try #require(try store.read(runID: runID))
+  }
 
   /// Removes whatever lease is left, so the holder returns, and waits for it.
   func finish(_ holding: Task<SimHoldOutcome, any Error>) async {
@@ -135,25 +151,9 @@ struct SimDownTests {
   func borrowedDeviceStaysHeld() async throws {
     defer { try? FileManager.default.removeItem(at: root) }
     let simctl = FakeSimctl(devices: [Self.base])
-    let process = FakeProcess(pid: Self.holderPID)
-    let holder = SimHolder(
-      devices: SimulatorClones(
-        simctl: simctl, lock: lock, config: SimulatorConfig(device: "iPhone 17", os: "26.2")),
-      leases: store, agentDevice: FakeAgentDevice(), worktree: Self.worktree,
-      holderPID: Self.holderPID, timeout: Self.holdTimeout, pollInterval: .milliseconds(5),
-      clock: .continuous())
     let holdRunID = "20261004T120000Z-1a2b3c4d-device"
-    let holding = Task {
-      defer { process.exit() }
-      return try await holder.hold(runID: holdRunID)
-    }
-    var hold: SimLease?
-    let deadline = ContinuousClock.now + .seconds(20)
-    while hold == nil, ContinuousClock.now < deadline {
-      hold = try store.read(runID: holdRunID)
-      await Task.yield()
-    }
-    let held = try #require(hold)
+    let (process, holding) = startHold(runID: holdRunID, simctl: simctl)
+    let held = try await heldLease(holdRunID)
     try store.write(
       SimLease(
         runID: Self.runID, worktree: Self.worktree, udid: held.udid, holderPID: Self.holderPID,
@@ -418,15 +418,10 @@ struct SimDownTests {
     let holder = SimHolder(
       devices: SimulatorClones(simctl: simctl, lock: lock, config: config, ownerPID: child),
       leases: store, agentDevice: FakeAgentDevice(), worktree: Self.worktree, holderPID: child,
-      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous())
+      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous(),
+      log: holderLog.append)
     let holding = Task { try await holder.hold(runID: Self.runID) }
-    var lease: SimLease?
-    let deadline = ContinuousClock.now + .seconds(20)
-    while lease == nil, ContinuousClock.now < deadline {
-      lease = try store.read(runID: Self.runID)
-      await Task.yield()
-    }
-    let udid = try #require(lease?.udid)
+    let udid = try await heldLease(Self.runID).udid
 
     kill(child, SIGKILL)
     _ = await DetachedLauncherTests.reap(child)

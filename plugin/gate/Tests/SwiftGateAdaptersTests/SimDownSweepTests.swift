@@ -14,7 +14,7 @@ extension SimDownTests {
         agentDevice: agent, leases: store, simctl: simctl,
         crashReports: CrashReportReader(
           directory: root.appending(path: "DiagnosticReports", directoryHint: .isDirectory)),
-        isAlive: isAlive, clock: .continuous(), teardownTimeout: .seconds(20),
+        isAlive: isAlive, clock: .continuous(), teardownTimeout: SimHolderTests.forever,
         pollInterval: .milliseconds(10), crashReportWait: .milliseconds(50)))
   }
 
@@ -37,15 +37,10 @@ extension SimDownTests {
     let holder = SimHolder(
       devices: SimulatorClones(simctl: simctl, lock: lock, config: config, ownerPID: child),
       leases: store, agentDevice: holderAgent, worktree: Self.worktree, holderPID: child,
-      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous())
+      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous(),
+      log: holderLog.append)
     let holding = Task { try await holder.hold(runID: Self.runID) }
-    var lease: SimLease?
-    let deadline = ContinuousClock.now + .seconds(20)
-    while lease == nil, ContinuousClock.now < deadline {
-      lease = try store.read(runID: Self.runID)
-      await Task.yield()
-    }
-    var recorded = try #require(lease)
+    var recorded = try await heldLease(Self.runID)
     // `sim up` records the session it opened in the lease; the holder must see it open, or it
     // ends the hold itself.
     holderAgent.update {
