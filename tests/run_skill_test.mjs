@@ -316,13 +316,16 @@ export function agentLaunchProblems(files) {
 
 /** Every way `files` ({relative path: markdown}) lets a merge gate run with no deadline or hold
  * the merges behind it, as `…` lines: no `build gate-wait` watch of a background merge gate, a
- * `Monitor` wait, an action of the watch left unexplained, or an `overrun` that isn't stopped,
- * undone as a RED gate and followed by the next ready merge. */
+ * `Monitor` wait, a watch that can't see a worker return while it waits, an action of the watch
+ * left unexplained, or an `overrun` that isn't stopped, undone as a RED gate and followed by the
+ * next ready merge. */
 export function gateWatchProblems(files) {
   const problems = []
   const named = calls(files)
   if (!named.some(call => /^build gate-wait <slug> --tier \S+ --output \S+/.test(call))) {
     problems.push('no gate is watched with `swiftgate build gate-wait --tier --output`')
+  } else if (!named.some(call => /^build gate-wait <slug> .*--session <session>/.test(call))) {
+    problems.push('no gate watch passes `--session`, so a worker\'s return waits for the next poll')
   }
   for (const [file, text] of Object.entries(files)) {
     for (const block of blocks(text)) {
@@ -333,7 +336,7 @@ export function gateWatchProblems(files) {
     }
   }
   const text = Object.values(files).join('\n')
-  for (const action of ['read', 'wait', 'overrun', 'cutoff']) {
+  for (const action of ['read', 'wait', 'worker-returned', 'overrun', 'cutoff']) {
     if (!bulletAt(text, `- \`${action}\``)) problems.push(`no bullet says what \`${action}\` means`)
   }
   const overrun = bulletAt(text, '- `overrun`') ?? ''
@@ -618,16 +621,20 @@ const tests = {
       ['x.md:1: a gate or qa run in the background'])
   },
 
-  'the build loop and the run skill launch each merge gate in the background and watch it with build gate-wait, which stops an overrun as RED and lands the next ready task — catches the price-tracker orchestrator\'s 608 s foreground wait and 607 s Monitor on a hung merge gate'() {
+  'the build loop and the run skill launch each merge gate in the background and watch it with build gate-wait for the session, which stops an overrun as RED, lands the next ready task and returns when a worker does — catches the price-tracker orchestrator\'s 608 s foreground wait and 607 s Monitor on a hung merge gate, and price-tracker-4\'s returns held up to 125 s behind a poll'() {
     assert.deepEqual(gateWatchProblems(buildSkillFiles()), [])
     const run = runSkillFiles()
     assert.ok(calls(run).some(call => call.startsWith('build gate-wait <slug> --tier final --output <out>/final.json')),
       'the run skill never watches its final gate with build gate-wait')
+    assert.ok(calls(run).some(call => /^build gate-wait <slug> --tier merge .*--session <session>/.test(call)),
+      'the run skill watches its merge gates without --session')
+    assert.deepEqual(gateWatchProblems({ 'x.md': '- Watch it: `"$SG" build gate-wait <slug> --tier merge --output o.json --json`.' }).filter(p => /--session/.test(p)),
+      ['no gate watch passes `--session`, so a worker\'s return waits for the next poll'])
     assert.ok(gateWatchProblems(run).every(problem => !/Monitor|foreground/.test(problem)), gateWatchProblems(run).join('\n'))
     assert.deepEqual(gateWatchProblems({ 'x.md': '- Run `"$SG" check --tier merge --json > o.json` and Monitor its output for GATE.' }), [
       'no gate is watched with `swiftgate build gate-wait --tier --output`',
       'x.md:1: waits with Monitor',
-      'no bullet says what `read` means', 'no bullet says what `wait` means', 'no bullet says what `overrun` means', 'no bullet says what `cutoff` means',
+      'no bullet says what `read` means', 'no bullet says what `wait` means', 'no bullet says what `worker-returned` means', 'no bullet says what `overrun` means', 'no bullet says what `cutoff` means',
       'an `overrun` gate is never stopped with TaskStop', 'an `overrun` gate is never treated as RED', 'an `overrun` merge is never undone',
       'an `overrun` never lands the next ready task first', 'a `wait` may end the turn and kill the gate',
     ])
