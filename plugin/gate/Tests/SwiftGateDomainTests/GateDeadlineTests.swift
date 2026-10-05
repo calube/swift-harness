@@ -235,21 +235,24 @@ struct MergeQueueTests {
   }
 
   @Test(
-    "with 3 slots held by tasks whose checked returns only wait to merge, build next starts the validation task ahead of the other ready task, and once the trial started it by hand, the freed slot goes to the other ready task — catches the send-money slot deadlock broken by hand"
+    "with 3 slots held by tasks whose checked returns only wait to merge, build next starts the validation task outside the slot limit and gives a freed slot to the other ready task, while with every slot held by a working task only the validation task starts — catches the send-money slot deadlock broken by hand"
   )
   func waitingReturnsFreeTheirSlots() throws {
     let trial = Trial.sendMoney
     let record = try trial.record()
-    func next(_ time: String) throws -> BuildScheduler.Result {
+    func next(_ time: String, countingIdle: Bool = true) throws -> BuildScheduler.Result {
       let ledger = try trial.ledger(at: at(time))
       let running = try trial.running(at: at(time))
       let log = try trial.log(through: at(time))
       return BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
         now: try at(time), required: .empty, timeBox: record.timeBox,
-        idle: running.filter { log.workerFinished(task: $0) })
+        idle: countingIdle ? running.filter { log.workerFinished(task: $0) } : [])
     }
-    #expect(try next("2026-10-05T02:56:56Z").toStart == ["spec-validation"])
+    #expect(record.preset.maxParallel == 3)
+    #expect(try trial.running(at: at("2026-10-05T02:56:56Z")).count == 3)
+    #expect(try next("2026-10-05T02:56:56Z").toStart == ["spec-validation", "account-fake"])
+    #expect(try next("2026-10-05T02:56:56Z", countingIdle: false).toStart == ["spec-validation"])
     #expect(try next("2026-10-05T02:59:52Z").toStart == ["account-fake"])
     let ledger = try LedgerJSON.decode(trial.data("ledger.json"))
     #expect(
