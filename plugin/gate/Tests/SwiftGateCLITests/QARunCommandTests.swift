@@ -578,6 +578,9 @@ struct QAAdoptCommandTests {
       atPath: repo.planDirectory.appending(path: "qa").path
     ).sorted()
     #expect(names == ["save.flow.json", "save.state.sh"])
+    let folder = worktree.appending(path: ".harness/qa").path
+    #expect(!FileManager.default.fileExists(atPath: folder), "a GREEN adopt removes what it took")
+    #expect(report.removed == folder)
   }
 
   @Test(
@@ -615,6 +618,11 @@ struct QAAdoptCommandTests {
     #expect(empty.message.contains(".harness/qa"))
     #expect(unknown.verdict == .red)
     #expect(unknown.message.contains("no-such-plan"))
+    #expect(unknown.removed == nil)
+    #expect(
+      FileManager.default.fileExists(
+        atPath: repo.root.appending(path: ".harness/qa/no-such-plan/x.state.sh").path),
+      "a refused adopt leaves the prepared folder")
     #expect(!FileManager.default.fileExists(atPath: repo.planDirectory("no-such-plan").path))
   }
 }

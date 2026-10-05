@@ -57,7 +57,7 @@ struct QAAdoptRepairTests {
       QARunRun.Options(atBase: true, preparedBy: "validation"), suffix: 1)
     let adopted = await QARunReusesPreparedTests.adopt(repo)
     try #require(adopted.verdict == .green, "\(adopted.message)")
-    try FileManager.default.removeItem(at: prepared)
+    #expect(!FileManager.default.fileExists(atPath: prepared.path), "a GREEN adopt removes it")
 
     let red1 = await repo.run(QARunRun.Options(after: "total-ui"), suffix: 2)
     let red2 = await repo.run(QARunRun.Options(after: "total-ui"), suffix: 3)
@@ -109,6 +109,11 @@ struct QAAdoptRepairTests {
     #expect(
       atBase.rows.map(\.reusedFrom) == [repairRun.runID, worker.runID], "\(atBase.rows)")
 
+    #expect(
+      !FileManager.default.fileExists(atPath: prepared.path),
+      "a GREEN repair removes the prepared folder it took")
+    #expect(report.removed == repo.root.appending(path: ".harness/qa").path)
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("exit 6\n".utf8).write(to: prepared.appending(path: "total.sh"))
     _ = await repo.run(
       QARunRun.Options(atBase: true, preparedBy: "validation", requirement: "req-total"),
@@ -117,6 +122,10 @@ struct QAAdoptRepairTests {
       repo, requirement: "req-total", redRuns: [try #require(red1.runID)], events: events)
     #expect(again.verdict == .red)
     #expect(again.findings.map(\.ruleID) == [QAFlowRepair.capRuleID], "\(again.findings)")
+    #expect(again.removed == nil)
+    #expect(
+      FileManager.default.fileExists(atPath: prepared.appending(path: "total.sh").path),
+      "a refused repair leaves the prepared folder for the next attempt")
     #expect(
       try String(contentsOf: repo.planDirectory.appending(path: "qa/total.sh"), encoding: .utf8)
         == "exit 5\n")
@@ -233,6 +242,10 @@ struct QAAdoptRepairTests {
       repo, requirement: RefreshRepairTrial.requirement, redRuns: RefreshRepairTrial.redRuns,
       events: events, cause: .flowSide)
     #expect(overreach.findings.map(\.ruleID) == [QAFlowRepair.outsideRowRuleID])
+    #expect(
+      FileManager.default.fileExists(
+        atPath: Self.prepared(repo, slug: RefreshRepairTrial.plan).path),
+      "a refused repair leaves the prepared folder")
     #expect(try Data(contentsOf: planFlow) == (try RefreshRepairTrial.adoptedFlow()))
     #expect(Self.repairs(events).isEmpty)
 
@@ -253,5 +266,60 @@ struct QAAdoptRepairTests {
     #expect(event.added == ["gesture"])
     #expect(try EventPayloadGuard.rejection(of: try #require(events.events.first)) == nil)
     #expect(QAAdoptRun.render(report, json: false).contains(RefreshRepairTrial.requirement))
+  }
+
+  @Test(
+    "in a brownfield clone, a repair adopted from the plan checkout reads the red runs a slot's qa run wrote to the shared store under the git common dir, takes the repair, and removes the slot's prepared folder — catches red runs looked up only in each checkout's own git dir, refused as holding no row of the requirement"
+  )
+  func readsRedRunsFromTheSharedStore() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let task = await scenario.create()
+    let slot = URL(filePath: try #require(task.worktree, "\(task.message)"), directoryHint: .isDirectory)
+    let checkout = URL(filePath: scenario.checkout, directoryHint: .isDirectory)
+
+    let plan = try PlanStateLayout(commonDirectory: scenario.common).plan(RefreshRepairTrial.plan)
+    let directory = URL(filePath: plan.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(
+      at: directory.appending(path: "qa"), withIntermediateDirectories: true)
+    try RefreshRepairTrial.tableData().write(
+      to: directory.appending(path: ValidationTable.fileName))
+    try RefreshRepairTrial.adoptedFlow().write(
+      to: directory.appending(path: RefreshRepairTrial.check))
+    try RefreshRepairTrial.adoptedRecordData().write(
+      to: directory.appending(path: "qa/\(QAAtBaseRun.fileName)"))
+    for run in RefreshRepairTrial.redRuns {
+      let folder = try RunStore.qaRuns(worktree: slot).runDirectory(for: run)
+        .appending(path: QAReport.directory, directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+      try RefreshRepairTrial.redReportData(run).write(
+        to: folder.appending(path: QAReport.fileName))
+    }
+    let prepared = slot.appending(path: ".harness/qa/\(RefreshRepairTrial.plan)")
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+    let flow = try RefreshRepairTrial.repairedFlow()
+    try flow.write(to: prepared.appending(path: RefreshRepairTrial.fileName))
+    try QAAtBaseRunJSON.encode(
+      try RefreshRepairTrial.preparedRecord(flow: flow, runID: "20261005T063500Z-0000a11e")
+    ).write(to: prepared.appending(path: QAAtBaseRun.fileName))
+
+    let events = MemoryEventLog()
+    let report = await QAAdoptRun.repair(
+      QAAdoptRepair(
+        requirement: RefreshRepairTrial.requirement, buildRun: Self.buildRun, cause: .flowSide,
+        reason: "the scroll never refreshed the list", redRuns: RefreshRepairTrial.redRuns),
+      worktree: slot.path, root: checkout,
+      git: LiveGit(runner: scenario.runner, repositoryRoot: checkout.path),
+      runner: scenario.runner, events: events,
+      now: { Date(timeIntervalSince1970: 1_800_000_100) }, newEventID: { UUID().uuidString })
+
+    #expect(report.verdict == .green, "\(report.message) \(report.findings)")
+    #expect(report.findings.isEmpty, "\(report.findings)")
+    #expect(
+      try Data(contentsOf: directory.appending(path: RefreshRepairTrial.check)) == flow)
+    #expect(Self.repairs(events).first?.redRuns == RefreshRepairTrial.redRuns)
+    #expect(Self.repairs(events).first?.failingStep == 6)
+    #expect(!FileManager.default.fileExists(atPath: slot.appending(path: ".harness/qa").path))
+    #expect(report.removed == slot.appending(path: ".harness/qa").path)
   }
 }

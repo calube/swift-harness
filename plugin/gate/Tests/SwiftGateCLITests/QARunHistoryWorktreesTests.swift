@@ -56,4 +56,24 @@ struct QARunHistoryWorktreesTests {
       worktree: URL(filePath: slot, directoryHint: .isDirectory))
     #expect(read.map(\.run.runID) == [Self.fixerRun])
   }
+
+  @Test(
+    "a qa run's report a slot wrote to the shared store under the common dir is found by run id from the plan checkout and from another slot — catches a run-id lookup that reads only each checkout's own git dir"
+  )
+  func reportByRunIDReadsTheSharedStore() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let task = await scenario.create()
+    let slot = URL(
+      filePath: try #require(task.worktree, "\(task.message)"), directoryHint: .isDirectory)
+    let run = RefreshRepairTrial.redRuns[0]
+    let folder = try RunStore.qaRuns(worktree: slot).runDirectory(for: run)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    try RefreshRepairTrial.redReportData(run).write(to: folder.appending(path: QAReport.fileName))
+    let checkout = URL(filePath: scenario.checkout, directoryHint: .isDirectory)
+
+    #expect(QARunHistory.report(runID: run, worktrees: [checkout])?.runID == run)
+    #expect(QARunHistory.report(runID: run, worktrees: [slot, checkout])?.runID == run)
+  }
 }
