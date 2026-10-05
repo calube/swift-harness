@@ -307,24 +307,32 @@ struct WarmupSeedCheckoutTests {
   )
   func warmsThePlanCheckoutAndEachSlot() async throws {
     let (clone, checkout) = try await Self.clone()
+    // Every path as git names it, through `/private`.
+    let root = try await clone.git("rev-parse", "--show-toplevel").trimmingCharacters(
+      in: .whitespacesAndNewlines)
+    let planCheckout = try await clone.git(
+      "-C", checkout.path(percentEncoded: false), "rev-parse", "--show-toplevel"
+    ).trimmingCharacters(in: .whitespacesAndNewlines)
+    let common = URL(filePath: "\(root)/.git", directoryHint: .isDirectory)
     let names = (1...3).map {
       try? TaskWorktree.slotPath(
-        commonDirectory: clone.layout.commonDir.path(percentEncoded: false), plan: Self.plan,
-        number: $0)
+        commonDirectory: common.path(percentEncoded: false), plan: Self.plan, number: $0)
     }
     defer { Self.remove(clone, slots: names.compactMap { $0 }) }
     let runner = FakeAreaCommandRunner { _ in .passed }
 
     let outcome = try await WarmupCommand.warm(
-      directory: clone.root, areaNames: nil, seedCheckout: checkout, plan: Self.plan,
+      directory: clone.root, areaNames: nil,
+      seedCheckout: URL(filePath: planCheckout, directoryHint: .isDirectory), plan: Self.plan,
       dependencies: clone.dependencies(runner: runner))
 
     let slots = try names.map { try #require($0) }
     #expect(outcome.slots == slots)
     let base = try await clone.git("rev-parse", "HEAD").trimmingCharacters(
       in: .whitespacesAndNewlines)
-    let checkouts = [checkout.path(percentEncoded: false)] + slots
-    let seed = AreaCacheEnvironment.derivedDataSeed(area: "InterviewStarter", layout: clone.layout)
+    let checkouts = [planCheckout] + slots
+    let seed = AreaCacheEnvironment.derivedDataSeed(
+      area: "InterviewStarter", layout: BrownfieldStateLayout(commonDir: common, gitDir: common))
     for path in checkouts {
       let gitDir = try await clone.git("-C", path, "rev-parse", "--absolute-git-dir")
         .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -349,7 +357,7 @@ struct WarmupSeedCheckoutTests {
     #expect(times.areas["APIClient"]?.steps == [.build: .passed, .test: .passed])
     #expect(
       runner.requests.filter {
-        Self.inside($0.workingDirectory, clone.root.path(percentEncoded: false))
+        Self.inside($0.workingDirectory, root)
       }.count
         == 2 * (Self.packages.count + 1),
       "the base tree's build and test of each area, and nothing more")

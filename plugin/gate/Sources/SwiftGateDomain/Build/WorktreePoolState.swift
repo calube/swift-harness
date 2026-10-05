@@ -42,6 +42,12 @@ public struct WorktreePoolState: Codable, Sendable, Equatable {
     }
   }
 
+  /// Adds a free slot at `path`; a slot already there keeps what it holds.
+  public mutating func add(free path: String) {
+    guard !slots.contains(where: { $0.path == path }) else { return }
+    slots.append(Slot(path: path, branch: nil))
+  }
+
   /// Frees the slot holding `branch`.
   /// - Returns: its path, or `nil` when no slot holds `branch`.
   @discardableResult

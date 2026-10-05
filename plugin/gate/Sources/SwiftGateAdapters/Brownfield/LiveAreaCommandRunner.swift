@@ -14,9 +14,37 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
     seeding = DerivedDataSeeding(processRunner: processRunner)
   }
 
-  /// A seed that fails leaves the command to build cold, as it would with no seed.
+  /// A seed that fails leaves the command to build cold, as it would with no seed. A command that
+  /// builds in a worktree's own DerivedData waits, inside its deadline, for any other build there
+  /// to end: `xcodebuild` fails a build whose build database another build holds.
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
-    if let copy = request.derivedDataSeed { _ = await seeding.seed(copy) }
+    guard let copy = request.derivedDataSeed else { return await launch(request) }
+    let destination = URL(filePath: copy.destination, directoryHint: .isDirectory)
+    let lock = FileCountingLock(
+      directory: destination.deletingLastPathComponent(),
+      name: "\(destination.lastPathComponent).build-lock", capacity: 1)
+    let clock = ContinuousClock()
+    let started = clock.now
+    let lease: LockLease
+    do {
+      lease = try await lock.acquire(timeout: request.deadline)
+    } catch {
+      return .timedOut(
+        tail: "waited \(request.deadline.components.seconds) s for another build in "
+          + "\(copy.destination) to end: \(error)")
+    }
+    defer { lease.release() }
+    _ = await seeding.seed(copy)
+    let left = request.deadline - (clock.now - started)
+    return await launch(
+      AreaCommandRequest(
+        area: request.area, step: request.step, command: request.command,
+        workingDirectory: request.workingDirectory, deadline: max(left, .milliseconds(1)),
+        environment: request.environment, junitPath: request.junitPath,
+        resultBundlePath: request.resultBundlePath, derivedDataSeed: copy))
+  }
+
+  private func launch(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
     if let junitPath = request.junitPath { JUnitReportFiles.clear(at: junitPath) }
     // `xcodebuild` refuses a result bundle path that already exists.
     if let bundle = request.resultBundlePath { try? FileManager.default.removeItem(atPath: bundle) }

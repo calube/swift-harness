@@ -91,7 +91,21 @@ public struct WorktreePool: Sendable {
   public func prepare(count: Int, revision: String, workspace: any GitWorkspace)
     async throws(GitWorkspaceError) -> [String]
   {
-    []
+    try await locked { () async throws(GitWorkspaceError) -> [String] in
+      var state = try state()
+      for slot in state.slots where !FileManager.default.fileExists(atPath: slot.path) {
+        state.drop(slot.path)
+      }
+      var added: [String] = []
+      while state.slots.count < count {
+        let path = try newSlotPath(state)
+        try await workspace.addDetachedWorktree(at: path, revision: revision)
+        state.add(free: path)
+        added.append(path)
+        try write(state)
+      }
+      return added
+    }
   }
 
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never

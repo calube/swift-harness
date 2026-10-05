@@ -4,8 +4,9 @@ import SwiftGateAdapters
 import SwiftGateDomain
 import Synchronization
 
-/// `swiftgate warmup [--areas a,b]`: runs every area's generate, build and test at the base tree
-/// in parallel, filling the caches, the warm-up times and the baseline.
+/// `swiftgate warmup [--areas a,b] [--seed-checkout <path>] [--plan <slug>]`: runs every area's
+/// generate, build and test at the base tree in parallel, filling the caches, the warm-up times
+/// and the baseline; then builds each Xcode area in the plan checkout and in the plan's slots.
 struct WarmupCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "warmup",
@@ -16,8 +17,8 @@ struct WarmupCommand: AsyncParsableCommand {
 
   @Option(
     help: ArgumentHelp(
-      "The plan branch's checkout, where each SwiftPM area's build also runs, warming the "
-        + "build the run makes there."))
+      "The plan branch's checkout, where each Xcode area's build also runs, warming the "
+        + "builds the run makes there."))
   var seedCheckout: String?
 
   @Option(
@@ -98,10 +99,14 @@ struct WarmupCommand: AsyncParsableCommand {
     let generator = XcodeGenerator(runner: process, repositoryRoot: root, layout: layout)
     let notes = Mutex(known.notes)
 
-    // Started beside the base tree's run, so the checkout the run builds in is warm sooner.
+    // Started beside the base tree's run, so the checkouts the run builds in are warm sooner.
     async let seeded = seed(
-      areas: areas, checkout: seedCheckout, layout: layout, tree: snapshot,
-      deadline: dependencies.deadline, runner: runner)
+      areas: areas, checkout: seedCheckout,
+      slots: { () async -> (paths: [String], notes: [String]) in
+        await prepareSlots(
+          plan: plan, config: config, areas: areas, layout: layout, revision: head,
+          process: process)
+      }, tree: snapshot, deadline: dependencies.deadline, process: process, runner: runner)
     let results = await Warmup.run(
       areas: areas,
       dependencies: Warmup.Dependencies(
@@ -135,31 +140,81 @@ struct WarmupCommand: AsyncParsableCommand {
           }
           notes.withLock { $0 += lines }
         }))
+    let checkouts = await seeded
     return Outcome(
       tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results,
-      seeded: await seeded, slots: [], notes: notes.withLock { $0 })
+      seeded: checkouts.builds, slots: checkouts.slots,
+      notes: notes.withLock { $0 } + checkouts.notes)
   }
 
-  /// Each SwiftPM area's build in `checkout`, all at once; none without a checkout.
+  /// What the warm-up built in the checkouts the run builds in.
+  struct Checkouts: Sendable {
+    var builds: [WarmupSeedBuild] = []
+    var slots: [String] = []
+    var notes: [String] = []
+  }
+
+  /// Each xcode area's build in `checkout`, then in each slot `slots` adds, those all at once:
+  /// the plan checkout takes the contract's build before any task takes a slot.
   private static func seed(
-    areas: [BrownfieldArea], checkout: URL?, layout: BrownfieldStateLayout,
-    tree: TrackedTreeSnapshot, deadline: Duration, runner: any AreaCommandRunning
-  ) async -> [WarmupSeedBuild] {
-    guard let checkout else { return [] }
-    let requests = areas.compactMap { area in
-      Warmup.seedRequest(
-        area: area, checkout: checkout.path, layout: layout, tree: tree,
-        deadline: deadline)
+    areas: [BrownfieldArea], checkout: URL?,
+    slots: @Sendable () async -> (paths: [String], notes: [String]), tree: TrackedTreeSnapshot,
+    deadline: Duration, process: any ProcessRunner, runner: any AreaCommandRunning
+  ) async -> Checkouts {
+    var checkouts = Checkouts()
+    if let checkout {
+      var path = checkout.path(percentEncoded: false)
+      while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+      let (builds, notes) = await build(
+        areas: areas, in: [path], tree: tree,
+        deadline: deadline, process: process, runner: runner)
+      checkouts.builds += builds
+      checkouts.notes += notes
+    }
+    let added = await slots()
+    checkouts.slots = added.paths
+    checkouts.notes += added.notes
+    let (builds, notes) = await build(
+      areas: areas, in: added.paths, tree: tree, deadline: deadline, process: process,
+      runner: runner)
+    checkouts.builds += builds
+    checkouts.notes += notes
+    return checkouts
+  }
+
+  /// Every ``Warmup/seedRequest(area:checkout:layout:tree:deadline:)`` in `paths`, all at once,
+  /// in checkout and then config order.
+  private static func build(
+    areas: [BrownfieldArea], in paths: [String], tree: TrackedTreeSnapshot, deadline: Duration,
+    process: any ProcessRunner, runner: any AreaCommandRunning
+  ) async -> (builds: [WarmupSeedBuild], notes: [String]) {
+    var requests: [(checkout: String, request: AreaCommandRequest)] = []
+    var notes: [String] = []
+    for path in paths {
+      let layout: BrownfieldStateLayout
+      do {
+        layout = try await GitTrackedTree(
+          runner: process, directory: URL(filePath: path, directoryHint: .isDirectory)
+        ).stateLayout()
+      } catch {
+        notes.append("warmup: \(path) not built: \(error.message)")
+        continue
+      }
+      requests += areas.compactMap { area in
+        Warmup.seedRequest(
+          area: area, checkout: path, layout: layout, tree: tree, deadline: deadline
+        ).map { (path, $0) }
+      }
     }
     let built = await withTaskGroup(of: (Int, WarmupSeedBuild).self) { group in
-      for (index, request) in requests.enumerated() {
+      for (index, (checkout, request)) in requests.enumerated() {
         group.addTask {
           let started = ContinuousClock.now
           let outcome = await runner.run(request)
           return (
             index,
             Warmup.seedBuild(
-              area: request.area, outcome: outcome,
+              area: request.area, checkout: checkout, outcome: outcome,
               milliseconds: milliseconds(ContinuousClock.now - started))
           )
         }
@@ -168,7 +223,31 @@ struct WarmupCommand: AsyncParsableCommand {
       for await result in group { built.append(result) }
       return built
     }
-    return built.sorted { $0.0 < $1.0 }.map(\.1)
+    return (built.sorted { $0.0 < $1.0 }.map(\.1), notes)
+  }
+
+  /// Adds `plan`'s slots up to the preset's `max_parallel` at `revision`; none without a plan,
+  /// a preset, or an area a slot's own build would warm.
+  private static func prepareSlots(
+    plan: String?, config: BrownfieldConfig, areas: [BrownfieldArea],
+    layout: BrownfieldStateLayout, revision: String, process: any ProcessRunner
+  ) async -> (paths: [String], notes: [String]) {
+    guard let plan,
+      let count = config.buildPresets[BrownfieldConfigSchema.profileName]?.maxParallel,
+      areas.contains(where: { $0.kind == .xcode })
+    else { return ([], []) }
+    let common = layout.commonDir.path(percentEncoded: false)
+    let pool = WorktreePool(commonDirectory: common, plan: plan)
+    do throws(GitWorkspaceError) {
+      let main = try TaskWorktree.mainCheckout(commonDirectory: common)
+      return (
+        try await pool.prepare(
+          count: count, revision: revision,
+          workspace: LiveGitWorkspace(runner: process, repositoryRoot: main)), []
+      )
+    } catch {
+      return ([], ["warmup: \(plan)'s slots not added: \(error)"])
+    }
   }
 
   /// A generator's outcome as the warm-up records it.
@@ -310,9 +389,10 @@ struct WarmupCommand: AsyncParsableCommand {
         }
       }
     }
+    for slot in outcome.slots { lines.append("added slot \(slot)") }
     for build in outcome.seeded {
       lines.append(
-        "\(build.area) build in \(seedCheckout ?? ""): \(build.outcome.rawValue), "
+        "\(build.area) build in \(build.checkout): \(build.outcome.rawValue), "
           + "\(build.milliseconds) ms")
       if build.outcome != .passed, let detail = build.detail {
         lines += detail.split(separator: "\n", omittingEmptySubsequences: false).map { "  \($0)" }
