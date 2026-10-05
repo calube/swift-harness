@@ -1,8 +1,8 @@
 # Interview starter
 
-A small SwiftUI app for timed rehearsals of `/swift-harness:ship`. It stands in for the project a
-candidate brings to a 45-minute AI coding interview: already built, already green, so the clock
-goes to features and not to setup.
+A small SwiftUI app for timed rehearsals of `/swift-harness:ship`. It stands in for a project at the
+start of a 45-minute timed build: already built, already green, so the clock goes to features and
+not to setup.
 
 It is not an eval suite app. It has no hidden tests and no graded tasks.
 
@@ -16,7 +16,7 @@ It is not an eval suite app. It has no hidden tests and no graded tasks.
   Errors map to `APIError` (`offline`, `badStatus`, `undecodable`).
 - `Packages/LogClient`: `LogClient` and its OSLog backend in `LogClientLive`.
 - `UITests/`: 1 launch flow, declared in `.swiftgate.toml`.
-- `specs/`: 3 practice READMEs of rising size, written the way an interviewer would hand them over.
+- `specs/`: 3 practice READMEs of rising size, each written as a self-contained brief.
 
 Every package pins TCA 1.26.2 and its dependencies to the same versions as `examples/SampleApp`.
 
@@ -32,7 +32,7 @@ A cold build of TCA and its macros takes minutes. Pay that cost before the timer
    is the warm one, and takes well under a minute.
 4. Run `swiftgate test --tier t3` once to build the app for the simulator and run the launch flow.
 
-Then copy in any assets the interview README ships with, and start the run:
+Then copy in any assets the brief ships with, and start the run:
 
 ```sh
 /swift-harness:ship specs/1-list-detail.md --preset interview
