@@ -699,20 +699,12 @@ public struct BuildMerge: Sendable {
     }
   }
 
-  /// The plan's `qa run --before-merge` reports in the main checkout's runs, where the build
-  /// skill runs them; a report that doesn't decode is passed over.
+  /// The plan's `qa run --before-merge` reports of this task in the main checkout's runs, where
+  /// the build skill runs them; a report that doesn't decode is passed over.
   private func beforeMergeReports(_ context: Context) -> [QAReport] {
-    let runs = RunStore(
-      worktreeRoot: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory)
-    ).state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
-    let ids = (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []
-    return ids.filter(RunID.isValid).compactMap { id in
-      let file = runs.appending(path: "\(id)/\(QAReport.directory)/\(QAReport.fileName)")
-      guard let data = try? Data(contentsOf: file), let report = try? QAReportJSON.decode(data),
-        report.plan == plan, report.after == task, report.trialMerge != nil
-      else { return nil }
-      return report
-    }
+    QARunHistory.beforeMergeReports(
+      worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory), plan: plan
+    ).filter { $0.after == task }
   }
 
   /// Aborts a conflicted merge in the main checkout and proves `main` is back where it was.

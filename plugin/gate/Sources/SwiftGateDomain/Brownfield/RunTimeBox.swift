@@ -237,9 +237,41 @@ public struct CutoffCosts: Sendable, Equatable, Codable {
     finalSource: .estimated)
 
   /// The costs `log`'s recorded gates measured, each gate's duration read from `milliseconds` by
-  /// its run id.
+  /// its run id. Only gates the run recorded count: a gate someone ran on a branch tip never
+  /// landed one. The merge cost is the slowest of the ``recentMergeGates`` newest, the final cost
+  /// the newest `final`, or the merge cost before any; each whole seconds, rounded up, and never
+  /// under ``floorSeconds``. With no recorded gate it is ``estimated``.
   public static func measured(log: BuildEventLog, milliseconds: [String: Int]) -> CutoffCosts {
-    estimated
+    var merges: [Int] = []
+    var finals: [Int] = []
+    for event in log.events {
+      guard case .gate(let gate) = event, let ms = milliseconds[gate.runID] else { continue }
+      switch gate.stage {
+      case .merge: merges.append(ms)
+      case .final: finals.append(ms)
+      }
+    }
+    func seconds(_ ms: Int) -> Int { max(floorSeconds, (ms + 999) / 1000) }
+    let merge = merges.suffix(recentMergeGates).max().map(seconds)
+    if let final = finals.last.map(seconds) {
+      return CutoffCosts(
+        mergeGateSeconds: merge ?? estimated.mergeGateSeconds,
+        mergeGateSource: merge == nil ? .estimated : .measured, finalSeconds: final,
+        finalSource: .measured)
+    }
+    guard let merge else { return estimated }
+    return CutoffCosts(
+      mergeGateSeconds: merge, mergeGateSource: .measured, finalSeconds: merge,
+      finalSource: .mergeGates)
+  }
+
+  /// How the reasons name where the costs came from.
+  var described: String {
+    switch (mergeGateSource, finalSource) {
+    case (.estimated, .estimated): "estimated, as no gate is recorded"
+    case (_, .mergeGates): "measured by this run's merge gates"
+    default: "measured by this run's gates"
+    }
   }
 }
 
@@ -257,22 +289,28 @@ public struct CutoffDecision: Sendable, Equatable, Codable {
 
 /// How a brownfield run treats in-flight work at the cutoff, with no one to ask.
 public enum CutoffRule {
-  /// The slowest `merge` gate the fifth memos trial measured (115 s), rounded up.
+  /// The slowest `merge` gate the fifth memos trial measured (115 s), rounded up: the merge cost
+  /// before this run has recorded one (``CutoffCosts/estimated``).
   public static let mergeGateSeconds = 120
-  /// `final` (111 s there) plus `build finish`, the checkout's removal and the report.
+  /// `final` (111 s there) plus `build finish`, the checkout's removal and the report, before this
+  /// run has recorded a gate.
   public static let finalAndReportSeconds = 180
 
-  /// 1 decision per task, in `tasks`' order. A task already merged always finishes: its merge
-  /// is on `main`, and abandoning it there would leave its code merged under an `abandoned` task.
-  /// A merged task whose merge gate isn't GREEN yet holds that gate's time first. A gating task
-  /// finishes its merge when that merge gate, every merge gate held before it, and `final` with
-  /// the report all fit before the box ends; any other running task is abandoned with the reason.
+  /// 1 decision per task, in `tasks`' order, charging `costs`. A task already merged always
+  /// finishes: its merge is on `main`, and abandoning it there would leave its code merged under an
+  /// `abandoned` task. A merged task whose merge gate isn't GREEN yet holds that gate's time first.
+  /// A gating task finishes its merge when its before-merge qa, its merge gate, every merge gate
+  /// held before it, and `final` with the report all fit before the box ends, which may be past
+  /// the cutoff: the cutoff only stops starting work. Any other running task is abandoned with the
+  /// reason.
   public static func decide(
     tasks: [CutoffTask], timeBox: RunTimeBox, now: Date, costs: CutoffCosts = .estimated
   ) -> [CutoffDecision] {
     let left = timeBox.secondsLeft(at: now)
     let ends = timeBox.deadlines.endsAt.formatted(.iso8601)
-    var merging = tasks.filter { $0.stage == .merged }.count * mergeGateSeconds
+    let gate = costs.mergeGateSeconds
+    let tail = costs.finalAndReportSeconds
+    var merging = tasks.filter { $0.stage == .merged }.count * gate
     return tasks.map { task in
       switch task.stage {
       case .notStarted:
@@ -293,22 +331,25 @@ public enum CutoffRule {
       case .merged:
         return CutoffDecision(
           task: task.id, action: .finishMerge,
-          reason: "its merge is on main: finish its merge gate (\(mergeGateSeconds) s) and the "
+          reason: "its merge is on main: finish its merge gate (\(gate) s) and the "
             + "steps after it, \(left) s before the box ends")
       case .gating:
         let available = left - merging
-        guard mergeGateSeconds + finalAndReportSeconds <= available else {
+        let qa = task.beforeMergeQASeconds
+        let cost =
+          (qa > 0 ? "its before-merge qa run (\(qa) s), " : "its before-merge qa already GREEN, ")
+          + "its merge gate (\(gate) s) plus final and the report (\(tail) s), "
+          + costs.described
+        guard qa + gate + tail <= available else {
           return CutoffDecision(
             task: task.id, action: .abandon,
-            reason: "its merge gate (\(mergeGateSeconds) s) plus final and the report "
-              + "(\(finalAndReportSeconds) s) doesn't fit in the \(available) s left in the box"
+            reason: cost + ", doesn't fit in the \(available) s left in the box"
               + (merging > 0 ? " after the merges ahead of it" : ""))
         }
-        merging += mergeGateSeconds
+        merging += qa + gate
         return CutoffDecision(
           task: task.id, action: .finishMerge,
-          reason: "its merge gate (\(mergeGateSeconds) s) plus final and the report "
-            + "(\(finalAndReportSeconds) s) fits in the \(available) s left in the box")
+          reason: cost + ", fits in the \(available) s left in the box")
       }
     }
   }

@@ -46,6 +46,14 @@ public enum MeasuredFinalGateReader {
   /// Each `gate.run` recorded where `worktree`'s events go, its duration in milliseconds by run
   /// id; empty when none can be read.
   public static func milliseconds(worktree: URL) -> [String: Int] {
-    [:]
+    guard let data = try? HarnessEventFiles(root: worktree).read(.gate, runID: nil),
+      let read = try? HarnessEventJSON.decode(data)
+    else { return [:] }
+    var durations: [String: Int] = [:]
+    for event in read.events {
+      guard case .gateRun(let run) = event.payload, let id = event.runID else { continue }
+      durations[id] = run.milliseconds
+    }
+    return durations
   }
 }

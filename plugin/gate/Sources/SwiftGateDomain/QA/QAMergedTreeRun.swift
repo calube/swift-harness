@@ -17,7 +17,7 @@ public struct QAMergedTreeRun: Sendable, Equatable, Codable {
 
   /// The newest record of `records` made on `tree`; run ids start with their UTC start time.
   public static func newest(on tree: String, in records: [QAMergedTreeRun]) -> QAMergedTreeRun? {
-    nil
+    records.filter { $0.tree == tree }.max { $0.run.runID < $1.run.runID }
   }
 
   public func encoded() throws -> Data {
