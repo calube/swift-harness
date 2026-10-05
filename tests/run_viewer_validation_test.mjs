@@ -111,6 +111,27 @@ const historyView = view({
   },
 })
 
+// A flow row abandoned at the final run, whose before-merge run passed with a video.
+const FINAL = '20261003T145000Z-0000eeee'
+const LAST_PASS = `passed before merge of notes/fix-list, qa run ${QA}; final qa run ${FINAL} read abandoned: not run: list was abandoned before it merged`
+const lastPassView = view({
+  validation: {
+    plan: 'sample-notes',
+    counts: { pass: 0, red: 0, unverified: 0, waiting: 0, abandoned: 1, atBase: 0 },
+    rows: [
+      row(1, 'flow', 'abandoned', ['list'], {
+        check: 'save-note.flow.json', qaRun: FINAL, message: 'not run: list was abandoned before it merged',
+        history: [
+          attempt(FINAL, 'final', 'abandoned', { message: 'not run: list was abandoned before it merged' }),
+          attempt(QA, 'after', 'pass', { after: 'list', ms: 6000, message: 'batch passed', flow: flowRecord(1) }),
+        ],
+        lastPass: { qaRun: QA, label: LAST_PASS, flow: flowRecord(1) },
+      }),
+    ],
+    keptFlows: [],
+  },
+})
+
 const dirs = []
 function writePage(data) {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-validation-'))
@@ -156,6 +177,7 @@ const withRows = writePage(view())
 const withoutRows = writePage(view({ validation: null }))
 const withFlows = writePage(flowView)
 const withHistory = writePage(historyView)
+const withLastPass = writePage(lastPassView)
 const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
   const r = document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="${n}"]')
   return { steps: [...r.querySelectorAll('.qa-step')].map((li) => ({ n: li.dataset.n, ok: li.dataset.ok, mark: li.querySelector('.qa-mark').getAttribute('aria-label'), href: li.querySelector('a')?.getAttribute('href') ?? null, text: li.innerText })),
@@ -341,6 +363,21 @@ const tests = {
     assert.deepEqual(tab.strip, { pass: 1, red: 0, unverified: 0, waiting: 0, atBase: 1 })
     const base = await page.evaluate(`document.querySelector('.qa-row[data-row="2"]').innerText`)
     assert.match(base, /at base/)
+    assert.deepEqual(page.errors, [])
+  },
+
+  async 'a row abandoned at the final run shows its last passing run\'s flow with its video and the label naming that run — catches a finished flow\'s video lost because its task missed the cutoff'() {
+    await page.load(withLastPass)
+    const shown = await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
+      const r = document.querySelector('.qa-row[data-row="1"]')
+      const p = r.querySelector(':scope > .qa-last-pass')
+      return p ? { label: p.querySelector('.qa-last-pass-label')?.innerText ?? null, video: p.querySelector('.qa-video')?.getAttribute('href') ?? null,
+        steps: p.querySelectorAll('.qa-step').length, errors: document.body.dataset.errors } : null })()`)
+    assert.ok(shown, 'the row shows no last pass')
+    assert.equal(shown.label, LAST_PASS)
+    assert.ok(shown.video && shown.video.includes(QA) && shown.video.endsWith('video.mp4'), `video link ${shown.video}`)
+    assert.equal(shown.steps, 3)
+    assert.equal(shown.errors, '0')
     assert.deepEqual(page.errors, [])
   },
 

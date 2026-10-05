@@ -1,0 +1,221 @@
+{
+  "after" : "ui",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "a0110d8533ab1d1ded501367e23adcd8bd002a0d",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-refresh, flow) `qa/refresh.flow.json`: step 7 `wait` failed: Batch failed at step 16 (wait): wait timed out for text: 64,350. Current surface: Prices, Updated 11:39:23 PM, Bitcoin, Bitcoin, $64,250.50, 2.35%.",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 6 (req-detail-chart, flow) `qa/detail-chart.flow.json`: step 5 `is` failed: Batch failed at step 11 (is): Selector did not match: id=\"detail.price\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 7 (req-chart-failure-keeps-price, flow) `qa/chart-failure-keeps-price.flow.json`: step 4 `wait` failed: Batch failed at step 7 (wait): wait timed out for selector: id=\"detail.price\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "7 of 9 rows verified (2 reason-only): 4 pass, 3 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 2,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-rows.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist-rows.flow/steps.json",
+        "qa/01-req-watchlist-rows.flow/batch.json",
+        "qa/01-req-watchlist-rows.flow/flow.json",
+        "qa/01-req-watchlist-rows.flow/sim/steps.ndjson",
+        "qa/01-req-watchlist-rows.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 6 steps; nit sim.a11y-untargeted: 48 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 59300,
+      "requirement" : "req-watchlist-rows",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+        "qa/02-req-first-load-spinner.flow/steps.json",
+        "qa/02-req-first-load-spinner.flow/batch.json",
+        "qa/02-req-first-load-spinner.flow/flow.json",
+        "qa/02-req-first-load-spinner.flow/sim/steps.ndjson",
+        "qa/02-req-first-load-spinner.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 2 steps; nit sim.a11y-untargeted: 10 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 9306,
+      "requirement" : "req-first-load-spinner",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+        "qa/03-req-refresh.flow/steps.json",
+        "qa/03-req-refresh.flow/batch.json",
+        "qa/03-req-refresh.flow/flow.json",
+        "qa/03-req-refresh.flow/sim/steps.ndjson",
+        "qa/03-req-refresh.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 7 `wait` failed: Batch failed at step 16 (wait): wait timed out for text: 64,350. Current surface: Prices, Updated 11:39:23 PM, Bitcoin, Bitcoin, $64,250.50, 2.35%.",
+      "ms" : 22952,
+      "requirement" : "req-refresh",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/last-updated.flow.json",
+      "evidence" : [
+        "qa/04-req-last-updated.flow/steps.json",
+        "qa/04-req-last-updated.flow/batch.json",
+        "qa/04-req-last-updated.flow/flow.json",
+        "qa/04-req-last-updated.flow/sim/steps.ndjson",
+        "qa/04-req-last-updated.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 2 steps; nit sim.a11y-untargeted: 16 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 6695,
+      "requirement" : "req-last-updated",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/load-error-retry.flow.json",
+      "evidence" : [
+        "qa/05-req-load-error-retry.flow/steps.json",
+        "qa/05-req-load-error-retry.flow/batch.json",
+        "qa/05-req-load-error-retry.flow/flow.json",
+        "qa/05-req-load-error-retry.flow/sim/steps.ndjson",
+        "qa/05-req-load-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 5 steps; nit sim.a11y-untargeted: 24 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 11472,
+      "requirement" : "req-load-error-retry",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+        "qa/06-req-detail-chart.flow/steps.json",
+        "qa/06-req-detail-chart.flow/batch.json",
+        "qa/06-req-detail-chart.flow/flow.json",
+        "qa/06-req-detail-chart.flow/sim/steps.ndjson",
+        "qa/06-req-detail-chart.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 5 `is` failed: Batch failed at step 11 (is): Selector did not match: id=\"detail.price\"",
+      "ms" : 8326,
+      "requirement" : "req-detail-chart",
+      "result" : "red",
+      "row" : 6,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure-keeps-price.flow.json",
+      "evidence" : [
+        "qa/07-req-chart-failure-keeps-price.flow/steps.json",
+        "qa/07-req-chart-failure-keeps-price.flow/batch.json",
+        "qa/07-req-chart-failure-keeps-price.flow/flow.json",
+        "qa/07-req-chart-failure-keeps-price.flow/sim/steps.ndjson",
+        "qa/07-req-chart-failure-keeps-price.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 7 (wait): wait timed out for selector: id=\"detail.price\"",
+      "ms" : 16505,
+      "requirement" : "req-chart-failure-keeps-price",
+      "result" : "red",
+      "row" : 7,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T043810Z-b6d7bd28",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "8c43136ccbdd42a7b08879d557b39b5fb6f07dc2",
+    "branch" : "spec/ui",
+    "conflicts" : [
+
+    ],
+    "tip" : "d148cdc2a82214f2b08624944344e5740f38153f"
+  },
+  "verdict" : "RED"
+}

@@ -1,0 +1,217 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "63972626a2662328e98210bb513d811520fb5fc7",
+  "final" : true,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-watchlist-rows, flow) `qa/watchlist-rows.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (req-first-load-spinner, flow) `qa/first-load-spinner.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-refresh, flow) `qa/refresh.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-last-updated, flow) `qa/last-updated.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-load-error-retry, flow) `qa/load-error-retry.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 6 (req-detail-chart, flow) `qa/detail-chart.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 7 (req-chart-failure-keeps-price, flow) `qa/chart-failure-keeps-price.flow.json`: not run: ui was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    }
+  ],
+  "message" : "0 of 9 rows verified (2 reason-only): 0 pass, 0 red, 0 unverified, 0 waiting, 7 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 2,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-rows.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-watchlist-rows",
+      "result" : "abandoned",
+      "row" : 1,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-first-load-spinner",
+      "result" : "abandoned",
+      "row" : 2,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-refresh",
+      "result" : "abandoned",
+      "row" : 3,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/last-updated.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-last-updated",
+      "result" : "abandoned",
+      "row" : 4,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/load-error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-load-error-retry",
+      "result" : "abandoned",
+      "row" : 5,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-detail-chart",
+      "result" : "abandoned",
+      "row" : 6,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure-keeps-price.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: ui was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-chart-failure-keeps-price",
+      "result" : "abandoned",
+      "row" : 7,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T045449Z-29875c87",
+  "schemaVersion" : 1,
+  "settled" : true,
+  "verdict" : "RED"
+}

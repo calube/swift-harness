@@ -214,6 +214,32 @@ struct QARunFlowTests {
   }
 
   @Test(
+    "at the merge base, a captured batch that ran no step lists only evidence files it left, so no sim/steps.ndjson — catches a report naming as not copied a step log that was never written"
+  )
+  func batchThatRanNothingListsOnlyItsFiles() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.plan(repo)
+    let simulator = try FakeFlowSimulator(
+      batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: Self.marker(repo),
+      agentDevice: LiveAgentDevice(
+        runner: try CapturedBatch.runner("batch-invalid", directory: "AgentDevice")))
+
+    let report = await Self.run(repo, simulator, atBase: true)
+
+    let flow = try #require(report.rows.first { $0.layer == .flow })
+    #expect(flow.result == .red, "\(flow.message)")
+    #expect(!flow.evidence.isEmpty)
+    #expect(!flow.evidence.contains { $0.hasSuffix("sim/\(SimStep.logFileName)") })
+    let run = try repo.runDirectory(report)
+    for path in flow.evidence {
+      #expect(FileManager.default.fileExists(atPath: run.appending(path: path).path), "\(path)")
+    }
+  }
+
+  @Test(
     "the captured passing batch with sim verify GREEN passes, its state row runs while the device is still held, then sim down, then sim verify, and the flow leaves its qa.flow record — catches a state check that reads a device already deleted, or a verify that misses the crash reports sim down collects"
   )
   func passingBatchRunsStateOnDevice() async throws {
