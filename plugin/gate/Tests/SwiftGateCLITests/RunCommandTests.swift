@@ -359,6 +359,54 @@ struct RunCommandTests {
     #expect(message.contains("no-such-plan"), "\(message)")
   }
 
+  @Test(
+    "run clock --wait-until cutoffAt, started as send-money-4's fixer went off at 1508 s, returns the report at the 2100 s cutoff after sleeps of 30 s at most, and an unknown deadline is refused at once — catches an orchestrator waiting on a background agent straight past the cutoff"
+  )
+  func clockWaitsUntilTheCutoff() async throws {
+    let clone = try await RunClone(files: ["Package.swift": "// swift-tools-version:6.0\n"])
+    defer { clone.remove() }
+    let spec = clone.outside.appending(path: "spec.md")
+    try Data("# Spec\n".utf8).write(to: spec)
+    let launch = try Date("2026-10-05T05:53:02Z", strategy: .iso8601)
+    let prepared = try await RunCommand.prepare(
+      spec: spec.path, directory: clone.root, slug: nil,
+      dependencies: clone.dependencies(
+        warmup: FakeWarmup(steps: Steps(), config: clone.layout.config), now: { launch }))
+    let clock = Mutex(launch.addingTimeInterval(1508))
+    let sleeps = Mutex<[Duration]>([])
+
+    let outcome = await RunClockRun.wait(
+      until: "cutoffAt", slug: prepared.slug, root: clone.root, runner: clone.runner,
+      now: { clock.withLock { $0 } },
+      sleep: { step in
+        sleeps.withLock { $0.append(step) }
+        let seconds = Double(step.components.seconds) + Double(step.components.attoseconds) / 1e18
+        clock.withLock { $0 = $0.addingTimeInterval(seconds) }
+      })
+
+    guard case .report(let report) = outcome else {
+      Issue.record("run clock refused: \(outcome)")
+      return
+    }
+    #expect(report.deadlines.cutoffAt == launch.addingTimeInterval(2100))
+    #expect(report.phase == .cutoff)
+    #expect(report.now >= report.deadlines.cutoffAt)
+    #expect(report.now < report.deadlines.cutoffAt.addingTimeInterval(1))
+    let slept = sleeps.withLock { $0 }
+    #expect(!slept.isEmpty)
+    #expect(slept.allSatisfy { $0 <= RunClockRun.waitStep && $0 > .zero })
+
+    let unknown = await RunClockRun.wait(
+      until: "lunchAt", slug: prepared.slug, root: clone.root, runner: clone.runner,
+      now: { launch }, sleep: { _ in Issue.record("slept for an unknown deadline") })
+    guard case .refused(let message, let status) = unknown else {
+      Issue.record("an unknown deadline got a report")
+      return
+    }
+    #expect(status == 2)
+    #expect(message.contains("lunchAt") && message.contains("cutoffAt"), "\(message)")
+  }
+
   @Test("a tracked spec is read in place and not copied — catches the run reading a stale copy")
   func trackedSpecReadInPlace() async throws {
     let clone = try await RunClone(files: [

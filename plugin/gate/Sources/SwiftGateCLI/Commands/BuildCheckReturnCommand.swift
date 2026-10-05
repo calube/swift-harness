@@ -259,6 +259,7 @@ enum BuildCheckReturnRun {
     }
     var commits: [String: TaskReturnEvidence.CommitState] = [:]
     var outside: [String] = []
+    var changed: [String] = []
     var surface: TaskReturnEvidence.CommitState?
     var manifests: PlanSurfaceManifests?
     var testBuild: ProofBaseTestBuild?
@@ -279,7 +280,7 @@ enum BuildCheckReturnRun {
       if let surfaceCommit = taskReturn.surfaceCommit {
         surface = try await state(of: surfaceCommit, onBranchAt: branchTip, git: git)
       }
-      let changed = try await branchChanges(tip: branchTip, git: git)
+      changed = try await branchChanges(tip: branchTip, git: git)
       if let planSurface {
         manifests = try await surfaceManifests(
           changed, surface: planSurface, tip: branchTip, git: git)
@@ -305,7 +306,7 @@ enum BuildCheckReturnRun {
       branch: names.branch, branchExists: branchTip != nil, commits: commits,
       gateRun: try gateRun(taskReturn.gate, in: worktree, warnings: &warnings),
       taskGate: taskGate, taskStatus: try taskStatus(in: worktree), filesOutsideWriteSet: outside,
-      explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
+      changedFiles: changed, explainedEditsAllowed: fix, proofRequired: !fix && taskProof == .perTask,
       surfaceCommit: surface, reviewRequired: !fix, taskGateStepsRequired: !fix,
       planSurface: manifests, testBuild: testBuild, lastCommit: lastCommit,
       addedTests: addedTests)

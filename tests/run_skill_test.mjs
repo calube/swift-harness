@@ -557,6 +557,21 @@ const tests = {
       'the cutoff is never checked against `swiftgate run clock`')
   },
 
+  'while it waits on a background agent, the run arms a one-shot run clock --wait-until cutoffAt in the background, and fixers and build-task launches get the cutoff — catches send-money-4\'s orchestrator idle 738 s past its cutoff while its fixer ran'() {
+    const skill = read('skills/run/SKILL.md')
+    const bullet = cutoffBullet(skill) ?? ''
+    assert.doesNotMatch(bullet, /No timer runs/, 'the cutoff bullet still says no timer runs')
+    const wake = blocks(skill).filter(block => extractInvocations(block.text).some(inv => inv.words.join(' ').startsWith('run clock <slug> --wait-until cutoffAt')))
+    assert.ok(wake.length > 0, 'the run never arms `run clock <slug> --wait-until cutoffAt`')
+    assert.ok(wake.some(block => /run_in_background: true/.test(block.text)), 'the cutoff wake is not sent to the background')
+    assert.ok(wake.some(block => /background agent/.test(block.text)), 'the cutoff wake is not tied to waiting on a background agent')
+    const loop = read('skills/build/references/event-loop.md')
+    const fixer = loop.slice(loop.indexOf('Launch `swift-harness:build-fixer`'), loop.indexOf('Go on with other tasks, or end the turn to wait'))
+    assert.match(fixer, /`cutoffAt`/, 'the fixer brief never gets the run\'s cutoff')
+    const launch = loop.slice(loop.indexOf('## Launch'), loop.indexOf('## ', loop.indexOf('## Launch') + 3))
+    assert.match(launch, /cutoffAt/, 'build-task launches never pass the run\'s cutoff')
+  },
+
   'the background-work check names the trial orchestrator\'s background gates, qa run, cutoff timer and /tmp outputs, and passes its stall watches — catches a checker that passes anything'() {
     const captured = capturedBackgroundCalls()
     const problems = backgroundWorkProblems(captured)

@@ -4040,3 +4040,45 @@ for f in "$P/$S"/workflows/wf_*.json; do
 The orchestrator has 51 distinct messages, the fixer `ac257d99…` 68 and the killed worker
 `a441498…` 14. `grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in any of
 these files.
+
+## Brownfield trial: send-money-4's run-end and proof gaps
+
+The fourth send-money trial's fixer named the 1 file it changed outside its write set as
+`AppView.swift`, and `check-return --fix` read that as unexplained. Its contract changed the
+build-only app target's UI test, which no merge gate proved, and `final` read BLOCKED for want of
+time to prove it. Its copied evidence kept machine paths, and its first before-merge run's search
+row message was too long for the report. `T` is the trial folder under the practice-trial runs
+folder, holding the clone's state copied after the run as `state/` and the orchestrator's
+transcripts, and `R` the trial clone. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+S=$T/state F=BuildReturn/send-money-4 Q=20261005T061244Z-0883dbbe
+X=RunView/send-money-4-evidence/$Q W=$X/qa/01-req-contact-search.flow
+scrub() { LC_ALL=C sed -E -e "s#/Users/[^/\"]*/Developer/trials/practice/send-money-4/#/TRIAL/#g" \
+  -e "s#/Users/[^/\"]*/\.agent-device/#/HOME/.agent-device/#g" "$1" > "$2"; }
+mkdir -p $F $X/events $W
+sed -n 56p $T/transcripts/*/subagents/agent-a9f247b3f6b4d9d1c.jsonl | python3 -c \
+  "import json,sys;sys.stdout.write(json.loads(sys.stdin.read())['message']['content'][0]['text'])" \
+  > $F/fix-send-flow-core.json
+git -C $R diff --name-only swift-harness/spec...spec/fix-send-flow-core > $F/fix-send-flow-core.changed.txt
+python3 -c "import json,sys;l=json.load(open(sys.argv[1]))
+json.dump(next(t['writeSet'] for t in l['tasks'] if t['id']=='send-flow-core'),open(sys.argv[2],'w'))" \
+  $R/.git/swift-harness/plans/spec/ledger.json $F/send-flow-core.write-set.json
+git -C $R show 42098e0:UITests/LaunchFlowUITests.swift > BrownfieldTrial/send-money-4-LaunchFlowUITests-base.swift
+git -C $R show d40c812:UITests/LaunchFlowUITests.swift > BrownfieldTrial/send-money-4-LaunchFlowUITests-contract.swift
+cp $S/plans/spec/out/final.json BrownfieldTrial/send-money-4-final.json
+cp $S/runs/$Q/events/qa.jsonl $X/events/qa.jsonl
+cp $S/runs/$Q/qa/report.json $X/qa/report.json
+scrub $S/runs/$Q/qa/01-req-contact-search.flow/steps.json $W/steps.json
+python3 -c "import json,sys;d=json.load(open(sys.argv[1]));d['data']['results']=d['data']['results'][:4]
+json.dump(d,sys.stdout,indent=2)" $S/runs/$Q/qa/01-req-contact-search.flow/batch.json > /tmp/batch.json
+scrub /tmp/batch.json $W/batch.json
+```
+
+Line 56 of the fixer's transcript is its last message, its return. The changed files are the fix
+branch's changes since it left the plan branch, as `check-return` lists them. The 2 UI test
+versions are the plan base's and the contract commit's. `final.json` is the `final` gate's report
+the orchestrator saved. `batch.json` keeps the first 4 of the batch's 26 step results. The trial's
+`config.toml` differs from `send-money-3-config.toml` only in `discovered_at`, so its prove tests
+use that one. `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched
+nothing.

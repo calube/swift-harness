@@ -30,6 +30,33 @@ public struct ViewServerRegistry: Sendable {
   }
 }
 
+/// Stops a repository's detached viewer server once its run is over: the final report is a
+/// static page by then, so nothing needs the server.
+public struct ViewServerShutdown: Sendable {
+  public let registry: ViewServerRegistry
+  public let probe: any ViewServerProbing
+  /// Sends the server its stop signal; `false` when it couldn't be sent.
+  public let signal: @Sendable (Int32) -> Bool
+
+  public init(
+    registry: ViewServerRegistry, probe: any ViewServerProbing,
+    signal: @escaping @Sendable (Int32) -> Bool = { kill($0, SIGTERM) == 0 }
+  ) {
+    self.registry = registry
+    self.probe = probe
+    self.signal = signal
+  }
+
+  /// Stops the saved server when it still answers as itself; returns its record, or `nil` when
+  /// no saved server answers or the signal couldn't be sent.
+  public func stop() async -> ViewServerRecord? {
+    guard let record = registry.read(), record.pid > 1, await probe.answers(record),
+      signal(record.pid)
+    else { return nil }
+    return record
+  }
+}
+
 /// Whether a saved server still answers as itself.
 public protocol ViewServerProbing: Sendable {
   func answers(_ record: ViewServerRecord) async -> Bool

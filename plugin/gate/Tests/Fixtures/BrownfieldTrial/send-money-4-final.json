@@ -1,0 +1,99 @@
+{
+  "allowances" : [
+
+  ],
+  "durationMilliseconds" : 41234,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "Packages/APIClient",
+      "line" : null,
+      "message" : "APIClient has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/AppFeature",
+      "line" : null,
+      "message" : "AppFeature build passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "rule" : "gate.reused",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/AppFeature",
+      "line" : null,
+      "message" : "AppFeature test passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "rule" : "gate.reused",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/AppFeature",
+      "line" : null,
+      "message" : "AppFeature has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "InterviewStarter build passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "rule" : "gate.reused",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "InterviewStarter test passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "rule" : "gate.reused",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "InterviewStarter has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "Packages/LogClient",
+      "line" : null,
+      "message" : "LogClient has no lint command, so this tier doesn't run it",
+      "rule" : "area.step-dropped",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : ".",
+      "line" : null,
+      "message" : "prove: AppFeature's new or changed tests aren't proven again here: slice runs and proves them in each task's own gate, and final proves only the areas whose slice builds without running them",
+      "rule" : "prove.summary",
+      "severity" : "nit"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "UITests/LaunchFlowUITests.swift",
+      "line" : null,
+      "message" : "prove: InterviewStarter's changed tests not run: the 96 s left before the run's box ends at 2026-10-05T06:33:02Z can't hold its measured 226 s",
+      "rule" : "prove.no-evidence",
+      "severity" : "minor"
+    }
+  ],
+  "runID" : "20261005T063046Z-ef6dcfdc",
+  "schemaVersion" : 1,
+  "tiers" : [
+    {
+      "durationMilliseconds" : 41067,
+      "testCounts" : null,
+      "tier" : "T1",
+      "verdict" : "BLOCKED"
+    }
+  ],
+  "verdict" : "BLOCKED"
+}
