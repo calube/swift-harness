@@ -3098,6 +3098,43 @@ for c in 990fd862 20e3afcf 0f470558 bae9f2f8; do echo "$c $(git -C $C/../.. rev-
 
 `grep -niE '/Users|/private|/var/folders|caleb' BuildReturn/memos-5/*` matched nothing.
 
+## Build returns: a flow row with no repair
+
+`BuildReturn/no-repair/` is what a brownfield trial left when its flow repair worker returned
+`no repair:` for 1 row of a task whose fixer's slice gate was GREEN and whose other rows passed,
+and the build then stopped. `repair-reply.txt` is the repair worker's whole reply, with its fix
+worktree as `/WORKTREE`, and `fix-return.json` the fixer's return as the orchestrator wrote it for
+`build check-return --fix`. `qa-report.json` is the before-merge `qa run` at the fixer's tip, red
+on row 3 alone, and `qa-report-combined.json` the earlier combined run, red on rows 3 to 5.
+`validation.json` is the plan's table, and `run.json` and `events.jsonl` are the build run's. `S` is
+the trial folder, `C` the trial clone, `T` the orchestrator session's transcript folder under
+`~/.claude/projects/` and `W` the fix worktree. From this directory:
+
+```sh
+F=BuildReturn/no-repair P=$C/.git/swift-harness/plans/spec R=$P/build/20261005T150555Z-583f6874
+mkdir -p $F
+S=$S T=$T W=$W F=$F python3 - <<'PY'
+import json, os
+T, W, F = (os.environ[k] for k in ("T", "W", "F"))
+last = json.loads(open(f"{T}/subagents/agent-a61455da06fa764ca.jsonl").read().splitlines()[-1])
+content = last["message"]["content"]
+reply = content if isinstance(content, str) else "\n".join(c.get("text", "") for c in content)
+open(f"{F}/repair-reply.txt", "w").write(reply.replace(W, "/WORKTREE").rstrip("\n") + "\n")
+for line in open(f"{T}.jsonl"):
+    for c in (json.loads(line).get("message") or {}).get("content") or []:
+        if isinstance(c, dict) and c.get("type") == "tool_use" and c["name"] == "Bash" \
+           and "fix-chat-thread.json <<'EOF'" in c["input"]["command"]:
+            body = c["input"]["command"].split("fix-chat-thread.json <<'EOF'\n", 1)[1]
+            open(f"{F}/fix-return.json", "w").write(body.split("\nEOF", 1)[0] + "\n")
+PY
+cp $S/state/runs/20261005T151815Z-9de928dd/qa/report.json $F/qa-report.json
+cp $S/state/runs/20261005T151346Z-23962d10/qa/report.json $F/qa-report-combined.json
+cp $P/validation.json $F/; cp $R/run.json $F/; cp $R/events.jsonl $F/
+```
+
+The repair worker's reply arrived at 2026-10-05T15:23:00.391Z, the time the tests decide at.
+`grep -rniE '/Users|/private|/var/folders|caleb' BuildReturn/no-repair` matched nothing.
+
 ## Brownfield trial: a contract landed before import
 
 `BrownfieldTrial/` holds state the fourth brownfield trial on `usememos/memos` left, for a contract
