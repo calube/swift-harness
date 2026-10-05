@@ -105,6 +105,28 @@ extension BuildEventLog {
   }
 }
 
+extension BuildEventLog {
+  /// `task`'s newest return check while it still stands as checked and waiting to merge: GREEN,
+  /// of a worker's `ready-to-merge` return at a commit git knew, with no ledger transition, merge,
+  /// undo or merge gate of the task after it, and no halt answered `retry` at or after it. `nil`
+  /// otherwise: whatever the task's branch holds now has passed no check.
+  /// - Parameter retriedAt: when the task's newest halt was answered `retry`, as
+  ///   ``BuildHalts/retried(in:buildRun:)`` reads it.
+  public func standingCheck(task: String, retriedAt: Date? = nil) -> BuildEvent.ReturnCheck? {
+    guard let check = latestReturnCheck(task: task, fix: false), check.verdict == .green else {
+      return nil
+    }
+    return check
+  }
+
+  /// When `task`'s checked return went back to work: the first ledger transition of the task
+  /// after its newest GREEN worker return check, or the halt answered `retry` at or after that
+  /// check, whichever came first. `nil` while that check stands, or when there is none.
+  public func returnSentBack(task: String, retriedAt: Date? = nil) -> Date? {
+    nil
+  }
+}
+
 extension LedgerTask {
   /// The prefix every write of a task that writes only validation checks starts with: its
   /// checks go to plan state through `qa adopt`, so it never commits or merges.

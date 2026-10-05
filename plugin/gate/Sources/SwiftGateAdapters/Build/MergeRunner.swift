@@ -793,7 +793,7 @@ public struct BuildMerge: Sendable {
       if let noNewStartsAt { lapsesAt = min(lapsesAt, noNewStartsAt) }
       let names = awaited.map(\.task)
       let one = names.count == 1
-      let gates = awaited.map { "run \($0.gateRunID)" }.joined(separator: ", ")
+      let gates = awaited.compactMap { $0.gateRunID.map { "run \($0)" } }.joined(separator: ", ")
       let together = ([task] + alongside + names).joined(separator: ",")
       let reason = BuildMergeReport.Reason.flowsPending.rawValue
       let message: String =
