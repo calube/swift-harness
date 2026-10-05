@@ -1,0 +1,5 @@
+{
+  "cwd": "/CLONE",
+  "command": "cd /CLONE-spec.slot-6 && mkdir -p .harness/qa/spec && cd .harness/qa/spec && \nO='{\"command\": \"open\", \"input\": {\"app\": \"com.example.App\", \"relaunch\": true, \"launchArgs\": [\"-harness-scenario\", \"SCEN\"]}}'\ncat > launch-list.flow.json <<EOF\nEOF\n",
+  "denial": "PreToolUse:Bash hook error: swiftgate guard.run-user-checkout: `/CLONE/launch-list.flow.json` is in the user's checkout, which a run never writes. Commit, keep task returns under `.harness/build/`, and put scratch files in the plan checkout `/CLONE-spec`; a gate's or `qa run`'s JSON goes in the plan's `out/` folder. Nothing in this command ran, not even the parts before the refused step: no file it writes (a `cat > \u2026 <<EOF` heredoc, a `>` redirect, a `cp`), no commit and no other step. Run those parts again in a new call without the refused step."
+}

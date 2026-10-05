@@ -19,10 +19,11 @@ extension ShellSyntax {
   /// destinations of `cp`/`mv`/`install`/`ln` (and what `mv` moves away), the operands of
   /// `rm`/`rmdir`/`unlink`/`truncate`/`touch`, `dd of=`, the files of `sed -i`/`perl -i`, and the
   /// pathspecs of `git checkout`/`restore`/`rm`/`mv`.
-  /// A relative path is named under the directory a literal absolute `cd` or `pushd` certainly
-  /// moved the shell to (see ``knownDirectories(_:directoryExists:)``). Otherwise it is relative
-  /// to the shell's starting directory and also named under every literal `cd` of the line, so a
-  /// `cd` the shell may not have made never hides a write from the starting directory. A path the
+  /// A relative path is named under every directory its command may run in (see
+  /// ``possibleDirectories(_:directoryExists:)``), the starting directory spelled as the bare
+  /// path. Where the line can't be followed, it is relative to the starting directory and also
+  /// named under every literal `cd` of the line, so a `cd` the shell may not have made never
+  /// hides a write from the starting directory. A path the
   /// shell would expand (`$VAR`, `$(…)`, backticks), code an interpreter runs, and heredoc text
   /// name nothing: a static reading can't know them.
   /// - Parameter directoryExists: whether an absolute path is a directory now.
@@ -32,7 +33,7 @@ extension ShellSyntax {
     let parsed = parse(line)
     let directories = parsed.filter { !$0.isHeredocBody }.map(\.command)
       .compactMap(changedDirectory)
-    let known = knownDirectories(parsed, directoryExists: directoryExists)
+    let possible = possibleDirectories(parsed, directoryExists: directoryExists)
     var targets: [ShellWriteTarget] = []
     for (index, entry) in parsed.enumerated() where !entry.isHeredocBody {
       let command = entry.command
@@ -43,8 +44,13 @@ extension ShellSyntax {
         let spellings: [String]
         if path.hasPrefix("/") || path.hasPrefix("~") {
           spellings = [path]
-        } else if let directory = known[index] {
-          spellings = [directory + "/" + path]
+        } else if let directories = possible[index] {
+          spellings = directories.map { directory in
+            switch directory {
+            case .start: path
+            case .path(let base): base + "/" + path
+            }
+          }
         } else {
           spellings = [path] + directories.map { $0 + "/" + path }
         }
@@ -60,30 +66,50 @@ extension ShellSyntax {
 
   // MARK: - The working directory a cd leaves
 
+  /// A directory a command may run in.
+  enum ShellDirectory: Hashable {
+    /// The shell's starting directory.
+    case start
+    /// A path as a `cd` spelled it: absolute, or relative to the starting directory.
+    case path(String)
+  }
+
   /// Commands that can move the shell, or define something that does, out of a static reading's
   /// sight. A line holding one at top level is read as if no `cd` were certain.
   private static let opaqueCommands: Set<String> = [
     "eval", "source", ".", "trap", "alias", "function", "builtin", "enable",
   ]
   private static let directoryCommands: Set<String> = ["cd", "pushd", "popd"]
-  /// Words that open or continue a compound command; the command proper follows them.
-  private static let reservedWords: Set<String> = [
-    "if", "then", "else", "elif", "while", "until", "do", "{",
+  /// Words that open, continue or close a compound command, whose body may run any number of
+  /// times or not at all.
+  private static let compoundWords: Set<String> = [
+    "if", "then", "else", "elif", "fi", "while", "until", "for", "select", "do", "done", "case",
+    "esac", "{", "}",
   ]
+  private static let compoundOpeners: Set<String> = [
+    "if", "while", "until", "for", "select", "case", "{",
+  ]
+  private static let compoundClosers: Set<String> = ["fi", "done", "esac", "}"]
 
-  /// The directory each top-level command certainly runs in, by index into `commands`, when a
-  /// literal absolute `cd`/`pushd` put it there. A command is in that directory when either:
-  /// - it follows the `cd` through `&&` (and pipes after the first `&&`), with no other directory
-  ///   command between, so it runs only if the `cd` succeeded; or
-  /// - the `cd` is the line's first command, its directory exists now, and the commands up to this
-  ///   one follow by `;`, newline or `&&` with no other directory command between, so the `cd`
-  ///   ran and succeeded before it.
-  /// Anything else, a `cd` to a variable, a glob or `~`, in a pipeline, subshell or behind `||`
-  /// or `!`, or through a wrapper like `env`, leaves the command's directory unknown. So does a
-  /// line that defines a function or runs `eval`, `source` or `trap` at top level.
-  static func knownDirectories(
+  /// Every directory each top-level command may run in, by index into `commands`, read in order
+  /// as the shell runs them. A literal `cd` or `pushd` moves the shell to its operand, a relative
+  /// one from each directory the shell may be in (as with `CDPATH` unset). Unless its directory
+  /// exists now, the `cd` may fail and leave the shell where it was. A command after `&&` runs
+  /// where everything before it succeeded, after `||` where something failed, and after `;` or a
+  /// newline wherever the shell may be; a pipeline's commands run in subshells that move nothing,
+  /// and `exit` ends the shell.
+  ///
+  /// A compound command (`if`, `for`, `{ … }`) that holds no directory command or `exit` runs
+  /// where it starts and leaves the shell there.
+  ///
+  /// From the first command a static reading can't follow on, the map has no entry: any other
+  /// compound command, a subshell, a command sent to the background, or a `cd` to a variable, a
+  /// glob, `~` or `-`, behind `!` or through a wrapper like `env`. A line that defines
+  /// a function or runs `eval`, `source` or `trap` at top level has no entries at all, and neither
+  /// has a command no path reaches.
+  static func possibleDirectories(
     _ commands: [ParsedCommand], directoryExists: (String) -> Bool
-  ) -> [Int: String] {
+  ) -> [Int: [ShellDirectory]] {
     let top = commands.indices.filter { commands[$0].isTopLevel }
     let opaque = top.contains { index in
       let entry = commands[index]
@@ -93,69 +119,150 @@ extension ShellSyntax {
     }
     guard !opaque else { return [:] }
 
-    var leading: String?
-    if let first = top.first, first == commands.startIndex, commands[first].links.isEmpty,
-      top.count > 1, Set(commands[top[1]].links).isSubset(of: [.sequence, .and]),
-      let directory = certainDirectory(commands[first]), directoryExists(directory)
-    {
-      leading = directory
-    }
-
-    var known: [Int: String] = [:]
-    for position in top.indices.dropFirst() {
-      if let directory = andChainDirectory(top, position, commands) {
-        known[top[position]] = directory
+    var possible: [Int: [ShellDirectory]] = [:]
+    var succeeded: [ShellDirectory] = [.start]
+    var failed: [ShellDirectory] = []
+    var position = 0
+    while position < top.count {
+      guard let link = joining(commands[top[position]].links) else { break }
+      let runs: [ShellDirectory]
+      switch link {
+      case .and: runs = succeeded
+      case .or: runs = failed
+      default: runs = merged(succeeded, failed)
+      }
+      if let opener = commands[top[position]].words.first, compoundOpeners.contains(opener) {
+        guard let closer = staticCompound(top, from: position, commands) else { break }
+        if !runs.isEmpty {
+          for index in top[position...closer] { possible[index] = runs }
+        }
+        succeeded = runs
+        failed = runs
+        position = closer + 1
         continue
       }
-      guard let leading else { continue }
-      let between = top[1..<position].map { commands[$0] }
-      if between.allSatisfy({ !isDirectoryCommand($0) }) { known[top[position]] = leading }
+      var end = position + 1
+      while end < top.count, joining(commands[top[end]].links) == .pipe { end += 1 }
+      let pipeline = top[position..<end].map { commands[$0] }
+      guard
+        pipeline.allSatisfy({ entry in
+          entry.words.first.map(compoundWords.contains) != true
+        })
+      else { break }
+      let after: (succeeded: [ShellDirectory], failed: [ShellDirectory])
+      if pipeline.count > 1 {
+        after = (runs, runs)
+      } else if isDirectoryCommand(pipeline[0]) {
+        guard let operand = certainDirectory(pipeline[0]) else { break }
+        let moved = merged(
+          runs.map { directory in
+            guard case .path(let base) = directory, !operand.hasPrefix("/") else {
+              return .path(operand)
+            }
+            return .path(base + "/" + operand)
+          }, [])
+        let certain = moved.allSatisfy { directory in
+          guard case .path(let path) = directory else { return false }
+          return path.hasPrefix("/") && directoryExists(path)
+        }
+        after = (moved, certain ? [] : runs)
+      } else if unwrapped(pipeline[0]).name == "exit" {
+        after = ([], [])
+      } else {
+        after = (runs, runs)
+      }
+      if !runs.isEmpty {
+        for index in top[position..<end] { possible[index] = runs }
+      }
+      switch link {
+      case .and:
+        succeeded = after.succeeded
+        failed = merged(failed, after.failed)
+      case .or:
+        succeeded = merged(succeeded, after.succeeded)
+        failed = after.failed
+      default:
+        succeeded = after.succeeded
+        failed = after.failed
+      }
+      position = end
     }
-    return known
+    return possible
   }
 
-  /// The directory of the `cd` that `top[position]` follows through `&&` and pipes only.
-  private static func andChainDirectory(
-    _ top: [Int], _ position: Int, _ commands: [ParsedCommand]
-  ) -> String? {
-    var current = position
-    while current > 0 {
-      let links = commands[top[current]].links
-      guard links == [.and] || links == [.pipe] else { return nil }
-      let previous = commands[top[current - 1]]
-      if isDirectoryCommand(previous) {
-        guard links == [.and], !previous.links.contains(.or), !previous.links.contains(.pipe)
-        else { return nil }
-        return certainDirectory(previous)
+  /// The directory each top-level command certainly runs in, by index into `commands`: the one
+  /// absolute directory ``possibleDirectories(_:directoryExists:)`` leaves it.
+  static func knownDirectories(
+    _ commands: [ParsedCommand], directoryExists: (String) -> Bool
+  ) -> [Int: String] {
+    possibleDirectories(commands, directoryExists: directoryExists).compactMapValues {
+      guard $0.count == 1, case .path(let path) = $0[0], path.hasPrefix("/") else { return nil }
+      return path
+    }
+  }
+
+  /// The position in `top` of the word that closes the compound command opening at `position`,
+  /// when nothing inside it can move or end the shell: no directory command, `exit`, subshell or
+  /// background command. Its commands then run where it starts, and leave the shell there.
+  private static func staticCompound(
+    _ top: [Int], from position: Int, _ commands: [ParsedCommand]
+  ) -> Int? {
+    var depth = 0
+    for current in position..<top.count {
+      let entry = commands[top[current]]
+      if current > position, joining(entry.links) == nil { return nil }
+      if isDirectoryCommand(entry) || unwrapped(entry).name == "exit" { return nil }
+      guard let word = entry.words.first else { continue }
+      if compoundOpeners.contains(word) { depth += 1 }
+      if compoundClosers.contains(word) {
+        depth -= 1
+        if depth == 0 { return current }
       }
-      current -= 1
     }
     return nil
   }
 
-  /// The words after any reserved words and `!`, re-read as a simple command.
+  /// The operator that joins a command to the one before it, a newline after `&&`, `||` or `|`
+  /// only continuing it. `nil` for a subshell's bounds or a command sent to the background.
+  private static func joining(_ links: [ShellLink]) -> ShellLink? {
+    if links.contains(where: { $0 == .open || $0 == .close || $0 == .background }) { return nil }
+    return links.first { $0 != .sequence } ?? .sequence
+  }
+
+  /// `first` then the directories of `second` it lacks, in order.
+  private static func merged(_ first: [ShellDirectory], _ second: [ShellDirectory])
+    -> [ShellDirectory]
+  {
+    var result: [ShellDirectory] = []
+    for directory in first + second where !result.contains(directory) {
+      result.append(directory)
+    }
+    return result
+  }
+
+  /// The words after any compound-command words and `!`, re-read as a simple command.
   private static func unwrapped(_ entry: ParsedCommand) -> SimpleCommand {
-    normalize(Array(entry.words.drop { reservedWords.contains($0) || $0 == "!" }))
+    normalize(Array(entry.words.drop { compoundWords.contains($0) || $0 == "!" }))
   }
 
   private static func isDirectoryCommand(_ entry: ParsedCommand) -> Bool {
     unwrapped(entry).name.map(directoryCommands.contains) == true
   }
 
-  /// The directory a plain `cd` or `pushd` to 1 literal absolute path moves the shell to; `nil`
-  /// for any other command, and for a `cd` behind `!`, a wrapper or an assignment.
+  /// The operand of a plain `cd` or `pushd` to 1 literal path, without trailing slashes; `nil` for
+  /// any other command, for `cd -`, `~` or a glob, and for a `cd` behind `!`, a wrapper or an
+  /// assignment.
   private static func certainDirectory(_ entry: ParsedCommand) -> String? {
-    let words = Array(entry.words.drop { reservedWords.contains($0) })
-    guard let name = words.first else { return nil }
+    guard let name = entry.words.first else { return nil }
     let options: Set<String>
     switch name {
     case "cd": options = ["-L", "-P", "--"]
     case "pushd": options = ["--"]
     default: return nil
     }
-    let operands = words.dropFirst().drop { options.contains($0) }
-    guard operands.count == 1, let directory = operands.first, directory.hasPrefix("/"),
-      isLiteral(directory), !directory.contains(where: { "*?[{~\\".contains($0) })
+    let operands = entry.words.dropFirst().drop { options.contains($0) }
+    guard operands.count == 1, let directory = operands.first, isLiteral(directory),
+      !directory.contains(where: { "*?[{~\\".contains($0) })
     else { return nil }
     var trimmed = Substring(directory)
     while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed = trimmed.dropLast() }

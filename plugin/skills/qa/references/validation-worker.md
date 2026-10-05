@@ -59,6 +59,14 @@ exists and fails for the reason the feature is missing.
   A screen a dependency client feeds never reaches the live service: the flow's first step is
   `{"command": "open", "input": {"app": "<bundle id>", "relaunch": true, "launchArgs":
   ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
+  A state shown only while a call runs, such as a loading, sending or saving label, ends before a
+  `wait` polls under a scenario that answers in 300 ms. A flow that waits for such a state runs
+  under the contract's scenario named with the word `held`, whose call holds it, and waits for
+  the state's end with a `timeoutMs` of at least 15000. Check for that scenario before you write
+  the flow; when the contract has none, leave that check out and return the scenario as a
+  `missing:` line, so the orchestrator hears of it while the tasks are still building.
+  `qa lint` warns `qa.flow-transient-state` on a flow that sees a state come and go under a
+  scenario without the word.
   A pull to refresh is 1 step, `{"command": "gesture", "input": {"kind": "drag", "source":
   "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`, from the list's top row to an
   element at least 350 pt lower on screen, then a `wait` for what the refresh changes. That
@@ -180,4 +188,5 @@ no repair: <requirement>: <why>
 ```
 
 Return `no repair` when the flow already drives what the requirement needs and the app is at
-fault, or when the fix needs a contract name the app doesn't have.
+fault, or when the fix needs a contract name the app doesn't have. A `held` scenario for a state
+the fake ends before the `wait` sees it is such a name.

@@ -21,6 +21,12 @@ public enum FlowRules {
   public static let unknownIDRuleID = "qa.flow-unknown-id"
   public static let idsUnknownRuleID = "qa.flow-ids-unknown"
   public static let kindKeyRuleID = "qa.flow-kind-key"
+  /// A warning that never gates: the flow sees a state appear, then go by itself, under a fake
+  /// scenario that doesn't hold it, so the fake's latency decides whether the first wait sees it.
+  public static let transientStateRuleID = "qa.flow-transient-state"
+  /// The `-`- or `_`-separated word a scenario's name carries when its fake holds an in-flight
+  /// state until the flow moves on, as in `save-held`.
+  public static let heldScenarioWord = "held"
 
   /// The input key a `wait` of each `kind` reads its target from. The pinned tool drops `kind`
   /// before it runs the step and takes whichever 1 of these keys is present, so a target under
@@ -86,6 +92,9 @@ public enum FlowRules {
                 + "of its `enum AccessibilityID`, or add the case the view sets"))
         }
       }
+    }
+    for problem in transientStateProblems(steps) {
+      findings.append(finding(transientStateRuleID, file, problem, severity: .minor))
     }
     if !steps.contains(where: asserts) {
       findings.append(
@@ -188,6 +197,94 @@ public enum FlowRules {
       ]
     }
     return []
+  }
+
+  /// Commands that read the screen and leave the app as it is.
+  static let observingCommands: Set<String> = ["wait", "is", "get", "snapshot", "screenshot"]
+
+  /// Each check that sees a selector appear and a later check that sees the same selector go,
+  /// with only ``observingCommands`` between them, under the latest `open`'s scenario when that
+  /// scenario doesn't hold. Nothing the flow does ends the state, so the fake's latency does. A
+  /// flow with no scenario has no fake to hold the state, so it earns none.
+  static func transientStateProblems(_ steps: [FlowStep]) -> [String] {
+    var scenario: String?
+    var problems: [String] = []
+    for (index, step) in steps.enumerated() {
+      if step.command == "open" { scenario = launchScenario(step.input) }
+      guard let scenario, !holds(scenario), let shown = presentTarget(step) else { continue }
+      for later in steps[(index + 1)...] {
+        guard observingCommands.contains(later.command) else { break }
+        guard absentTarget(later) == shown else { continue }
+        problems.append(
+          "step \(step.number) `\(step.command)` sees \(shown) appear and step \(later.number) "
+            + "`\(later.command)` sees it go, with no step between that drives the app, under "
+            + "the scenario `\(scenario)`, which holds nothing: the fake ends that state on its "
+            + "own, so its latency, not the app, decides whether step \(step.number) sees it. Run "
+            + "the flow under a scenario that holds the state until the flow moves on, named "
+            + "with the word `\(heldScenarioWord)` (such as `\(scenario)-\(heldScenarioWord)`), "
+            + "or return that scenario as a missing contract name")
+        break
+      }
+    }
+    return problems
+  }
+
+  /// The scenario an `open` step launches the app in; `nil` for live dependencies.
+  static func launchScenario(_ input: [String: FlowJSON]) -> String? {
+    guard case .array(let arguments)? = input["launchArgs"] else { return nil }
+    let strings = arguments.map { argument -> String? in
+      if case .string(let text) = argument { return text }
+      return nil
+    }
+    guard let flag = strings.firstIndex(of: SimSession.scenarioArgument),
+      flag + 1 < strings.count
+    else { return nil }
+    return strings[flag + 1]
+  }
+
+  /// Whether `scenario`'s name carries ``heldScenarioWord`` as 1 of its `-`- or `_`-separated
+  /// words.
+  static func holds(_ scenario: String) -> Bool {
+    scenario.lowercased().split(whereSeparator: { $0 == "-" || $0 == "_" })
+      .contains { $0 == heldScenarioWord }
+  }
+
+  /// The selector a step sees present: a selector `wait` whose keys agree with its `kind`, or an
+  /// `is exists` or `is visible`. A `wait` that ``kindKeyProblems`` refuses counts as neither.
+  static func presentTarget(_ step: FlowStep) -> String? {
+    switch step.command {
+    case "wait":
+      guard kindKeyProblems(step).isEmpty, case .string(let target)? = step.input["selector"]
+      else { return nil }
+      return target.trimmingCharacters(in: .whitespaces)
+    case "is":
+      guard case .string(let predicate)? = step.input["predicate"],
+        ["exists", "visible"].contains(predicate),
+        case .string(let target)? = step.input["selector"]
+      else { return nil }
+      return target.trimmingCharacters(in: .whitespaces)
+    default:
+      return nil
+    }
+  }
+
+  /// The selector a step sees gone: an absent `wait` whose keys agree with its `kind`, or an
+  /// `is absent` or `is hidden`.
+  static func absentTarget(_ step: FlowStep) -> String? {
+    switch step.command {
+    case "wait":
+      guard kindKeyProblems(step).isEmpty, case .string(let target)? = step.input["absent"]
+      else { return nil }
+      return target.trimmingCharacters(in: .whitespaces)
+    case "is":
+      guard case .string(let predicate)? = step.input["predicate"],
+        ["absent", "hidden"].contains(predicate),
+        case .string(let target)? = step.input["selector"]
+      else { return nil }
+      return target.trimmingCharacters(in: .whitespaces)
+    default:
+      return nil
+    }
   }
 
   /// A `wait` that looks for something, or any `is`. A `duration` or `stable` wait only pauses.
