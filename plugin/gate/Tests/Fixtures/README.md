@@ -2533,6 +2533,17 @@ The `sed` replaces the trial clone's parent folder in each task's `worktree` wit
 changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-3`
 matched nothing.
 
+`at-base-report.json` is the orchestrator's `qa run --at-base` in that trial, after `qa adopt`: all
+4 rows red at `c1766cda`, the 2 flows on a device. `store.state.sh` is the state row's script the
+validation worker wrote. With `S` and `F` as above:
+
+```sh
+cp $S/qa-runs/20261004T235239Z-4acebe48/qa/report.json $F/at-base-report.json
+cp $S/qa/confirm-large-downloads-store.state.sh $F/store.state.sh
+```
+
+The same `grep` on both files matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge

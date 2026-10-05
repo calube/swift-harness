@@ -12,10 +12,13 @@ public struct QACheckEvent: Sendable, Equatable, Codable {
   public let milliseconds: Int
   public let evidence: [String]
   public let waitingOn: [String]
+  /// The prepared at-base run whose result this row took instead of running; absent otherwise.
+  public let reusedFrom: String?
 
   public init(
     plan: String, row: Int, requirement: String, layer: ValidationLayer, result: QAResult,
-    atBase: Bool, exitStatus: Int?, milliseconds: Int, evidence: [String], waitingOn: [String]
+    atBase: Bool, exitStatus: Int?, milliseconds: Int, evidence: [String], waitingOn: [String],
+    reusedFrom: String? = nil
   ) {
     self.plan = plan
     self.row = row
@@ -27,17 +30,20 @@ public struct QACheckEvent: Sendable, Equatable, Codable {
     self.milliseconds = milliseconds
     self.evidence = evidence
     self.waitingOn = waitingOn
+    self.reusedFrom = reusedFrom
   }
 
   public init(plan: String, row: QARow, atBase: Bool) {
     self.init(
       plan: plan, row: row.row, requirement: row.requirement, layer: row.layer,
       result: row.result, atBase: atBase, exitStatus: row.exitStatus,
-      milliseconds: row.milliseconds, evidence: row.evidence, waitingOn: row.waitingOn)
+      milliseconds: row.milliseconds, evidence: row.evidence, waitingOn: row.waitingOn,
+      reusedFrom: row.reusedFrom)
   }
 
   private enum CodingKeys: String, CodingKey {
-    case plan, row, requirement, layer, result, atBase, exitStatus, evidence, waitingOn
+    case plan, row, requirement, layer, result, atBase, exitStatus, evidence, waitingOn,
+      reusedFrom
     case milliseconds = "ms"
   }
 }
