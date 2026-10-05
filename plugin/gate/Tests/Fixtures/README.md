@@ -4958,6 +4958,40 @@ at 5 s), and the payload carries `permission_mode: "bypassPermissions"`. Scrubbi
 becomes `/REPO`, the transcript `/HOME/.claude/projects/-REPO/`, and `session_id` the fixed
 `8f2c1d7e-…`; nothing else changed.
 
+## Brownfield trial: a heredoc written after a relative `cd`
+
+`Hooks/relative-heredoc-after-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
+2026-10-05 brownfield practice trial: from the clone's checkout it `cd`'d into a validation slot,
+then into a relative `.harness/qa/spec`, and on a later line wrote a flow file there with a heredoc.
+The guard named the write in the user's checkout. Each heredoc body after the first heredoc's
+opening line is dropped (its text is app content and names no write), the clone becomes `/CLONE`
+and the app's bundle id `com.example.App`. With `T` the trial's run folder, whose `run.jsonl` is
+the orchestrator's stream-json output:
+
+```sh
+python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/relative-heredoc-after-cd-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
+    return c.replace('com.example.InterviewStarter','com.example.App')
+cwd=None; denied={}
+lines=[json.loads(l) for l in open(sys.argv[1])]
+for d in lines:
+    if d.get('type')=='system' and d.get('subtype')=='init' and cwd is None: cwd=d['cwd']
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_result' and str(b.get('content')).startswith('PreToolUse:Bash hook error: swiftgate guard.run-user-checkout'):
+            denied[b['tool_use_id']]=b['content']
+for d in lines:
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_use' and b.get('id') in denied:
+            head,_,_=b['input']['command'].partition('<<EOF\n')
+            json.dump({"cwd":scrub(cwd),"command":scrub(head+'<<EOF\nEOF\n'),
+                       "denial":scrub(denied[b['id']])},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## qa lint: a flow that waits for a state the fake ends on its own
 
 `QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
