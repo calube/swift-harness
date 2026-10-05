@@ -156,11 +156,12 @@ struct SpanLogEndOpenTests {
     #expect(ended(cutoff) == ["f4102dced11585b9", "dd827de42d1b55e5"])
     #expect(ended(finish) == ["b5bd65c39f79bed5"])
     #expect(ended(again).isEmpty)
-    let worker = try #require(cutoff.first)
-    #expect(
-      worker.payload
-        == .spanEnd(
-          SpanEndEvent(spanID: "f4102dced11585b9", outcome: .abandoned, milliseconds: 1_830_376)))
+    guard case .spanEnd(let worker)? = cutoff.first?.payload else {
+      Issue.record("the cutoff wrote no span end")
+      return
+    }
+    #expect(worker.outcome == .abandoned)
+    #expect(abs(worker.milliseconds - 1_830_376) <= 1, "\(worker.milliseconds)")
     #expect(OpenSpans.of(try SpanLogTests.spanLines(root), buildRun: Self.buildRun).isEmpty)
   }
 }

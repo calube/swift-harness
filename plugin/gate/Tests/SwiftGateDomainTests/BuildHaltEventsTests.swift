@@ -96,19 +96,22 @@ struct FixingMergeQueueTests {
   }
 
   @Test(
-    "of the trial's halts only watchlist-screen's gate-red was answered retry: the budget halts were answered continue and abandon — catches a cutoff or a question read as a fixer launch"
+    "before the cutoff only watchlist-screen's gate-red halt was answered retry, and once the cutoff answered its budget halt abandon, no task reads retried — catches a cutoff or an older retry read as a fixer still working"
   )
-  func onlyRetriesCount() throws {
+  func onlyTheNewestRetryCounts() throws {
     let halts = try HarnessEventJSON.decode(
       Fixture.data("BrownfieldTrial/price-tracker-3-halts.jsonl")
     ).events
+    let cutoff = try Self.time("2026-10-05T06:28:00Z")
 
-    let retried = BuildHalts.retried(in: halts, buildRun: Self.buildRun)
+    let retried = BuildHalts.retried(
+      in: halts.filter { $0.time < cutoff }, buildRun: Self.buildRun)
 
     #expect(Array(retried.keys) == ["watchlist-screen"])
     let resumed = try Date(
       "2026-10-05T06:10:09.077Z", strategy: Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     #expect(abs((retried["watchlist-screen"] ?? .distantPast).timeIntervalSince(resumed)) < 0.001)
+    #expect(BuildHalts.retried(in: halts, buildRun: Self.buildRun).isEmpty)
     #expect(BuildHalts.retried(in: halts, buildRun: "20261005T000000Z-00000000").isEmpty)
   }
 }
