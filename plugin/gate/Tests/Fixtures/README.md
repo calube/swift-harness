@@ -2738,7 +2738,7 @@ review depth.
 - In send-money-2, 3 checked returns held every slot while the validation task waited. The run
   merged `send-ui`, undid it, fixed it, merged it again, then undid and abandoned it at the cutoff.
 
-With `T` the trial's folder under the block-prep harness runs, `C=$T/state` (the clone's
+With `T` the trial's folder under the practice-trial runs folder, `C=$T/state` (the clone's
 `swift-harness` state root, copied after the run), `P=$C/plans/spec`, `R` the build run's folder
 under `$P/build`, and `t` the trial's name, copied 2026-10-05:
 
