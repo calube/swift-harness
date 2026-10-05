@@ -76,6 +76,7 @@ on the newest iOS runtime holding it. A clone with no `xcode` area, or several, 
 
 ## qa adopt
 
-`swiftgate qa adopt <worktree> [--json]` replaces each plan's `qa/` folder in plan state with a copy
-of `<worktree>/.harness/qa/<plan>/`. It exits 1 and copies nothing for a path that isn't a checkout
-of this repository, a worktree with no prepared folder, or a folder naming no plan.
+`swiftgate qa adopt <worktree> [--json]` replaces each plan's `qa/` in plan state with
+`<worktree>/.harness/qa/<plan>/`, then removes `<worktree>/.harness/qa`. It exits 1 and changes
+nothing for a path that isn't a checkout of this repository, a worktree with no prepared folder,
+or a folder naming no plan.

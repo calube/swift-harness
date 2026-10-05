@@ -41,7 +41,8 @@ writes. Its `at-base-run.json` holds those rows alone. Its `qa.check` events car
 
 It reads the requirement's rows from `validation.json`, the adopted checks and record in plan
 state, the worktree's prepared folder and record, each red run's `qa/report.json` from the
-worktree's runs or the main checkout's, and plan state's `qa/repairs.json`. It copies nothing when
+clone's shared store under the git common dir, where a `qa run` in any checkout writes, else from
+the worktree's or the main checkout's runs, and plan state's `qa/repairs.json`. It copies nothing when
 any rule fails, and exits 1 naming each finding:
 
 - `qa.repair-cap`: 2 repairs of the requirement already landed in this build run, or 1 did and
@@ -71,7 +72,8 @@ with the prepared ones. Each such row names the prepared run as its `runID`, so 
 `qa run --at-base` takes it, naming that run in `reusedFrom`, while every other row keeps the
 record's own run. It appends the repair to `qa/repairs.json`: the requirement, rows, checks, build
 run, cause, reason, red runs, the prepared run, the step the red runs failed at, and the commands
-of the steps it took out and put in.
+of the steps it took out and put in. Then it removes the worktree's `.harness/qa` and names it as
+`removed`; a refused repair leaves the folder for the next attempt.
 
 It writes 1 `qa.repair` event under the prepared run's id, with ids, row numbers and commands only;
 the reason stays in `qa/repairs.json`. The run viewer reads it with the build run's `qa.check`

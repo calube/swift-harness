@@ -170,9 +170,8 @@ surface, and says to work in that worktree and follow
 1. `"$SG" qa adopt <worktree> --session <session> --json` copies its `.harness/qa/<slug>/` into
    `<plans>/<slug>/qa/`, where `qa run` reads every check. A non-GREEN adopt halts that task. Its
    `unblocks` lists each checked return that waited on this task, with the exact `build merge`
-   command as `next`.
-2. `/bin/rm -rf <worktree>/.harness/qa`, then
-   `"$SG" ledger set <slug> <task> done --session <session> --json` and
+   command as `next`. A GREEN adopt removes `<worktree>/.harness/qa` itself; never remove it.
+2. `"$SG" ledger set <slug> <task> done --session <session> --json` and
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
 3. Confirm each check fails before its tasks merge:
    `"$SG" qa run --plan <slug> --at-base --json --output <plans>/<slug>/out/qa-at-base.json`, in
@@ -536,7 +535,9 @@ another in the same fix worktree, starting with the row whose step failed first.
    "$SG" qa adopt <fixWorktree> --repair <requirement> --build-run <run> --cause <cause> --reason "<why>" --red-run <run id> --red-run <run id> --json
    ```
 
-   `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
+   `<why>` is the `flow row:` line's reason, on 1 line. Read its verdict first: a GREEN adopt
+   removes `<fixWorktree>/.harness/qa` itself and a RED one leaves it for the next attempt, so
+   never remove it yourself.
    - GREEN: go on to the next requirement's round, if any. Once every round is taken, launch the
      fixer again, 1 more attempt with its own span, ingest and check, given its last return and
      each adopt's `repaired` record. Quote the evidence of its newest red run as its first brief
