@@ -21,6 +21,9 @@ enum BrownfieldProve {
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
     /// How many tests a reverted run ran, from the reports it left.
     var testCounts = AreaTestCountReader()
+    /// Proves that passed on the same reverted tree, which this prove takes without running;
+    /// `nil` runs every area's.
+    var reuse: ProveReuse? = nil
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
@@ -47,6 +50,7 @@ enum BrownfieldProve {
         git: git, scratch: scratch, runner: runner, readFile: readFile, deadline: deadline,
         layout: layout, bound: bound)
       copy.testCounts = testCounts
+      copy.reuse = reuse
       return copy
     }
 
@@ -61,6 +65,31 @@ enum BrownfieldProve {
           runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory),
         runner: runner, deadline: deadline,
         layout: layout)
+    }
+  }
+
+  /// What a prove needs to take an area's earlier pass: the binary and config every key shares,
+  /// the store, the gate run recording new passes, and the files renamed since a merge base.
+  struct ProveReuse: Sendable {
+    let inputs: GateReuse.Inputs
+    let store: any ProveReusing
+    let runID: String
+    let tier: CheckTier
+    /// New path → old path for each file renamed from a commit to `HEAD`; `nil` when git can't
+    /// say, so nothing is reused.
+    let renames: @Sendable (_ since: String) async -> [String: String]?
+
+    /// Passes kept under `layout`'s clone root, and renames git reads in `root`.
+    static func live(
+      inputs: GateReuse.Inputs, root: URL, layout: BrownfieldStateLayout, runID: String,
+      tier: CheckTier
+    ) -> ProveReuse {
+      ProveReuse(
+        inputs: inputs, store: ProveResults(layout: layout), runID: runID, tier: tier,
+        renames: { since in
+          await GitRenames.between(
+            since, "HEAD", runner: LiveProcessRunner(), directory: root.path)
+        })
     }
   }
 
@@ -187,6 +216,21 @@ enum BrownfieldProve {
       return unbuilt(
         judgement.merged(with: note("prove: no new or changed tests in \(names) since \(base)")))
     }
+    let taken = await reused(
+      plans, tests: tests, mergeBase: mergeBase, root: root, dependencies: dependencies)
+    plans = taken.left
+    /// What the areas run here and the areas taken from earlier passes came to together.
+    func outcome(_ ran: AreaRun, derivedData: GateDerivedData, lockWait: Int?) -> Outcome {
+      let all = ran + taken.run
+      proofs.record(all.proved)
+      return Outcome(
+        judgement: judgement.merged(with: all.judgement).merged(
+          with: note(
+            "prove: \(all.proven) of \(all.total) changed tests fail with the change's source "
+              + "reverted")),
+        derivedData: derivedData, lockWaitMilliseconds: lockWait)
+    }
+    guard !plans.isEmpty else { return outcome(AreaRun(), derivedData: .reused, lockWait: nil) }
     // A plan whose run the box leaves too little time isn't started: it would only be killed.
     plans = plans.filter { plan in
       guard let bound = dependencies.bound?(plan.area.name, plan.step), bound.cannotFinish else {
@@ -208,9 +252,13 @@ enum BrownfieldProve {
       }
       return false
     }
-    guard !plans.isEmpty else { return unbuilt(judgement) }
+    guard !plans.isEmpty else {
+      return taken.run.total > 0
+        ? outcome(AreaRun(), derivedData: .reused, lockWait: nil) : unbuilt(judgement)
+    }
     let reverted = changed.filter { !tests.contains($0) }
     guard !reverted.isEmpty else {
+      if taken.run.total > 0 { return outcome(AreaRun(), derivedData: .reused, lockWait: nil) }
       return unbuilt(
         judgement.merged(
           with: note("prove: only tests changed since \(base), so there is nothing to revert")))
@@ -226,24 +274,84 @@ enum BrownfieldProve {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
         var total = AreaRun()
         for plan in plans {
-          total =
-            total
-            + (await execute(
-              plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies,
-              derivedData: built, waits: waits, timed: timed))
+          let run = await execute(
+            plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies,
+            derivedData: built, waits: waits, timed: timed)
+          if let reuse = dependencies.reuse, let key = taken.keys[plan.area.name] {
+            record(run, key: key, reuse: reuse)
+          }
+          total = total + run
         }
         return total
       }
     } catch {
       return unbuilt(judgement.merged(with: blocked("scratch worktree: \(error)")))
     }
-    proofs.record(ran.proved)
-    return Outcome(
-      judgement: judgement.merged(with: ran.judgement).merged(
-        with: note(
-          "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
-            + "reverted")),
-      derivedData: built, lockWaitMilliseconds: waits.milliseconds)
+    return outcome(ran, derivedData: built, lockWait: waits.milliseconds)
+  }
+
+  /// The plans left to run once each area whose prove passed on the same reverted tree is taken
+  /// from its pass, the key each plan left records its own pass under, and what the taken areas
+  /// came to. With no ``Dependencies/reuse``, or no renames read, every plan is left.
+  private static func reused(
+    _ plans: [AreaPlan], tests: [String], mergeBase: String, root: URL,
+    dependencies: Dependencies
+  ) async -> (left: [AreaPlan], keys: [String: String], run: AreaRun) {
+    guard let reuse = dependencies.reuse, let renames = await reuse.renames(mergeBase) else {
+      return (plans, [:], AreaRun())
+    }
+    var copied: [String: String?] = [:]
+    for path in tests {
+      copied[path] = .some(
+        dependencies.readFile(root.appending(path: path)).map { GateReuse.digest(Data($0.utf8)) })
+    }
+    var left: [AreaPlan] = []
+    var keys: [String: String] = [:]
+    var run = AreaRun()
+    for plan in plans {
+      let template =
+        switch plan.command {
+        case .selected(let template), .whole(let template): template
+        }
+      let key = GateReuse.proveKey(
+        reuse.inputs, mergeBase: mergeBase, area: plan.area.name,
+        command: "\(plan.step.rawValue) \(template)",
+        tests: plan.ids.map { "\($0.file) \($0.selector)" }, copied: copied, renames: renames)
+      guard let pass = reuse.store.pass(key) else {
+        left.append(plan)
+        keys[plan.area.name] = key
+        continue
+      }
+      run =
+        run
+        + AreaRun(
+          judgement: ChangedTestJudgement(
+            findings: pass.findings + reusedNote(plan.area, pass: pass), blocked: false),
+          proven: pass.proven, total: pass.total, proved: pass.proved)
+    }
+    return (left, keys, run)
+  }
+
+  /// Keeps `run` for a later gate on the same reverted tree when it proved every changed test it
+  /// ran and nothing it found gates.
+  private static func record(_ run: AreaRun, key: String, reuse: ProveReuse) {
+    guard run.total > 0, run.proven == run.total, run.judgement.verdict == .green else { return }
+    reuse.store.record(
+      ProvePass(
+        runID: reuse.runID, tier: reuse.tier.rawValue, proved: run.proved,
+        findings: run.judgement.findings, proven: run.proven, total: run.total),
+      key: key)
+  }
+
+  /// A prove taken from an earlier pass, named so the run says what it didn't run.
+  private static func reusedNote(_ area: BrownfieldArea, pass: ProvePass) -> [Finding] {
+    let finding = try? Finding(
+      ruleID: GateReuse.ruleID, severity: .nit, file: area.root, line: nil,
+      message:
+        "prove: \(area.name)'s changed tests were proven in \(pass.tier) gate run \(pass.runID) "
+        + "on the same reverted tree, command and binary, so they didn't run again",
+      failureScenario: nil)
+    return finding.map { [$0] } ?? []
   }
 
   /// How 1 area's changed tests run.

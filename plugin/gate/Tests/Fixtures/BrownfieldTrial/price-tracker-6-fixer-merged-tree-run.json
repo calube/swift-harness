@@ -1,0 +1,56 @@
+{
+  "run" : {
+    "commit" : "8bf712ff86e6a154c72c8eb98eb2e08e5e6fbe0c",
+    "preparedBy" : "app-navigation",
+    "rows" : [
+      {
+        "check" : "qa/watchlist.flow.json",
+        "digest" : "d2031b4ccca993391622974888e4df6d2988a35cc6f479edee2a82b065b89957",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 66 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+        "ms" : 30049,
+        "requirement" : "req-watchlist",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/refresh.flow.json",
+        "digest" : "4e052aa9ab80f6a60b075d596dd22a3d1dbd23e9ff7654fe85f41c36e729b5d2",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 4 steps; nit sim.a11y-untargeted: 24 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+        "ms" : 13446,
+        "requirement" : "req-refresh",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/error-retry.flow.json",
+        "digest" : "61a4d59422ac8215be9aa975c124c44c6bbc3a581f5ae4b1cf1f93ea01b2d19b",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 6 steps; nit sim.a11y-untargeted: 36 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+        "ms" : 18396,
+        "requirement" : "req-error-retry",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/detail-chart.flow.json",
+        "digest" : "84c24d45ba883c13658ec655c982fb8ecf89353056993311d7ba2a9d69ff53a4",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 4 steps; nit sim.a11y-untargeted: 6 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+        "ms" : 15437,
+        "requirement" : "req-detail-chart",
+        "result" : "pass"
+      },
+      {
+        "check" : "qa/chart-failure.flow.json",
+        "digest" : "fa4465c968d772074609beec57d81bab1a8e6d142baa57418030abb8be905087",
+        "layer" : "flow",
+        "message" : "batch passed; sim verify GREEN over 4 steps; nit sim.a11y-untargeted: 6 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+        "ms" : 18961,
+        "requirement" : "req-chart-failure",
+        "result" : "pass"
+      }
+    ],
+    "runID" : "20261005T115303Z-d69a2a72",
+    "schemaVersion" : 1
+  },
+  "tree" : "304026a1e983888377af096b7009d8078aea25d2"
+}

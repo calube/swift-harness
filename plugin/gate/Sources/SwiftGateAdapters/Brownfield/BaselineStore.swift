@@ -121,6 +121,9 @@ public struct BaselineStore: Sendable {
     let loaded = load(tree: base.tree)
     var notes = loaded.notes
     var known = loaded.results
+    for query in failing where known[query.key] == nil {
+      known[query.key] = Baseline.implied(query.key, by: loaded.results)
+    }
     var seen = Set<BaselineStepKey>()
     let missing = failing.filter { known[$0.key] == nil && seen.insert($0.key).inserted }
     var fresh: [BaselineRecord] = []
@@ -220,6 +223,16 @@ public struct BaselineStore: Sendable {
       throw .io(operation: "write", path: path.path, reason: "\(error)")
     }
     return current.notes
+  }
+
+  /// Records each of `keys` as passed at `tree`, a clean head's tree whose gate ran it GREEN, so
+  /// a later gate measuring from a commit with that tree needn't run it again there. A key the
+  /// file already answers keeps its answer. A file that can't be written is only not used.
+  public func recordPasses(_ keys: [BaselineStepKey], tree: String) async {
+    let known = load(tree: tree).results
+    let fresh = Set(keys).filter { known[$0] == nil }
+    guard !fresh.isEmpty else { return }
+    _ = try? await record(fresh.map { BaselineRecord(key: $0, result: .passed) }, tree: tree)
   }
 
   /// A missing file is an empty baseline: nothing was recorded at that tree yet.

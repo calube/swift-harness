@@ -11,7 +11,7 @@ enum BrownfieldMergeCheck {
     let git: any Git
     let runner: any AreaCommandRunning
     let baseline: BaselineStore
-    let prove: BrownfieldProve.Dependencies
+    var prove: BrownfieldProve.Dependencies
     /// The tracked files, for each area's shared cache variables.
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline file's name.
@@ -22,6 +22,9 @@ enum BrownfieldMergeCheck {
     let deadline: Duration
     /// Reads each test step's totals for the run's `report.json`.
     var testCounts = AreaTestCountReader()
+    /// `HEAD^{tree}` of a clean working tree, where each step that passes is recorded as the
+    /// baseline's answer; `nil` records none.
+    var headTree: String? = nil
     /// Each command's bound, from the area's warm-up times and the run's time box.
     var bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
@@ -152,7 +155,10 @@ enum BrownfieldMergeCheck {
       dependencies.reuse = AreaStepReuse(
         inputs: inputs, store: AreaStepResults(layout: dependencies.layout),
         runID: context.runID)
+      dependencies.prove.reuse = BrownfieldProve.ProveReuse.live(
+        inputs: inputs, root: root, layout: dependencies.layout, runID: context.runID, tier: tier)
     }
+    dependencies.headTree = await cleanTree(root: root)
     return try await run(
       root: root, tier: tier, base: base, context: context, dependencies: dependencies)
   }
@@ -238,6 +244,13 @@ enum BrownfieldMergeCheck {
     outcome.findings += runs.flatMap(\.findings)
     outcome.blocked = runs.contains(where: \.refused)
     let stepRuns = runs.flatMap(\.runs)
+    if let headTree = dependencies.headTree {
+      await dependencies.baseline.recordPasses(
+        stepRuns.filter { $0.outcome == .passed }.map {
+          BaselineStepKey(
+            area: $0.area.name, step: $0.step, command: $0.template, selection: $0.selection)
+        }, tree: headTree)
+    }
 
     let failing = stepRuns.filter { run in
       switch run.outcome {
@@ -346,6 +359,14 @@ enum BrownfieldMergeCheck {
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
     return outcome
+  }
+
+  /// `HEAD^{tree}` of the checkout at `root` when nothing in it is uncommitted, else `nil`.
+  static func cleanTree(root: URL) async -> String? {
+    guard let state = try? await LiveWorkingTree(runner: LiveProcessRunner(), root: root).state(),
+      !state.dirty
+    else { return nil }
+    return state.treeHash
   }
 
   /// Where `tier`'s prove measures changed tests from and reverts the source to. At `merge` on a

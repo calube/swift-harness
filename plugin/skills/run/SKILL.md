@@ -139,9 +139,10 @@ The warm-up started when discovery finished and runs every area's `generate`, `b
 at `<base>`, in parallel, to the end. Every checkout builds a `swiftpm` area in the 1 scratch path
 the warm-up fills, and proves it in a scratch path of its own. Then it runs each `xcode` area's
 `build` in `<checkout>`, which `swiftgate run` checked out at launch, and each `swiftpm` area's into
-that checkout's prove scratch path. After that it adds the plan's worktree slots up to
-`max_parallel` and builds there too, so the first builds and proves in each start warm; a build of
-yours there waits for its build. It waits for nothing and you don't wait for it either; read
+that checkout's prove scratch path. After that it adds `max_parallel` + 1 worktree slots, since a task
+waiting to merge keeps its slot, and builds there too, so the first builds and proves in each start
+warm; a build of yours there waits for its build. When `sim up` can build the app, it adds 1 more
+slot and builds only the app there, kept for `qa run`'s trees. It waits for nothing and you don't wait for it either; read
 what it has recorded so far with `"$SG" events list --kind warmup.run`. Each event names an
 `area`, a `step`, its `ms`, `cache` and `outcome` (`passed`, `failed`, `dropped`,
 `not-installed`).
@@ -443,7 +444,8 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    as a merge gate is. Its deadline is never past the box's end. An `overrun` is a RED `final`
    with no run to record: `TaskStop` it, skip item 2 and go on from item 3, and the report names
    the overrun. It runs every area's `test`, `lint` and `build` against the baseline, plus each
-   area's `e2e`. A test step that also fails
+   area's `e2e`. A step, or a prove of changed tests on the same reverted tree, that a merge gate
+   passed on the same inputs is taken, not run, and a `gate.reused` note names that gate. A test step that also fails
    whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
    names where the head's and the merge base's output tail and report were kept: read those first.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.

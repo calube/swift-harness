@@ -509,6 +509,19 @@ public struct SimUp: Sendable {
     }
   }
 
+  /// The folder under a worktree's DerivedData that `sim up` builds the app in.
+  public static let derivedDataDirectoryName = "sim-up"
+
+  /// The `xcodebuild build` `sim up` runs for `target`'s app in `worktree` into `derivedDataPath`,
+  /// as a warm-up runs it to leave that DerivedData warm for the first `sim up` there.
+  public static func appBuild(
+    _ target: SimTarget, in worktree: URL, derivedDataPath: String, resultBundlePath: String
+  ) throws(SimUpFailure) -> AppBuild.Request {
+    AppBuild.Request(
+      container: try container(target.container, in: worktree), scheme: target.scheme,
+      derivedDataPath: derivedDataPath, resultBundlePath: resultBundlePath)
+  }
+
   private static func container(_ named: SimTarget.Container, in worktree: URL)
     throws(SimUpFailure) -> XcodebuildContainer
   {
