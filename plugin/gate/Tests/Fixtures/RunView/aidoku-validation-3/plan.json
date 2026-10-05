@@ -1,0 +1,101 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "confirm-downloads-check" : {
+        "acceptance" : [
+          "`AidokuTests/LargeDownloadConfirmationTests` stores the setting under its real key in a dedicated `UserDefaults(suiteName:)` suite, removed after, and checks 50 and 51 chapters with the setting on, 51 with it off and 51 with it never stored; it fails against the stub first, then passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the prompt UI"
+        ],
+        "scope" : [
+          "`needsConfirmation` reads `confirmLargeDownloads.key` from the given defaults (missing reads false) and compares with `threshold`"
+        ],
+        "title" : "Implement the large-download decision from the chapter count and the stored setting.",
+        "why" : "requirement 3: more than 50 chapters with the setting stored on needs confirmation; otherwise never."
+      },
+      "confirm-downloads-contract" : {
+        "acceptance" : [
+          "the Aidoku area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the toggle row, the decision logic and the prompt"
+        ],
+        "scope" : [
+          "`DownloadsSettings.confirmLargeDownloads` (`Downloads.confirmLargeDownloads`, default false) in its `keys`",
+          "`LargeDownloadConfirmation.threshold = 50` and `needsConfirmation(chapterCount:defaults:)` returning false",
+          "`CONFIRM_LARGE_DOWNLOADS` and `DOWNLOAD_N_CHAPTERS_CONFIRM` in `en.lproj/Localizable.strings`"
+        ],
+        "title" : "Declare the setting key, the decision entry point as a stub, the localized strings and the toggle identifier.",
+        "why" : "requirements 1 to 4 share 1 key, 1 entry point and 2 strings, so every task builds against them."
+      },
+      "confirm-downloads-prompt" : {
+        "acceptance" : [
+          "the Aidoku area builds and slice is GREEN; the decision is covered by confirm-downloads-check's test"
+        ],
+        "outOfScope" : [
+          "the Library screen's Download All, the context-menu single download, the download queue"
+        ],
+        "scope" : [
+          "the edit toolbar's Download button in `MangaView` computes the chapters to queue, calls `LargeDownloadConfirmation.needsConfirmation(chapterCount:defaults: .standard)`, and when true holds them in state and shows an alert titled with `DOWNLOAD_N_CHAPTERS_CONFIRM` and Download and Cancel buttons",
+          "Download runs the existing Wi-Fi check and queue path with the held chapters; Cancel clears them and queues nothing",
+          "extract the queue path into 1 helper so both branches share it"
+        ],
+        "title" : "Ask \"Download <n> chapters?\" before queueing a multi-select chapter download that needs confirmation.",
+        "why" : "requirement 4: Download and Cancel before queueing; Cancel queues nothing; other requests queue as today."
+      },
+      "confirm-downloads-setting" : {
+        "acceptance" : [
+          "a test that `Settings.downloadSettings` holds a toggle with the key fails first, then passes; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the decision and the prompt"
+        ],
+        "scope" : [
+          "a `.toggle` entry in `Settings.downloadSettings` keyed by `AppSettings.downloads.confirmLargeDownloads.key`, titled `CONFIRM_LARGE_DOWNLOADS`, after the parallel downloads toggle",
+          "`SettingView` sets `.accessibilityIdentifier(setting.key)` on its toggle"
+        ],
+        "title" : "Add the \"Confirm Large Downloads\" toggle to Settings → Downloads with a stable accessibility identifier.",
+        "why" : "requirements 1 and 2: the toggle sits with the download toggles and writes its key."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "`qa/confirm-large-downloads-toggle.flow.json`: open Settings → Downloads and find the switch `Downloads.confirmLargeDownloads` labelled \"Confirm Large Downloads\", off",
+          "`qa/confirm-large-downloads-store.flow.json`: switch it on",
+          "`qa/confirm-large-downloads-store.state.sh`: read the installed app's defaults and require `Downloads.confirmLargeDownloads` to be true"
+        ],
+        "title" : "Write the toggle flows and the stored-value state check against the contract's names, and record why each fails now.",
+        "why" : "requirements 1 and 2 need checks in the running app that fail before the toggle merges and pass after."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-setting-toggle",
+        "title" : "Settings → Downloads shows a \"Confirm Large Downloads\" toggle, off by default, beside the other download toggles, with the stable accessibility identifier `Downloads.confirmLargeDownloads` and a readable label"
+      },
+      {
+        "id" : "req-stored-value",
+        "title" : "The toggle's value is stored in user defaults under `Downloads.confirmLargeDownloads`, registered with the other download settings, and switching it on in the UI writes `true` under that key"
+      },
+      {
+        "id" : "req-download-check",
+        "title" : "`LargeDownloadConfirmation.needsConfirmation(chapterCount:defaults:)` returns true only when the setting is stored on in the given defaults and more than 50 chapters are requested, proven by `AidokuTests/LargeDownloadConfirmationTests` with a dedicated `UserDefaults` suite at 50 and 51 chapters"
+      },
+      {
+        "id" : "req-prompt",
+        "title" : "A chapter-list download that needs confirmation asks \"Download <n> chapters?\" with Download and Cancel before queueing; Cancel queues nothing, and requests that need no confirmation queue as before"
+      }
+    ]
+  },
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

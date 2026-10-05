@@ -83,6 +83,34 @@ const flowView = view({
   ],
 })
 
+// Rows whose earlier qa runs the view keeps: a row an at-base run read red and a later run passed,
+// and a row only the at-base run checked.
+const attempt = (qaRun, stage, result, extra = {}) => ({
+  qaRun, stage, after: null, result, message: null, exitStatus: null, ms: 0, evidence: [], waitingOn: [], reusedFrom: null,
+  at: at(30), output: [], outputCut: false, flow: null, ...extra,
+})
+const BASE = '20261003T142000Z-0000cccc'
+const historyView = view({
+  validation: {
+    plan: 'sample-notes',
+    counts: { pass: 1, red: 0, unverified: 0, waiting: 0, abandoned: 0, atBase: 1 },
+    rows: [
+      row(1, 'acceptance', 'pass', ['store'], {
+        check: 'notes-cli save', exitStatus: 0, ms: 420, message: 'exit 0',
+        history: [
+          attempt(QA, 'after', 'pass', { after: 'store', exitStatus: 0, ms: 420, message: 'exit 0' }),
+          attempt(BASE, 'at-base', 'red', { exitStatus: 1, ms: 300, message: 'exit 1', evidence: ['qa/01-req-save-note.acceptance.txt'], output: ['no such command: save'], reusedFrom: '20261003T141000Z-0000dddd' }),
+        ],
+      }),
+      row(2, 'acceptance', 'red', ['list'], {
+        check: 'notes-cli list', exitStatus: 1, ms: 200, message: 'exit 1', qaRun: BASE, atBase: true,
+        history: [attempt(BASE, 'at-base', 'red', { exitStatus: 1, ms: 200, message: 'exit 1' })],
+      }),
+    ],
+    keptFlows: [],
+  },
+})
+
 const dirs = []
 function writePage(data) {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-validation-'))
@@ -127,6 +155,7 @@ const { page, close } = await launch({ deadlineMs: 45000 })
 const withRows = writePage(view())
 const withoutRows = writePage(view({ validation: null }))
 const withFlows = writePage(flowView)
+const withHistory = writePage(historyView)
 const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
   const r = document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="${n}"]')
   return { steps: [...r.querySelectorAll('.qa-step')].map((li) => ({ n: li.dataset.n, ok: li.dataset.ok, mark: li.querySelector('.qa-mark').getAttribute('aria-label'), href: li.querySelector('a')?.getAttribute('href') ?? null, text: li.innerText })),
@@ -283,6 +312,36 @@ const tests = {
     await page.press('Escape')
     assert.equal(await page.evaluate(`document.activeElement?.dataset.task ?? null`), 'list')
     assert.equal(await page.evaluate(`document.body.dataset.errors`), '0')
+  },
+
+  async 'a row lists each qa run that checked it, newest first, with its stage, the task an after run named and the run an at-base check reused, and an earlier red run opens "Why it failed" — catches a page that shows only the last qa run'() {
+    await page.load(withHistory)
+    const rows = await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
+      return [...document.querySelectorAll('.qa-group .qa-row')].map((r) => ({ row: r.dataset.row, result: r.dataset.result,
+        attempts: [...r.querySelectorAll('.qa-attempt')].map((a) => [a.dataset.stage, a.dataset.result, a.dataset.run, a.innerText]) })) })()`)
+    const saved = rows.find((r) => r.row === '1')
+    assert.deepEqual(saved.attempts.map(([stage, result, run]) => [stage, result, run]), [['after', 'pass', QA], ['at-base', 'red', BASE]])
+    assert.match(saved.attempts[0][3], /after store/)
+    assert.match(saved.attempts[1][3], /reused from 20261003T141000Z-0000dddd/)
+    await page.evaluate(`document.querySelector('.qa-row[data-row="1"] .qa-attempt[data-stage="at-base"] .qa-why').click()`)
+    const pop = await page.evaluate(POPOVER)
+    assert.equal(pop.title, 'Why it failed')
+    const fields = Object.fromEntries(pop.rows)
+    assert.equal(fields['qa run'], BASE)
+    assert.equal(fields['exit status'], '1')
+    assert.match(pop.text, /no such command: save/)
+    assert.equal(await page.evaluate(`document.body.dataset.errors`), '0')
+  },
+
+  async 'a row only an at-base run checked reads "at base", counted apart in the strip and not as a red badge — catches expected reds before the first merge counted as failures'() {
+    await page.load(withHistory)
+    await page.evaluate(`document.querySelector('[role=tab][data-tab="validation"]').click()`)
+    const tab = await page.evaluate(TAB)
+    assert.deepEqual(tab.badges, {})
+    assert.deepEqual(tab.strip, { pass: 1, red: 0, unverified: 0, waiting: 0, atBase: 1 })
+    const base = await page.evaluate(`document.querySelector('.qa-row[data-row="2"]').innerText`)
+    assert.match(base, /at base/)
+    assert.deepEqual(page.errors, [])
   },
 
   async 'a run with no validation rows has no Validation tab and no console error — catches an empty tab'() {

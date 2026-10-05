@@ -1,0 +1,76 @@
+{
+  "after" : "ttt-screen",
+  "atBase" : false,
+  "commit" : "dd208a7f1dc9aedcc06b4479e5c1c259e7241d33",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "3 of 3 rows verified: 3 pass, 0 red, 0 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/01-req-board-screen.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 57026,
+      "requirement" : "req-board-screen",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/02-req-status-text.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 51646,
+      "requirement" : "req-status-text",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "evidence" : [
+        "qa/03-req-new-game.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0",
+      "ms" : 49807,
+      "requirement" : "req-new-game",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T005653Z-37ebb9c9",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}

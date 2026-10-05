@@ -3098,3 +3098,74 @@ cp evals/apps/interview-starter/.swiftgate.toml \
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/starter-swiftgate.toml` matched
 nothing.
+
+## Brownfield trial: a run's end with and without the finish event
+
+`BrownfieldTrial/tic-tac-toe-1-build-events.jsonl` is the build run's `events.jsonl` from the first
+tic-tac-toe trial, whose binary records `build finish`: its last 2 lines are a GREEN `final` gate
+and the `finish` event. `tic-tac-toe-1-run.json` is that run's `run.json`, written before the
+record marked the `finish` event. `aidoku-validation-3-build-events.jsonl`, above, is a log from
+before the event existed. `S` is the trial folder. From the repository root:
+
+```sh
+S=<trial folder> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/build-events.jsonl $F/tic-tac-toe-1-build-events.jsonl
+cp $S/repo/.git/swift-harness/plans/spec/build/20261005T004845Z-62589e1a/run.json $F/tic-tac-toe-1-run.json
+```
+
+`build-events.jsonl` matched the clone's own log byte for byte (`cmp`).
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-{build-events.jsonl,run.json}`
+matched nothing.
+
+## Run view: the qa runs a removed plan checkout kept
+
+`RunView/tic-tac-toe-1-kept-runs/` is the first tic-tac-toe trial's plan state with the 3
+`qa run` directories `run checkout remove` copied out of the plan checkout, for the reader's kept
+runs. `events/` is the clone's common store's `qa` stream, 9 `qa.check` events. `S` is the trial
+folder. From the repository root:
+
+```sh
+S=<trial folder> R=$S/repo/.git/swift-harness X=plugin/gate/Tests/Fixtures/RunView/tic-tac-toe-1-kept-runs
+B=$R/plans/spec/build/20261005T004845Z-62589e1a
+mkdir -p $X/events $X/returns
+cp $R/events/qa.jsonl $R/events/store.json $X/events/
+sed "s#$S/#/TRIAL/#g" $R/plans/spec/ledger.json > $X/ledger.json
+sed "s#$S/#/TRIAL/#g" $R/plans/spec/clock.json > $X/clock.json
+cp $R/plans/spec/plan.json $X/plan.json
+cp $B/run.json $X/run.json
+cp $B/events.jsonl $X/ledger-events.jsonl
+cp $B/returns/*.json $X/returns/
+for r in 20261005T005653Z-37ebb9c9 20261005T010144Z-9350394a 20261005T010428Z-75c783e4; do
+  mkdir -p $X/runs/$r/qa && cp $S/repo/.harness/runs/$r/qa/report.json $X/runs/$r/qa/
+done
+```
+
+The `sed` replaces the trial folder in the ledger's worktree paths and the clock's spec paths with
+`/TRIAL/` and changes nothing else. The copy leaves out each row's saved output and result bundle,
+which hold machine paths. `grep -rniE '/Users|/private|/var/folders|caleb' RunView/tic-tac-toe-1-kept-runs`
+matched nothing.
+
+## Run view: every qa run of a row
+
+`RunView/aidoku-validation-3/` is the third iOS validation trial on `Aidoku/Aidoku`, build run
+`20261004T234410Z-daacb3fb` of plan `spec`, for each row's run history. Its `qa run --at-base`
+(`20261004T235239Z-4acebe48`) read all 4 rows red, and its 2 flow rows drove a device; then
+`--after confirm-downloads-check` (`20261005T000035Z-78e50883`) passed the acceptance row; the
+final run (`20261005T002359Z-7b81c6a7`) passed it again and read the flow and state rows
+`waiting`. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 Y=plugin/gate/Tests/Fixtures/RunView/aidoku-validation-3
+mkdir -p $Y/events $Y/returns
+jq -c 'select(.kind=="qa.check" or .kind=="qa.flow")' $S/events.jsonl > $Y/events/qa.jsonl
+sed -E "s#/Users/[^/]*/Developer/trials/#/TRIAL/#g" $S/ledger.json > $Y/ledger.json
+cp $S/plan.json $Y/plan.json; cp $S/build-events.jsonl $Y/ledger-events.jsonl; cp $S/returns/*.json $Y/returns/
+for r in $S/qa-runs/*; do mkdir -p $Y/runs/$(basename $r)/qa; cp $r/qa/report.json $Y/runs/$(basename $r)/qa/; done
+cp $S/qa-runs/20261004T235239Z-4acebe48/qa/03-req-stored-value.state.txt $Y/runs/20261004T235239Z-4acebe48/qa/
+```
+
+The `jq` keeps the 9 `qa.check` and 2 `qa.flow` lines of the trial's event dump unedited; each
+run's own `events/qa.jsonl` repeats them. The `sed` replaces the trial folder in the ledger's
+worktree paths. The copy leaves out the acceptance rows' saved output, which holds machine paths,
+and the flow rows' device evidence. The trial kept no `run.json`.
+`grep -rniE '/Users|/private|/var/folders|caleb' RunView/aidoku-validation-3` matched nothing.

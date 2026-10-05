@@ -1,0 +1,126 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-stored-value"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 60,
+      "gate" : "slice",
+      "id" : "confirm-downloads-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/aidoku-ios-validation-3-spec-confirm-downloads-contract",
+      "writeSet" : [
+        "Aidoku/Core/Settings/Downloads/DownloadsSettings.swift",
+        "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift",
+        "Aidoku/App/Resources/Localization/en.lproj/Localizable.strings"
+      ]
+    },
+    {
+      "branch" : "spec/confirm-downloads-setting",
+      "covers" : [
+        "req-setting-toggle",
+        "req-stored-value"
+      ],
+      "deps" : [
+        "confirm-downloads-contract"
+      ],
+      "estLines" : 20,
+      "gate" : "slice",
+      "id" : "confirm-downloads-setting",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/aidoku-ios-validation-3-spec-confirm-downloads-setting",
+      "writeSet" : [
+        "Aidoku/Features/Settings/Settings.swift",
+        "Aidoku/App/Common/Settings/SettingView.swift",
+        "AidokuTests/ConfirmLargeDownloadsSettingTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/confirm-downloads-check",
+      "covers" : [
+        "req-download-check"
+      ],
+      "deps" : [
+        "confirm-downloads-contract"
+      ],
+      "estLines" : 60,
+      "gate" : "slice",
+      "id" : "confirm-downloads-check",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/aidoku-ios-validation-3-spec-confirm-downloads-check",
+      "writeSet" : [
+        "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift",
+        "AidokuTests/LargeDownloadConfirmationTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/confirm-downloads-prompt",
+      "covers" : [
+        "req-prompt"
+      ],
+      "deps" : [
+        "confirm-downloads-contract"
+      ],
+      "estLines" : 60,
+      "gate" : "slice",
+      "id" : "confirm-downloads-prompt",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/aidoku-ios-validation-3-spec-confirm-downloads-prompt",
+      "writeSet" : [
+        "Aidoku/Features/Manga/MangaView.swift"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-setting-toggle",
+        "req-stored-value"
+      ],
+      "deps" : [
+        "confirm-downloads-contract"
+      ],
+      "estLines" : 80,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/aidoku-ios-validation-3-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "confirm-downloads-contract"
+    ],
+    [
+      "confirm-downloads-check",
+      "confirm-downloads-prompt",
+      "confirm-downloads-setting"
+    ],
+    [
+      "spec-validation"
+    ]
+  ]
+}

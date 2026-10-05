@@ -119,6 +119,34 @@ struct RunCheckoutCommandTests {
   }
 
   @Test(
+    "remove keeps the checkout's runs in the clone's common state root even when the user's tree commits its own config, where the run viewer reads them — catches qa reports kept in a .harness the report never searches"
+  )
+  func removeKeepsRunsWhereTheViewerReads() async throws {
+    let committed = try Fixture.data("BrownfieldTrial/starter-swiftgate.toml")
+    let scenario = try await PlanBranchScenario(files: [
+      "app.py": Data("print('hi')\n".utf8), ".swiftgate.toml": committed,
+    ])
+    defer { scenario.remove() }
+    // As the trial's orchestrator did: the plan branch drops the committed config, so its
+    // checkout runs the clone's profile while the user's tree still holds the file.
+    try await scenario.git("rm", "-q", ".swiftgate.toml", in: scenario.checkout)
+    try await scenario.git("commit", "-q", "-m", "drop config", in: scenario.checkout)
+    let runID = try await Self.gateIn(scenario)
+
+    let report = await RunCheckoutRun.remove(
+      slug: PlanBranchScenario.slug, session: PlanBranchScenario.session, root: scenario.user,
+      runner: scenario.runner)
+
+    #expect(report.status == .removed, "\(report.message)")
+    #expect(report.keptRuns == [runID])
+    let common = URL(filePath: scenario.common, directoryHint: .isDirectory)
+    let kept = StateRoot.gitDir(common).url(RunLayout.runDirectory(for: runID))
+    #expect(FileManager.default.fileExists(atPath: kept.path))
+    let tree = StateRoot.tree(scenario.user).url(RunLayout.runDirectory(for: runID))
+    #expect(!FileManager.default.fileExists(atPath: tree.path))
+  }
+
+  @Test(
     "remove from a session that doesn't hold the plan's lock leaves the checkout — catches a removal any session can make"
   )
   func removeNeedsTheLock() async throws {

@@ -1,0 +1,12 @@
+{"at":"2026-10-05T00:49:03Z","from":"pending","kind":"transition","task":"ttt-engine","to":"in-progress"}
+{"at":"2026-10-05T00:49:04Z","from":"pending","kind":"transition","task":"ttt-screen","to":"in-progress"}
+{"at":"2026-10-05T00:51:38Z","checkId":"0566DFB4-F0E2-4B4C-9B01-691484F9322C","commit":"f4a7963ee9f726d3f2127ac8c4d7a896eebc1620","fix":false,"kind":"return-check","rules":[],"task":"ttt-engine","verdict":"GREEN"}
+{"at":"2026-10-05T00:51:48Z","kind":"merge","postCommit":"64f3990072f11f33b16e58980bca570e68c78065","preCommit":"45df274547d182f5162fb56e799e2062db6a9577","task":"ttt-engine"}
+{"at":"2026-10-05T00:52:49Z","gate":"merge","kind":"gate","runId":"20261005T005148Z-e71b8446","task":"ttt-engine","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T00:52:49Z","from":"in-progress","kind":"transition","task":"ttt-engine","to":"done"}
+{"at":"2026-10-05T00:54:13Z","checkId":"0D2F5DAC-854C-49C6-8058-7542CEA9583E","commit":"7908ee33f8fbb78d0e2743cf1801fe822a5cf2c6","fix":false,"kind":"return-check","rules":[],"task":"ttt-screen","verdict":"GREEN"}
+{"at":"2026-10-05T00:54:13Z","kind":"merge","postCommit":"dd208a7f1dc9aedcc06b4479e5c1c259e7241d33","preCommit":"64f3990072f11f33b16e58980bca570e68c78065","task":"ttt-screen"}
+{"at":"2026-10-05T00:56:53Z","gate":"merge","kind":"gate","runId":"20261005T005413Z-f263daf6","task":"ttt-screen","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T00:59:39Z","from":"in-progress","kind":"transition","task":"ttt-screen","to":"done"}
+{"at":"2026-10-05T01:01:43Z","gate":"final","kind":"gate","runId":"20261005T010013Z-764e88a5","tier":"final","verdict":"GREEN"}
+{"at":"2026-10-05T01:04:19Z","kind":"finish"}

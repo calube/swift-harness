@@ -1,0 +1,90 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 3 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-rules-tested"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 60,
+      "gate" : "slice",
+      "id" : "ttt-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-contract",
+      "writeSet" : [
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/TicTacToe/",
+        "Packages/AppFeature/Tests/TicTacToeTests/",
+        "InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme",
+        ".swiftgate.toml"
+      ]
+    },
+    {
+      "branch" : "spec/ttt-engine",
+      "covers" : [
+        "req-turns",
+        "req-ignored-moves",
+        "req-win-lines",
+        "req-draw",
+        "req-rules-tested"
+      ],
+      "deps" : [
+        "ttt-contract"
+      ],
+      "estLines" : 140,
+      "gate" : "slice",
+      "id" : "ttt-engine",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-engine",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/TicTacToe/",
+        "Packages/AppFeature/Tests/TicTacToeTests/"
+      ]
+    },
+    {
+      "branch" : "spec/ttt-screen",
+      "covers" : [
+        "req-board-screen",
+        "req-status-text",
+        "req-new-game"
+      ],
+      "deps" : [
+        "ttt-contract"
+      ],
+      "estLines" : 200,
+      "gate" : "slice",
+      "id" : "ttt-screen",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-screen",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/",
+        "Packages/AppFeature/Sources/AppUI/",
+        "Packages/AppFeature/Tests/AppCoreTests/",
+        "App/",
+        "UITests/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "ttt-contract"
+    ],
+    [
+      "ttt-engine",
+      "ttt-screen"
+    ]
+  ]
+}

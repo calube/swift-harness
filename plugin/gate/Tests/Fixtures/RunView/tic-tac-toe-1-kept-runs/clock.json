@@ -1,0 +1,14 @@
+{
+  "base" : "533b9165147c54297ab09847d5a2aacc9b04c568",
+  "origin" : "/TRIAL/repo/spec.md",
+  "planBranch" : "swift-harness/spec",
+  "spec" : "/TRIAL/repo/spec.md",
+  "specSource" : "tracked",
+  "started" : "2026-10-05T00:41:08.826Z",
+  "timeBox" : {
+    "budgetMin" : 40,
+    "finalReserveMin" : 5,
+    "source" : "flag",
+    "stopStartsBeforeMin" : 13
+  }
+}

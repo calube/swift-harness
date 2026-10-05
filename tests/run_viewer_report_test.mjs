@@ -27,6 +27,9 @@ const RUNS = {
   spans: { dir: 'build-run-2', buildRun: '20261004T095203Z-7053bb32', plan: '2026-10-04-counter-reset-and-floor' },
   blocked: { dir: 'brownfield-blocked', buildRun: '20261004T124141Z-c3747b7a', plan: 'spec', brownfield: true, clone: 'memos-3' },
   rejected: { dir: 'brownfield-rejected', buildRun: '20261004T141445Z-85d15f09', plan: 'spec', brownfield: true, clone: 'memos-4' },
+  // A brownfield run whose qa runs went at-base, after 1 task, then final, kept in the clone's
+  // common state root as run checkout remove leaves them.
+  history: { dir: 'aidoku-validation-3', buildRun: '20261004T234410Z-daacb3fb', plan: 'spec', brownfield: true, clone: 'aidoku-3' },
 }
 // build-run-1's merge gate of counter-ui-reset-button, RED on a snapshot test before the fixer.
 const RED_GATE = '20261004T050310Z-ed998508'
@@ -53,8 +56,9 @@ function seededClone({ dir: fixture, buildRun, plan, clone }) {
   writeFileSync(join(harness, 'config.toml'), '')
   const copies = [
     ['events', join(harness, 'events')],
-    // The warm-up's times and baseline files, where the capture kept them.
-    ...['warmup', 'baseline'].filter((name) => existsSync(join(captured, name))).map((name) => [name, join(harness, name)]),
+    // The warm-up's times and baseline files, and the runs a removed plan checkout kept, where
+    // the capture kept them.
+    ...['warmup', 'baseline', 'runs'].filter((name) => existsSync(join(captured, name))).map((name) => [name, join(harness, name)]),
     ['ledger.json', join(harness, 'plans', plan, 'ledger.json')],
     ['plan.json', join(harness, 'plans', plan, 'plan.json')],
     ['clock.json', join(harness, 'plans', plan, 'clock.json')],
@@ -62,8 +66,8 @@ function seededClone({ dir: fixture, buildRun, plan, clone }) {
     ['ledger-events.jsonl', join(runDir, 'events.jsonl')],
     ['returns', join(runDir, 'returns')],
   ]
-  for (const [from, to] of copies) cpSync(join(captured, from), to, { recursive: true })
-  for (const name of readdirSync(join(captured, 'worktrees'))) {
+  for (const [from, to] of copies) if (existsSync(join(captured, from))) cpSync(join(captured, from), to, { recursive: true })
+  for (const name of existsSync(join(captured, 'worktrees')) ? readdirSync(join(captured, 'worktrees')) : []) {
     const gitDir = join(dir, '.git/worktrees', name)
     mkdirSync(join(parent, name), { recursive: true })
     mkdirSync(join(gitDir, 'swift-harness'), { recursive: true })
@@ -382,6 +386,36 @@ const tests = {
       'CounterFlowUITests/testIncrementAndDecrementUpdateTheDisplayedCount() 8',
     ]]])
     assert.deepEqual(ticks.sort(), flowRows.flatMap((r) => r.flow.steps.map((st) => `qa:${qaRun}:${r.row} ${st.n}`)).sort())
+    assert.doesNotMatch(rendered.html, MACHINE_PATHS)
+  },
+  async 'the report of a run with an at-base, an after and a final qa run shows each row\'s every run newest first, the at-base reds with their flow steps and saved output beside the final waiting rows, with 0 console errors — catches a page that shows only the last qa run'() {
+    const HISTORY = `(() => {
+      document.querySelector('[role=tab][data-tab="validation"]').click()
+      const row = (n) => document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="' + n + '"]')
+      const attempts = (n) => [...row(n).querySelectorAll('.qa-attempt')].map((a) => a.dataset.stage + ':' + a.dataset.result + ':' + a.dataset.run)
+      return {
+        rows: [1, 2, 3, 4].map((n) => row(n)?.dataset.result ?? null),
+        attempts: [1, 2, 3, 4].map(attempts),
+        steps: [...row(1).querySelectorAll('.qa-attempt[data-stage="at-base"] .qa-step')].map((li) => li.dataset.n + ':' + li.dataset.ok),
+        text: row(4).innerText,
+      }
+    })()`
+    const AT_BASE_WHY = `(() => { document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="3"] .qa-attempt[data-stage="at-base"] .qa-why').click()
+      return { title: document.getElementById('pop-title').textContent, text: document.getElementById('pop').innerText } })()`
+    const rendered = await renderReport(RUNS.history, async (page) => ({ history: await page.evaluate(HISTORY), why: await page.evaluate(AT_BASE_WHY) }))
+    const { view, acted: { history, why } } = rendered
+    assert.equal(rendered.errors.length, 0, JSON.stringify(rendered.errors))
+    const AT_BASE = '20261004T235239Z-4acebe48', AFTER = '20261005T000035Z-78e50883', FINAL = '20261005T002359Z-7b81c6a7'
+    assert.deepEqual(view.validation.rows.map((r) => r.history.length), [2, 2, 2, 3])
+    assert.deepEqual(history.rows, ['waiting', 'waiting', 'waiting', 'pass'])
+    assert.deepEqual(history.attempts[0], [`final:waiting:${FINAL}`, `at-base:red:${AT_BASE}`])
+    assert.deepEqual(history.attempts[3], [`final:pass:${FINAL}`, `after:pass:${AFTER}`, `at-base:red:${AT_BASE}`])
+    assert.deepEqual(history.steps, ['1:true', '2:true', '3:true', '4:true', '5:true', '6:false'])
+    assert.match(history.text, /after confirm-downloads-check/)
+    assert.equal(why.title, 'Why it failed')
+    assert.match(why.text, /does not exist/)
+    assert.match(why.text, new RegExp(AT_BASE))
+    assert.equal(rendered.regions.errors, '0')
     assert.doesNotMatch(rendered.html, MACHINE_PATHS)
   },
   async 'the final report folder still opens and draws with its step links, and renders again from the folder alone, after the plan state and run stores are deleted — catches a report that dies with plan cleanup'() {
