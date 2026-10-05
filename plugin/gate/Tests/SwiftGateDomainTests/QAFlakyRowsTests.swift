@@ -69,7 +69,7 @@ struct QAFlakyRowsTests {
   }
 
   @Test(
-    "the trial's racy row, red in the fixer's run and passing later on the same flow file, reads unverified as flaky, naming the red run — catches a race the fixer proved reported as a pass, as req-lives was"
+    "the trial's racy row, red in the fixer's run and passing later on the same flow file, reads unverified as flaky, naming the red run — catches a race the fixer proved reported as a pass"
   )
   func samePassingFlowIsFlaky() throws {
     let marked = try Self.outcome()
