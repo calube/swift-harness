@@ -195,7 +195,7 @@ public struct LeasedDeviceAreaRunner: AreaCommandRunning {
             area: request.area, step: request.step, command: command,
             workingDirectory: request.workingDirectory, deadline: request.deadline,
             environment: request.environment, junitPath: request.junitPath,
-            resultBundlePath: request.resultBundlePath))
+            resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed))
       }
     } catch {
       return await retrying(request)
