@@ -7,6 +7,8 @@ public enum ProveResultOutcome: String, Sendable, Codable, CaseIterable {
   case passesReverted = "passes-reverted"
   case compileOnly = "compile-only"
   case crashed
+  /// It ran past its bound with the source change reverted and was killed.
+  case hangsAtBase = "hangs-at-base"
   case skipped
 }
 

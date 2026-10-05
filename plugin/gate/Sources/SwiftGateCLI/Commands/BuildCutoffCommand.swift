@@ -21,6 +21,10 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let notStarted: [String]
   /// Where the decisions were written for the report.
   let path: String
+  /// Gates that were still running in an abandoned task's worktree, each as `<tier> in <path>`.
+  let stoppedGates: [String]
+  /// Scratch trees left by gates that ended without removing them.
+  let prunedScratchTrees: [String]
   /// Telemetry lines that failed; the decisions stand without them.
   let notes: [String]
 }
@@ -33,9 +37,11 @@ enum BuildCutoffRun {
   /// Acts at the cutoff, or once starts have stopped with nothing running, when the only tasks
   /// left are ones that never started. Owned runs, which have no box, are refused: their build
   /// halts and asks.
+  /// - Parameter leftovers: stops the gates of the tasks it abandons and prunes scratch trees;
+  ///   `nil` leaves both alone.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock,
-    telemetry: BuildCutoffTelemetry?
+    telemetry: BuildCutoffTelemetry?, leftovers: (any RunLeftovers)? = nil
   ) async -> BuildLoopResult<BuildCutoffReport> {
     if let refusal: BuildLoopResult<BuildCutoffReport> = await BuildLoop.authorize(
       command, slug: slug, session: session, git: git)
@@ -122,7 +128,7 @@ enum BuildCutoffRun {
           landed: tasks.filter { $0.stage == .landed }.map(\.id),
           abandoned: abandoned,
           notStarted: decisions.filter { $0.action == .notStarted }.map(\.task), path: path,
-          notes: notes),
+          stoppedGates: [], prunedScratchTrees: [], notes: notes),
         holder: nil,
         message: "cut off build run \(record.runID): \(abandoned.count) task(s) abandoned")
     } catch {

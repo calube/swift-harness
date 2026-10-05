@@ -18,8 +18,12 @@ enum BrownfieldMergeCheck {
     let tree: @Sendable (_ commit: String) async throws -> String
     /// Whether `slice` only builds the area, so its changed tests and their prove run here.
     let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
-    /// Per command run.
+    /// Per command run, when ``bound`` is `nil`.
     let deadline: Duration
+    /// Each command's bound, from the area's warm-up times and the run's time box.
+    var bound:
+      (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
+        nil
 
     /// An area command may run as long as the area's own tests take.
     static let liveDeadline: Duration = .seconds(3600)

@@ -12,9 +12,10 @@ public enum ProveVerdict {
   }
 
   /// Judges each id by the outcome of the run that selected it.
-  public static func judge(area: String, outcomes: [(AreaTestID, AreaCommandOutcome)])
-    -> ChangedTestJudgement
-  {
+  /// - Parameter bound: what each reverted run was given, which a time-out names.
+  public static func judge(
+    area: String, outcomes: [(AreaTestID, AreaCommandOutcome)], bound: AreaCommandBound? = nil
+  ) -> ChangedTestJudgement {
     var findings = ProveFindings()
     for (id, outcome) in outcomes {
       switch outcome {
@@ -39,9 +40,9 @@ public enum ProveVerdict {
   }
 
   /// Judges `ids` by 1 run of the area's whole `test` command, which can't attribute a failure.
-  public static func judgeWhole(area: String, ids: [AreaTestID], outcome: AreaCommandOutcome)
-    -> ChangedTestJudgement
-  {
+  public static func judgeWhole(
+    area: String, ids: [AreaTestID], outcome: AreaCommandOutcome, bound: AreaCommandBound? = nil
+  ) -> ChangedTestJudgement {
     var findings = ProveFindings()
     findings.note(
       ProofRules.summaryRuleID,

@@ -12,21 +12,25 @@ enum BrownfieldProve {
     let runner: any AreaCommandRunning
     /// A file's text, or `nil` when it can't be read.
     let readFile: @Sendable (URL) -> String?
-    /// Per command run.
+    /// Per command run, when ``bound`` is `nil`.
     let deadline: Duration
+    /// Each area's bound for a command in the scratch tree, by step.
+    let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
       readFile: @escaping @Sendable (URL) -> String? = {
         try? String(contentsOf: $0, encoding: .utf8)
       },
-      deadline: Duration
+      deadline: Duration,
+      bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)? = nil
     ) {
       self.git = git
       self.scratch = scratch
       self.runner = runner
       self.readFile = readFile
       self.deadline = deadline
+      self.bound = bound
     }
 
     /// Live git and scratch trees under `layout`'s scratch directory, around `runner`.

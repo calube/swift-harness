@@ -9,7 +9,7 @@ enum BuildMergeRun {
   static func run(
     slug: String, task: String, undo: Bool, fix: Bool = false, session: String?, git: any Git,
     workspace: any GitWorkspace, merger: any MergeRunner, clock: any BuildClock,
-    profile: RepositoryProfile = .owned
+    profile: RepositoryProfile = .owned, leftovers: (any RunLeftovers)? = nil
   ) async -> BuildMergeReport {
     let command = undo ? BuildMerge.undoCommand : BuildMerge.mergeCommand
     if let refusal: BuildLoopResult<BuildMergeReport> = await BuildLoop.authorize(
