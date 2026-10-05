@@ -79,7 +79,7 @@ enum PreToolUseHook {
       // `pgrep`, it may not run either. Anything else goes to the normal permission flow.
       guard let command = payload.command else { return nil }
       if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
-        return deny(violation)
+        return deny(violation, tool: payload.toolName)
       }
       return nil
     case "Agent"?:
