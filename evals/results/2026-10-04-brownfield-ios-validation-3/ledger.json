@@ -17,7 +17,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-contract",
+      "worktree" : "~/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-contract",
       "writeSet" : [
         "Aidoku/Core/Settings/Downloads/DownloadsSettings.swift",
         "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift",
@@ -40,7 +40,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-setting",
+      "worktree" : "~/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-setting",
       "writeSet" : [
         "Aidoku/Features/Settings/Settings.swift",
         "Aidoku/App/Common/Settings/SettingView.swift",
@@ -62,7 +62,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-check",
+      "worktree" : "~/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-check",
       "writeSet" : [
         "Aidoku/Core/Downloads/LargeDownloadConfirmation.swift",
         "AidokuTests/LargeDownloadConfirmationTests.swift"
@@ -83,7 +83,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-prompt",
+      "worktree" : "~/Developer/trials/aidoku-ios-validation-3-spec-confirm-downloads-prompt",
       "writeSet" : [
         "Aidoku/Features/Manga/MangaView.swift"
       ]
@@ -104,7 +104,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3-spec-spec-validation",
+      "worktree" : "~/Developer/trials/aidoku-ios-validation-3-spec-spec-validation",
       "writeSet" : [
         ".harness/qa/spec/"
       ]

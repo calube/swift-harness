@@ -6,7 +6,7 @@
   "findings" : [
     {
       "failureScenario" : null,
-      "file" : "/Users/caleb/Developer/trials/memos-2/.git/swift-harness/baseline/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json",
+      "file" : "~/Developer/trials/memos-2/.git/swift-harness/baseline/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json",
       "line" : null,
       "message" : "2 failure(s) also fail at the merge base, so they don't gate: memos test (the whole step); web test (the whole step)",
       "rule" : "baseline.summary",

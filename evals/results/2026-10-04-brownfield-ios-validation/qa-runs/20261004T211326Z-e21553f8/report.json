@@ -7,7 +7,7 @@
       "failureScenario" : null,
       "file" : "validation.json",
       "line" : null,
-      "message" : "row 1 (req-setting, flow) `qa/confirm-toggle.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in /Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
+      "message" : "row 1 (req-setting, flow) `qa/confirm-toggle.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in ~/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
       "rule" : "qa.check-unverified",
       "severity" : "nit"
     },
@@ -15,7 +15,7 @@
       "failureScenario" : null,
       "file" : "validation.json",
       "line" : null,
-      "message" : "row 2 (req-stored, flow) `qa/confirm-toggle-on.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in /Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
+      "message" : "row 2 (req-stored, flow) `qa/confirm-toggle-on.flow.json`: not run: sim up swiftgate.environment: no .swiftgate.toml in ~/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
       "rule" : "qa.check-unverified",
       "severity" : "nit"
     }
@@ -33,7 +33,7 @@
       ],
       "exitStatus" : null,
       "layer" : "flow",
-      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in /Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
+      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in ~/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
       "ms" : 1,
       "requirement" : "req-setting",
       "result" : "unverified",
@@ -52,7 +52,7 @@
       ],
       "exitStatus" : null,
       "layer" : "flow",
-      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in /Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
+      "message" : "not run: sim up swiftgate.environment: no .swiftgate.toml in ~/Developer/trials/aidoku-ios-validation-1/.git/worktrees/aidoku-ios-validation-1-spec/swift-harness/scratch/.aidoku-ios-validation-1-spec-swiftgate-prove-90731-e70e202b",
       "ms" : 0,
       "requirement" : "req-stored",
       "result" : "unverified",

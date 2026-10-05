@@ -4,5 +4,5 @@ exit: 1
 --- stdout ---
 
 --- stderr ---
-/Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/swift-harness/plans/spec/qa/confirm-toggle-on.state.sh: line 5: QA_SIM_UDID: QA_SIM_UDID is required
+~/Developer/trials/aidoku-ios-validation-1/.git/swift-harness/plans/spec/qa/confirm-toggle-on.state.sh: line 5: QA_SIM_UDID: QA_SIM_UDID is required
 

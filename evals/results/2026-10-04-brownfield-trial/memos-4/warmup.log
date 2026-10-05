@@ -1,4 +1,4 @@
-warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: /Users/caleb/Developer/trials/memos-4/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
+warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: ~/Developer/trials/memos-4/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
 web build: passed, 11583 ms, cold
 web test: failed, 34701 ms, cold
     }

@@ -14,7 +14,7 @@
     },
     {
       "failureScenario" : null,
-      "file" : "/Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
+      "file" : "~/Developer/trials/aidoku-ios-validation-3/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
       "line" : null,
       "message" : "Aidoku lint: its command's tool isn't installed (exit 127 at the head and the merge base), so the step checked nothing; put the tool on PATH or drop the step",
       "rule" : "area.step-dropped",

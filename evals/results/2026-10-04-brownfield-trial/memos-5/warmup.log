@@ -1,4 +1,4 @@
-warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: /Users/caleb/Developer/trials/memos-5/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
+warmup at tree 98ce20b4568e17d2b5fee0f4a11ec054d03d03e2: ~/Developer/trials/memos-5/.git/swift-harness/warmup/98ce20b4568e17d2b5fee0f4a11ec054d03d03e2.json
 web build: passed, 18553 ms, cold
 web test: failed, 84148 ms, cold
   
@@ -39,7 +39,7 @@ web test: failed, 84148 ms, cold
      Start at  11:02:52
      Duration  78.56s (transform 146.03s, setup 83.18s, import 438.10s, tests 148.22s, environment 390.37s)
   
-  JUNIT report written to /Users/caleb/Developer/trials/memos-5/.git/swift-harness/junit/web.test.xml
+  JUNIT report written to ~/Developer/trials/memos-5/.git/swift-harness/junit/web.test.xml
    ELIFECYCLE  Test failed. See above for more details.
 memos build: passed, 2760 ms, cold
 memos test: failed, 83804 ms, cold

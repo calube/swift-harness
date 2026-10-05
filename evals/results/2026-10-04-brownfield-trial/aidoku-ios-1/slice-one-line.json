@@ -14,7 +14,7 @@
     },
     {
       "failureScenario" : null,
-      "file" : "/Users/caleb/Developer/trials/aidoku-ios-1/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
+      "file" : "~/Developer/trials/aidoku-ios-1/.git/swift-harness/baseline/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json",
       "line" : null,
       "message" : "1 failure(s) also fail at the merge base, so they don't gate: Aidoku build (the whole step)",
       "rule" : "baseline.summary",

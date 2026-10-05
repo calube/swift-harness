@@ -17,7 +17,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-contract",
+      "worktree" : "~/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-contract",
       "writeSet" : [
         "proto/api/v1/memo_service.proto",
         "proto/gen/",
@@ -46,7 +46,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-store",
+      "worktree" : "~/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-store",
       "writeSet" : [
         "store/migration/sqlite/",
         "store/migration/mysql/",
@@ -77,7 +77,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-api",
+      "worktree" : "~/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-api",
       "writeSet" : [
         "server/api/v1/memo_share_service.go",
         "server/api/v1/test/memo_share_service_test.go",
@@ -100,7 +100,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/Users/caleb/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-web",
+      "worktree" : "~/Developer/trials/memos-2/.git/swift-harness/plans/spec/worktrees/share-view-limit-web",
       "writeSet" : [
         "web/src/hooks/useMemoShareQueries.ts",
         "web/src/components/MemoDetailSidebar/MemoSharePanel.tsx",

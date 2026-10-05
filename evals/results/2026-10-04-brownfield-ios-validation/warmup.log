@@ -1,4 +1,4 @@
-warmup at tree 19f6f6e634617fd7f2e0d4225c6455590f7d199b: /Users/caleb/Developer/trials/aidoku-ios-validation-1/.git/swift-harness/warmup/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json
+warmup at tree 19f6f6e634617fd7f2e0d4225c6455590f7d199b: ~/Developer/trials/aidoku-ios-validation-1/.git/swift-harness/warmup/19f6f6e634617fd7f2e0d4225c6455590f7d199b.json
 Aidoku build: failed, 21135 ms, cold
   
   Checking out 3.5.1 of package ‘Gifu’
@@ -67,7 +67,7 @@ Aidoku test: failed, 2455 ms, cold
   
   
   Test session results, code coverage, and logs:
-  	/Users/caleb/Library/Developer/Xcode/DerivedData/Aidoku-eobllkjjuhcaxfbtskajtmnzbunl/Logs/Test/Test-Aidoku-2026.10.04_16-08-42--0500.xcresult
+  	~/Library/Developer/Xcode/DerivedData/Aidoku-eobllkjjuhcaxfbtskajtmnzbunl/Logs/Test/Test-Aidoku-2026.10.04_16-08-42--0500.xcresult
   
   Testing failed:
   	Plugin “SwiftLintBuildToolPlugin” from package “SwiftLintPlugins” must be enabled before it can be used

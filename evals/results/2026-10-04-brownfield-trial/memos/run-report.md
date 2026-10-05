@@ -1,10 +1,10 @@
-final: not recorded; no final gate: build run not recorded: /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/build doesn't exist
+final: not recorded; no final gate: build run not recorded: ~/Developer/trials/memos/.git/swift-harness/plans/spec/build doesn't exist
 
 # Run report: spec
 
 ## Assumptions
 
-- PLAN.md not recorded: /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/PLAN.md doesn't exist
+- PLAN.md not recorded: ~/Developer/trials/memos/.git/swift-harness/plans/spec/PLAN.md doesn't exist
 
 ## Baseline failures
 
@@ -12,7 +12,7 @@ final: not recorded; no final gate: build run not recorded: /Users/caleb/Develop
 
 ## Build-only areas
 
-- PLAN.md not recorded: /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/PLAN.md doesn't exist
+- PLAN.md not recorded: ~/Developer/trials/memos/.git/swift-harness/plans/spec/PLAN.md doesn't exist
 
 ## Dropped steps
 
@@ -20,7 +20,7 @@ final: not recorded; no final gate: build run not recorded: /Users/caleb/Develop
 
 ## Review fallbacks
 
-- build run not recorded: /Users/caleb/Developer/trials/memos/.git/swift-harness/plans/spec/build doesn't exist
+- build run not recorded: ~/Developer/trials/memos/.git/swift-harness/plans/spec/build doesn't exist
 
 ## Plan branch
 

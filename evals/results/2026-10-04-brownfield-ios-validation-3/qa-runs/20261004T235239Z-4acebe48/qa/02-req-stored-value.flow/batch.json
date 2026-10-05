@@ -5,7 +5,7 @@
     "message": "Batch failed at step 12 (wait): wait timed out for selector: id=\"Downloads.confirmLargeDownloads\"",
     "hint": "Retry with --debug and inspect diagnostics log for details.",
     "diagnosticId": "muuhd3st-8e004213",
-    "logPath": "/Users/caleb/.agent-device/sessions/swiftgate-20261004T235239Z-4acebe48-row2/requests/01be6ac8aa44743d.ndjson",
+    "logPath": "~/.agent-device/sessions/swiftgate-20261004T235239Z-4acebe48-row2/requests/01be6ac8aa44743d.ndjson",
     "diagnosticsRecord": {
       "session": "swiftgate-20261004T235239Z-4acebe48-row2",
       "requestId": "01be6ac8aa44743d"
@@ -661,8 +661,8 @@
           "command": "screenshot",
           "ok": true,
           "data": {
-            "path": "/Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
-            "message": "Saved screenshot: /Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
+            "path": "~/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
+            "message": "Saved screenshot: ~/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-03299FC6.png",
             "width": 402,
             "height": 874,
             "logicalWidth": 402,
@@ -2694,8 +2694,8 @@
           "command": "screenshot",
           "ok": true,
           "data": {
-            "path": "/Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
-            "message": "Saved screenshot: /Users/caleb/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
+            "path": "~/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
+            "message": "Saved screenshot: ~/Developer/trials/aidoku-ios-validation-3/.git/worktrees/aidoku-ios-validation-3-spec/swift-harness/runs/20261004T235239Z-4acebe48/qa/02-req-stored-value.flow/sim/steps/.50020-C4FCF159.png",
             "width": 402,
             "height": 874,
             "logicalWidth": 402,
