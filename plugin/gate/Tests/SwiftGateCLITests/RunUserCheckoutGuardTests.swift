@@ -131,6 +131,31 @@ struct RunUserCheckoutGuardTests {
   }
 
   @Test(
+    "the trial's heredocs written after its cd into a plan slot, a relative cd under it and a shell function definition are not denied guard.run-user-checkout, and the same command cd'ing into the user's checkout is — catches a function definition making the guard resolve a relative write against the session's starting directory"
+  )
+  func capturedHeredocAfterFunctionDefinition() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let captured = try JSONDecoder().decode(
+      CapturedBash.self, from: Fixture.data("Hooks/function-definition-after-cd-bash.json"))
+    try #require(captured.cwd == "/CLONE")
+    try #require(captured.command.hasPrefix("cd /CLONE-spec.slot-4 && "))
+
+    func decision(_ directory: String) async throws -> String? {
+      try await scenario.orchestratorDecision(
+        fixture: "Hooks/pre-tool-use-bash-allowed.json", cwd: scenario.userRoot,
+        input: [
+          "command": captured.command.replacingOccurrences(
+            of: "/CLONE-spec.slot-4", with: directory)
+        ])
+    }
+
+    let slot = try await decision(scenario.checkout)
+    #expect(slot.map { !$0.hasPrefix("deny") } ?? true, "\(slot ?? "nil")")
+    #expect(try await decision(scenario.userRoot) == Self.denied)
+  }
+
+  @Test(
     "the trial's `sed -i` of a relative glob after `C=<plan checkout>; cd $C &&` is not denied guard.run-user-checkout, and the same command assigning the user's checkout is — catches the guard reading a write after a cd to a variable the command assigned against the session's starting directory"
   )
   func capturedCdToAnAssignedVariable() async throws {

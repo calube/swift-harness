@@ -120,6 +120,71 @@ struct ShellWriteTargetsTests {
   }
 
   @Test(
+    "the trial's heredocs written after `cd <slot> && mkdir -p rel && cd rel &&`, a shell function definition and newlines are named only under the slot, never under the session's starting directory — catches a function definition making the guard stop following the cd"
+  )
+  func capturedHeredocAfterFunctionDefinitionFollowsIt() throws {
+    let call = try JSONDecoder().decode(
+      RefusedCall.self, from: Fixture.data("Hooks/function-definition-after-cd-bash.json"))
+    let slot = "/CLONE-spec.slot-4"
+    let paths = ShellSyntax.writeTargets(in: call.command, directoryExists: { $0 == slot })
+      .map(\.path)
+    let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
+    #expect(denied == "\(call.cwd)/launch.flow.json")
+    let flows = ["launch"] + (2...6).map { "flow-\($0)" }
+    #expect(
+      paths == flows.map { "\(slot)/.harness/qa/spec/\($0).flow.json" } + ["/dev/null"],
+      "\(paths)")
+  }
+
+  @Test(
+    "a shell function definition moves nothing when it is defined, so a write after it follows the line's cd, as it does after a call to a function whose body moves nothing or to none at all — catches a definition making the guard stop following the cd",
+    arguments: [
+      "cd /wt; f() { echo x; }; echo x > a",
+      "cd /wt && f() { echo x; }\necho x > a",
+      "cd /wt && f () { echo x; } && echo x > a",
+      "cd /wt\nf() {\n  echo x\n}\nf\necho x > a",
+      "cd /wt\nf()\n{\n  if true; then echo x; fi\n}\nf && echo x > a",
+      "cd /wt && function f { echo x; }; f && echo x > a",
+      "cd /wt && function f() { echo x; }; f; echo x > a",
+      "cd /wt; f() { echo x; }; g() { f; }; g; echo x > a",
+      "f() { cd /main; }; cd /wt && echo x > a",
+      "cd /wt && f() { cd /main; }\ncat > a <<EOF\n$(f)\nEOF\n",
+    ])
+  func functionDefinitionKeepsTheCd(command: String) {
+    #expect(Self.paths(command) == ["/wt/a"], "\(command)")
+  }
+
+  @Test(
+    "a call to a function whose body may move or end the shell, one made through an expansion, and a definition the reading can't follow keep the starting directory in play — catches a called function's cd hiding a write from the starting directory",
+    arguments: [
+      "cd /wt && f() { cd /main; }; f; echo x > a",
+      "cd /wt && f() { cd /main; }\nf\necho x > a",
+      "cd /wt && function f { pushd /main; }; f && echo x > a",
+      "cd /wt; f() { g; }; g() { cd /main; }; f; echo x > a",
+      "cd /wt; f() { if true; then cd /main; fi; }; f; echo x > a",
+      "cd /wt; f() { eval cd /main; }; f; echo x > a",
+      "cd /wt; f() { exit; }; f || echo x > a",
+      "cd /wt; f() { cd /main; }; if true; then f; fi; echo x > a",
+      "cd /wt; f() { cd /main; }; $F; echo x > a",
+      "cd /wt; f() { cd /main; }; command f; echo x > a",
+      "cd /wt; f() ( cd /main ); echo x > a",
+      "cd /wt; f() { cd /main; } > log; echo x > a",
+      "cd /wt; function f() ( cd /main ); echo x > a",
+    ])
+  func calledFunctionThatMovesKeepsTheStart(command: String) {
+    #expect(Self.paths(command).contains("a"), "\(command)")
+  }
+
+  @Test(
+    "a write inside a function body is named under every cd of the line, since it runs wherever the function is called — catches a body write named only under the directory the definition sits in"
+  )
+  func writeInAFunctionBodyIsNamedUnderEveryCd() {
+    let paths = Self.paths("cd /wt; f() { echo x > a; }; cd /main; f")
+    #expect(paths.contains("/main/a"), "\(paths)")
+    #expect(paths.contains("a"), "\(paths)")
+  }
+
+  @Test(
     "a cd into a directory an earlier `mkdir -p` of the line made is as certain as one into a directory that exists, through trailing assignments and a newline, while a write after the same chain into the main checkout stays there — catches a made directory leaving the starting directory in play",
     arguments: [
       ("mkdir -p /wt/s && cd /wt/s && B=x\ncat > a <<EOF\nEOF\n", ["/wt/s/a"]),
@@ -210,7 +275,7 @@ struct ShellWriteTargetsTests {
       "cd /main && echo x > a", "cd /main\necho x > a", "cd /main; echo x > a",
       "pushd /main && echo x > a", "cd -P /main && cat a | tee a",
       "cd /wt && cd /main && echo x > a", "M=/main; cd $M && echo x > a",
-      "M=\"/main\"\ncd \"${M}\" && echo x > a",
+      "M=\"/main\"\ncd \"${M}\" && echo x > a", "cd /main; f() { echo x; }; f; echo x > a",
     ])
   func cdIntoTheMainCheckoutStaysThere(command: String) {
     let paths = Self.paths(command)
