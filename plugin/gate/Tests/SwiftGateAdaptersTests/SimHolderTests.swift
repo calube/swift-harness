@@ -23,12 +23,35 @@ final class VirtualHoldClock: Sendable {
 }
 
 final class LogLines: Sendable {
-  private let lines = Mutex<[String]>([])
-  var all: [String] { lines.withLock { $0 } }
-  func append(_ line: String) { lines.withLock { $0.append(line) } }
+  private let state = Mutex<(lines: [String], readers: [AsyncStream<String>.Continuation])>(
+    ([], []))
+  var all: [String] { state.withLock { $0.lines } }
+
+  func append(_ line: String) {
+    let readers = state.withLock { state in
+      state.lines.append(line)
+      return state.readers
+    }
+    for reader in readers { reader.yield(line) }
+  }
+
+  /// Waits, on no clock, until a line containing `text` is logged: `true` once it is, `false`
+  /// only when the waiting task is cancelled, as the test's time limit does.
+  func waitFor(_ text: String) async -> Bool {
+    let (stream, continuation) = AsyncStream<String>.makeStream()
+    let earlier = state.withLock { state in
+      state.readers.append(continuation)
+      return state.lines
+    }
+    if earlier.contains(where: { $0.contains(text) }) { return true }
+    for await line in stream where line.contains(text) { return true }
+    return false
+  }
 }
 
-@Suite("SimHolder")
+/// Every wait here is on a signal or on virtual time, so this limit only turns a broken hold that
+/// never ends into a failure instead of a hang.
+@Suite("SimHolder", .timeLimit(.minutes(5)))
 struct SimHolderTests {
   static let base = SimulatorDevice(
     udid: "BASE", name: "iPhone 17",
@@ -46,12 +69,14 @@ struct SimHolderTests {
       pollInterval: .milliseconds(10))
   }
   var store: SimLeaseStore { SimLeaseStore(directory: root.appending(path: "locks/sim-leases")) }
+  /// What every holder this test makes logs, which says when each lease is written.
+  let holderLog = LogLines()
 
   func holder(
     _ simctl: FakeSimctl, agent: FakeAgentDevice = FakeAgentDevice(),
     ownerPID: Int32 = getpid(), timeout: Duration = Self.forever,
     lockTimeout: Duration = .seconds(30), clock: VirtualHoldClock = VirtualHoldClock(),
-    log: LogLines = LogLines(), runOwner: Int32? = nil,
+    runOwner: Int32? = nil,
     isAlive: @escaping @Sendable (Int32) -> Bool = { _ in true }
   ) -> SimHolder {
     let clones = SimulatorClones(
@@ -60,7 +85,7 @@ struct SimHolderTests {
     return SimHolder(
       devices: clones, leases: store, agentDevice: agent, worktree: Self.worktree,
       holderPID: ownerPID, owner: runOwner, isAlive: isAlive, timeout: timeout,
-      clock: clock.clock, log: { log.append($0) })
+      clock: clock.clock, log: holderLog.append)
   }
 
   @Test(
@@ -73,7 +98,7 @@ struct SimHolderTests {
     let clock = VirtualHoldClock()
     let holding = Task {
       try await holder(
-        simctl, timeout: .seconds(600), clock: clock, runOwner: 7777,
+        simctl, clock: clock, runOwner: 7777,
         isAlive: { pid in pid == 7777 ? ownerAlive.withLock { $0 } : true }
       ).hold(runID: "shared")
     }
@@ -87,17 +112,12 @@ struct SimHolderTests {
     #expect(Self.harnessDevices(simctl).isEmpty)
   }
 
-  /// Waits, with a real deadline, until a lease names `runID`.
+  /// Waits for the holder of `runID` to log that it holds a device, which it does only once
+  /// its lease is written, and returns that lease.
   func lease(_ runID: String) async throws -> SimLease {
-    let deadline = ContinuousClock.now + .seconds(20)
-    while ContinuousClock.now < deadline {
-      if let lease = try store.read(runID: runID) { return lease }
-      await Task.yield()
-    }
-    throw LeaseNeverWritten(runID: runID)
+    try #require(await holderLog.waitFor("run \(runID) holds"))
+    return try #require(try store.read(runID: runID))
   }
-
-  struct LeaseNeverWritten: Error { let runID: String }
 
   static func harnessDevices(_ simctl: FakeSimctl) -> [String] {
     simctl.currentDevices.filter { $0.udid != "BASE" }.map(\.udid)
@@ -191,12 +211,8 @@ struct SimHolderTests {
     try store.write(lease)
     let target = AgentDeviceTarget(udid: lease.udid, session: "qa-1")
 
-    let deadline = ContinuousClock.now + .seconds(20)
-    while agent.calls.filter({ $0 == .sessions(target) }).count < 3, ContinuousClock.now < deadline
-    {
-      await Task.yield()
-    }
-    #expect(agent.calls.filter { $0 == .sessions(target) }.count >= 3)
+    // Each check is 15 s apart on the virtual clock, so 3 of them take no real time.
+    while agent.calls.filter({ $0 == .sessions(target) }).count < 3 { await Task.yield() }
     #expect(try store.read(runID: "r1") == lease)
 
     agent.update { $0.sessions = [] }
@@ -217,17 +233,12 @@ struct SimHolderTests {
     let failure = AgentDeviceError.unreadableOutput(
       command: "session list", status: .exited(1), detail: "garbled")
     let agent = FakeAgentDevice(script: .init(failures: ["session list": failure]))
-    let log = LogLines()
-    let holding = Task { try await holder(simctl, agent: agent, log: log).hold(runID: "r1") }
+    let holding = Task { try await holder(simctl, agent: agent).hold(runID: "r1") }
     var lease = try await lease("r1")
     lease.session = "qa-1"
     try store.write(lease)
 
-    let deadline = ContinuousClock.now + .seconds(20)
-    while !log.all.contains(where: { $0.contains("garbled") }), ContinuousClock.now < deadline {
-      await Task.yield()
-    }
-    #expect(log.all.contains { $0.contains(failure.message) })
+    #expect(await holderLog.waitFor(failure.message))
     #expect(try store.read(runID: "r1") == lease)
 
     try store.remove(runID: "r1")
