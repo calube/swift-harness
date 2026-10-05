@@ -61,7 +61,9 @@ exists and fails for the reason the feature is missing.
   ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
   A pull to refresh is 1 step, `{"command": "gesture", "input": {"kind": "drag", "source":
   "id=\"<top row>\"", "destination": "id=\"<lower element>\""}}`, from the list's top row to an
-  element at least 350 pt lower on screen, then a `wait` for what the refresh changes. A `scroll`
+  element at least 350 pt lower on screen, then a `wait` for what the refresh changes. That
+  `wait` reads the fake's refreshed value, which every later load after the first answers, never
+  a value that counts calls. A `scroll`
   step is never a pull to refresh: it leaves the row red on a gesture that didn't refresh. On a
   list too short for that, end the drag on the bottom-pinned id the contract adds for each
   refresh row, `"destination": "id=\"<bottom id>\""`; the contract pins it with

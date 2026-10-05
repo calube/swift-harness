@@ -87,11 +87,11 @@
       "model" : "sonnet"
     }
   ],
-  "contentHash" : "66ee7646ed265a610998cff0140b95e7647c70b30b6645d909f68cd72ffe9f71",
+  "contentHash" : "e43266cc5ceb690999cf392e627dc342828ac773a7ae2d389100aca81e3a485e",
   "hashedFiles" : [
     "plugin/agents/build-fixer.md",
     "plugin/agents/build-worker.md"
   ],
-  "passedAt" : "2026-10-05T12:16:30Z",
+  "passedAt" : "2026-10-05T12:46:16Z",
   "schemaVersion" : 4
 }

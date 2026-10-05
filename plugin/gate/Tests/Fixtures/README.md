@@ -457,6 +457,34 @@ time, also from a `NavigationLink` row (no navigation followed) and under an inl
 refreshed. A `scroll up` refreshed only sometimes: 3 of 4 with `pixels: 500`, 3 of 4 with
 `amount: 0.5`, 0 of 4 with `pixels: 600`, which starts at y 137, and never with `amount: 0.8`.
 
+### AgentDevice/row-launch
+
+Which launches a qa flow row makes on its device, captured on 2026-10-05 with `agent-device`
+0.21.18, Xcode 26.2 and the iOS 26.2 runtime. In the sixth price-tracker trial every flow video
+opened on the app showing live prices: `sim up` opened the app with no launch arguments before the
+flow's first step relaunched it with `-harness-scenario`. The app is `LaunchProbe.swift` with
+`Info.plist`: each launch appends its arguments to `Documents/launches.log` and shows them under
+`probe.arguments`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/row-launch/capture.sh
+```
+
+The script works on its own `agent-device-capture-<pid>` device and deletes it on exit; it took
+about 10 minutes on a loaded machine. Each run installs the app fresh, runs `open` as `sim up`
+would, then the row's batch: `record start`, `open` with `relaunch` and
+`launchArgs: ["-harness-scenario", "success"]`, a wait on `probe.arguments`, `record stop`. It
+closes the session after each run, since a session holds its device until it closes.
+
+| Files | `sim up`'s `open` | Batch | `launches.log` |
+|---|---|---|---|
+| `live-first.{open.status,open.stdout,stdout,stderr,status,launches.txt}` | the app, no launch arguments | exits 0 | `[]`, then `[-harness-scenario success]` |
+| `scenario-first.{…}` | the app with `--launch-args -harness-scenario --launch-args success` | exits 0 | `[-harness-scenario success]` twice |
+| `app-less.{…}` | no app: a session alone | exits 1 at step 1: app-scoped recording needs an open app | empty |
+
+The first frame of `live-first`'s video showed the probe's `live` text, and `scenario-first`'s
+showed `-harness-scenario success`; the videos stay out of the fixture.
+
 ### AgentDevice/searchable
 
 Typing into a SwiftUI `.searchable` field, captured on 2026-10-05 with `agent-device` 0.21.18,
@@ -4663,6 +4691,23 @@ with the `test-only not run:` line its result printed: a `tool_use` whose `comma
 with its `tool_result`. The first call's output went through `grep`, so it kept no refusal line.
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-6's refresh row opened live before its scenario
+
+The sixth price-tracker trial's flow videos opened on live prices. Its refresh row's flow relaunches
+the app with `-harness-scenario success` at step 1, while that row's `sim/session.json` records no
+scenario: `sim up` had opened the app on its live dependencies. `T` is the trial's folder under the
+harness runs, with the clone's state copied to `$T/state`:
+
+```sh
+T=<price-tracker-6 run folder> S=$T/state F=BrownfieldTrial/price-tracker-6-refresh-row
+mkdir -p $F
+cp $S/plans/spec/qa/refresh.flow.json $F/flow.json
+cp $S/runs/20261005T115543Z-d6f8c935/qa/02-req-refresh.flow/sim/session.json $F/session.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-6-refresh-row`
+matched nothing.
 
 ## Brownfield trials: same-tree work send-money-7 and price-tracker-6 ran twice
 

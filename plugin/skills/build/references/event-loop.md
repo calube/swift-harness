@@ -316,6 +316,11 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   as 1 `flow row:` line per row at the end of its notes, with `flow-side: yes` or `no`. It never reads
   `agent-device`'s source and never writes probe tests to learn why a step fails. Its `gate-red`
   return then takes the path below like any other, quoting the row's evidence;
+- that a red from the fake's timing or call count goes to the fake or the flow, never the app's
+  behaviour. Each behaviour it adds to the app anyway, such as a cooldown, debounce or guard,
+  ends its notes as 1 `assumption: <behaviour>: <why>` line. For such a row, name the fake
+  and what it counts or how fast it answers; never ask for an app change that makes 1 gesture load
+  once;
 - in a `swiftgate run`, the `cutoffAt` time `run clock` reports, as its deadline: it starts no
   gate or `qa run` it can't finish by then, and at that time returns what it has, with `gate`
   `null` when no gate ran on its last commit.
@@ -336,6 +341,8 @@ The notice HTML-escapes it: turn `&lt;`, `&gt;` and `&amp;` back into `<`, `>` a
 read the output file the notice names, which is the fixer's whole transcript:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
 
+- In a `swiftgate run`, add each `assumption:` line of its notes as 1 bullet under `PLAN.md`'s
+  `## Assumptions`, whatever its outcome.
 - The check passes and `outcome` is `ready-to-merge`: wait until `build next` lists it in
   `readyToMerge` with `merging` absent. With a `validation.json`,
   `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json` first, as

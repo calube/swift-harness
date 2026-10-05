@@ -19,6 +19,10 @@ least 350 pt lower on screen, then the flow waits for what the refresh changes:
 - 350 pt is about 40% of an iPhone 17's screen. On the captured list, drags of 312 pt and 364 pt
   refreshed in every run, and drags of 266 pt or less never did. The drag holds on its source
   before it moves; from a `NavigationLink` row it opened nothing.
+- The fake behind the list answers after a fixed 300 ms, so the drag ends before the load does.
+  Its first load answers the seed and every later load the same refreshed value, never a value
+  that counts calls: a drag held past the threshold can refresh twice, and the flow's `wait`
+  still finds the refreshed value.
 - A `scroll` step is never a pull to refresh. `scroll up` starts its finger near the top edge,
   often inside the navigation bar, and moves in 400 ms. On the captured list it never refreshed at
   `amount: 0.8`, and at most 3 runs in 4 at other amounts.

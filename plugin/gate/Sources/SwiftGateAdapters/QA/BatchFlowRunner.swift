@@ -19,6 +19,9 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
   public var simDirectory: URL
   /// `nil` launches the app with its live dependencies.
   public var scenario: String?
+  /// What `sim up` opens the app with in place of the scenario's argument: the flow's first
+  /// `open` step's `launchArgs`. `nil` opens it with the scenario's.
+  public var launchArguments: [String]?
   /// Which controls `sim verify`'s accessibility rules judge.
   public var audit: SimAuditScope
   /// The `qa run`'s device the row borrows; `nil` brings a device up for the row alone.
@@ -26,12 +29,14 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
 
   public init(
     worktree: URL, runID: String, simDirectory: URL, scenario: String?,
-    audit: SimAuditScope = .everyControl, hold: QAFlowDeviceHold? = nil
+    launchArguments: [String]? = nil, audit: SimAuditScope = .everyControl,
+    hold: QAFlowDeviceHold? = nil
   ) {
     self.worktree = worktree
     self.runID = runID
     self.simDirectory = simDirectory
     self.scenario = scenario
+    self.launchArguments = launchArguments
     self.audit = audit
     self.hold = hold
   }
@@ -391,9 +396,11 @@ public actor QAFlowRunner {
     }
 
     let simDirectory = row.directory.appending(path: "sim", directoryHint: .isDirectory)
+    let steps = (try? Data(contentsOf: row.stepsFile)).flatMap { try? FlowSteps.parse($0) }
     let request = QAFlowSimulatorRequest(
       worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil,
-      audit: Self.audit(row), hold: hold)
+      launchArguments: steps.map(FlowSteps.launchArguments),
+      audit: Self.audit(row, steps: steps ?? []), hold: hold)
     if hold != nil { heldIn = row.worktree }
     let started: SimUpStarted
     switch await simulator.up(request) {
@@ -561,10 +568,8 @@ public actor QAFlowRunner {
   /// The controls the row's `sim verify` audits: every one in an owned repository, and in a
   /// brownfield clone those the flow file's steps select. A flow file that doesn't parse selects
   /// none; the batch reports it.
-  static func audit(_ row: QAFlowRow) -> SimAuditScope {
-    let steps = (try? Data(contentsOf: row.stepsFile)).flatMap { try? FlowSteps.parse($0) }
-    return .scope(
-      profile: StateRootResolver.profile(worktree: row.worktree), flowSteps: steps ?? [])
+  static func audit(_ row: QAFlowRow, steps: [FlowStep]) -> SimAuditScope {
+    .scope(profile: StateRootResolver.profile(worktree: row.worktree), flowSteps: steps)
   }
 
   /// `sim verify` over the row's `sim/` folder: only `GREEN` passes.

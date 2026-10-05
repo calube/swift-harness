@@ -251,6 +251,27 @@ const PLAN_SHAPE = 'skills/run/references/plan-shape.md'
 const BOTTOM_ANCHOR = '.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier('
 
 /**
+ * Where a text's scenario fake lets a flow read a call count, or answer faster than a gesture.
+ * In the sixth price-tracker trial the fake added $1 per quotes call and answered at once, so 1
+ * long drag loaded twice, the row read $64,002.00 for $64,001.00, and the fixer added a refresh
+ * cooldown to the app to fit the fake.
+ */
+export function fakeShapeProblems(text, { latency = true } = {}) {
+  const sentences = flat(text).split(/(?<=\.)\s+/)
+  const problems = []
+  if (latency && !sentences.some(s => /\bfake\b/i.test(s) && /\b300 ms\b/.test(s))) {
+    problems.push('the fake answers with no fixed 300 ms delay')
+  }
+  if (!sentences.some(s => /\bfirst\b/i.test(s) && /\bevery later\b/i.test(s))) {
+    problems.push('the fake\'s refresh change is not its first answer against every later one')
+  }
+  if (!sentences.some(s => /\bnever\b[^.]*\bcounts? (?:its )?calls\b/i.test(s))) {
+    problems.push('never forbids a value that counts calls')
+  }
+  return problems
+}
+
+/**
  * Where a text's pull to refresh on a list too short to hold 2 ids 350 pt apart falls short of
  * the captured run: it pins the drag's end with the captured modifier, the contract adds it, and
  * the drag's destination is that pinned id. The fourth price-tracker trial left its refresh row
@@ -489,6 +510,20 @@ const tests = {
 
   'the validation worker, the gestures doc and the plan shape pull a short list to refresh onto a contract id pinned to the bottom safe area — catches a refresh row left out because no element sits 350 pt below the top row'() {
     for (const file of [WORKER, GESTURES, PLAN_SHAPE]) assert.deepEqual(shortListProblems(read(file)), [], file)
+  },
+
+  'the plan shape and the gestures doc give scenario fakes a fixed delay and a refresh value no call count moves, and the validation worker waits for it — catches a flow red on a long drag that loads twice, which a fixer then hides in the app'() {
+    for (const file of [PLAN_SHAPE, GESTURES]) assert.deepEqual(fakeShapeProblems(read(file)), [], file)
+    assert.deepEqual(fakeShapeProblems(read(WORKER), { latency: false }), [], WORKER)
+  },
+
+  'the fake shape check names a missing delay, refresh shape and count ban — catches a check that passes anything'() {
+    const good = 'The fake answers after a fixed 300 ms. Its first load answers the seed and every later load the refreshed data, never a value that counts calls.'
+    assert.deepEqual(fakeShapeProblems(good), [])
+    assert.match(fakeShapeProblems(good.replace('300 ms', 'delay')).join('\n'), /300 ms/)
+    assert.match(fakeShapeProblems(good.replace('every later', 'the next')).join('\n'), /first answer/)
+    assert.match(fakeShapeProblems(good.replace('never', 'or')).join('\n'), /counts calls/)
+    assert.deepEqual(fakeShapeProblems(good.replace('300 ms', 'delay'), { latency: false }), [])
   },
 
   'the short-list check names a missing modifier, contract and destination — catches a check that passes anything'() {

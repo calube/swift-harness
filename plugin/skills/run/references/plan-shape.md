@@ -147,6 +147,10 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
 - A task, or the contract's stubs, gives the fake 1 scenario per journey, such as `success`,
   `load-failure` and `detail-failure`, each with fixed data. Every flow row's `Runs after` names
   that task.
+- The fake answers each call after a fixed 300 ms, as a network would, so no gesture outlives a
+  load. A refresh scenario's first load answers the seed and every later load the same refreshed
+  data, such as a new price, never a value that counts calls. A long drag may load twice, and
+  the flow still reads 1 refresh.
 - A refresh journey's flow drags from the list's top row to a 1 pt id pinned to the bottom of the
   screen's safe area, so a list of 3 rows refreshes as a long one does. The contract places that
   bottom id in the stub of each screen a refresh row drives, not just declares it. It goes after
