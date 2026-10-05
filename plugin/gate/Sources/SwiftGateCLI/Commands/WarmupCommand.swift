@@ -20,6 +20,12 @@ struct WarmupCommand: AsyncParsableCommand {
         + "build the run makes there."))
   var seedCheckout: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "The plan whose worktree slots the warm-up adds, up to the preset's max_parallel, and "
+        + "builds in before the first task takes one."))
+  var plan: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -34,8 +40,10 @@ struct WarmupCommand: AsyncParsableCommand {
     let tree: String
     let timesFile: String
     let areas: [WarmupAreaResult]
-    /// Each SwiftPM area's build in the seed checkout, in config order.
+    /// Each build in the seed checkout and the plan's slots, in checkout and config order.
     let seeded: [WarmupSeedBuild]
+    /// The plan's worktree slots this warm-up added, in slot order.
+    let slots: [String]
     /// Non-gating lines for stderr: a file not written, an event not recorded.
     let notes: [String]
   }
@@ -53,7 +61,8 @@ struct WarmupCommand: AsyncParsableCommand {
 
   /// The warm-up of `areaNames`, or of every area when `nil`, in the clone holding `directory`.
   static func warm(
-    directory: URL, areaNames: [String]?, seedCheckout: URL? = nil, dependencies: Dependencies
+    directory: URL, areaNames: [String]?, seedCheckout: URL? = nil, plan: String? = nil,
+    dependencies: Dependencies
   ) async throws(SetupError) -> Outcome {
     let process = dependencies.processRunner
     let tracked = GitTrackedTree(runner: process, directory: directory)
@@ -128,7 +137,7 @@ struct WarmupCommand: AsyncParsableCommand {
         }))
     return Outcome(
       tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results,
-      seeded: await seeded, notes: notes.withLock { $0 })
+      seeded: await seeded, slots: [], notes: notes.withLock { $0 })
   }
 
   /// Each SwiftPM area's build in `checkout`, all at once; none without a checkout.
@@ -274,7 +283,7 @@ struct WarmupCommand: AsyncParsableCommand {
       outcome = try await Self.warm(
         directory: directory, areaNames: names,
         seedCheckout: seedCheckout.map { URL(filePath: $0, directoryHint: .isDirectory) },
-        dependencies: .init())
+        plan: plan, dependencies: .init())
     } catch {
       FileHandle.standardError.write(Data("warmup: \(error.message)\n".utf8))
       throw ExitCode(Verdict.blocked.exitCode)

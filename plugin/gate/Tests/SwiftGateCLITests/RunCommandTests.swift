@@ -183,7 +183,9 @@ private final class FakeWarmup: WarmupSpawning {
     self.config = config
   }
 
-  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
+  func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
+    async throws(RunStartError) -> Int32?
+  {
     let existed = FileManager.default.fileExists(atPath: config.path)
     calls.withLock { $0.append((directory, log, existed)) }
     let seeded = seedCheckout.map { FileManager.default.fileExists(atPath: $0.path) } ?? false
@@ -745,7 +747,8 @@ struct RunCommandTests {
     let spawner = LiveWarmupSpawner(
       runner: clone.runner, executable: fake.path, arguments: ["warmup"])
 
-    let pid = try await spawner.spawn(directory: clone.root, log: log, seedCheckout: nil)
+    let pid = try await spawner.spawn(
+      directory: clone.root, log: log, seedCheckout: nil, plan: nil)
 
     let alive = try #require(pid)
     #expect(kill(alive, 0) == 0, "the warm-up is still blocked on its gate")

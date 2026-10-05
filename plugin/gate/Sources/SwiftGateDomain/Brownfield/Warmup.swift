@@ -185,14 +185,20 @@ public struct WarmupTimesFile: Sendable, Equatable {
 /// use there. Nothing is recorded from it: the times and baseline come from the base tree's run.
 public struct WarmupSeedBuild: Sendable, Equatable {
   public let area: String
+  /// Absolute: the checkout it built in.
+  public let checkout: String
   public let milliseconds: Int
   /// `passed`, `failed` or `notInstalled`.
   public let outcome: WarmupOutcome
   /// The end of the build's output when it didn't pass.
   public let detail: String?
 
-  public init(area: String, milliseconds: Int, outcome: WarmupOutcome, detail: String?) {
+  public init(
+    area: String, checkout: String = "", milliseconds: Int, outcome: WarmupOutcome,
+    detail: String?
+  ) {
     self.area = area
+    self.checkout = checkout
     self.milliseconds = milliseconds
     self.outcome = outcome
     self.detail = detail
@@ -315,10 +321,10 @@ public enum Warmup {
 
   /// The seed build's result from what its command came to.
   public static func seedBuild(
-    area: String, outcome: AreaCommandOutcome, milliseconds: Int
+    area: String, checkout: String = "", outcome: AreaCommandOutcome, milliseconds: Int
   ) -> WarmupSeedBuild {
     WarmupSeedBuild(
-      area: area, milliseconds: milliseconds,
+      area: area, checkout: checkout, milliseconds: milliseconds,
       outcome: outcome == .passed ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
       detail: detail(outcome))
   }

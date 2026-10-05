@@ -85,6 +85,15 @@ public struct WorktreePool: Sendable {
     }
   }
 
+  /// Adds free slots, each checked out detached at `revision`, until the pool holds `count`, so
+  /// the warm-up can build in them before the first task takes one.
+  /// - Returns: the paths of the slots it added, in slot order.
+  public func prepare(count: Int, revision: String, workspace: any GitWorkspace)
+    async throws(GitWorkspaceError) -> [String]
+  {
+    []
+  }
+
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never
   /// in a branch name, and the pid lets a later checkout free a slot whose process died.
   public static func scratchHolder(pid: Int32, token: String) -> String {

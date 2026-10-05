@@ -23,9 +23,10 @@ struct RunStartError: Error, Sendable, Equatable {
 /// Starts `swiftgate warmup` so that it outlives `run` and the orchestrator session, and nothing
 /// waits on it.
 protocol WarmupSpawning: Sendable {
-  /// Starts the warm-up in `directory`, appending its output to `log`, also building each SwiftPM
-  /// area in `seedCheckout` when given. Returns its pid when known.
-  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32?
+  /// Starts the warm-up in `directory`, appending its output to `log`, also warming the builds of
+  /// `seedCheckout` and of `plan`'s worktree slots when given. Returns its pid when known.
+  func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
+    async throws(RunStartError) -> Int32?
   /// Stops the warm-up `spawn` started, when the run it was started for never launched.
   func stop(pid: Int32)
 }
@@ -283,7 +284,7 @@ extension RunCommand {
       checkedOut = true
       warmupPID = try await dependencies.warmup.spawn(
         directory: root, log: warmupLog,
-        seedCheckout: URL(filePath: checkout, directoryHint: .isDirectory))
+        seedCheckout: URL(filePath: checkout, directoryHint: .isDirectory), plan: slug)
     } catch {
       if checkedOut {
         _ = try? await git(
@@ -459,7 +460,9 @@ struct LiveWarmupSpawner: WarmupSpawning {
   /// the hash from this process's environment, so the child can't inherit it.
   var binary: GateBinary? = GateBinaryScope.current
 
-  func spawn(directory: URL, log: URL, seedCheckout: URL?) async throws(RunStartError) -> Int32? {
+  func spawn(directory: URL, log: URL, seedCheckout: URL?, plan: String?)
+    async throws(RunStartError) -> Int32?
+  {
     do {
       try FileManager.default.createDirectory(
         at: log.deletingLastPathComponent(), withIntermediateDirectories: true)
@@ -477,7 +480,8 @@ struct LiveWarmupSpawner: WarmupSpawning {
         ProcessInvocation(
           executable: "/bin/sh",
           arguments: ["-c", script, "sh", log.path(percentEncoded: false), executable] + arguments
-            + (seedCheckout.map { ["--seed-checkout", $0.path(percentEncoded: false)] } ?? []),
+            + (seedCheckout.map { ["--seed-checkout", $0.path(percentEncoded: false)] } ?? [])
+            + (plan.map { ["--plan", $0] } ?? []),
           environmentOverlay: [GateBinary.sourceHashVariable: binary?.sourceHash],
           workingDirectory: directory.path(percentEncoded: false), timeout: .seconds(60)))
     } catch {

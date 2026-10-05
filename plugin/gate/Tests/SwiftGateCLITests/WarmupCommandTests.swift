@@ -242,7 +242,8 @@ struct WarmupCommandTests {
       arguments: ["warmup"], binary: try GateBinary(sourceHash: hash, pluginVersion: nil))
 
     _ = try await spawner.spawn(
-      directory: clone.root, log: clone.root.appending(path: "logs/warmup.log"), seedCheckout: nil)
+      directory: clone.root, log: clone.root.appending(path: "logs/warmup.log"), seedCheckout: nil,
+      plan: nil)
     // Opening the fifo blocks until the wrapper writes it, after the warm-up exited.
     let signal = try FileHandle(forReadingFrom: URL(filePath: finished))
     #expect(try signal.readToEnd() == Data("done\n".utf8))
