@@ -25,6 +25,9 @@ enum QARunRun {
     var beforeMerge = false
     /// With `beforeMerge`, merge the task's fixer's branch in place of the task's.
     var fix = false
+    /// With `beforeMerge`, more tasks whose branches merge after `after`'s, each counting as
+    /// merged: a run over every task a row waits on, before the first of them merges.
+    var alongside: [String] = []
   }
 
   struct Dependencies: Sendable {
@@ -880,7 +883,14 @@ enum QARunRun {
     return QARunDeadline.of(box, final: final)
   }
 
-  static func render(_ report: QAReport, json: Bool) -> String {
+  /// 1 line naming the verdict, the run and the report file, printed last so a cut output keeps
+  /// it; empty when `reportFile` is `nil`.
+  static func summary(_ report: QAReport, reportFile: String?) -> String {
+    ""
+  }
+
+  /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
+  static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
     guard !json else {
       return String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
     }

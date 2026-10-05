@@ -2,7 +2,21 @@ import Foundation
 
 /// The merge a `qa run --before-merge` ran its rows on: a task's branch merged into main's tip in
 /// a scratch tree, so the rows see the tree `build merge` would land while main stays where it is.
+/// A run over every task a row waits on merges the others' branches after it, in ``alongside``.
 public struct QATrialMerge: Sendable, Equatable, Codable {
+  /// 1 more task's branch a trial merge took in, at the commit it was at.
+  public struct Branch: Sendable, Equatable, Codable {
+    public let task: String
+    public let branch: String
+    public let tip: String
+
+    public init(task: String, branch: String, tip: String) {
+      self.task = task
+      self.branch = branch
+      self.tip = tip
+    }
+  }
+
   /// The branch merged: the task's, or its fixer's.
   public let branch: String
   /// The commit `branch` was at.
@@ -11,12 +25,42 @@ public struct QATrialMerge: Sendable, Equatable, Codable {
   public let base: String
   /// The files the merge conflicted in, sorted; empty when it merged and the rows ran.
   public let conflicts: [String]
+  /// The other tasks' branches merged after `branch`, in the order merged; empty for a run of 1
+  /// task's branch.
+  public let alongside: [Branch]
 
-  public init(branch: String, tip: String, base: String, conflicts: [String] = []) {
+  public init(
+    branch: String, tip: String, base: String, conflicts: [String] = [], alongside: [Branch] = []
+  ) {
     self.branch = branch
     self.tip = tip
     self.base = base
     self.conflicts = conflicts
+    self.alongside = alongside
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case branch, tip, base, conflicts, alongside
+  }
+
+  public init(from decoder: any Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    branch = try c.decode(String.self, forKey: .branch)
+    tip = try c.decode(String.self, forKey: .tip)
+    base = try c.decode(String.self, forKey: .base)
+    conflicts = try c.decode([String].self, forKey: .conflicts)
+    // Reports written before a run could merge several branches hold no key.
+    alongside = try c.decodeIfPresent([Branch].self, forKey: .alongside) ?? []
+  }
+
+  /// `alongside` is written only when a run merged more than 1 branch.
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(branch, forKey: .branch)
+    try c.encode(tip, forKey: .tip)
+    try c.encode(base, forKey: .base)
+    try c.encode(conflicts, forKey: .conflicts)
+    if !alongside.isEmpty { try c.encode(alongside, forKey: .alongside) }
   }
 }
 
@@ -38,9 +82,11 @@ public enum QAMergeReadiness: Sendable, Equatable {
   /// - Parameters:
   ///   - merged: the tasks merged so far; `task` counts as merged.
   ///   - reports: the plan's `qa run` reports, in any order.
+  ///   - waiting: the other tasks whose checked return waits to merge, each at its branch's tip.
   public static func of(
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
-    reports: [QAReport], branch: String, tip: String, base: String
+    reports: [QAReport], branch: String, tip: String, base: String,
+    waiting: [QATrialMerge.Branch] = []
   ) -> QAMergeReadiness {
     let ready = QARunPlan.make(table: table, merged: merged, after: task).entries
       .filter(\.waitingOn.isEmpty).map(\.row)
@@ -60,5 +106,13 @@ public enum QAMergeReadiness: Sendable, Equatable {
     case .red: return .red(runID: runID, rows: newest.rows.filter { $0.result == .red })
     case .blocked: return .unchecked(rows: ready)
     }
+  }
+
+  /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming
+  /// `task` still waits on, when each task such a row waits on is in `waiting`, in table order.
+  public static func alongside(
+    table: ValidationTable, merged: Set<String>, task: String, waiting: [QATrialMerge.Branch]
+  ) -> [String] {
+    []
   }
 }
