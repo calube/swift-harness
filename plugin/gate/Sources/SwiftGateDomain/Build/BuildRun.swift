@@ -599,7 +599,12 @@ public struct BuildEventLog: Sendable, Equatable {
   /// Each validation row a `build no-repair` decision left unverified, by its 1-based position,
   /// with the newest decision that names it.
   public func unverifiedRows() -> [Int: BuildEvent.RowsUnverified] {
-    [:]
+    var rows: [Int: BuildEvent.RowsUnverified] = [:]
+    for event in events {
+      guard case .rowsUnverified(let left) = event else { continue }
+      for row in left.rows { rows[row] = left }
+    }
+    return rows
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

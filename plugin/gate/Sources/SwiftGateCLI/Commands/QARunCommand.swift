@@ -201,6 +201,7 @@ enum QARunRun {
     var notes: [String] = []
     var merged: Set<String>?
     var ended: [String: TaskStatus]?
+    var leftUnverified: [Int: String] = [:]
     if !options.atBase || options.after != nil {
       let progress: LedgerProgress
       do throws(PlanStateStoreError) {
@@ -218,6 +219,7 @@ enum QARunRun {
         var mergedTasks = progress.merged(per: build)
         if options.after == nil, options.final || build?.finalGated == true {
           ended = progress.statuses
+          leftUnverified = (build?.unverifiedRows() ?? [:]).mapValues(Self.leftMessage)
           let landed = await landedUnmerged(
             progress: progress, merged: mergedTasks, log: build, slug: slug, git: git)
           mergedTasks.formUnion(landed.map(\.task))
@@ -241,7 +243,8 @@ enum QARunRun {
       }
     }
     var runPlan = QARunPlan.make(
-      table: table, merged: merged, after: options.after, ended: ended, alongside: alongsideTasks)
+      table: table, merged: merged, after: options.after, ended: ended, alongside: alongsideTasks,
+      leftUnverified: leftUnverified)
     var prepared: String?
     if let writer = options.preparedBy {
       let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
@@ -822,6 +825,19 @@ enum QARunRun {
   /// The tasks outside `merged` whose branch tip is in `HEAD` and is no commit the plan branch
   /// itself stood at in `log`: a branch with no commits of its own points at one of those, and
   /// landed nothing. With no build events, none.
+  /// What a row a `build no-repair` decision left unverified reports in the final pass.
+  static func leftMessage(_ left: BuildEvent.RowsUnverified) -> String {
+    let cause: String =
+      switch left.cause {
+      case .contractGap:
+        "it needs a contract name the app doesn't have"
+          + (left.contractName.map { " (`\($0)`)" } ?? "")
+      case .appAtFault: "the repair worker found the app at fault"
+      }
+    return "not run: left unverified when `\(left.task)` merged, since its flow repair found no "
+      + "repair in qa run \(left.qaRun): \(cause)"
+  }
+
   private static func landedUnmerged(
     progress: LedgerProgress, merged: Set<String>, log: BuildEventLog?, slug: String,
     git: any Git

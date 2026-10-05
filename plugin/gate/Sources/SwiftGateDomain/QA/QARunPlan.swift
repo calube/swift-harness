@@ -131,7 +131,9 @@ public struct QARunPlan: Sendable, Equatable {
     for entry in entries {
       let validation = entry.validation
       let row: QARow
-      if !entry.waitingOn.isEmpty, let ended {
+      if ended != nil, let message = leftUnverified[entry.row] {
+        row = Self.row(entry, result: .unverified, message: message)
+      } else if !entry.waitingOn.isEmpty, let ended {
         row = Self.neverReady(entry, ended: ended)
       } else if !entry.waitingOn.isEmpty {
         row = Self.row(

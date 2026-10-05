@@ -110,7 +110,7 @@ struct FlowNoRepairTests {
       FlowNoRepair(requirement: "req-send-sending-sent", cause: .appAtFault, why: "x"),
       report: try Self.report("qa-report-combined.json"), fixGate: .green, at: Self.replied)
     #expect(decision.action == .continue, "\(decision)")
-    #expect(decision.why.contains("row 4"), "\(decision.why)")
+    #expect(decision.why.contains("rows 4, 5"), "\(decision.why)")
   }
 
   @Test(

@@ -143,16 +143,21 @@ public enum QAMergeReadiness: Sendable, Equatable {
     var red: [(report: QAReport, row: QARow)] = []
     var unchecked: [Int] = []
     var passed: [QAReport] = []
+    var left: [QAReport] = []
     for entry in entries {
       guard let report = ran.first(where: { $0.verdict != .blocked && covers($0, entry) }),
         let row = report.rows.first(where: { $0.row == entry.row })
       else {
-        unchecked.append(entry.row)
+        if !unverified.contains(entry.row) { unchecked.append(entry.row) }
+        continue
+      }
+      if row.result != .pass, unverified.contains(entry.row) {
+        left.append(report)
         continue
       }
       switch row.result {
-      case .red: red.append((report, row))
       case .pass: passed.append(report)
+      case .red: red.append((report, row))
       case .unverified, .waiting, .abandoned: unchecked.append(entry.row)
       }
     }
@@ -161,9 +166,10 @@ public enum QAMergeReadiness: Sendable, Equatable {
     {
       return .red(runID: runID, rows: red.map(\.row))
     }
-    guard unchecked.isEmpty,
-      let runID = passed.compactMap(\.runID).max()
-    else { return .unchecked(rows: unchecked) }
+    guard unchecked.isEmpty else { return .unchecked(rows: unchecked) }
+    guard let runID = passed.compactMap(\.runID).max() ?? left.compactMap(\.runID).max() else {
+      return .notNeeded
+    }
     return .checked(runID: runID)
   }
 

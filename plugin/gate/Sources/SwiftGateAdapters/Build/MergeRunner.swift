@@ -777,7 +777,8 @@ public struct BuildMerge: Sendable {
         table: table, merged: merged, task: task, waiting: waiting)
       readiness = QAMergeReadiness.of(
         table: table, merged: merged, plan: self.plan, task: task, reports: reports,
-        branch: context.branch, tip: tip, base: main, waiting: waiting)
+        branch: context.branch, tip: tip, base: main, waiting: waiting,
+        unverified: Set(log.unverifiedRows().keys))
       if !fix {
         noNewStartsAt = (try? context.run.record())?.timeBox?.deadlines.noNewStartsAt
         let skipping = Set(waiting.map(\.task)).union(merged)
