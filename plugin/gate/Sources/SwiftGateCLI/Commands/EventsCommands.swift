@@ -293,36 +293,50 @@ enum EventsIngestRun {
     // them is the orchestrator; without, they describe the session itself. With --agent-id they
     // describe 1 subagent the session launched itself, and only that transcript is read: any
     // other subagent may belong to a workflow still running, which its own ingest tags.
+    // A Workflow agent read through the session, and with worker transcripts the session's own
+    // Agent-tool subagents, may still be running and belong to no tag given here: their messages
+    // are stored with no role, for their own ingest to retag, and their tool calls wait for it.
     let sessionTags: (role: AgentRole?, task: String?) =
       options.workflowTranscripts == nil ? (options.role, options.task) : (.orchestrator, nil)
     var transcripts: [UsageTranscript] = []
     var toolTranscripts: [ToolTranscript] = []
     do throws(TranscriptReadError) {
       let reader = TranscriptReader()
-      var files: [(file: TranscriptFile, role: AgentRole?, task: String?)] = []
-      // Workers first: the first transcript to hold a message tags it, and a worker's file may
-      // also sit under the session's own subagents.
+      var files: [(file: TranscriptFile, role: AgentRole?, task: String?, tools: Bool)] = []
+      var workers: Set<String> = []
       if let directory = options.workflowTranscripts {
-        files += try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
-          .map { ($0, options.role, options.task) }
+        let read = try reader.workflow(in: URL(filePath: directory, directoryHint: .isDirectory))
+        workers = Set(read.compactMap(\.agentID))
+        files += read.map { ($0, options.role, options.task, true) }
       }
       let session = try reader.session(at: URL(filePath: transcriptPath))
       if let agentID = options.agentID {
         guard
-          let subagent = session.first(where: { $0.agent == .subagent && $0.agentID == agentID })
+          let subagent = session.first(where: {
+            $0.agent == .subagent && !$0.workflow && $0.agentID == agentID
+          })
         else {
           return refused("--agent-id \(agentID) names no subagent transcript of this session")
         }
-        files.append((subagent, options.role, options.task))
+        files.append((subagent, options.role, options.task, true))
       } else {
-        files += session.map { ($0, sessionTags.role, sessionTags.task) }
+        for file in session where file.agentID.map({ !workers.contains($0) }) ?? true {
+          if file.agent == .main {
+            files.append((file, sessionTags.role, sessionTags.task, true))
+          } else if file.workflow || options.workflowTranscripts != nil {
+            files.append((file, nil, nil, false))
+          } else {
+            files.append((file, sessionTags.role, sessionTags.task, true))
+          }
+        }
       }
-      for (file, role, task) in files {
+      for (file, role, task, tools) in files {
         do throws(TranscriptUsageError) {
           transcripts.append(
             UsageTranscript(
               agent: file.agent, agentID: file.agentID, role: role, task: task,
               messages: try TranscriptUsage.messages(in: file.data)))
+          guard tools else { continue }
           toolTranscripts.append(
             ToolTranscript(
               agent: file.agent, agentID: file.agentID, role: role, task: task,
@@ -400,15 +414,18 @@ struct EventsIngestCommand: ParsableCommand {
     commandName: "ingest",
     abstract: "Store each assistant message's token counts and cost from a session's transcripts.",
     discussion:
-      "Reads, offline, the transcript the session record names, its subagents' transcripts, and "
-      + "with --workflow-transcripts every agent-*.jsonl in that directory. Only message ids, "
+      "Reads, offline, the transcript the session record names, its subagents' transcripts, "
+      + "every Workflow agent's under subagents/workflows/, and with --workflow-transcripts every "
+      + "agent-*.jsonl in that directory. Only message ids, "
       + "model ids, usage counts and times are kept: no transcript text, prompt or tool input. "
       + "Tool calls are counted by tool per agent per 60 s window, with their time and the "
       + "repository-relative paths file tools named; any other path is dropped and counted. "
       + "A message or window already stored for the session is skipped, so ingesting again adds "
       + "nothing, except that a message stored with no role is retagged by an ingest that gives "
       + "it one. With --workflow-transcripts, --role and --task tag the workers and the session's "
-      + "own messages are tagged orchestrator; without, they tag the session's. With "
+      + "own messages are tagged orchestrator; without, they tag the session's. A Workflow agent "
+      + "read through the session, and with --workflow-transcripts the session's own subagents, "
+      + "are stored with no role, for their own ingest to tag. With "
       + "--agent-id, only that subagent of the session is read, and --role (required) and "
       + "--task tag it: the merge fixer the build skill launches itself. "
       + "Exit 0 stored; 2 when [telemetry] enabled = false, outside a project, for a bad flag "

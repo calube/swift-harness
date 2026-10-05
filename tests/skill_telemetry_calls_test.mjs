@@ -101,6 +101,50 @@ export function telemetryCallProblems(files) {
   return problems
 }
 
+// The run skill's ingests: its validation worker is an Agent-tool subagent of the run's session,
+// tagged alone when it returns, and the run's last ingest, at the report, reads every message the
+// session and its agents wrote after their own completion ingests.
+const RUN_REQUIRED = [
+  { heading: '## 7. Import and build', path: 'events ingest', flags: { '--session': '<session>', '--agent-id': '<agent>', '--role': 'qa', '--task': '<task>', '--build-run': '<run>' } },
+  { heading: '## 9. Report', path: 'events ingest', flags: { '--session': '<session>', '--role': 'orchestrator', '--build-run': '<run>' } },
+  { heading: '## 9. Report', path: 'events summary', flags: { '--build-run': '<run>' } },
+]
+
+/**
+ * Problems with the run skill `text`'s usage calls: a required call missing or missing a flag, a
+ * report ingest after `run report` or after the summary, and an ingest whose paragraph doesn't
+ * skip an opt-out quietly, doesn't carry on after any other failure, or halts.
+ */
+export function runTelemetryProblems(text) {
+  const problems = []
+  for (const { heading, path, flags } of RUN_REQUIRED) {
+    const body = section(text, heading)
+    if (body === null) {
+      problems.push(`${RUN}: no \`${heading}\` section`)
+      continue
+    }
+    const calls = extractInvocations(body).filter(inv => inv.words.slice(0, 2).join(' ') === path)
+    if (!calls.some(inv => Object.entries(flags).every(([flag, value]) => inv.words[inv.words.indexOf(flag) + 1] === value))) {
+      const want = Object.entries(flags).map(([flag, value]) => `${flag} ${value}`).join(' ')
+      problems.push(`${RUN}: \`${heading}\` never runs \`swiftgate ${path} ${want}\``)
+    }
+    const paragraph = path === 'events ingest' && paragraphWith(body, `--role ${flags['--role']}`)
+    if (!paragraph) continue
+    if (!new RegExp(`\`${OPT_OUT}\`[^.]*say nothing`).test(paragraph)) problems.push(`${RUN}: \`${heading}\` never skips an opted-out ingest quietly`)
+    if (!/any other non-zero exit[^.]*1 line[^.]*goes on/i.test(paragraph)) problems.push(`${RUN}: \`${heading}\` never goes on after a failed ingest`)
+    if (/\bhalt/i.test(paragraph)) problems.push(`${RUN}: \`${heading}\` halts on its ingest`)
+  }
+  const report = section(text, '## 9. Report') ?? ''
+  const at = needle => report.indexOf(needle)
+  if (at('events ingest') >= 0 && at('run report') >= 0 && at('run report') < at('events ingest')) {
+    problems.push(`${RUN}: the report is written before the session's usage is ingested`)
+  }
+  if (at('events ingest') >= 0 && at('events summary') >= 0 && at('events summary') < at('events ingest')) {
+    problems.push(`${RUN}: the summary prints before the session's usage is ingested`)
+  }
+  return problems
+}
+
 // The closed values a column of the event loop's halt tables lists: every backticked word in the
 // column headed `--reason` or `--answer`.
 export function tableValues(loop, column) {
@@ -306,6 +350,41 @@ function run(dir, args) {
 const tests = {
   'the build skill ingests each completed task\'s worker transcripts, and ship\'s report ingests its session before printing the build run\'s summary — catches a skill that drops an ingest or the summary'() {
     assert.deepEqual(telemetryCallProblems(skillFiles()), [])
+  },
+
+  'the run skill tags its validation worker alone when it returns and ingests the session again at the report, before the build run\'s summary, each ingest going on after any failure — catches a run whose cost misses every message after the last task completion'() {
+    const text = readFileSync(join(root, RUN), 'utf8')
+    assert.deepEqual(runTelemetryProblems(text), [])
+    const { runs, problems } = telemetryRuns({ [RUN]: ['## 7. Import and build', '## 9. Report'].map(heading => section(text, heading)).join('\n') }, {}, '')
+    assert.deepEqual(problems.filter(problem => problem.includes('`events ')), [])
+    const usage = runs.filter(({ args }) => args[0] === 'events')
+    assert.equal(usage.length, 3, usage.map(r => r.args.join(' ')).join('\n'))
+    const results = withRepository(false, dir => usage.map(({ where, args }) => ({ where, args, ...run(dir, args) })))
+    const wrong = results.filter(r => r.args[1] === 'ingest' ? r.status !== 2 || !r.out.includes(OPT_OUT) : r.status !== 0)
+    assert.deepEqual(wrong.map(r => `${r.where}: exit ${r.status} for \`${r.args.join(' ')}\`: ${r.out.trim()}`), [])
+  },
+
+  'the run telemetry check names a missing validation ingest, a report ingest after the report and the summary, and a halting ingest — catches a check that passes anything'() {
+    const text = [
+      '# Run', '', '## 7. Import and build', '',
+      'When it returns, ingest: `"$SG" events ingest --session <session> --role qa --task <task> --build-run <run>`. A failure halts the run.', '',
+      '## 9. Report', '',
+      '`"$SG" run report <slug>` prints the report, then `"$SG" events summary --build-run <run>`.', '',
+      'Then `"$SG" events ingest --session <session> --role orchestrator --build-run <run>`; an exit 2 that says `telemetry is off` means say nothing, and any other non-zero exit prints 1 line and the report goes on.', '',
+    ].join('\n')
+    assert.deepEqual(runTelemetryProblems(text), [
+      `${RUN}: \`## 7. Import and build\` never runs \`swiftgate events ingest --session <session> --agent-id <agent> --role qa --task <task> --build-run <run>\``,
+      `${RUN}: \`## 7. Import and build\` never skips an opted-out ingest quietly`,
+      `${RUN}: \`## 7. Import and build\` never goes on after a failed ingest`,
+      `${RUN}: \`## 7. Import and build\` halts on its ingest`,
+      `${RUN}: the report is written before the session's usage is ingested`,
+      `${RUN}: the summary prints before the session's usage is ingested`,
+    ])
+    assert.deepEqual(runTelemetryProblems('# Run\n'), [
+      `${RUN}: no \`## 7. Import and build\` section`,
+      `${RUN}: no \`## 9. Report\` section`,
+      `${RUN}: no \`## 9. Report\` section`,
+    ])
   },
 
   'a refused or failed ingest never stops the build or the ship report: the opt-out is skipped quietly and any other exit prints 1 line and goes on — catches a telemetry failure halting a build'() {
