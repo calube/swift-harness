@@ -88,8 +88,7 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
   /// a passing run's flow, from the newest one that recorded a video when any did.
   public struct LastPass: Sendable, Equatable, Encodable {
     public var qaRun: String
-    /// Which run passed and how, and, when the row's newest check is another run's, what that
-    /// check read.
+    /// Which run passed and how, and, when the row's newest check didn't pass, what it read.
     public var label: String
     public var flow: RunViewFlow?
 
@@ -680,7 +679,7 @@ enum RunViewValidationFold {
       case .run, .atBase: "in a qa run"
       }
     var label = "passed \(how), qa run \(pass.qaRun)"
-    if pass.qaRun != shown.qaRun {
+    if shown.result != .pass {
       let stage =
         switch shown.stage {
         case .atBase: "at-base"
