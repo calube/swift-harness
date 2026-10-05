@@ -91,16 +91,48 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   public var videoStartMs: Int?
   /// Where the time before a failing flow step went; `nil` when no flow step failed.
   public var delay: QAFlowDelay?
+  /// The `sim/` steps whose PNG is the video's frame, waiting for the video ``BatchFlowRunner/
+  /// commitFrames(_:video:store:)`` reads them from once the recording stops.
+  public var frames: [PendingFrame]
 
   public init(
     stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil,
-    delay: QAFlowDelay? = nil
+    delay: QAFlowDelay? = nil, frames: [PendingFrame] = []
   ) {
     self.stop = stop
     self.record = record
     self.files = files
     self.videoStartMs = videoStartMs
     self.delay = delay
+    self.frames = frames
+  }
+}
+
+/// 1 assertion's evidence whose tree a batch captured and whose PNG is still to come from the
+/// flow's video.
+public struct PendingFrame: Sendable, Equatable {
+  public var staging: SimStepStaging
+  /// The snapshot's output in the envelope `sim verify` parses.
+  public var treeJSON: Data
+  public var label: String
+  public var assert: String?
+  public var target: String?
+  /// How long the inline snapshot took.
+  public var elapsedMs: Int
+  /// When the snapshot began, on the video's clock.
+  public var videoMs: Int
+
+  public init(
+    staging: SimStepStaging, treeJSON: Data, label: String, assert: String?, target: String?,
+    elapsedMs: Int, videoMs: Int
+  ) {
+    self.staging = staging
+    self.treeJSON = treeJSON
+    self.label = label
+    self.assert = assert
+    self.target = target
+    self.elapsedMs = elapsedMs
+    self.videoMs = videoMs
   }
 }
 
@@ -113,9 +145,20 @@ public struct BatchFlowRunner: Sendable {
   public static let outputFileName = "batch.json"
 
   private let agentDevice: any AgentDevice
+  private let frames: any VideoFrameReading
 
-  public init(agentDevice: any AgentDevice) {
+  public init(agentDevice: any AgentDevice, frames: any VideoFrameReading = AVVideoFrames()) {
     self.agentDevice = agentDevice
+    self.frames = frames
+  }
+
+  /// Writes each pending step's PNG from `video` and commits it as a `sim/` step, in order.
+  /// Returns why each step it couldn't commit is missing; with no `video` every pending step is
+  /// missing.
+  public func commitFrames(_ pending: [PendingFrame], video: URL?, store: SimRunStore) async
+    -> [String]
+  {
+    []
   }
 
   /// - Parameters:
@@ -259,8 +302,8 @@ public struct BatchFlowRunner: Sendable {
       results.map { ($0.outcome.index, $0) }, uniquingKeysWith: { first, _ in first })
     for (evidence, staging) in zip(plan.evidence, stagings) {
       guard let tree = byIndex[evidence.snapshot], tree.outcome.ok,
-        let shot = byIndex[evidence.screenshot], shot.outcome.ok,
-        let settle = byIndex[evidence.settle], settle.outcome.ok,
+        let shot = evidence.screenshot.flatMap({ byIndex[$0] }), shot.outcome.ok,
+        let settle = evidence.settle.flatMap({ byIndex[$0] }), settle.outcome.ok,
         let treeJSON = Self.envelope(tree.data), let settleJSON = Self.envelope(settle.data)
       else {
         store.discard(staging)

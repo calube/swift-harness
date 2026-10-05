@@ -56,13 +56,19 @@ public struct QAFlowDelay: Sendable, Equatable {
   public let captureMs: Int
   /// The flow's opening `open`'s launch, when it reported one.
   public let launch: QAFlowLaunch?
+  /// What a tree `qa run` captured before the failing step showed of the state it then missed.
+  public let lost: QAFlowCaptureLoss?
 
-  public init(step: Int, beforeMs: Int, openMs: Int, captureMs: Int, launch: QAFlowLaunch?) {
+  public init(
+    step: Int, beforeMs: Int, openMs: Int, captureMs: Int, launch: QAFlowLaunch?,
+    lost: QAFlowCaptureLoss? = nil
+  ) {
     self.step = step
     self.beforeMs = beforeMs
     self.openMs = openMs
     self.captureMs = captureMs
     self.launch = launch
+    self.lost = lost
   }
 
   /// The clause a red row's message ends with, such as `step 5 began 22.7 s into the batch: …`.
@@ -87,6 +93,27 @@ public struct QAFlowDelay: Sendable, Equatable {
   private static func seconds(_ ms: Int) -> String {
     let tenths = (ms + 50) / 100
     return "\(tenths / 10).\(tenths % 10) s"
+  }
+}
+
+/// A failing step's target shown in the tree `qa run` captured after the step before it: the
+/// state was on screen and went while `qa run`'s own captures held the flow, so the red is a
+/// capture delay, not evidence against the app, the flow or the contract.
+public struct QAFlowCaptureLoss: Sendable, Equatable {
+  /// The flow file's step the capture followed.
+  public let after: Int
+  /// The failing step's checked selector, which an element of that tree matched.
+  public let selector: String
+  /// From the start of that capture to the start of the failing step.
+  public let beforeMs: Int
+  /// The captures `qa run` added between the step before and the failing step.
+  public let captureMs: Int
+
+  public init(after: Int, selector: String, beforeMs: Int, captureMs: Int) {
+    self.after = after
+    self.selector = selector
+    self.beforeMs = beforeMs
+    self.captureMs = captureMs
   }
 }
 
@@ -164,7 +191,9 @@ public struct BatchStepOutcome: Sendable, Equatable {
 
 /// A prepared flow as `qa run` drives it: the flow file's steps, each kept as written, with a
 /// `snapshot`, a `screenshot` and a second `snapshot` after every assertion, so the run's `sim/`
-/// folder keeps a tree and a PNG per asserted step as `sim snap` would.
+/// folder keeps a tree and a PNG per asserted step as `sim snap` would. A batch that records a
+/// video takes only the `snapshot` inline: each step's PNG is the video's frame from when that
+/// snapshot began, so the flow's next step waits for 1 capture, not 3.
 public struct BatchFlowPlan: Sendable, Equatable {
   /// The evidence captured after 1 assertion.
   public struct Evidence: Sendable, Equatable {
@@ -176,15 +205,17 @@ public struct BatchFlowPlan: Sendable, Equatable {
     public let assert: String?
     /// The selector of the element the step checks is shown, which `sim verify` holds in view.
     public let target: String?
-    /// Driven-file indexes, 1-based: the kept tree, the screenshot, and the settle check.
+    /// Driven-file indexes, 1-based: the kept tree, the screenshot, and the settle check. With
+    /// no `screenshot` the PNG is the video's frame, and with no `settle` nothing checks the
+    /// screen held still.
     public let snapshot: Int
-    public let screenshot: Int
-    public let settle: Int
-    /// Where the `screenshot` step writes its PNG.
+    public let screenshot: Int?
+    public let settle: Int?
+    /// Where the `screenshot` step, or the video's frame, writes its PNG.
     public let screenshotPath: String
 
     public init(
-      after: Int, label: String, assert: String?, snapshot: Int, screenshot: Int, settle: Int,
+      after: Int, label: String, assert: String?, snapshot: Int, screenshot: Int?, settle: Int?,
       screenshotPath: String, target: String? = nil
     ) {
       self.after = after
@@ -297,6 +328,21 @@ public struct BatchFlowPlan: Sendable, Equatable {
     let byIndex = Dictionary(
       results.map { ($0.index, $0.durationMs) }, uniquingKeysWith: { first, _ in first })
     return (1...recordIndex).reduce(0) { $0 + (byIndex[$1] ?? 0) }
+  }
+
+  /// When each evidence whose PNG is the video's frame began its snapshot, on the video's clock,
+  /// by the flow file's step it follows. Empty when the batch recorded nothing.
+  public func frameTimes(results: [BatchStepOutcome]) -> [Int: Int] {
+    [:]
+  }
+
+  /// The failing step's target as the tree `qa run` captured just before it showed it; `nil`
+  /// when no such capture ran, the step checks no element, or that tree didn't show it.
+  /// `trees` holds each capture's parsed tree by driven index.
+  public func captureLoss(
+    results: [BatchStepOutcome], failedAt: Int?, trees: [Int: SimTree]
+  ) -> QAFlowCaptureLoss? {
+    nil
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.

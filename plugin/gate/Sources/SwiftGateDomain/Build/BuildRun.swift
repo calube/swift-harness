@@ -276,11 +276,15 @@ public enum BuildEvent: Sendable, Equatable {
     public let at: Date
     /// The checked return's outcome; `nil` when the recorded check names none.
     public let outcome: TaskReturn.Outcome?
+    /// The return's `flow row:` lines.
+    public let flowRows: [FlowRowVerdict]
 
     public init(
       task: String, fix: Bool, verdict: Verdict, commit: String?, checkID: String,
-      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil
+      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil,
+      flowRows: [FlowRowVerdict] = []
     ) {
+      self.flowRows = flowRows
       self.task = task
       self.fix = fix
       self.verdict = verdict
@@ -605,6 +609,11 @@ public struct BuildEventLog: Sendable, Equatable {
       for row in left.rows { rows[row] = left }
     }
     return rows
+  }
+
+  /// Every `flow row:` line the checked fixers' returns carried, oldest first.
+  public func flowRowVerdicts() -> [FlowRowVerdict] {
+    []
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;
