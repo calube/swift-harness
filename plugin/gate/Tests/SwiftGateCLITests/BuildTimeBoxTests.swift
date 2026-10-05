@@ -451,7 +451,8 @@ struct BuildTimeBoxTests {
   ) async throws -> BuildLoopResult<BuildGateWaitReport> {
     let events = try priceTrackerEvents()
     return await BuildGateWaitRun.run(
-      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: maxWait, git: scenario.git,
+      slug: BoxScenario.plan, target: .gate(.merge), output: output, maxWait: maxWait,
+      git: scenario.git,
       clock: clock, events: { events }, sleep: { clock.sleep($0) })
   }
 
@@ -543,7 +544,8 @@ struct BuildTimeBoxTests {
     let clock = SteppingClock(started.addingTimeInterval(60))
     let events = try Self.priceTrackerEvents()
     let result = await BuildGateWaitRun.run(
-      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: 120, git: scenario.git,
+      slug: BoxScenario.plan, target: .gate(.merge), output: output, maxWait: 120,
+      git: scenario.git,
       clock: clock, events: { events },
       endedWorkflows: { WorkflowRecords.ended(in: workflows) },
       sleep: { seconds in
@@ -559,5 +561,99 @@ struct BuildTimeBoxTests {
     #expect(clock.slept == [5, 5])
     #expect(report.gateVerdict == nil)
     #expect(report.message.contains("tracker-watchlist"), "\(report.message)")
+  }
+
+  /// send-money-7's `qa.check` events from before its combined before-merge run started: the
+  /// at-base run's 7 rows took 202.9 s in all, its adopt re-run reused every row in 0 s.
+  private static func sendMoneyQAEvents() throws -> [HarnessEvent] {
+    let cut = try #require(ISO8601DateFormatter().date(from: "2026-10-05T11:14:01Z"))
+    return try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/send-money-7-qa-events.jsonl")
+    ).events.filter { $0.time < cut }
+  }
+
+  @Test(
+    "build gate-wait --qa watches send-money-7's 271 s combined before-merge qa run in the background: its empty --output file waits inside a deadline from the at-base run's 203 s, a Workflow run that ends meanwhile returns worker-returned, and the captured report reads GREEN with its run id — catches the orchestrator held 271 s in the foreground while a worker's return sat unread for 225 s"
+  )
+  func gateWaitWatchesAQARun() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("send-flow", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+    let started = BoxScenario.launch.addingTimeInterval(20 * 60)
+    let output = URL(filePath: try scenario.layout().directory).appending(
+      path: "out/qa-send-flow.json")
+    try scenario.write(output, Data())
+    try FileManager.default.setAttributes([.creationDate: started], ofItemAtPath: output.path)
+    let events = try Self.sendMoneyQAEvents()
+    func wait(_ clock: SteppingClock, maxWait: Int = 0, ended: [String: String] = [:])
+      async -> BuildLoopResult<BuildGateWaitReport>
+    {
+      await BuildGateWaitRun.run(
+        slug: BoxScenario.plan, target: .qaRun, output: output, maxWait: maxWait,
+        git: scenario.git, clock: clock, events: { events }, endedWorkflows: { ended },
+        sleep: { clock.sleep($0) })
+    }
+
+    let running = try #require(await wait(SteppingClock(started.addingTimeInterval(45))).report)
+    #expect(running.action == .wait, "\(running.message)")
+    #expect(running.tier == "qa")
+    #expect(running.budget.expectedSeconds == 203)
+    #expect(running.budget.source == .history)
+    #expect(running.budget.basis == ["20261005T110500Z-b2b53229"])
+    #expect(running.deadlineAt == started.addingTimeInterval(609))
+
+    let clock = SteppingClock(started.addingTimeInterval(46))
+    let returned = await BuildGateWaitRun.run(
+      slug: BoxScenario.plan, target: .qaRun, output: output, maxWait: 120, git: scenario.git,
+      clock: clock, events: { events },
+      endedWorkflows: { clock.slept.isEmpty ? [:] : ["wf_send-flow": "send-flow"] },
+      sleep: { clock.sleep($0) })
+    let worker = try #require(returned.report)
+    #expect(worker.action == .workerReturned)
+    #expect(worker.returned == ["send-flow"])
+
+    try Fixture.data("BrownfieldTrial/send-money-7-qa-combined-before-merge.json").write(
+      to: output)
+    let read = try #require(await wait(SteppingClock(started.addingTimeInterval(271))).report)
+    #expect(read.action == .read)
+    #expect(read.gateVerdict == .green)
+    #expect(read.gateRunId == "20261005T111401Z-5e6bfd29")
+  }
+
+  @Test(
+    "build gate-wait --qa called before the backgrounded qa run has made its --output file waits for the file rather than refusing, and still refuses one that never appears — catches the watch losing a race with the run it watches"
+  )
+  func qaWaitOutlastsTheRunsStart() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("send-flow", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+    let started = BoxScenario.launch.addingTimeInterval(20 * 60)
+    let output = URL(filePath: try scenario.layout().directory).appending(
+      path: "out/qa-send-flow.json")
+    let events = try Self.sendMoneyQAEvents()
+
+    let clock = SteppingClock(started)
+    let late = await BuildGateWaitRun.run(
+      slug: BoxScenario.plan, target: .qaRun, output: output, maxWait: 30, git: scenario.git,
+      clock: clock, events: { events },
+      sleep: { seconds in
+        clock.sleep(seconds)
+        if !FileManager.default.fileExists(atPath: output.path) {
+          try? scenario.write(output, Data())
+        }
+      })
+    #expect(late.verdict == .green, "\(late.message)")
+    #expect(late.report?.action == .wait)
+
+    let never = await BuildGateWaitRun.run(
+      slug: BoxScenario.plan, target: .qaRun,
+      output: output.deletingLastPathComponent().appending(path: "none.json"), maxWait: 30,
+      git: scenario.git, clock: SteppingClock(started), events: { events }, sleep: { _ in })
+    #expect(never.verdict == .blocked)
+    #expect(never.message.contains("no qa run output"), "\(never.message)")
   }
 }

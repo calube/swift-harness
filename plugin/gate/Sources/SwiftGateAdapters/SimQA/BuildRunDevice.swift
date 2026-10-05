@@ -157,15 +157,39 @@ public enum BuildRunDevice {
   }
 
   /// Ends the hold by removing its lease, which its holder watches: the holder then deletes the
-  /// device and exits.
-  public static func release(buildRunID: String, leases: SimLeaseStore) -> Release {
+  /// device and exits. Then removes the borrow lock's files of this build run and of every other
+  /// build run whose hold has ended, when no borrower holds them, from `lockDirectory`: by
+  /// default the directory holding `leases`.
+  public static func release(
+    buildRunID: String, leases: SimLeaseStore, lockDirectory: URL? = nil
+  ) -> Release {
     let runID = holdRunID(buildRunID: buildRunID)
+    defer {
+      removeEndedBorrowLocks(
+        in: lockDirectory ?? leases.directory.deletingLastPathComponent(), leases: leases)
+    }
     do throws(SimLeaseStoreError) {
       guard let lease = try leases.read(runID: runID) else { return .notHeld }
       try leases.remove(runID: runID)
       return .released(udid: lease.udid)
     } catch {
       return .failed(error.message)
+    }
+  }
+
+  /// Removes the borrow lock files of each build run in `directory` that has no hold lease left,
+  /// when no borrower holds them.
+  private static func removeEndedBorrowLocks(in directory: URL, leases: SimLeaseStore) {
+    let suffix = holdRunID(buildRunID: "") + ".borrow.guard"
+    guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path)
+    else { return }
+    for name in names where name.hasSuffix(suffix) {
+      let buildRunID = String(name.dropLast(suffix.count))
+      // A lease that can't be read may still be live, so only a read that finds none counts.
+      guard case .some(.none) = try? leases.read(runID: holdRunID(buildRunID: buildRunID)) else {
+        continue
+      }
+      borrowLock(buildRunID: buildRunID, lockDirectory: directory).removeIfFree()
     }
   }
 

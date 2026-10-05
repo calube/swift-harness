@@ -68,9 +68,14 @@ public struct QAReport: Sendable, Equatable {
     let counts = QAResult.allCases.map { result in
       "\(rows.filter { $0.result == result }.count) \(result.rawValue)"
     }
+    // A run that took only some rows still counts against the whole plan.
+    let planRows = max(checkableRows ?? rows.count, rows.count)
+    let parts =
+      (reasonOnly > 0 ? ["\(reasonOnly) reason-only"] : [])
+      + (planRows > rows.count ? ["\(planRows - rows.count) not in this run"] : [])
     let verified =
-      "\(Self.verified(rows)) of \(rows.count + reasonOnly) rows verified"
-      + (reasonOnly > 0 ? " (\(reasonOnly) reason-only)" : "")
+      "\(Self.verified(rows)) of \(planRows + reasonOnly) rows verified"
+      + (parts.isEmpty ? "" : " (\(parts.joined(separator: ", ")))")
     // A row that was due to run and didn't verify leaves the run unanswered, never GREEN.
     let unrun = atBase ? [] : rows.filter { $0.result == .unverified }
     let why =

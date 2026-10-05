@@ -278,6 +278,11 @@ function fakeSwiftgate({ exit = () => 0, off = false, forgets = () => false } = 
     const words = commandWords(command)
     if (words[2] === 'start') {
       if (off) return { exitStatus: 0, stdout: '' }
+      const parent = flagIn(words, '--parent')
+      const parentOutcome = flagIn(words, '--end-parent')
+      if (parent && parentOutcome && events.some(e => e.kind === 'start' && e.id === parent) && !events.some(e => e.kind === 'end' && e.id === parent)) {
+        events.push({ kind: 'end', id: parent, outcome: parentOutcome })
+      }
       const id = (++next).toString(16).padStart(16, '0')
       events.push({ kind: 'start', id, phase: flagIn(words, '--phase'), buildRun: flagIn(words, '--build-run'), task: flagIn(words, '--task'), role: flagIn(words, '--role'), parent: flagIn(words, '--parent') })
       return { exitStatus: 0, stdout: id }
@@ -491,6 +496,31 @@ const tests = {
       assert.ok(c.opts.schema.required.includes('span'), `${c.opts.label}: the schema does not require "span"`)
     }
     assert.deepEqual([...seen].sort(), ['fix', 'review', 'verify', 'worker'])
+  },
+
+  async 'a stage that follows another ends it from its own span start with --end-parent and the outcome that stage\'s rule gives, with no separate end line before it — catches send-money-7\'s and pos-checkout-1\'s reviewers chaining that end and their start into 1 call guard.reviewer-bash refuses'() {
+    const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    const followers = calls.filter(c => flagIn(commandWords(spanLines(c.prompt).start ?? ''), '--parent'))
+    assert.ok(followers.length >= 2, 'no stage prompt followed another')
+    for (const c of followers) {
+      assert.doesNotMatch(c.prompt, /^0\. /m, `${c.opts.label}: a separate end line before the start`)
+      const words = commandWords(spanLines(c.prompt).start)
+      assert.match(flagIn(words, '--end-parent') ?? '', /^(ok|red|abandoned)$/, `${c.opts.label}: ${spanLines(c.prompt).start}`)
+      assert.match(c.prompt, /also ends the stage before yours/, `${c.opts.label}: the start's end of the stage before is unexplained`)
+    }
+  },
+
+  async 'every stage prompt says each span command runs as its own Bash call, never joined with `;` or `&&` — catches send-money-7\'s reviewers chaining 2 span commands into 1 refused call'() {
+    const { calls } = await run(baseArgs({ pluginRoot: '/plugins/swift-harness' }), {
+      workers: [workerReturn(), workerReturn({ commits: ['77aa001'] })],
+      reviews: { architecture: [{ findings: [finding()] }] },
+    })
+    for (const c of calls) {
+      assert.match(c.prompt, /Run each of these commands as its own Bash call, exactly as written: never join 2 with `;` or `&&`, and add no `cd`, pipe or redirection\./, `${c.opts.label}: no 1-command-per-call rule`)
+    }
   },
 
   async 'a stage that returns without ending its span has it ended by the stage after it, with the outcome its own rule gives — catches send-money-4\'s review span left open after its reviewer returned findings'() {

@@ -67,21 +67,70 @@ public struct AcceptanceTestReference: Sendable, Equatable {
   public static func owningAreas(
     of id: String, in areas: [BrownfieldArea], directoryExists: (String) -> Bool
   ) -> [String] {
-    guard let target = id.split(separator: "/").first.map(String.init), !target.isEmpty,
-      id.contains("/")
-    else { return [] }
+    guard let (target, _) = targetSplit(id) else { return [] }
     return areas.filter { area in
       guard area.test != nil || area.testFiles != nil else { return false }
-      var parents = area.testGlobs.map { glob in
-        glob.split(separator: "/").prefix { !$0.contains("*") }.joined(separator: "/")
-      }
-      if area.kind == .swiftpm {
-        parents.append(area.root == "." ? "Tests" : "\(area.root)/Tests")
-      }
-      return parents.contains { parent in
-        directoryExists(parent.isEmpty ? target : "\(parent)/\(target)")
-      }
+      return holds(area, testTarget: target, directoryExists: directoryExists)
     }.map(\.name)
+  }
+
+  /// `id`'s first component and the separator after it: the text before its first `/`, or, when
+  /// that holds a `.`, the text before the `.`; `nil` for an id with neither.
+  private static func targetSplit(_ id: String) -> (target: String, separator: Character)? {
+    guard let slash = id.firstIndex(of: "/") else {
+      guard let dot = id.firstIndex(of: "."), dot != id.startIndex else { return nil }
+      return (String(id[..<dot]), ".")
+    }
+    let head = id[..<slash]
+    if let dot = head.firstIndex(of: "."), dot != head.startIndex {
+      return (String(head[..<dot]), ".")
+    }
+    return head.isEmpty ? nil : (String(head), "/")
+  }
+
+  /// Whether `area` holds a test target named `target`: a directory of that name under a test
+  /// glob's fixed prefix, or under a `swiftpm` area's `Tests/`.
+  private static func holds(
+    _ area: BrownfieldArea, testTarget target: String, directoryExists: (String) -> Bool
+  ) -> Bool {
+    var parents = area.testGlobs.map { glob in
+      glob.split(separator: "/").prefix { !$0.contains("*") }.joined(separator: "/")
+    }
+    if area.kind == .swiftpm {
+      parents.append(area.root == "." ? "Tests" : "\(area.root)/Tests")
+    }
+    return parents.contains { parent in
+      directoryExists(parent.isEmpty ? target : "\(parent)/\(target)")
+    }
+  }
+
+  /// This reference with its id in the form `area`'s filter matches: a `swiftpm` area's
+  /// `--filter` reads `<Target>.<Suite>[/<test>]`, an `xcode` area's `-only-testing:`
+  /// `<Target>/<Class>[/<method>]`. The id's first separator is swapped only when the text before
+  /// it names a test target `area` holds, so `<Suite>/<test>` keeps its slash.
+  public func filterForm(in area: BrownfieldArea, directoryExists: (String) -> Bool)
+    -> AcceptanceTestReference
+  {
+    let wanted: Character
+    switch area.kind {
+    case .swiftpm: wanted = "."
+    case .xcode: wanted = "/"
+    case .go, .jvm, .node, .python, .cargo, .command: return self
+    }
+    guard let (target, separator) = Self.targetSplit(id), separator != wanted,
+      Self.holds(area, testTarget: target, directoryExists: directoryExists)
+    else { return self }
+    let rest = id.dropFirst(target.count + 1)
+    return AcceptanceTestReference(area: self.area, id: target + String(wanted) + rest)
+  }
+
+  /// How `kind`'s filter spells 1 test, for a refusal to name.
+  public static func filterSpelling(of kind: AreaKind) -> String {
+    switch kind {
+    case .swiftpm: "<Target>.<Suite>[/<test>]"
+    case .xcode: "<Target>/<Class>[/<method>]"
+    case .go, .jvm, .node, .python, .cargo, .command: "<id>"
+    }
   }
 
   /// The command that runs only this test, from the area it names or the 1 area that runs tests.

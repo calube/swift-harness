@@ -138,4 +138,42 @@ struct BuildRunDeviceTests {
     #expect(try store.read(runID: runID) == nil)
     #expect(again == .notHeld)
   }
+
+  @Test(
+    "release removes its build run's borrow lock files and those of every build run whose hold has ended, the 5 earlier trials' left in the machine's lock directory among them, and keeps a lock another borrower holds — catches run-device.borrow files outliving their runs"
+  )
+  func releaseRemovesBorrowLocks() async throws {
+    defer { TestTemporaryDirectory.remove(root) }
+    let locks = root.appending(path: "locks", directoryHint: .isDirectory)
+    let left = try Fixture.text("BrownfieldTrial/borrow-locks-left.txt")
+      .split(separator: "\n").map(String.init)
+    let suffix = BuildRunDevice.holdRunID(buildRunID: "") + ".borrow.0"
+    let buildRuns = left.filter { $0.hasSuffix(suffix) }.map { String($0.dropLast(suffix.count)) }
+    try #require(buildRuns.count >= 5)
+    for buildRun in buildRuns {
+      let lease = await BuildRunDevice.borrow(buildRunID: buildRun, lockDirectory: locks)
+      try #require(lease != nil)
+      lease?.release()
+    }
+    let still = try #require(
+      await BuildRunDevice.borrow(buildRunID: Self.buildRun, lockDirectory: locks))
+    let mine = buildRuns[buildRuns.count - 1]
+    try store.write(
+      SimLease(
+        runID: BuildRunDevice.holdRunID(buildRunID: mine), worktree: "/w", udid: "UDID-1",
+        holderPID: 4242, session: nil))
+    let listed = Set(try FileManager.default.contentsOfDirectory(atPath: locks.path))
+    #expect(listed.isSuperset(of: left), "\(listed.sorted())")
+
+    let released = BuildRunDevice.release(buildRunID: mine, leases: store, lockDirectory: locks)
+
+    #expect(released == .released(udid: "UDID-1"))
+    let after = try FileManager.default.contentsOfDirectory(atPath: locks.path).sorted()
+    #expect(
+      after == [
+        "\(Self.buildRun)-run-device.borrow.0", "\(Self.buildRun)-run-device.borrow.guard",
+      ],
+      "\(after)")
+    still.release()
+  }
 }

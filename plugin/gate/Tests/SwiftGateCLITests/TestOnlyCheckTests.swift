@@ -123,9 +123,9 @@ struct TestOnlyCheckTests {
   }
 
   @Test(
-    "an exit 0 whose result bundle shows no test ran reads RED, naming the id — catches a misspelt id passing as a green loop"
+    "an exit 0 whose result bundle shows no test ran is BLOCKED, naming the id and the xcode area's `<Target>/<Class>` form in 1 runnable line — catches a misspelt id passing as a green loop, or read as the code's own RED"
   )
-  func noTestMatchedIsRed() async throws {
+  func noTestMatchedIsBlocked() async throws {
     let clone = try Clone()
     defer { try? FileManager.default.removeItem(at: clone.base) }
     let runner = FakeAreaCommandRunner { _ in .passed }
@@ -133,9 +133,14 @@ struct TestOnlyCheckTests {
     let parts = try await clone.run(
       "AidokuTests/NoSuchTests", runner: runner, xcresults: "zero")
 
-    #expect(Self.verdict(parts) == .red)
-    let finding = try #require(parts.findings.first { $0.severity.failsGate })
-    #expect(finding.message.contains("no test matched `AidokuTests/NoSuchTests`"), "\(finding.message)")
+    #expect(Self.verdict(parts) == .blocked)
+    let finding = try #require(parts.findings.first)
+    #expect(finding.ruleID == CheckRun.notRunRuleID)
+    #expect(
+      finding.message.contains("no test matched `AidokuTests/NoSuchTests`"), "\(finding.message)")
+    #expect(
+      finding.message.contains("`\"$SG\" test-only --area Aidoku <Target>/<Class>[/<method>]`"),
+      "\(finding.message)")
   }
 
   @Test(
@@ -335,11 +340,9 @@ struct TestOnlyCheckTests {
 
       #expect(Self.verdict(parts) != .blocked, "\(call.argument): \(parts.findings.map(\.message))")
       #expect(runner.requests.map(\.area) == ["AppFeature"], "\(call.argument)")
-      let id = call.argument.split(separator: ":").last.map {
-        $0.trimmingCharacters(in: .whitespaces)
-      }
       #expect(
-        runner.requests.first?.command.contains(id ?? "--") == true,
+        runner.requests.first?.command.contains("--filter 'AppCoreTests.ConfirmFeatureTests")
+          == true,
         "\(runner.requests.map(\.command))")
     }
   }
@@ -386,5 +389,81 @@ struct TestOnlyCheckTests {
     let message = try #require(parts.findings.first?.message)
     #expect(message.contains("`\"$SG\" test-only --area <area> <Target>/<Class>"), "\(message)")
     #expect(!message.contains("`test:"), "\(message)")
+  }
+
+  /// A call a price-tracker worker made, and the verdict and finding it got.
+  private struct VerdictCall: Decodable {
+    let argument: String
+    let verdict: String?
+    let finding: String?
+  }
+
+  @Test(
+    "price-tracker-6's `AppCoreTests/WatchlistFeatureTests`, RED in the trial with no test matched, runs in AppFeature with the same `--filter 'AppCoreTests.WatchlistFeatureTests'` as the dot form the worker fell back to, while `AppFeatureTests/tapPushesDetail`, a suite and test, keeps its slash — catches a SwiftPM area's slash form matching nothing"
+  )
+  func swiftPMSlashFormRunsAsTheDotForm() async throws {
+    let calls = try JSONDecoder().decode(
+      [VerdictCall].self,
+      from: Fixture.data("BrownfieldTrial/price-tracker-6-test-only-calls.json"))
+    let slash = try #require(
+      calls.first { $0.finding?.contains("no test matched") == true }?.argument)
+    let dot = try #require(calls.first { $0.argument.contains(".") && $0.verdict == "GREEN" })
+    #expect(slash == "AppCoreTests/WatchlistFeatureTests")
+    #expect(dot.argument == "AppCoreTests.WatchlistFeatureTests")
+
+    for argument in [slash, dot.argument] {
+      let clone = try Clone()
+      defer { try? FileManager.default.removeItem(at: clone.base) }
+      let runner = FakeAreaCommandRunner { _ in .passed }
+
+      let parts = try await Self.sendMoney(clone, argument, runner: runner)
+
+      #expect(Self.verdict(parts) != .blocked, "\(argument): \(parts.findings.map(\.message))")
+      #expect(runner.requests.map(\.area) == ["AppFeature"], "\(argument)")
+      #expect(
+        runner.requests.first?.command.hasSuffix(" --filter 'AppCoreTests.WatchlistFeatureTests'")
+          == true, "\(argument): \(runner.requests.map(\.command))")
+    }
+
+    let suite = try #require(calls.first { $0.argument == "AppFeatureTests/tapPushesDetail" })
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    _ = try await Self.sendMoney(clone, suite.argument, area: "AppFeature", runner: runner)
+    #expect(
+      runner.requests.first?.command.hasSuffix(" --filter 'AppFeatureTests/tapPushesDetail'")
+        == true, "\(runner.requests.map(\.command))")
+  }
+
+  @Test(
+    "a SwiftPM run whose captured price-tracker-6 reports hold no test is BLOCKED, not RED, naming the id and the 1 runnable line in the area's `<Target>.<Suite>` form — catches a worker reading a misspelt filter as its code's failure"
+  )
+  func swiftPMNoTestMatchedIsBlockedWithItsForm() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let reports = try [
+      Fixture.data("BrownfieldTrial/price-tracker-6-test-only-no-match.junit.xml"),
+      Fixture.data("BrownfieldTrial/price-tracker-6-test-only-no-match.junit-swift-testing.xml"),
+    ]
+    let runner = FakeAreaCommandRunner { request in
+      if let junit = request.junitPath {
+        try? reports[0].write(to: URL(filePath: junit))
+        try? reports[1].write(
+          to: URL(filePath: JUnitReports.companionPaths(of: junit)[0]))
+      }
+      return .passed
+    }
+
+    let parts = try await Self.sendMoney(clone, "AppCoreTests.NoSuchTests", runner: runner)
+
+    #expect(runner.requests.count == 1)
+    #expect(Self.verdict(parts) == .blocked, "\(parts.findings.map(\.message))")
+    let finding = try #require(parts.findings.first)
+    #expect(finding.ruleID == CheckRun.notRunRuleID)
+    #expect(
+      finding.message.contains("no test matched `AppCoreTests.NoSuchTests`"), "\(finding.message)")
+    #expect(
+      finding.message.contains("`\"$SG\" test-only --area AppFeature <Target>.<Suite>[/<test>]`"),
+      "\(finding.message)")
   }
 }

@@ -104,7 +104,7 @@ enum TestOnlyCheck {
       percentEncoded: false)
     let bundle = context.directory.appending(path: "test-only.xcresult").path(
       percentEncoded: false)
-    let resolved: AcceptanceTestCommand
+    var resolved: AcceptanceTestCommand
     var reference = AcceptanceTestReference.testOnly(test, area: area)
     if reference.area == nil {
       let owners = AcceptanceTestReference.owningAreas(
@@ -118,6 +118,17 @@ enum TestOnlyCheck {
     {
     case .success(let found): resolved = found
     case .failure(let unresolved): return try notRun(unresolved.reason)
+    }
+    // `<Target>/<Suite>` and `<Target>.<Suite>` both name 1 suite; only 1 matches the area's filter.
+    if let area = dependencies.areas.first(where: { $0.name == resolved.area }) {
+      let filtered = reference.filterForm(in: area, directoryExists: dependencies.directoryExists)
+      if filtered != reference,
+        case .success(let found) = filtered.resolve(
+          in: dependencies.areas, junitPath: junit, resultBundlePath: bundle, spelling: .testOnly)
+      {
+        reference = filtered
+        resolved = found
+      }
     }
     guard let owner = dependencies.areas.first(where: { $0.name == resolved.area }) else {
       return try notRun("area `\(resolved.area)` isn't in the config")
@@ -194,8 +205,15 @@ enum TestOnlyCheck {
       let judgement = QACheckJudgement.judge(
         QACheckJudgement.Input(
           end: .exited(0), stdout: "", stderr: "", report: JUnitReportFiles.read(at: junit),
-          resultBundle: read, reference: test, atBase: false,
+          resultBundle: read, reference: reference.id, atBase: false,
           roots: [root.path(percentEncoded: false)]))
+      // No test ran: the id, not the code, is what's wrong.
+      if judgement.result == .unverified {
+        return try notRun(
+          "\(what) exited 0, but \(judgement.message); name 1 test as "
+            + "`\(AcceptanceTestReference.testOnlyCommand(area: owner.name, id: AcceptanceTestReference.filterSpelling(of: owner.kind)))`"
+        )
+      }
       guard judgement.result != .pass else {
         return GateRunParts(
           tiers: [
@@ -254,8 +272,8 @@ struct TestOnlyCommand: AsyncParsableCommand {
 
   @Argument(
     help: ArgumentHelp(
-      "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode, or "
-        + "<area>: <id>."))
+      "The test, as the area's filter takes it: <Target>/<Class>[/<method>] in Xcode, "
+        + "<Target>.<Suite>[/<test>] or <Target>/<Suite> in SwiftPM, or <area>: <id>."))
   var test: String
 
   @Option(

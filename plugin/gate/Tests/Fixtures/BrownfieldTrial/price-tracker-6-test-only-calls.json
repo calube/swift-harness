@@ -1,0 +1,67 @@
+[
+  {
+    "argument": "AppCoreTests/WatchlistFeatureTests",
+    "verdict": "BLOCKED",
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/WatchlistFeatureTests`"
+  },
+  {
+    "argument": "AppCoreTests/WatchlistFeatureTests",
+    "verdict": "RED",
+    "finding": "exited 0, but no test matched `AppCoreTests/WatchlistFeatureTests`"
+  },
+  {
+    "argument": "AppCoreTests.WatchlistFeatureTests",
+    "verdict": "RED",
+    "finding": "failed, exit 1"
+  },
+  {
+    "argument": "AppCoreTests.WatchlistFeatureTests",
+    "verdict": "GREEN",
+    "finding": null
+  },
+  {
+    "argument": "AppCoreTests/DetailFeatureTests",
+    "verdict": null,
+    "finding": null
+  },
+  {
+    "argument": "AppCoreTests/DetailFeatureTests",
+    "verdict": null,
+    "finding": null
+  },
+  {
+    "argument": "AppCoreTests/DetailFeatureTests",
+    "verdict": "BLOCKED",
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/DetailFeatureTests`"
+  },
+  {
+    "argument": "AppCoreTests/DetailFeatureTests",
+    "verdict": "RED",
+    "finding": "failed, exit 1"
+  },
+  {
+    "argument": "AppCoreTests/DetailFeatureTests",
+    "verdict": "RED",
+    "finding": "exited 0, but no test matched `AppCoreTests/DetailFeatureTests`"
+  },
+  {
+    "argument": "AppFeature/AppFeatureTests",
+    "verdict": "BLOCKED",
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppFeature/AppFeatureTests`"
+  },
+  {
+    "argument": "test AppFeature: AppFeature/AppFeatureTests",
+    "verdict": "BLOCKED",
+    "finding": "test-only not run: `test:` names no test: write 1 id with no spaces, such as `test: <Target>/<Class>/<method>`"
+  },
+  {
+    "argument": "AppFeatureTests/tapPushesDetail",
+    "verdict": null,
+    "finding": "failed, exit 1"
+  },
+  {
+    "argument": "AppFeatureTests",
+    "verdict": "GREEN",
+    "finding": null
+  }
+]

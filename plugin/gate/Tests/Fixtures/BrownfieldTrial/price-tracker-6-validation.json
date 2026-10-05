@@ -1,0 +1,69 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist",
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-refresh",
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-error-retry",
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail-chart",
+      "runsAfter" : [
+        "detail-feature",
+        "app-navigation"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-chart-failure",
+      "runsAfter" : [
+        "detail-feature",
+        "app-navigation"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: the simulator exposes no view of an in-flight request being cancelled; DetailFeature and AppFeature TestStore tests assert the effect ends when the detail leaves",
+      "requirement" : "req-cancel-chart"
+    },
+    {
+      "reason" : "system: a property of the test suites, not of the running app; each task's slice gate runs its fixture-based and stubbed tests",
+      "requirement" : "req-recorded-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

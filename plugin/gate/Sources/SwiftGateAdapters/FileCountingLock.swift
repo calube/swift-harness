@@ -144,6 +144,34 @@ public struct FileCountingLock: CountingLock {
     return LockLease(slot: slot, descriptor: fd)
   }
 
+  /// Unlinks the lock's slot and guard files when no holder has a slot, under the guard so no
+  /// scan takes a slot meanwhile; `false`, removing nothing, while a slot is held or the guard is
+  /// busy.
+  @discardableResult
+  public func removeIfFree() -> Bool {
+    let guardPath = directory.appending(path: "\(name).guard").path
+    guard FileManager.default.fileExists(atPath: guardPath),
+      let guardFD = try? Self.open(guardPath)
+    else { return false }
+    defer { close(guardFD) }
+    guard flock(guardFD, LOCK_EX | LOCK_NB) == 0 else { return false }
+    defer { flock(guardFD, LOCK_UN) }
+    var slots: [String] = []
+    for slot in 0..<capacity {
+      let path = slotPath(slot)
+      guard FileManager.default.fileExists(atPath: path) else { continue }
+      guard let fd = try? Self.open(path) else { return false }
+      defer { close(fd) }
+      guard flock(fd, LOCK_EX | LOCK_NB) == 0 else { return false }
+      flock(fd, LOCK_UN)
+      slots.append(path)
+    }
+    // Every scan takes the guard first, so no slot is taken between these checks and the unlinks.
+    for path in slots { unlink(path) }
+    unlink(guardPath)
+    return true
+  }
+
   /// The live PIDs holding a slot now; a slot whose holder let go still names it, so only a slot
   /// still locked counts.
   public func livePIDs() -> [Int32] {

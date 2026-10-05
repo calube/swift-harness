@@ -1,0 +1,90 @@
+{
+  "after" : "watchlist-feature",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "a23a4ebafb8fb29534263e2cd2c2780c72f41539",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "0 of 6 rows verified (3 reason-only): 0 pass, 0 red, 0 unverified, 3 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on app-navigation",
+      "ms" : 0,
+      "requirement" : "req-watchlist",
+      "result" : "waiting",
+      "row" : 1,
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "waitingOn" : [
+        "app-navigation"
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on app-navigation",
+      "ms" : 0,
+      "requirement" : "req-refresh",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "waitingOn" : [
+        "app-navigation"
+      ]
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on app-navigation",
+      "ms" : 0,
+      "requirement" : "req-error-retry",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "watchlist-feature",
+        "app-navigation"
+      ],
+      "waitingOn" : [
+        "app-navigation"
+      ]
+    }
+  ],
+  "runID" : "20261005T114521Z-c03715c2",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "62ee63d7b23c03e1865a5d3f2510133d2102ad19",
+    "branch" : "spec/watchlist-feature",
+    "conflicts" : [
+
+    ],
+    "tip" : "fb1fadc394b27ee23a5345246e6bff8c131b05d7"
+  },
+  "verdict" : "GREEN"
+}
