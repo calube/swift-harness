@@ -102,11 +102,7 @@ struct ShellWriteTargetsTests {
       .map(\.path)
     let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
     #expect(denied == "\(call.cwd)/launch-list.flow.json")
-    #expect(
-      Set(paths) == [
-        slot + "/.harness/qa/spec/launch-list.flow.json", slot + "/launch-list.flow.json",
-      ],
-      "\(paths)")
+    #expect(paths == [slot + "/.harness/qa/spec/launch-list.flow.json"], "\(paths)")
   }
 
   @Test(
@@ -153,7 +149,7 @@ struct ShellWriteTargetsTests {
     arguments: [
       ("cd /wt && cd sub && echo x > a", ["/wt/sub/a"]),
       ("cd /wt && cd ./sub && cd .. && echo x > a", ["/wt/./sub/../a"]),
-      ("cd /wt && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n", ["/wt/s/a", "/wt/a"]),
+      ("cd /wt && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n", ["/wt/s/a"]),
       ("cd /wt\ncd sub\necho x > a", ["/wt/sub/a", "/wt/a"]),
       ("cd sub && echo x > a", ["sub/a"]),
       ("cd /wt &&\necho x > a", ["/wt/a"]),
