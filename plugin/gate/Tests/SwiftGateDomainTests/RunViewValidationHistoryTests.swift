@@ -169,4 +169,31 @@ struct RunViewValidationHistoryTests {
     #expect(row.history[1].flow?.video == video)
     #expect(validation.linkedFiles.contains("\(qaRun)/\(video)"))
   }
+
+  @Test(
+    "send-money-4's first before-merge run, whose search row message ran to 974 bytes, shows that row with its message cut to fit and marked, and records no damage — catches a long qa message dropped from the report as damage"
+  )
+  func longRowMessageIsCutNotDamage() throws {
+    let qaRun = "20261005T061244Z-0883dbbe"
+    let folder = "RunView/send-money-4-evidence/\(qaRun)"
+    let events = try HarnessEventJSON.decode(try Fixture.data("\(folder)/events/qa.jsonl")).events
+    let report = try QAReportJSON.decode(try Fixture.data("\(folder)/qa/report.json"))
+    let whole = try #require(report.rows.first { $0.row == 1 }?.message)
+    #expect(whole.utf8.count >= EventPayloadGuard.maxStringBytes)
+
+    let view = RunViewBuilder.build(
+      RunViewInput(
+        buildRun: "20261005T055912Z-33c711cb", events: events,
+        qaRuns: [qaRun: RunViewQARun(report: report)]))
+
+    #expect(view.damage.filter { $0.source.hasPrefix("qa run \(qaRun)") } == [])
+    let row = try #require(view.validation?.rows.first { $0.row == 1 })
+    let message = try #require(row.message)
+    #expect(EventPayloadGuard.rejection(inJSON: message) == nil)
+    #expect(message.hasSuffix("…"))
+    #expect(whole.hasPrefix(String(message.dropLast())))
+    #expect(message.hasPrefix("sim verify RED: sim.a11y-label"))
+    #expect(try #require(view.validation?.rows.first { $0.row == 2 }).message
+      == report.rows.first { $0.row == 2 }?.message)
+  }
 }

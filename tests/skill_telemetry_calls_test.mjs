@@ -52,11 +52,11 @@ const REQUIRED = [
     file: BUILD, heading: '## 3. On each completion', path: 'events ingest',
     flags: { '--session': '<session>', '--workflow-transcripts': '<transcripts>', '--role': 'build-worker', '--task': '<task>', '--build-run': '<run>' },
   },
-  // The merge fixer is the build session's own subagent, so the completion ingest would file its
-  // usage as the orchestrator's; its own ingest tags it with the task it fixes.
+  // The merge fixer is the build session's own subagent; its own ingest tags it build-fixer with
+  // the task it fixes, which the session's ingest can't tell.
   {
     file: LOOP, heading: '## Conflict or red main', path: 'events ingest',
-    flags: { '--session': '<session>', '--agent-id': '<agent>', '--role': 'build-worker', '--task': '<task>', '--build-run': '<run>' },
+    flags: { '--session': '<session>', '--agent-id': '<agent>', '--role': 'build-fixer', '--task': '<task>', '--build-run': '<run>' },
   },
   { file: SHIP, heading: '## 7. Report', path: 'events ingest', flags: { '--session': '<session>', '--role': 'orchestrator', '--build-run': '<run>' } },
   { file: SHIP, heading: '## 7. Report', path: 'events summary', flags: { '--build-run': '<run>' } },
@@ -427,7 +427,7 @@ const tests = {
     assert.deepEqual(wrong.map(r => `${r.where}: exit ${r.status} for \`${r.args.join(' ')}\`: ${r.out.trim()}`), [])
   },
 
-  'the build loop times the merge fixer in a fix span inside its task and ingests the fixer alone as that task\'s build-worker, ending the span before any halt — catches a merge fixer drawn nowhere and billed to the orchestrator'() {
+  'the build loop times the merge fixer in a fix span inside its task and ingests the fixer alone as that task\'s build-fixer, ending the span before any halt — catches a merge fixer drawn nowhere and billed to the orchestrator'() {
     const loop = section(skillFiles()[LOOP], '## Conflict or red main')
     assert.ok(loop, 'no `## Conflict or red main` section')
     const calls = extractInvocations(loop)

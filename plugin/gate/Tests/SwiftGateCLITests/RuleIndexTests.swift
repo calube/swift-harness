@@ -77,8 +77,9 @@ struct RuleIndexTests {
       CalibrationFreshness.noRecordRuleID, CalibrationFreshness.unreadableRuleID,
       CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
       "plugin-validate.summary", "plugin-validate.accepted-warning",
-      PlanLintGraph.writeSetUnresolvedRuleID,
-      PluginVersionRule.pinnedRuleID, PluginVersionRule.malformedRuleID,
+      PlanLintGraph.writeSetUnresolvedRuleID, ContractLanding.unlandedWriteRuleID,
+      ContractLanding.scenarioSeamRuleID, PluginVersionRule.pinnedRuleID,
+      PluginVersionRule.malformedRuleID,
       PluginVersionRule.summaryRuleID,
     ]
     let environment = [

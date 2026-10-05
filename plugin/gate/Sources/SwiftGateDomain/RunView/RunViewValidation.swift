@@ -619,11 +619,20 @@ enum RunViewValidationFold {
       }
     return RunViewValidation.Attempt(
       qaRun: qaRun, stage: stage, after: report?.after.flatMap { keep($0, "after") },
-      result: check.result, message: reported.flatMap { keep($0.message, "message") },
+      result: check.result, message: reported.flatMap { keep(shown($0.message), "message") },
       exitStatus: check.exitStatus, milliseconds: check.milliseconds, evidence: evidence,
       waitingOn: check.waitingOn,
       reusedFrom: check.reusedFrom.flatMap { keep($0, "reusedFrom") }, at: time, output: output,
       outputCut: cut)
+  }
+
+  /// `message` on 1 line, cut to ``RunView/maxFailureMessageBytes`` with `…` marking a cut, so a
+  /// long `qa run` message shows its start rather than nothing.
+  static func shown(_ message: String) -> String {
+    let line = message.split(whereSeparator: \.isNewline).joined(separator: " ")
+    let mark = "…"
+    guard line.utf8.count > RunView.maxFailureMessageBytes else { return line }
+    return RunViewText.cut(line, toBytes: RunView.maxFailureMessageBytes - mark.utf8.count) + mark
   }
 
   /// 1 row as the check it shows left it, with its report row's check and tasks; each string the

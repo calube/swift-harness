@@ -15,7 +15,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch|Agent",
+        "matcher": "Bash|Monitor|Edit|Write|MultiEdit|NotebookEdit|WebFetch|WebSearch|Agent",
         "hooks": [
           {
             "type": "command",

@@ -1,0 +1,9 @@
+{
+  "args": {
+    "plan": "spec",
+    "task": "detail-screen"
+  },
+  "runId": "wf_b303df48-6fa",
+  "status": "killed",
+  "workflowName": "swift-harness-build-task"
+}

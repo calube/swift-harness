@@ -10,7 +10,8 @@
 // test files and `.harness/qa/<plan>/`, adds a contract name itself, or proves a red by hand rather
 // than through `qa run --at-base --prepared-by`; a worker call cut at the 120 s tool timeout, a
 // bare `ls` an alias turns into a wait on stdin, or a search of the whole disk for the record its
-// prepared run wrote; and a skill tuned to one app.
+// prepared run wrote; a pull-to-refresh flow on a gesture that never refreshes the list; and a
+// skill tuned to one app.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs'
@@ -198,6 +199,52 @@ export function toolCallProblems(text) {
   return problems
 }
 
+const REFRESH_FIXTURE = 'gate/Tests/Fixtures/AgentDevice/pull-to-refresh'
+const GESTURES = 'docs/simulator-qa-flow-gestures.md'
+
+// 1 captured refresh batch: its step 3, whether the list refreshed, and how far step 3 moved.
+function capturedRefresh(name) {
+  const steps = JSON.parse(read(`${REFRESH_FIXTURE}/${name}.steps.json`))
+  const output = JSON.parse(read(`${REFRESH_FIXTURE}/${name}.stdout`))
+  const results = output.data?.results ?? output.error.details.partialResults
+  const data = results.find(result => result.step === 3).data
+  const [y1, y2] = data.from ? [data.from.y, data.to.y] : [data.y1, data.y2]
+  return { step: steps[2], refreshed: output.success === true, distance: y2 - y1 }
+}
+
+/**
+ * Where a text's pull-to-refresh recipe falls short of the captured runs: its step is the
+ * `gesture` drag that refreshed, between 2 `id=` selectors; the distance it asks for is past
+ * the short drag that didn't refresh and no more than the drag that did; and it says a `scroll`
+ * never stands in. Two build trials left a refresh row red on a `scroll up`, and a fixer spent
+ * 14 minutes finding out why.
+ */
+export function refreshProblems(text, { pass, short }) {
+  const problems = []
+  const prose = flat(text)
+  const span = [...prose.matchAll(/`(\{"command": "gesture".*?\}\})`/g)].map(m => m[1])[0]
+  if (!span) return ['no `gesture` step for pull to refresh']
+  let step
+  try {
+    step = JSON.parse(span)
+  } catch (error) {
+    return [`the pull-to-refresh step isn't JSON: ${error.message}`]
+  }
+  if (step.input?.kind !== pass.step.input.kind) problems.push(`the step's kind is \`${step.input?.kind}\`, not the captured \`${pass.step.input.kind}\``)
+  const keys = input => Object.keys(input ?? {}).sort().join(',')
+  if (keys(step.input) !== keys(pass.step.input)) problems.push(`the step's keys are ${keys(step.input)}, not the captured ${keys(pass.step.input)}`)
+  for (const key of ['source', 'destination']) {
+    if (!/^id=/.test(step.input?.[key] ?? '')) problems.push(`the step's \`${key}\` is no \`id=\` selector`)
+  }
+  const least = /\bat least (\d+) pt\b/.exec(prose)
+  if (!least) problems.push('the recipe names no distance in pt')
+  else if (!(Number(least[1]) > short.distance && Number(least[1]) <= pass.distance)) {
+    problems.push(`${least[1]} pt is not past the ${short.distance} pt drag that didn't refresh and within the ${pass.distance} pt one that did`)
+  }
+  if (!/`scroll`[^.]*\bnever\b[^.]*refresh/i.test(prose)) problems.push('the recipe never says a `scroll` never pulls to refresh')
+  return problems
+}
+
 // Words a generic skill never carries: every template preset but `default`, every captured spec
 // page's title, and the example app's name.
 function nonGenericWords() {
@@ -358,6 +405,34 @@ const tests = {
       const found = words.filter(word => new RegExp(`\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text))
       assert.deepEqual(found, [], `${file} names ${found.join(', ')}`)
     }
+  },
+
+  'the captured drag refreshes the list and the short drag and scroll up don\'t — catches a recipe built on a capture that shows nothing'() {
+    const pass = capturedRefresh('drag')
+    const short = capturedRefresh('drag-short')
+    const scroll = capturedRefresh('scroll-up')
+    assert.deepEqual([pass.refreshed, short.refreshed, scroll.refreshed], [true, false, false])
+    assert.equal(pass.step.command, 'gesture')
+    assert.ok(short.distance < pass.distance, `${short.distance} >= ${pass.distance}`)
+  },
+
+  'the validation worker and the flow gestures doc pull to refresh with the captured drag, never a scroll — catches a refresh row red on a gesture that never refreshes'() {
+    const captured = { pass: capturedRefresh('drag'), short: capturedRefresh('drag-short') }
+    assert.deepEqual(refreshProblems(read(WORKER), captured), [])
+    assert.deepEqual(refreshProblems(read(GESTURES), captured), [])
+    assert.match(flat(read('docs/simulator-qa-flows.md')), /\(simulator-qa-flow-gestures\.md\)/, 'the flows doc never links the gestures doc')
+    assert.match(read('docs/index.md'), /\(simulator-qa-flow-gestures\.md\)/, 'the docs index never routes to the gestures doc')
+  },
+
+  'the refresh check names a scroll step, a short distance, a ref target and a missing scroll ban — catches a check that passes anything'() {
+    const captured = { pass: capturedRefresh('drag'), short: capturedRefresh('drag-short') }
+    const good = 'Pull to refresh: `{"command": "gesture", "input": {"kind": "drag", "source": "id=\\"a\\"", "destination": "id=\\"b\\""}}`, rows at least 350 pt apart. A `scroll` never pulls to refresh.'
+    assert.deepEqual(refreshProblems(good, captured), [])
+    assert.deepEqual(refreshProblems(good.replace('"command": "gesture"', '"command": "scroll"'), captured), ['no `gesture` step for pull to refresh'])
+    assert.match(refreshProblems(good.replace('350 pt', '200 pt'), captured).join('\n'), /200 pt is not past/)
+    assert.match(refreshProblems(good.replace('id=\\"a\\"', '@e3'), captured).join('\n'), /`source` is no `id=`/)
+    assert.match(refreshProblems(good.replace('"kind": "drag"', '"kind": "pan"'), captured).join('\n'), /kind is `pan`/)
+    assert.match(refreshProblems(good.replace('never', 'may'), captured).join('\n'), /never pulls to refresh/)
   },
 
   'the docs router sends a reader running simulator QA to the QA skill — catches a skill no doc reaches'() {

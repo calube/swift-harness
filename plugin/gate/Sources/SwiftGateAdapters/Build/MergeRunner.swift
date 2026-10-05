@@ -665,8 +665,11 @@ public struct BuildMerge: Sendable {
 
   /// Refuses while a validation row runs after this task with every other task it waits on
   /// merged, unless the newest `qa run --after <task> --before-merge` of the branch at its tip on
-  /// `main`'s commit is GREEN, or conflicted, which the merge then shows. A RED one cuts the fix
-  /// worktree, as a conflict does, unless this merges the fixer's branch, whose worktree exists.
+  /// `main`'s commit is GREEN, or conflicted, which the merge then shows. A row whose other
+  /// unmerged tasks all have a checked return waiting to merge, and no fixer's branch, needs that
+  /// run over all their branches at once, before the first of them lands. A RED one cuts the fix
+  /// worktree, as a conflict does, unless this merges the fixer's branch, whose worktree exists;
+  /// that fixer's branch sets the task aside, so the other tasks' merges no longer wait on it.
   /// A plan with no table, or one whose state doesn't read, needs no run here: `qa run` itself
   /// reports that table.
   private func checkFlows(_ command: String, _ context: Context, main: String)
@@ -674,6 +677,7 @@ public struct BuildMerge: Sendable {
   {
     let readiness: QAMergeReadiness
     let tip: String
+    let alongside: [String]
     do {
       let plan = try PlanStateLayout(commonDirectory: context.common).plan(self.plan)
       guard
@@ -685,14 +689,20 @@ public struct BuildMerge: Sendable {
       let log = try context.run.events()
       tip = try await merger.commit(
         of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
+      let merged = progress.merged(per: log)
+      let waiting = try await waitingBranches(context, progress: progress, log: log)
+      alongside = QAMergeReadiness.alongside(
+        table: table, merged: merged, task: task, waiting: waiting)
       readiness = QAMergeReadiness.of(
-        table: table, merged: progress.merged(per: log), plan: self.plan, task: task,
-        reports: beforeMergeReports(context), branch: context.branch, tip: tip, base: main)
+        table: table, merged: merged, plan: self.plan, task: task,
+        reports: beforeMergeReports(context), branch: context.branch, tip: tip, base: main,
+        waiting: waiting)
     } catch {
       return
     }
+    let tasks = ([task] + alongside).joined(separator: ",")
     let run =
-      "`swiftgate qa run --plan \(plan) --after \(task) --before-merge\(fix ? " --fix" : "")`"
+      "`swiftgate qa run --plan \(plan) --after \(tasks) --before-merge\(fix ? " --fix" : "")`"
     switch readiness {
     case .notNeeded, .checked, .conflicts:
       return
@@ -702,8 +712,14 @@ public struct BuildMerge: Sendable {
         "build-merge.\(BuildMergeReport.Reason.flowsUnchecked.rawValue): validation "
           + "\(rows.count == 1 ? "row" : "rows") \(rows.map(String.init).joined(separator: ", ")) "
           + "\(rows.count == 1 ? "runs" : "run") after `\(task)` with every other task "
-          + "\(rows.count == 1 ? "it waits" : "they wait") on merged, and no GREEN \(run) covers "
-          + "\(context.branch) at \(tip) on \(context.names.baseBranch) at \(main); run it in "
+          + "\(rows.count == 1 ? "it waits" : "they wait") on "
+          + (alongside.isEmpty
+            ? "merged"
+            : "merged or checked and waiting to merge (\(alongside.joined(separator: ", ")))")
+          + ", and no GREEN \(run) covers "
+          + "\(context.branch) at \(tip)"
+          + (alongside.isEmpty ? "" : " with those tasks' branches at their tips")
+          + " on \(context.names.baseBranch) at \(main); run it in "
           + "\(context.names.mainCheckout) and merge once it is GREEN",
         reason: .flowsUnchecked)
     case .red(let runID, let rows):
@@ -725,12 +741,35 @@ public struct BuildMerge: Sendable {
     }
   }
 
-  /// The plan's `qa run --before-merge` reports of this task in the main checkout's runs, where
-  /// the build skill runs them; a report that doesn't decode is passed over.
+  /// The plan's `qa run --before-merge` reports that merged this task's branch in the main
+  /// checkout's runs, where the build skill runs them; a report that doesn't decode is passed
+  /// over.
   private func beforeMergeReports(_ context: Context) -> [QAReport] {
     QARunHistory.beforeMergeReports(
       worktree: URL(filePath: context.names.mainCheckout, directoryHint: .isDirectory), plan: plan
-    ).filter { $0.after == task }
+    ).filter { $0.after == task || $0.trialMerge?.alongside.contains { $0.task == task } == true }
+  }
+
+  /// Every other running task whose checked return waits to merge, at its branch's tip, except
+  /// one whose fixer's branch exists: its rows run again before that fix merges.
+  private func waitingBranches(
+    _ context: Context, progress: LedgerProgress, log: BuildEventLog
+  ) async throws -> [QATrialMerge.Branch] {
+    let running = Set(progress.tasks.filter { $0.status == .inProgress }.map(\.id))
+    var waiting: [QATrialMerge.Branch] = []
+    for ready in log.mergeQueue(running: running).ready where !ready.fix && ready.task != task {
+      let names = try TaskWorktree(
+        commonDirectory: context.common, plan: plan, task: ready.task, profile: profile)
+      let fix = try TaskWorktree(
+        commonDirectory: context.common, plan: plan, task: "fix-\(ready.task)", profile: profile)
+      guard try await !workspace.branchExists(fix.branch),
+        try await workspace.branchExists(names.branch)
+      else { continue }
+      let tip = try await merger.commit(
+        of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
+      waiting.append(QATrialMerge.Branch(task: ready.task, branch: names.branch, tip: tip))
+    }
+    return waiting
   }
 
   /// Aborts a conflicted merge in the main checkout and proves `main` is back where it was.

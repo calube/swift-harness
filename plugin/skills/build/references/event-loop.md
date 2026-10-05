@@ -100,6 +100,9 @@ Workflow({
 })
 ```
 
+In a `swiftgate run`, also pass `cutoffAt`: `deadlines.cutoffAt` from `run clock --json`, an
+ISO 8601 UTC time. The worker and its fix pass get it as their deadline. Leave it out elsewhere.
+
 - `taskGate`: the preset's `taskGate` when it names a tier; under `ledger`, the task's own `gate`.
   The workflow tells the worker to run it as `check --tier <taskGate> --base main`, with
   `--proof-base <surface commit>` when the task adds API, and adds `--prove --mutate` under
@@ -195,8 +198,9 @@ Merges land on `main` 1 at a time: `build merge --undo` takes back only the newe
 second merge on top of an ungated one would block its undo. `build next` reports the queue.
 `merging` is the merge on `main` whose task isn't done yet. `readyToMerge` lists each running task
 whose checked return waits to merge, in the order `build check-return` passed them, with
-`fix: true` for a fixer's return, which merges with `--fix`. Merge the first task in `readyToMerge` only while
-`merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
+`fix: true` for a fixer's return, which merges with `--fix`. A task whose halt was answered `retry`
+after its return was checked is in `fixing` instead, until its fixer's return is checked. Merge the
+first task in `readyToMerge` only while `merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
 run.
 
 A task whose return `build check-return` passed, or whose merge is on `main`, holds no slot: its
@@ -287,17 +291,23 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
   or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
   passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
-  (`guard.fixer-gate-cap`).
+  (`guard.fixer-gate-cap`);
+- that after 2 red `qa run`s of the same flow row it stops and returns `gate-red` with that row's
+  evidence: its requirement, the failing step and its message, and both run ids. It never reads
+  `agent-device`'s source and never writes probe tests to learn why a step fails. Its `gate-red`
+  return then takes the path below like any other, quoting the row's evidence;
+- in a `swiftgate run`, the `cutoffAt` time `run clock` reports, as its deadline: it starts no
+  gate or `qa run` it can't finish by then, and at that time returns what it has.
 
 Go on with other tasks, or end the turn to wait; never poll. When its completion notice arrives,
 end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `ready-to-merge`,
 else `"$SG" events span end <span> --outcome red`.
 
 Then record its usage under the task it fixed:
-`"$SG" events ingest --session <session> --agent-id <agent> --role build-worker --task <task> --build-run <run>`,
+`"$SG" events ingest --session <session> --agent-id <agent> --role build-fixer --task <task> --build-run <run>`,
 with the `<agent>` its launch named. The fixer is
-this session's own subagent, which the session's own ingest files as the orchestrator's, so run this
-one first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
+this session's own subagent, which the session's own ingest files as `build-fixer` with no task,
+so run this one first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
 other non-zero exit prints 1 line for the report and the step goes on.
 
 Write its reply, the notice's `<result>`, to `.harness/build/<run>/fix-<task>.json` and check it.
@@ -339,6 +349,26 @@ tip on `main`'s commit, so run it again after any commit to either. A run whose 
 the same tree as an earlier one takes the rows that passed there with byte-identical checks,
 naming that run in `reusedFrom`, so repeating a fixer's passing run costs seconds.
 
+A row whose `Runs after` names tasks that haven't merged doesn't wait for the last of them. Once
+each unmerged task it names has a checked return in `build next`'s `readyToMerge`, it runs before
+the first of them merges, on 1 trial merge of all their branches onto `main`'s tip:
+
+```
+"$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json
+```
+
+`build merge` of any of those tasks refuses `flows-unchecked` until a run took every one of their
+branches at its tip on `main`'s commit, naming the command with its task list; a GREEN one lets
+each merge in turn. The held device and the reuse of a tree a passing run already checked work as
+above, so the last of them repeats the run in seconds when its merge makes the same tree. A task
+with a fixer's branch is no longer waiting: its rows run again before its fix merges.
+
+- RED over several tasks: pick the task that owns the red behaviour: the one whose write set holds
+  the screen, state or code each red row's message points at. When unsure, take the task the
+  row's `Runs after` names last. Run `build merge` for it first: it refuses `flows-red` and cuts
+  its fix worktree, and the halt and fixer follow as below. The fixer reruns the same run with
+  that task first and `--fix`. Then merge the other tasks: with the owner set aside, they no
+  longer wait on its rows.
 - GREEN: merge. Rows that read `unverified` or `waiting` go in the report with their messages.
   A branch that conflicts with `main` runs no row and names the files: merge, and the conflict
   goes to the fixer as any conflict does.

@@ -35,6 +35,9 @@ struct CutoffHistory: Sendable {
   var gateMilliseconds: [String: Int] = [:]
   /// The plan's `qa run --before-merge` reports.
   var beforeMergeReports: [QAReport] = []
+  /// What `final` would still run on the checkout's tree, which prices it before any `final` is
+  /// recorded; `nil` when that can't be read.
+  var finalReuse: FinalGateReuse? = nil
 }
 
 /// `build cutoff`: the brownfield run's answer to the time box's cutoff, decided by
@@ -124,7 +127,8 @@ enum BuildCutoffRun {
       }
       let decisions = CutoffRule.decide(
         tasks: tasks, timeBox: box, now: now,
-        costs: CutoffCosts.measured(log: log, milliseconds: history.gateMilliseconds))
+        costs: CutoffCosts.measured(
+          log: log, milliseconds: history.gateMilliseconds, finalReuse: history.finalReuse))
       let path = store.layout.directory + "/" + CutoffRecord.fileName
       do {
         try CutoffRecord(at: now, timeBox: box, decisions: decisions).encoded()
@@ -159,6 +163,7 @@ enum BuildCutoffRun {
       let sweep = await leftovers?.pruneScratchTrees() ?? ScratchWorktreeSweep()
       let notes =
         recordHalts(decisions, run: record.runID, telemetry: telemetry)
+        + endSpans(of: Set(abandoned.map(\.task)), run: record.runID, telemetry: telemetry)
         + sweep.failures.map { "a scratch tree wasn't pruned: \($0)" }
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green,
@@ -262,6 +267,22 @@ enum BuildCutoffRun {
     return notes
   }
 
+  /// Ends, as `abandoned`, each span of `run` the agents of the `abandoned` tasks left open: a
+  /// stopped worker never ends its own. Returns a line when they weren't ended.
+  private static func endSpans(
+    of abandoned: Set<String>, run: String, telemetry: BuildCutoffTelemetry?
+  ) -> [String] {
+    guard let telemetry, telemetry.enabled, !abandoned.isEmpty else { return [] }
+    do throws(SpanLogError) {
+      _ = try SpanLog(root: telemetry.log.root).endOpen(buildRun: run, outcome: .abandoned) {
+        $0.task.map(abandoned.contains) ?? false
+      }
+      return []
+    } catch {
+      return ["the abandoned tasks' open spans weren't ended: \(error)"]
+    }
+  }
+
   static func render(_ result: BuildLoopResult<BuildCutoffReport>, format: OutputFormat) -> String {
     BuildLoop.render(result, format: format) { report in
       func list(_ ids: [String]) -> String { ids.isEmpty ? "none" : ids.joined(separator: ", ") }
@@ -279,6 +300,19 @@ struct BuildCutoffTelemetry {
 }
 
 struct BuildCutoffCommand: AsyncParsableCommand {
+  /// What `final` would still run at the plan's launch base, from the checkout's toplevel as
+  /// `check --tier final` gates; `nil` when the plan has no launch clock or it can't be read.
+  static func finalReuse(root: URL, plan slug: String) async -> FinalGateReuse? {
+    let git = BuildLoop.git()
+    guard let plan = try? await BuildLoop.planLayout(slug, git: git).plan(slug),
+      let data = FileManager.default.contents(atPath: plan.directory + "/" + RunClock.fileName),
+      let clock = try? RunClock.decode(data),
+      let toplevel = try? await BrownfieldCheck.repositoryRoot(from: root, git: git)
+    else { return nil }
+    return await FinalGateReuseReader.read(
+      root: toplevel, base: clock.base, sourceHash: GateBinaryScope.current?.sourceHash)
+  }
+
   static let configuration = CommandConfiguration(
     commandName: "cutoff",
     abstract: "Decide a brownfield run's in-flight tasks at its time box's cutoff, asking no one.",
@@ -287,7 +321,9 @@ struct BuildCutoffCommand: AsyncParsableCommand {
       + "already gating finish its merge while its before-merge qa (none when a GREEN run "
       + "covers its tip), that merge gate, `final` and the report still fit before the box "
       + "ends, each priced from this run's recorded merge and final gates and the fixed "
-      + "estimates only before any, sets every other running task `abandoned` with the reason, "
+      + "estimates only before any, with a final not yet run priced by the area steps it can't "
+      + "reuse from earlier passes on the checkout's tree, sets every other running task "
+      + "`abandoned` with the reason, ends their open spans, "
       + "and writes "
       + "the decisions to the run's cutoff.json. It also acts once starts have stopped with "
       + "nothing running, naming the tasks that never started. It stops any gate still running "
@@ -325,7 +361,8 @@ struct BuildCutoffCommand: AsyncParsableCommand {
       finalSeconds: MeasuredFinalGateReader.seconds(worktree: root),
       history: CutoffHistory(
         gateMilliseconds: MeasuredFinalGateReader.milliseconds(worktree: root),
-        beforeMergeReports: QARunHistory.beforeMergeReports(worktree: root, plan: plan)))
+        beforeMergeReports: QARunHistory.beforeMergeReports(worktree: root, plan: plan),
+        finalReuse: await Self.finalReuse(root: root, plan: plan)))
     Console.write(BuildCutoffRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

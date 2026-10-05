@@ -247,6 +247,44 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "on the third price-tracker trial's areas, after a merge gate that touched the client and feature packages, the cutoff's price of final names LogClient's build and test as the only steps left, exactly the steps final then runs — catches a price whose keys drift from the ones final looks up"
+  )
+  func finalPriceNamesTheStepsFinalRuns() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/price-tracker-3-config.toml"))
+    let changed = [
+      "Packages/APIClient/Sources/APIClientLive/CoinGeckoLive.swift",
+      "Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift",
+    ]
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+    _ = try await Self.run(
+      clone, tier: .merge, areas: config.areas, changed: changed,
+      runner: FakeAreaCommandRunner { _ in .passed },
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+
+    let priced = FinalGateReuse.areas(
+      config.areas, inputs: GateReuse.Inputs(
+        tier: .final, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+        stateFiles: ["config": "c1"]),
+      repositoryRoot: clone.root.path(percentEncoded: false), layout: clone.layout,
+      passed: { store.pass($0) != nil })
+    let final = FakeAreaCommandRunner { _ in .passed }
+    _ = try await Self.run(
+      clone, tier: .final, areas: config.areas, changed: changed, runner: final,
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+
+    #expect(priced.map(\.name) == config.areas.map(\.name))
+    let left = Set(priced.flatMap { area in area.unreused.map { "\(area.name) \($0.rawValue)" } })
+    #expect(left == ["LogClient build", "LogClient test"])
+    #expect(left == Set(final.requests.map { "\($0.area) \($0.step.rawValue)" }))
+  }
+
+  @Test(
     "each gate step is labelled by what it built: final's reused area steps read reused, a prove that ran nothing reads none, and a prove whose reverted SwiftPM run builds in a fresh scratch tree reads cold — catches 0 s steps labelled cold or none, which skew warm and cold gate times"
   )
   func stepsAreLabelledByWhatTheyBuilt() async throws {
@@ -734,7 +772,7 @@ extension BrownfieldMergeCheckTests {
   }
 
   @Test(
-    "a merge gate proves only the tests its own merge brought, measured from the merge's first parent, while final and a head that isn't a merge measure from the plan base — catches a second merge counting the first task's already-merged test as its own"
+    "a later merge gate proves only the tests its own merge brought, measured from the merge's first parent, while the first merge, final and a head that isn't a merge measure from the plan base — catches a second merge counting the first task's already-merged test as its own"
   )
   func mergeProvesFromTheFirstParent() async throws {
     let clone = try Clone()
@@ -755,8 +793,8 @@ extension BrownfieldMergeCheckTests {
         == [
           ProvedTest(
             test: TrialPlanBranch.test, target: "Aidoku", outcome: .proven,
-            proofBase: branch.contract, assertion: nil)
-        ])
+            proofBase: branch.planBase, assertion: nil)
+        ], "the first merge measures from the plan base, so it takes in the contract's changes")
 
     let fixer = try await Self.trialRun(clone, branch, tier: .merge, at: "download-check")
     #expect(
@@ -837,4 +875,183 @@ private final class MemoryAreaSteps: AreaStepReusing {
   func pass(_ key: String) -> AreaStepPass? { passes.withLock { $0[key] } }
 
   func record(_ pass: AreaStepPass, key: String) { passes.withLock { $0[key] = pass } }
+}
+
+/// send-money-4's plan branch, rebuilt in a real repository from its captured UI test: a contract
+/// commit that changes the app target's UI test and a view, then 2 task branches merged with
+/// `--no-ff`, the first adding a package test with its source and the second only a view.
+private struct SendMoneyPlanBranch {
+  static let uiTest = "UITests/LaunchFlowUITests.swift"
+  static let view = "Packages/AppFeature/Sources/AppUI/AppView.swift"
+
+  let repository: TrialPlanBranch.Repository
+  private(set) var planBase = ""
+  private(set) var contract = ""
+  private(set) var firstMerge = ""
+  private(set) var secondMerge = ""
+
+  init(root: URL) async throws {
+    repository = try await TrialPlanBranch.Repository(root: root)
+    try repository.write(
+      Self.uiTest, try Fixture.text("BrownfieldTrial/send-money-4-LaunchFlowUITests-base.swift"))
+    try repository.write(Self.view, "struct AppView {}\n")
+    planBase = try await repository.commit("base")
+    try repository.write(
+      Self.uiTest,
+      try Fixture.text("BrownfieldTrial/send-money-4-LaunchFlowUITests-contract.swift"))
+    try repository.write(Self.view, "struct AppView { var title = \"\" }\n")
+    contract = try await repository.commit("contract")
+
+    try await repository.git("checkout", "-q", "-b", "account-client")
+    try repository.write(
+      "Packages/AppFeature/Sources/AccountClient/InMemoryAccountClient.swift",
+      "struct InMemoryAccountClient {}\n")
+    try repository.write(
+      "Packages/AppFeature/Tests/AccountClientTests/AccountClientTests.swift",
+      "import Testing\n@Test func startsAtBalance() {}\n")
+    _ = try await repository.commit("account")
+    try await repository.git("checkout", "-q", "main")
+    try await repository.git("merge", "-q", "--no-ff", "-m", "merge account", "account-client")
+    firstMerge = try await repository.git("rev-parse", "HEAD")
+
+    try await repository.git("checkout", "-q", "-b", "send-flow-ui", contract)
+    try repository.write(Self.view, "struct AppView { var title = \"Send\" }\n")
+    _ = try await repository.commit("views")
+    try await repository.git("checkout", "-q", "main")
+    try await repository.git("merge", "-q", "--no-ff", "-m", "merge views", "send-flow-ui")
+    secondMerge = try await repository.git("rev-parse", "HEAD")
+  }
+}
+
+extension TrialPlanBranch {
+  /// A scratch git repository the trial plan branches are rebuilt in.
+  struct Repository {
+    let root: URL
+    let runner = LiveProcessRunner(baseEnvironment: TrialPlanBranch.environment)
+
+    init(root: URL) async throws {
+      self.root = root
+      try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+      try await git("init", "-q", "-b", "main")
+      try await git("config", "commit.gpgsign", "false")
+    }
+
+    var adapter: LiveGit { LiveGit(runner: runner, repositoryRoot: root.path) }
+
+    @discardableResult
+    func git(_ arguments: String...) async throws -> String {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: root.path,
+          timeout: .seconds(30)))
+      guard output.status.isSuccess else {
+        throw TrialGitFailure(arguments: arguments, stderr: output.stderr.text)
+      }
+      return output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    func write(_ path: String, _ content: String) throws {
+      let url = root.appending(path: path)
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(content.utf8).write(to: url)
+    }
+
+    func commit(_ message: String) async throws -> String {
+      try await git("add", "-A")
+      try await git("commit", "-q", "-m", message)
+      return try await git("rev-parse", "HEAD")
+    }
+  }
+}
+
+extension BrownfieldMergeCheckTests {
+  /// send-money's captured config, whose app target only builds at slice, run at `revision`.
+  private static func sendMoneyRun(
+    _ clone: Clone, _ branch: SendMoneyPlanBranch, tier: CheckTier, at revision: String,
+    bound: (@Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound)? = nil
+  ) async throws -> (parts: GateRunParts, proofs: [ProvedTest]) {
+    try await branch.repository.git("checkout", "-q", "--detach", revision)
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+    let reverted: @Sendable (AreaCommandRequest) -> Bool = { request in
+      URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
+        .path(percentEncoded: false).hasPrefix(clone.scratch.path(percentEncoded: false))
+    }
+    let runner = FakeAreaCommandRunner { request in
+      reverted(request) ? .failed(exit: 65, tail: "reverted", junit: nil) : .passed
+    }
+    let scratch = FakeScratchWorktrees(root: clone.scratch)
+    let git = branch.repository.adapter
+    var scratchBound: (@Sendable (String, AreaStep) -> AreaCommandBound)?
+    if let bound {
+      scratchBound = { area, step in bound(area, step, .scratch) }
+    }
+    let dependencies = BrownfieldMergeCheck.Dependencies(
+      config: config, layout: clone.layout, git: git, runner: runner,
+      baseline: BaselineStore(layout: clone.layout, runner: runner, scratch: scratch),
+      prove: BrownfieldProve.Dependencies(
+        git: git, scratch: scratch, runner: runner, deadline: .seconds(5), bound: scratchBound),
+      trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
+      sliceBuildsOnly: { !$0.selectsChangedTests }, deadline: .seconds(5), bound: bound)
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+    let parts = try await BrownfieldMergeCheck.run(
+      root: clone.root, tier: tier, base: branch.planBase, context: context,
+      dependencies: dependencies)
+    return (parts, context.proofs.results)
+  }
+
+  @Test(
+    "send-money-4's first merge proves the UI test the contract changed in its build-only app target, measured from the plan base, and the second merge doesn't prove it again — catches a contract's build-only test change no gate proves before final"
+  )
+  func firstMergeProvesTheContractsBuildOnlyTests() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+
+    let first = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.firstMerge)
+    let app = first.proofs.filter { $0.target == "InterviewStarter" }
+    #expect(!app.isEmpty, "\(first.parts.findings.map(\.message))")
+    #expect(app.allSatisfy { $0.proofBase == branch.planBase && $0.outcome == .proven })
+
+    let second = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.secondMerge)
+    #expect(second.proofs.filter { $0.target == "InterviewStarter" } == [])
+  }
+
+  @Test(
+    "send-money-4's final, whose box left 96 s for the app target's measured 226 s prove while every area's tests passed, is GREEN with a prove.unproven note where the trial read BLOCKED — catches a final blocked by a prove there was no time to run"
+  )
+  func finalWithNoTimeToProveIsUnprovenNotBlocked() async throws {
+    let trial = try JSONSerialization.jsonObject(
+      with: try Fixture.data("BrownfieldTrial/send-money-4-final.json")) as? [String: Any]
+    let trialFindings = trial?["findings"] as? [[String: Any]] ?? []
+    let skipped = try #require(trialFindings.first { $0["rule"] as? String == "prove.no-evidence" })
+    #expect(trial?["verdict"] as? String == "BLOCKED")
+    let reason = "the 96 s left before the run's box ends at 2026-10-05T06:33:02Z"
+    #expect((skipped["message"] as? String)?.contains(reason) == true)
+
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+    let short: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
+      _, _, tree in
+      tree == .scratch
+        ? AreaCommandBound(duration: .seconds(96), reason: reason, expected: .seconds(226))
+        : AreaCommandBound(duration: .seconds(600), reason: "the floor")
+    }
+
+    let final = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: branch.secondMerge, bound: short)
+
+    #expect(Self.verdict(final.parts) == .green)
+    let unproven = final.parts.findings.filter { $0.ruleID == ProofRules.unprovenRuleID }
+    #expect(unproven.count == 1)
+    #expect(unproven.allSatisfy { $0.severity == .nit && $0.message.contains("InterviewStarter") })
+    #expect(unproven.first?.message.contains(reason) == true)
+    #expect(!final.parts.findings.contains { $0.ruleID == ProofRules.noEvidenceRuleID })
+
+    let merge = try await Self.sendMoneyRun(
+      clone, branch, tier: .merge, at: branch.firstMerge, bound: short)
+    #expect(Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
+  }
 }

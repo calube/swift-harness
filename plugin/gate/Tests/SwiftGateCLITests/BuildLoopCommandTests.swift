@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 @testable import SwiftGateCLI
@@ -122,14 +123,14 @@ private struct BuildScenario {
 
   func finish(
     session: String? = Self.alice, plan: String = Self.plan, at: Date = Self.startedAt,
-    report: Bool = false, qaRun: String? = nil
+    report: Bool = false, qaRun: String? = nil, viewer: ViewServerShutdown? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
     await BuildFinishRun.run(
       slug: plan, session: session, git: git, clock: FixedClock(date: at),
       root: report ? repository : nil, pluginRoot: report ? Fixture.checkoutRoot : nil,
-      qaRun: qaRun)
+      qaRun: qaRun, viewer: viewer)
   }
 
   /// The tic-tac-toe trial's `plan.json` and `validation.json` as plan `slug`'s state: a live
@@ -372,6 +373,45 @@ struct BuildLoopCommandTests {
     let view = try #require(
       JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any])
     #expect((view["run"] as? [String: Any])?["state"] as? String == "done")
+  }
+
+  @Test(
+    "finish stops the repository's viewer server once the done run's final report is written, and names the report's address on it; a finish with no report leaves the server up — catches a viewer left serving after the run"
+  )
+  func finishStopsTheViewerOnceTheReportIsFinal() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.writeRepository()
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger([("a", .done)])
+    _ = try #require(await scenario.start().report?.runId)
+    try scenario.setIndex(.building)
+    let common = scenario.repository.appending(path: "viewer-common", directoryHint: .isDirectory)
+    let registry = ViewServerRegistry(commonDirectory: common)
+    let record = ViewServerRecord(pid: 4_242, port: 52_123, startedAt: BuildScenario.startedAt)
+    try registry.write(record)
+    let signalled = Mutex<[Int32]>([])
+    let viewer = ViewServerShutdown(
+      registry: registry, probe: AnsweringViewer(),
+      signal: { pid in
+        signalled.withLock { $0.append(pid) }
+        return true
+      })
+
+    let unreported = try #require(await scenario.finish(viewer: viewer).report)
+    #expect(unreported.viewerFinal == nil)
+    #expect(signalled.withLock { $0 } == [])
+
+    let result = await scenario.finish(
+      at: BuildScenario.startedAt.addingTimeInterval(3_600), report: true, viewer: viewer)
+
+    let report = try #require(result.report, "\(result.message)")
+    #expect(report.runReport != nil, "\(report.runReportNote ?? "no note")")
+    #expect(report.viewerFinal == "http://127.0.0.1:52123/final")
+    #expect(signalled.withLock { $0 } == [4_242])
+    #expect(
+      BuildFinishRun.render(result, format: .human).contains("http://127.0.0.1:52123/final"))
   }
 
   @Test(
@@ -774,4 +814,9 @@ struct BuildLoopCommandTests {
     #expect(refused.verdict == .blocked, "\(refused.message)")
     #expect(refused.message.contains("--session"), "\(refused.message)")
   }
+}
+
+/// A viewer server that always answers as itself.
+private struct AnsweringViewer: ViewServerProbing {
+  func answers(_ record: ViewServerRecord) async -> Bool { true }
 }

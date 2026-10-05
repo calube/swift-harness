@@ -1,0 +1,206 @@
+{
+  "after" : "account-client",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "b00aeb4426df781293c0d4551f5d22348b1c76a3",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "0 of 12 rows verified (4 reason-only): 0 pass, 0 red, 0 unverified, 8 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 4,
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-contact-search",
+      "result" : "waiting",
+      "row" : 1,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/contact-tap.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-contact-tap",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/keypad-entry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-keypad-entry",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/amount-currency.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-amount-currency",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/continue-rule.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-continue-rule",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/confirm-send.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-confirm-send",
+      "result" : "waiting",
+      "row" : 6,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-send-success",
+      "result" : "waiting",
+      "row" : 7,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on send-flow-core, send-flow-ui",
+      "ms" : 0,
+      "requirement" : "req-send-failure",
+      "result" : "waiting",
+      "row" : 8,
+      "runsAfter" : [
+        "account-client",
+        "send-flow-core",
+        "send-flow-ui"
+      ],
+      "waitingOn" : [
+        "send-flow-core",
+        "send-flow-ui"
+      ]
+    }
+  ],
+  "runID" : "20261005T060956Z-bdf9713a",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "d40c8124a7b6266a7cfd3a6cc6ce1fea2213613e",
+    "branch" : "spec/account-client",
+    "conflicts" : [
+
+    ],
+    "tip" : "d026df69e9a43bd3044bb1f138c3b8ab39a5bbc0"
+  },
+  "verdict" : "GREEN"
+}

@@ -13,6 +13,9 @@ public enum ProofRules {
   public static let failsAtHeadRuleID = "prove.fails-at-head"
   public static let noEvidenceRuleID = "prove.no-evidence"
   public static let summaryRuleID = "prove.summary"
+  /// `final` had too little of the box left to run an area's changed tests reverted, and its
+  /// tests passed at the head: a note that the change went unproven, never a gate.
+  public static let unprovenRuleID = "prove.unproven"
 
   /// The green half: every test passes on the change as it stands.
   public static func judgeChange(_ tests: [ChangedTest], run: SelectedTestRun)

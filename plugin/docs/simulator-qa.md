@@ -28,7 +28,7 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 
 ## qa run
 
-`swiftgate qa run [--plan <slug>] [--after <task> [--before-merge [--fix]]] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
+`swiftgate qa run [--plan <slug>] [--after <task>[,<task>…] [--before-merge [--fix]]] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
 validation.json: none is GREEN with a note, several exit 2. A row runs once each `Runs after`
 task merged, per the ledger or build events, `--after` counting as merged and keeping only its

@@ -176,10 +176,29 @@ private final class ChildProcessGroups: Sendable {
     }
   }
 
+  /// How long a child's tree has to exit after SIGTERM before it gets SIGKILL.
+  static let killGracePeriod: Duration = .seconds(2)
+
   /// Signals every child's whole descendant tree, waiting out a spawn in progress so a child
-  /// started this instant is signalled too, then ends this process as `number` would have.
+  /// started this instant is signalled too, then ends this process as `number` would have. A
+  /// tree still running after ``killGracePeriod``, such as a test runner that handles SIGTERM
+  /// and keeps going, gets SIGKILL: nothing is left to stop it once this process is gone. The
+  /// lock stays held until then, so a command that starts after its predecessor died of the
+  /// SIGTERM never starts.
   private func terminate(on number: Int32) {
-    for root in groups.withLock({ $0 }) { ProcessTree.terminate(root: root, signal: SIGTERM) }
+    groups.withLock { roots in
+      var signalled = Set<pid_t>()
+      for root in roots {
+        signalled.formUnion(ProcessTree.terminate(root: root, signal: SIGTERM))
+      }
+      let deadline = ContinuousClock.now.advanced(by: Self.killGracePeriod)
+      while ContinuousClock.now < deadline, signalled.contains(where: { kill(-$0, 0) == 0 }) {
+        usleep(20_000)  // swiftgate:equivalent-mutant — paces the wait only
+      }
+      for root in roots {
+        ProcessTree.terminate(root: root, signal: SIGKILL, alongside: signalled)
+      }
+    }
     signal(number, SIG_DFL)
     kill(getpid(), number)
   }
