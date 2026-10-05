@@ -143,6 +143,8 @@ public enum GateWatchAction: String, Sendable, Equatable, Encodable {
   case overrun
   /// The box's cutoff has come and `build cutoff` hasn't decided it yet: run it, then wait again.
   case cutoff
+  /// A Workflow run ended while the gate ran: handle its completion notice, then wait again.
+  case workerReturned = "worker-returned"
 }
 
 /// 1 look at a gate running in the background. Pure.

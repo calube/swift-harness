@@ -517,4 +517,47 @@ struct BuildTimeBoxTests {
     #expect(missing.verdict == .blocked)
     #expect(missing.message.contains("no gate output"), "\(missing.message)")
   }
+
+  @Test(
+    "build gate-wait on a hung merge gate returns worker-returned at the poll after a build workflow's record ends, naming its task, and ignores one that ended before the call — catches the price-tracker-4 watchlist return held 73 s behind a gate-wait poll"
+  )
+  func gateWaitReturnsOnAWorkflowEnd() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("app-core", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+    let started = BoxScenario.launch.addingTimeInterval(20 * 60)
+    let output = try Self.output("merge-app-core.json", in: scenario, startedAt: started)
+    let records = Fixture.gateDirectory.appending(
+      path: "Tests/Fixtures/Transcripts/price-tracker-4-workflows", directoryHint: .isDirectory)
+    let workflows = TestTemporaryDirectory.root.appending(
+      path: "gate-wait-workflows-\(UUID().uuidString)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: workflows, withIntermediateDirectories: true)
+    defer { TestTemporaryDirectory.remove(workflows) }
+    let clientLive = "wf_9443ae9a-9fc.json"
+    let watchlist = "wf_8913562a-df9.json"
+    try FileManager.default.copyItem(
+      at: records.appending(path: clientLive), to: workflows.appending(path: clientLive))
+
+    let clock = SteppingClock(started.addingTimeInterval(60))
+    let events = try Self.priceTrackerEvents()
+    let result = await BuildGateWaitRun.run(
+      slug: BoxScenario.plan, tier: .merge, output: output, maxWait: 120, git: scenario.git,
+      clock: clock, events: { events },
+      endedWorkflows: { WorkflowRecords.ended(in: workflows) },
+      sleep: { seconds in
+        clock.sleep(seconds)
+        if clock.slept.count == 2 {
+          try? FileManager.default.copyItem(
+            at: records.appending(path: watchlist), to: workflows.appending(path: watchlist))
+        }
+      })
+    let report = try #require(result.report, "\(result.message)")
+    #expect(report.action == .workerReturned)
+    #expect(report.returned == ["tracker-watchlist"])
+    #expect(clock.slept == [5, 5])
+    #expect(report.gateVerdict == nil)
+    #expect(report.message.contains("tracker-watchlist"), "\(report.message)")
+  }
 }

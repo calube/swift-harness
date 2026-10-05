@@ -1,0 +1,188 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 4 (wait): wait timed out for selector: id=\"probe.refreshes\" label=\"Refreshes 1\". Current surface: Probe, Refreshes 0, Row 0, Row 1.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muv0afuz-7ae5d324",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/requests/2ab68a0ab58880fd.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-refresh-short",
+      "requestId": "2ab68a0ab58880fd"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 5000,
+      "readableCaptures": 7,
+      "captures": 7,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 462,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 763,
+          "durationMs": 436,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1502,
+          "durationMs": 436,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2240,
+          "durationMs": 435,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2977,
+          "durationMs": 446,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3725,
+          "durationMs": 442,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4469,
+          "durationMs": 439,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 5002,
+      "currentSurface": {
+        "labels": [
+          "Probe",
+          "Refreshes 0",
+          "Row 0",
+          "Row 1",
+          "Row 2",
+          "probe.bottom"
+        ]
+      },
+      "step": 4,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.refreshes\" label=\"Refreshes 1\"",
+        "5000"
+      ],
+      "executed": 3,
+      "total": 5,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-refresh-short",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/requests/2ab68a0ab58880fd.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh-short/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.ShortRefreshProbe",
+            "appBundleId": "com.example.ShortRefreshProbe",
+            "startup": {
+              "durationMs": 1338,
+              "measuredAt": "2026-10-05T08:46:55.660Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.ShortRefreshProbe",
+              "appBundleId": "com.example.ShortRefreshProbe"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 456,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 860,
+              "totalDurationMs": 1338
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-92505",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.ShortRefreshProbe"
+          },
+          "durationMs": 1755
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 507,
+            "selector": "id=\"probe.refreshes\" label=\"Refreshes 0\""
+          },
+          "durationMs": 510
+        },
+        {
+          "step": 3,
+          "command": "gesture",
+          "ok": true,
+          "data": {
+            "kind": "drag",
+            "durationMs": 1300,
+            "pointerCount": 1,
+            "from": {
+              "x": 201,
+              "y": 246
+            },
+            "to": {
+              "x": 201,
+              "y": 350
+            },
+            "targets": {
+              "source": {
+                "selectorChain": [
+                  "id=\"probe.row.0\"",
+                  "role=\"statictext\" label=\"Row 0\"",
+                  "label=\"Row 0\""
+                ],
+                "resolution": {
+                  "source": "runtime",
+                  "phase": "pre-action",
+                  "kind": "unique"
+                }
+              },
+              "destination": {
+                "selectorChain": [
+                  "id=\"probe.row.2\"",
+                  "role=\"statictext\" label=\"Row 2\"",
+                  "label=\"Row 2\""
+                ],
+                "resolution": "[Circular]"
+              }
+            },
+            "currentUptimeMs": 341046119.236,
+            "gestureStartUptimeMs": 341044568.0595417,
+            "gestureEndUptimeMs": 341046119.06987506,
+            "runnerMainThreadBusy": false,
+            "message": "Dragged id=\"probe.row.0\" to id=\"probe.row.2\"",
+            "executionProfile": "timed-pan",
+            "timing": {
+              "executionProfile": "timed-pan",
+              "gestureDurationMs": 1300
+            }
+          },
+          "durationMs": 2593
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : "/trial/repo-spec.slot-1/.harness/qa/spec/at-base-run.json",
+  "commit" : "562e50679a13e8781b45ee72889cfaad310a3f4e",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-refresh, flow) `qa/refresh.flow.json`: no red run at the merge base: not run: qa lint couldn't run: /trial/repo-spec.slot-1/.harness/qa/spec/refresh.flow.json doesn't read: The file “refresh.flow.json” couldn’t be opened because there is no such file.",
+      "rule" : "qa.check-unverified",
+      "severity" : "nit"
+    }
+  ],
+  "message" : "5 of 9 rows verified (3 reason-only): 0 pass, 5 red, 1 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "checks read from .harness/qa/spec/ before qa adopt: only the 6 rows `spec-validation` writes ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist.flow/steps.json",
+        "qa/01-req-watchlist.flow/batch.json",
+        "qa/01-req-watchlist.flow/flow.json",
+        "qa/01-req-watchlist.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 230123,
+      "requirement" : "req-watchlist",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+        "qa/02-req-first-load-spinner.flow/steps.json",
+        "qa/02-req-first-load-spinner.flow/batch.json",
+        "qa/02-req-first-load-spinner.flow/flow.json",
+        "qa/02-req-first-load-spinner.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.loading\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 26371,
+      "requirement" : "req-first-load-spinner",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+        "qa/03-req-refresh.flow/lint.txt"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: qa lint couldn't run: /trial/repo-spec.slot-1/.harness/qa/spec/refresh.flow.json doesn't read: The file “refresh.flow.json” couldn’t be opened because there is no such file.",
+      "ms" : 0,
+      "requirement" : "req-refresh",
+      "result" : "unverified",
+      "row" : 3,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "evidence" : [
+        "qa/04-req-error-retry.flow/steps.json",
+        "qa/04-req-error-retry.flow/batch.json",
+        "qa/04-req-error-retry.flow/flow.json",
+        "qa/04-req-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.error\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 23874,
+      "requirement" : "req-error-retry",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "evidence" : [
+        "qa/05-req-detail.flow/steps.json",
+        "qa/05-req-detail.flow/batch.json",
+        "qa/05-req-detail.flow/flow.json",
+        "qa/05-req-detail.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 20555,
+      "requirement" : "req-detail",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "evidence" : [
+        "qa/06-req-chart-failure.flow/steps.json",
+        "qa/06-req-chart-failure.flow/batch.json",
+        "qa/06-req-chart-failure.flow/flow.json",
+        "qa/06-req-chart-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T074901Z-090098cf-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 20670,
+      "requirement" : "req-chart-failure",
+      "result" : "red",
+      "row" : 6,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T074901Z-090098cf",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

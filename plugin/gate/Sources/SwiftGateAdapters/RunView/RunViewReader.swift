@@ -51,6 +51,7 @@ public struct RunViewReader: RunViewReading {
     var briefs: [String: RunView.Brief] = [:]
     var prebuild = Prebuild()
     var qaWindow: QAWindow?
+    var validation: ValidationTable?
     if let join {
       let plan = try planState(join.plan, damage: &damage, unwritten: &unwritten)
       ledger = plan.ledger
@@ -59,6 +60,7 @@ public struct RunViewReader: RunViewReading {
       prebuild = try self.prebuild(plan: join.plan, buildRun: buildRun, damage: &damage)
       qaWindow = QAWindow(
         plan: join.plan, from: buildRun, until: try nextBuildRun(plan: join.plan, after: buildRun))
+      validation = try validationTable(join.plan, damage: &damage)
     }
 
     var gateRuns = join.map(Self.gateRuns(of:)) ?? []
@@ -123,7 +125,25 @@ public struct RunViewReader: RunViewReading {
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
       damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workerGateRuns,
       launchedAt: prebuild.launchedAt, gateReports: reports,
-      checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa)
+      checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa,
+      validation: validation)
+  }
+
+  /// The plan's `validation.json` as it stands now; `nil` when the plan has none, and damage when
+  /// it doesn't read.
+  private func validationTable(_ plan: String, damage: inout [RunView.Damage]) throws
+    -> ValidationTable?
+  {
+    let directory = try PlanStateLayout(commonDirectory: commonDirectory.path).plan(plan).directory
+    let path = "\(directory)/\(ValidationTable.fileName)"
+    guard FileManager.default.fileExists(atPath: path), let data = read(path, damage: &damage)
+    else { return nil }
+    do {
+      return try ValidationTableJSON.decode(data)
+    } catch {
+      damage.append(RunView.Damage(source: display(path), reason: "\(error)"))
+      return nil
+    }
   }
 
   /// `kept`, then each `judge.call` of `events` made between its first and last `agent.usage`

@@ -1,0 +1,158 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "45f0f2a70218cd72805c239b4483103dbfc33c48",
+  "final" : true,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-watchlist, flow) `qa/watchlist.flow.json`: not run: tracker-watchlist was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (req-first-load-spinner, flow) `qa/first-load-spinner.flow.json`: not run: tracker-watchlist was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-error-retry, flow) `qa/error-retry.flow.json`: not run: tracker-watchlist was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-detail, flow) `qa/detail.flow.json`: not run: tracker-watchlist, tracker-detail was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-chart-failure, flow) `qa/chart-failure.flow.json`: not run: tracker-watchlist, tracker-detail was abandoned before it merged",
+      "rule" : "qa.check-unverified",
+      "severity" : "major"
+    }
+  ],
+  "message" : "0 of 9 rows verified (4 reason-only): 0 pass, 0 red, 0 unverified, 0 waiting, 5 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 4,
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: tracker-watchlist was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-watchlist",
+      "result" : "abandoned",
+      "row" : 1,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: tracker-watchlist was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-first-load-spinner",
+      "result" : "abandoned",
+      "row" : 2,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: tracker-watchlist was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-error-retry",
+      "result" : "abandoned",
+      "row" : 3,
+      "runsAfter" : [
+        "tracker-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: tracker-watchlist, tracker-detail was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-detail",
+      "result" : "abandoned",
+      "row" : 4,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "not run: tracker-watchlist, tracker-detail was abandoned before it merged",
+      "ms" : 0,
+      "requirement" : "req-chart-failure",
+      "result" : "abandoned",
+      "row" : 5,
+      "runsAfter" : [
+        "tracker-watchlist",
+        "tracker-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T081823Z-e87338ca",
+  "schemaVersion" : 1,
+  "settled" : true,
+  "verdict" : "RED"
+}
