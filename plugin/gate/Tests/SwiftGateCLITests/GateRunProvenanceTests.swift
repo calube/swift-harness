@@ -49,9 +49,8 @@ struct GateRunProvenanceTests {
     "a gate run's report.json keeps each area test step's ran, passed, failed and skipped counts the steps handed over — catches a kept summary with no per-area test count"
   )
   func recordsAreaTestTotals() async throws {
-    let root = FileManager.default.temporaryDirectory
-      .appending(path: "swiftgate-provenance-\(UUID().uuidString)", directoryHint: .isDirectory)
-    defer { try? FileManager.default.removeItem(at: root) }
+    let root = try TestTemporaryDirectory.make("swiftgate-provenance")
+    defer { TestTemporaryDirectory.remove(root) }
     let parts = GateRunParts(
       tiers: [try TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1, testCounts: nil)])
     let counted = AreaTestCounts(

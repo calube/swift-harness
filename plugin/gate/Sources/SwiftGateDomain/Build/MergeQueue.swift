@@ -91,7 +91,8 @@ extension BuildEventLog {
 extension LedgerTask {
   /// The prefix every write of a task that writes only validation checks starts with: its
   /// checks go to plan state through `qa adopt`, so it never commits or merges.
-  public static let validationChecksPrefix = ".harness/qa/"
+  public static let validationChecksPrefix =
+    "\(RunLayout.treeDirectory)/\(RunLayout.qaPreparedDirectory)/"
 
   /// The plan's validation task: its write set is only paths under ``validationChecksPrefix``.
   public var writesOnlyValidationChecks: Bool {
