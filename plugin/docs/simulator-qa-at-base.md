@@ -38,7 +38,8 @@ runs again.
 
 With `--prepared-by <task>`, only `<task>`'s rows run, their `qa/<name>` checks and `QA_DIR` read
 from the checkout's `.harness/qa/<slug>/`: a validation worker's red run before `qa adopt`. It needs
-`--at-base`, and takes neither `--after` nor `--final`.
+`--at-base`, and takes neither `--after` nor `--final`. With `--requirement <id>` it runs only that
+requirement's rows: a [flow repair](simulator-qa-flow-repair.md)'s red run.
 
 The run leaves `at-base-run.json` in that folder: its run id, the merge base, and each row's result,
 message and exit status with the SHA-256 digest of its check. The digest covers the row's layer,

@@ -80,6 +80,11 @@ enum QARunRun {
         "--prepared-by runs a validation task's checks at the merge base before `qa adopt`, so "
           + "it needs --at-base and takes neither --after nor --final")
     }
+    if options.requirement != nil, options.preparedBy == nil {
+      return blocked(
+        "--requirement runs 1 requirement's rows of a repair worker's prepared folder, so it "
+          + "needs --prepared-by")
+    }
     if options.beforeMerge, options.after == nil || options.atBase || options.final {
       return blocked(
         "--before-merge runs the rows --after names on a trial merge of that task's branch, so "
@@ -196,10 +201,21 @@ enum QARunRun {
         return blocked(
           "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
       }
+      if let requirement = options.requirement {
+        runPlan = QARunPlan(
+          entries: runPlan.entries.filter { $0.validation.requirement == requirement },
+          ended: runPlan.ended)
+        guard !runPlan.entries.isEmpty else {
+          return blocked(
+            "no row of \(tablePath) that `\(writer)` writes checks `\(requirement)`; no row ran",
+            plan: slug)
+        }
+      }
       prepared = folder
       notes.append(
         "checks read from \(relative)/ before qa adopt: only the \(runPlan.entries.count) rows "
-          + "`\(writer)` writes ran")
+          + "`\(writer)` writes"
+          + (options.requirement.map { " for `\($0)`" } ?? "") + " ran")
     }
 
     let digests = Dictionary(

@@ -121,7 +121,26 @@ public struct QAAtBaseRun: Sendable, Equatable {
   /// This record with `requirement`'s rows taken from `prepared`, each naming `prepared`'s run,
   /// and every other row as it was.
   public func replacing(requirement: String, with prepared: QAAtBaseRun) -> QAAtBaseRun {
-    self
+    let taken = prepared.rows.filter { $0.requirement == requirement }.map { row in
+      Row(
+        requirement: row.requirement, layer: row.layer, check: row.check, digest: row.digest,
+        result: row.result, message: row.message, exitStatus: row.exitStatus,
+        milliseconds: row.milliseconds, runID: row.runID ?? prepared.runID)
+    }
+    var merged: [Row] = []
+    var placed = false
+    for row in rows {
+      guard row.requirement == requirement else {
+        merged.append(row)
+        continue
+      }
+      if !placed {
+        merged += taken
+        placed = true
+      }
+    }
+    if !placed { merged += taken }
+    return QAAtBaseRun(runID: runID, preparedBy: preparedBy, commit: commit, rows: merged)
   }
 
   /// What a run at the merge base takes from this record, and why each other row runs.
@@ -162,11 +181,12 @@ public struct QAAtBaseRun: Sendable, Equatable {
         reasons[entry.row] = "it read \(recorded.result.rawValue) in qa run \(runID)"
         continue
       }
+      let provedBy = recorded.runID ?? runID
       outcomes[entry.row] = QACheckOutcome(
         result: recorded.result,
-        message: "reused from qa run \(runID) by \(preparedBy)"
+        message: "reused from qa run \(provedBy) by \(preparedBy)"
           + (commit.map { " at \($0.prefix(12))" } ?? "") + ": \(recorded.message)",
-        exitStatus: recorded.exitStatus, reusedFrom: runID)
+        exitStatus: recorded.exitStatus, reusedFrom: provedBy)
     }
     let flowRequirements = Set(
       ready.filter { $0.validation.layer == .flow }.map(\.validation.requirement))

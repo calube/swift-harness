@@ -455,6 +455,7 @@ enum RunViewValidationFold {
     let scrubRoots = RunViewGateFailures.Scrub.roots(roots)
     var byRow: [Int: [Entry]] = [:]
     for entry in checks { byRow[entry.check.row, default: []].append(entry) }
+    let repairs = repairNotes(events, plan: plan)
     let rows = byRow.keys.sorted().compactMap { number -> RunViewValidation.Row? in
       // Newest first; checks of 1 `qa run` share its time, so a later run id breaks a tie.
       let entries = (byRow[number] ?? []).sorted {
@@ -475,6 +476,7 @@ enum RunViewValidationFold {
         read: qaRuns[history[index].qaRun], damage: &damage)
       shown.lastPass = lastPass(
         shown: history[index], history: history, qaRuns: qaRuns, damage: &damage)
+      shown.repairs = repairs[number] ?? []
       return shown
     }
     var counts = RunViewValidation.Counts()
@@ -504,6 +506,50 @@ enum RunViewValidationFold {
     }
     view.spans = (view.spans + spans).enumerated()
       .sorted { ($0.element.start, $0.offset) < ($1.element.start, $1.offset) }.map(\.element)
+  }
+
+  /// Each row's repairs from the plan's `qa.repair` events, newest first.
+  static func repairNotes(_ events: [HarnessEvent], plan: String) -> [Int: [RunViewValidation
+    .Repair]]
+  {
+    var notes: [Int: [RunViewValidation.Repair]] = [:]
+    let repairs = events.compactMap { event -> (HarnessEvent, QARepairEvent)? in
+      guard case .qaRepair(let repair) = event.payload, repair.plan == plan,
+        event.runID != nil
+      else { return nil }
+      return (event, repair)
+    }.sorted { $0.0.time > $1.0.time }
+    for (event, repair) in repairs {
+      let atBaseRun = event.runID ?? ""
+      let note = RunViewValidation.Repair(
+        atBaseRun: atBaseRun, at: event.time, cause: repair.cause, redRuns: repair.redRuns,
+        failingStep: repair.failingStep, failingCommand: repair.failingCommand,
+        removed: repair.removed, added: repair.added,
+        note: repairNote(repair, atBaseRun: atBaseRun))
+      for row in repair.rows { notes[row, default: []].append(note) }
+    }
+    return notes
+  }
+
+  /// `flow repaired (<cause>) after qa runs <ids> read red at step <n> `<command>`: `<removed>`
+  /// replaced by `<added>`; red at the base again in qa run <id>`.
+  static func repairNote(_ repair: QARepairEvent, atBaseRun: String) -> String {
+    var note = "flow repaired (\(repair.cause.rawValue))"
+    if !repair.redRuns.isEmpty {
+      note += " after qa runs " + repair.redRuns.joined(separator: ", ") + " read red"
+      if let step = repair.failingStep, let command = repair.failingCommand {
+        note += " at step \(step) `\(command)`"
+      }
+    }
+    let removed = repair.removed.map { "`\($0)`" }.joined(separator: ", ")
+    let added = repair.added.map { "`\($0)`" }.joined(separator: ", ")
+    switch (removed.isEmpty, added.isEmpty) {
+    case (false, false): note += ": \(removed) replaced by \(added)"
+    case (false, true): note += ": \(removed) removed"
+    case (true, false): note += ": \(added) added"
+    case (true, true): break
+    }
+    return note + "; red at the base again in qa run \(atBaseRun)"
   }
 
   /// A flow joins the check of its row in the same `qa run`, at the merge base or not as it was.

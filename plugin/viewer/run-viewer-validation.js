@@ -5,7 +5,8 @@
 // failed"; an unverified or abandoned row, or a flow missing its video or sheet, "Why
 // unverified". A flow
 // lists its steps, each linked to the video at its offset, and links its contact sheet. A row
-// whose newest run isn't the pass to show also shows its last passing run's flow, labelled. Each
+// whose newest run isn't the pass to show also shows its last passing run's flow, labelled, and a
+// row whose flow a repair rewrote shows the repair's note. Each
 // row lists its evidence; a report links only the files its folder holds and names the rest by
 // path. Nothing is embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
@@ -98,8 +99,15 @@
       <span class="mono">row ${row.row}</span><span class="qa-layer">${esc(row.layer)}</span>
       <span class="qa-req mono">${esc(row.requirement)}</span>
       ${row.check != null ? `<code class="qa-check">${esc(row.check)}</code>` : ""}
-      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${lastPassHtml(row.lastPass)}${evidenceHtml(row.qaRun, row.evidence)}${historyHtml(row, key)}</li>`;
+      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${lastPassHtml(row.lastPass)}${repairsHtml(row.repairs)}${evidenceHtml(row.qaRun, row.evidence)}${historyHtml(row, key)}</li>`;
   }
+
+  // Each rewrite of the row's flow plan state took, from its qa.repair, newest first: what was
+  // repaired, why, and the qa run that proved it red at the base again.
+  const code = (text) => esc(text).replace(/`([^`]*)`/g, "<code>$1</code>");
+  const repairsHtml = (repairs) => (repairs && repairs.length
+    ? repairs.map((r) => `<p class="sub qa-repair" data-run="${esc(r.atBaseRun)}">${code(r.note)}</p>`).join("")
+    : "");
 
   // The newest passing run of a row whose own result isn't that pass, or recorded no video: its
   // label names the run, and its flow links that run's video.
@@ -118,7 +126,7 @@
   function waitingHtml(row, key) {
     return `<li class="qa-row qa-waiting" data-row="${row.row}" data-result="waiting">${chip("waiting")}
       <span>waiting on ${row.waitingOn.map((t) => `<span class="mono">${esc(t)}</span>`).join(", ")}</span>
-      <span class="sub">row ${row.row} · ${esc(row.layer)} · <span class="mono">${esc(row.requirement)}</span></span>${historyHtml(row, key)}</li>`;
+      <span class="sub">row ${row.row} · ${esc(row.layer)} · <span class="mono">${esc(row.requirement)}</span></span>${repairsHtml(row.repairs)}${historyHtml(row, key)}</li>`;
   }
 
   function render(view) {

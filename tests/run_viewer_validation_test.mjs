@@ -213,7 +213,7 @@ const tests = {
     assert.deepEqual(got.runs, [REPAIRED])
     assert.equal(got.notes.length, 1)
     assert.ok(got.notes[0].includes(REPAIR_NOTE.replace(/`/g, '')), JSON.stringify(got.notes))
-    assert.ok(!got.errors, got.errors)
+    assert.equal(got.errors, '0')
   },
 
   async 'a run with validation rows shows the Validation tab last, its badges and strip carry the counts, and rows group by task with each group\'s waiting rows last — catches a shared check shown under 1 task or a count that drifts'() {

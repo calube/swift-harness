@@ -55,6 +55,7 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "agent.tools": "a harness event kind",
     "qa.check": "a harness event kind",
     "qa.flow": "a harness event kind",
+    "qa.repair": "a harness event kind",
     "simulator.device": "a `.swiftgate.toml` key a config error names",
     "simulator.os": "a `.swiftgate.toml` key a config error names",
     "docs.budgets.design": "a `.swiftgate.toml` key a config error names",

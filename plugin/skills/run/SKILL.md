@@ -316,6 +316,12 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      rows; its branch runs the same command with `--fix` before `build merge --fix`. At the
      cutoff, abandon as its item 2 says. Never merge on your own judgement, whatever you think
      caused the red.
+   - **Flow repair before any halt.** A fixer's `flow row:` line, or a flow row red again after its
+     fix, takes [the build loop's flow repair](../build/references/event-loop.md#flow-repair). A
+     validation worker in repair mode rewrites that row alone, `qa adopt --repair` takes it back
+     at most once per row per run, and the fixer runs again. Add 1 assumption naming the repaired
+     row, its cause and the reason the adopt recorded. A refused repair halts as the build loop
+     says, decided as the next bullet says.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks

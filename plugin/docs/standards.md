@@ -738,6 +738,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `qa.check-passes-at-base` | simulator QA amendment §5.2, decision 7; `qa run --at-base` found a row passing at the merge base, so its check can't tell the change from its absence (major) |
 | `qa.video-unverified` | simulator QA amendment §7, §8.3, decisions 6 and 14; a `qa run --final` flow left no video, a nit that never gates: the Mac's recorder stayed busy past 5 minutes, the `sim-record` slot stayed held, or `record start` or `stop` failed, or a kept T3 flow kept none. A missing contact sheet is the same nit |
 | `qa.evidence-unsaved` | simulator QA amendment §8.1, decision 3; a `qa run --final` flow's app log, network dump, trace, unified log or data container, or a kept flow's activities, wasn't saved, a nit that never gates, naming the call |
+| `qa.repair-cap`, `qa.repair-outside-row`, `qa.repair-weakens-check`, `qa.repair-unchanged`, `qa.repair-not-red`, `qa.repair-wrong-red`, `qa.repair-red-runs` | [`qa adopt --repair`](simulator-qa-flow-repair.md); a repaired flow row refused, nothing copied (major): a second repair in 1 build run, a file outside its row, a dropped or shortened `wait` or `is` step, no change, no red run at the base of the repaired check, a red there that fails no adopted assertion, or red runs that don't read the row red |
 
 ### Simulator QA flows ([`qa lint`](simulator-qa.md#qa-lint))
 
