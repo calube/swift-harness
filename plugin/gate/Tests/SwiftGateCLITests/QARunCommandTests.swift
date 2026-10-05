@@ -84,6 +84,7 @@ struct QARepo {
       scratch: LiveScratchWorktrees(runner: runner, repositoryRoot: root.path),
       events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
       runIDSuffix: { suffix }, newEventID: { UUID().uuidString }, timeout: .seconds(120))
+    dependencies.merger = LiveMergeRunner(runner: runner)
     if let xcresults { dependencies.xcresults = xcresults }
     dependencies.deadline = deadline
     return await QARunRun.run(

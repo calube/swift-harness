@@ -12,6 +12,16 @@ clone's plan branch) in a scratch worktree, with no layer stop, recording each f
 status. A row that reads `pass` there is `qa.check-passes-at-base`: its check can't tell the change
 from its absence. An `unverified` row there is a nit: no red run.
 
+## Before a task merges
+
+`--after <task> --before-merge` runs that task's ready rows, as `--after` picks them, in a scratch
+worktree where the task's branch `<plan>/<task>` is merged into `main`'s tip, so `main` doesn't
+move; `--fix` merges its fixer's branch `<plan>/fix-<task>`. The report's `trialMerge` names the
+branch, its tip and `main`'s commit. A branch that conflicts runs no row: each reads `unverified`
+and `trialMerge.conflicts` names the files. `build merge` refuses `build-merge.flows-unchecked`
+while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s commit, and
+`build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does.
+
 ## A validation worker's prepared run
 
 With `--prepared-by <task>`, only `<task>`'s rows run, their `qa/<name>` checks and `QA_DIR` read

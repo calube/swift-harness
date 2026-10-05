@@ -19,25 +19,58 @@ enum RunCheckoutRun {
     case .failure(let refusal): return refusal.report
     }
     let workspace = LiveGitWorkspace(runner: runner, repositoryRoot: root.path)
+    let made: Bool
     if FileManager.default.fileExists(atPath: context.path) {
-      return context.report(.refused, .red, "\(context.path) already exists")
-    }
-    do throws(GitWorkspaceError) {
-      guard try await workspace.branchExists(context.branch) else {
+      // `swiftgate run` checks the plan branch out at launch, for the warm-up to build in.
+      guard await isCheckout(context.path, on: context.branch, root: root, runner: runner) else {
         return context.report(
-          .refused, .red,
-          "branch \(context.branch) doesn't exist; `swiftgate run` creates it at launch")
+          .refused, .red, "\(context.path) already exists and isn't \(context.branch)'s checkout")
       }
-      try await workspace.checkOutWorktree(at: context.path, branch: context.branch)
-    } catch {
-      return context.report(.blocked, .blocked, "\(error)")
+      made = false
+    } else {
+      do throws(GitWorkspaceError) {
+        guard try await workspace.branchExists(context.branch) else {
+          return context.report(
+            .refused, .red,
+            "branch \(context.branch) doesn't exist; `swiftgate run` creates it at launch")
+        }
+        try await workspace.checkOutWorktree(at: context.path, branch: context.branch)
+      } catch {
+        return context.report(.blocked, .blocked, "\(error)")
+      }
+      made = true
     }
     let installed = await WorktreeNodeInstall.run(worktree: context.path, dependencies: install)
     var report = context.report(
-      .created, .green, "created \(context.path) on \(context.branch)" + installed.message)
+      .created, .green,
+      (made
+        ? "created \(context.path) on \(context.branch)"
+        : "\(context.path) is already \(context.branch)'s checkout, made by `swiftgate run`")
+        + installed.message)
     report.installs = installed.installs.isEmpty ? nil : installed.installs
     report.installNotes = installed.notes.isEmpty ? nil : installed.notes
     return report
+  }
+
+  /// Whether `git worktree list` names `path` as a worktree with `branch` checked out.
+  private static func isCheckout(
+    _ path: String, on branch: String, root: URL, runner: any ProcessRunner
+  ) async -> Bool {
+    guard
+      let output = try? await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: ["worktree", "list", "--porcelain"],
+          workingDirectory: root.path, timeout: .seconds(60))),
+      output.status.isSuccess
+    else { return false }
+    let wanted = CanonicalPath.of(URL(filePath: path, directoryHint: .isDirectory))
+    return output.stdout.text.components(separatedBy: "\n\n").contains { entry in
+      let lines = entry.split(separator: "\n").map(String.init)
+      guard let worktree = lines.first(where: { $0.hasPrefix("worktree ") }) else { return false }
+      let named = CanonicalPath.of(
+        URL(filePath: String(worktree.dropFirst("worktree ".count)), directoryHint: .isDirectory))
+      return named == wanted && lines.contains("branch refs/heads/\(branch)")
+    }
   }
 
   /// Copies the checkout's gate and `qa run` directories into the clone's kept runs, where the run
@@ -250,11 +283,11 @@ struct RunCheckoutCreateCommand: AsyncParsableCommand {
     abstract: "Check out a brownfield plan's branch in the plan's own checkout.",
     discussion:
       "Adds the worktree build merge lands merges in, on the plan branch swift-harness/<plan>, "
-      + "and prints its path, then installs each node area's dependencies there once, frozen to "
+      + "or takes the one `swiftgate run` checked out at launch, and prints its path, then installs each node area's dependencies there once, frozen to "
       + "its lockfile; a failed install is a report line and leaves the checkout created. Gates "
       + "there write their events to the clone's shared store. Exits "
-      + "0 when created; 1 when this session doesn't hold the plan's lock, the checkout exists "
-      + "or the plan branch doesn't; 2 for a missing --session, a clone that isn't brownfield, or "
+      + "0 when created or taken; 1 when this session doesn't hold the plan's lock, the path holds "
+      + "something other than the plan branch's checkout, or the plan branch doesn't exist; 2 for a missing --session, a clone that isn't brownfield, or "
       + "a failed git step.")
 
   @Argument(help: "The plan's slug.")

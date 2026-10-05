@@ -1,0 +1,113 @@
+{
+  "after" : "send-ui",
+  "atBase" : false,
+  "commit" : "d5c654bdc65117805e2c906889dfd762d91b0f6e",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-search, flow) `qa/search-contacts.flow.json`: sim verify RED: sim.a11y-label: step 001 \"after step 2: wait selector id=\"home.contact.alice\"\": TextField home.search has no readable label; sim.a11y-label: step 002 \"after step 4: wait selector id=\"home.contact.chloe\"\": TextField home.search has no readable label; sim.a11y-label: step 003 \"after step 5: is visible id=\"home.contact.chloe\"\": TextField home.search has no readable label; sim.a11y-label: step 004 \"after step 6: is absent id=\"home.contact.alice\"\": TextField home.search has no readable label; nit sim.a11y-untargeted: 57 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (req-send-success, flow) `qa/send-success.flow.json`: step 18 `wait` failed: Batch failed at step 45 (wait): wait timed out for selector: id=\"home.activity.0\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "3 of 10 rows verified (7 reason-only): 1 pass, 2 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 7,
+  "rows" : [
+    {
+      "check" : "qa/search-contacts.flow.json",
+      "evidence" : [
+        "qa/01-req-search.flow/steps.json",
+        "qa/01-req-search.flow/batch.json",
+        "qa/01-req-search.flow/flow.json",
+        "qa/01-req-search.flow/sim/steps.ndjson",
+        "qa/01-req-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "sim verify RED: sim.a11y-label: step 001 \"after step 2: wait selector id=\"home.contact.alice\"\": TextField home.search has no readable label; sim.a11y-label: step 002 \"after step 4: wait selector id=\"home.contact.chloe\"\": TextField home.search has no readable label; sim.a11y-label: step 003 \"after step 5: is visible id=\"home.contact.chloe\"\": TextField home.search has no readable label; sim.a11y-label: step 004 \"after step 6: is absent id=\"home.contact.alice\"\": TextField home.search has no readable label; nit sim.a11y-untargeted: 57 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 102275,
+      "requirement" : "req-search",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "send-flow",
+        "send-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/02-req-send-success.flow/steps.json",
+        "qa/02-req-send-success.flow/batch.json",
+        "qa/02-req-send-success.flow/flow.json",
+        "qa/02-req-send-success.flow/sim/steps.ndjson",
+        "qa/02-req-send-success.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 18 `wait` failed: Batch failed at step 45 (wait): wait timed out for selector: id=\"home.activity.0\"",
+      "ms" : 97165,
+      "requirement" : "req-send-success",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "account-fake",
+        "amount-entry",
+        "send-flow",
+        "send-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/03-req-send-failure.flow/steps.json",
+        "qa/03-req-send-failure.flow/batch.json",
+        "qa/03-req-send-failure.flow/flow.json",
+        "qa/03-req-send-failure.flow/sim/steps.ndjson",
+        "qa/03-req-send-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 100 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 103590,
+      "requirement" : "req-send-failure",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "account-fake",
+        "amount-entry",
+        "send-flow",
+        "send-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T031853Z-43708cc1",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "RED"
+}
+

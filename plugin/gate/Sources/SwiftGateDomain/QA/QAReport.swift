@@ -37,6 +37,8 @@ public struct QAReport: Sendable, Equatable {
   /// The absolute path of the `at-base-run.json` a `--prepared-by` run wrote; `nil` when it wrote
   /// none.
   public let atBaseRecord: String?
+  /// The merge a `--before-merge` run's rows ran on; `nil` for any other run.
+  public let trialMerge: QATrialMerge?
   public let verdict: Verdict
   public let rows: [QARow]
   /// The table's requirements left to unit tests with only a reason, which no check runs.
@@ -55,7 +57,7 @@ public struct QAReport: Sendable, Equatable {
     runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
     settled: Bool = false, commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [],
     notes: [String] = [], reasonOnly: Int = 0, checkableRows: Int? = nil,
-    atBaseRecord: String? = nil
+    atBaseRecord: String? = nil, trialMerge: QATrialMerge? = nil
   ) {
     let unverifiable = checkableRows == 0 && !atBase
     let findings =
@@ -79,7 +81,7 @@ public struct QAReport: Sendable, Equatable {
       }
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
-      commit: commit, atBaseRecord: atBaseRecord,
+      commit: commit, atBaseRecord: atBaseRecord, trialMerge: trialMerge,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
       reasonOnly: reasonOnly, findings: findings, notes: notes, message: message)
   }
@@ -109,7 +111,8 @@ public struct QAReport: Sendable, Equatable {
 
   private init(
     runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, settled: Bool,
-    commit: String?, atBaseRecord: String? = nil, verdict: Verdict, rows: [QARow],
+    commit: String?, atBaseRecord: String? = nil, trialMerge: QATrialMerge? = nil,
+    verdict: Verdict, rows: [QARow],
     reasonOnly: Int = 0, findings: [Finding], notes: [String], message: String
   ) {
     self.schemaVersion = Self.currentSchemaVersion
@@ -121,6 +124,7 @@ public struct QAReport: Sendable, Equatable {
     self.settled = settled
     self.commit = commit
     self.atBaseRecord = atBaseRecord
+    self.trialMerge = trialMerge
     self.verdict = verdict
     self.rows = rows
     self.reasonOnly = reasonOnly
@@ -155,8 +159,9 @@ public struct QAReport: Sendable, Equatable {
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
-      commit: commit, atBaseRecord: atBaseRecord, verdict: verdict, rows: rows,
-      reasonOnly: reasonOnly, findings: findings, notes: notes + more, message: message)
+      commit: commit, atBaseRecord: atBaseRecord, trialMerge: trialMerge, verdict: verdict,
+      rows: rows, reasonOnly: reasonOnly, findings: findings, notes: notes + more,
+      message: message)
   }
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
@@ -213,8 +218,8 @@ extension QAReport {
 
 extension QAReport: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runID, plan, after, atBase, final, settled, commit, atBaseRecord, verdict,
-      rows, reasonOnly, findings, notes, message
+    case schemaVersion, runID, plan, after, atBase, final, settled, commit, atBaseRecord,
+      trialMerge, verdict, rows, reasonOnly, findings, notes, message
   }
 
   public init(from decoder: any Decoder) throws {
@@ -236,6 +241,8 @@ extension QAReport: Codable {
       commit: try c.decodeIfPresent(String.self, forKey: .commit),
       // Reports written before a prepared run named its record hold no key.
       atBaseRecord: try c.decodeIfPresent(String.self, forKey: .atBaseRecord),
+      // Reports written before a run could merge a branch first hold no key.
+      trialMerge: try c.decodeIfPresent(QATrialMerge.self, forKey: .trialMerge),
       verdict: try c.decode(Verdict.self, forKey: .verdict),
       rows: try c.decode([QARow].self, forKey: .rows),
       // Reports written before reason-only rows were counted hold no key.
@@ -245,7 +252,8 @@ extension QAReport: Codable {
       message: try c.decode(String.self, forKey: .message))
   }
 
-  /// Every key is always present; an absent value is `null`.
+  /// Every key is always present, an absent value `null`, except `trialMerge`, written only by a
+  /// `--before-merge` run.
   public func encode(to encoder: any Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(schemaVersion, forKey: .schemaVersion)
@@ -257,6 +265,7 @@ extension QAReport: Codable {
     try c.encode(settled, forKey: .settled)
     try c.encode(commit, forKey: .commit)
     try c.encode(atBaseRecord, forKey: .atBaseRecord)
+    try c.encodeIfPresent(trialMerge, forKey: .trialMerge)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(rows, forKey: .rows)
     try c.encode(reasonOnly, forKey: .reasonOnly)

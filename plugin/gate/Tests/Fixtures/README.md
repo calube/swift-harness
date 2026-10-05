@@ -3506,6 +3506,30 @@ sed -E 's#"/[^"]*/send-money-2/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-2-*` matched nothing.
 
+## Brownfield trial: a screen task merged with its flows unrun
+
+The second send-money trial merged its screens task before any flow ran on its branch: 1 of its 3
+flow rows was ready at that merge, and the post-merge `qa run --after` found 2 rows red only near
+the cutoff. `BrownfieldTrial/send-money-2-validation.json` is that plan's table,
+`send-money-2-build-events.jsonl` its build run's `events.jsonl`, and
+`send-money-2-qa-after-send-ui.json` the JSON `qa run --plan spec --after send-ui --json` printed
+after the screens task's fix merge, which the orchestrator kept in the plan's `out/`. From the
+repository root, with `S` the plan state the trial's run folder kept:
+
+```sh
+S=<send-money-2 run folder>/state/plans/spec
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/validation.json $F/send-money-2-validation.json
+cp $S/build/20261005T025212Z-65cdde10/events.jsonl $F/send-money-2-build-events.jsonl
+cp $S/out/qa-after-send-ui.json $F/send-money-2-qa-after-send-ui.json
+```
+
+`send-money-2-config.toml`, copied as the next section says, is that clone's applied
+`config.toml`: 3 `swiftpm` areas and 1 `xcode` area. The warm-up built the 3 packages in the
+user's checkout, so the contract's first `swift build` in the plan checkout was cold.
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.
+
 ## Brownfield trials: new tests a build-only slice never ran
 
 The price-tracker trial's app-core task returned 2 new test files from a GREEN slice that only
