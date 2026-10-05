@@ -246,10 +246,12 @@ public enum BuildEvent: Sendable, Equatable {
     /// Every finding's rule, each once, in report order.
     public let rules: [TaskReturnFinding.Rule]
     public let at: Date
+    /// The checked return's outcome; `nil` in a check recorded before checks kept it.
+    public let outcome: TaskReturn.Outcome?
 
     public init(
       task: String, fix: Bool, verdict: Verdict, commit: String?, checkID: String,
-      rules: [TaskReturnFinding.Rule], at: Date
+      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil
     ) {
       self.task = task
       self.fix = fix
@@ -258,6 +260,7 @@ public enum BuildEvent: Sendable, Equatable {
       self.checkID = checkID
       self.rules = rules
       self.at = at
+      self.outcome = outcome
     }
   }
 

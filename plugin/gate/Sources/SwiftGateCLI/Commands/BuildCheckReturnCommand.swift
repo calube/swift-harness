@@ -19,6 +19,8 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   /// The full sha of the return's last commit, the branch tip `build merge` requires; `nil` when
   /// the check couldn't resolve one.
   var commit: String? = nil
+  /// The answer a halt of this return recommends; `nil` when the return doesn't halt its task.
+  var haltAdvice: TaskHaltAdvice? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and

@@ -180,6 +180,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case returnNotGreen = "return-not-green"
     /// The newest GREEN `build check-return` covered another commit than the branch tip.
     case returnStale = "return-stale"
+    /// The newest check is of a `review-blocked` return, and no halt of the task since then was
+    /// answered `merge`.
+    case reviewBlockedUnanswered = "review-blocked-unanswered"
     /// A validation row runs after this task with every other task it waits on merged, and no
     /// `qa run --before-merge` of the branch at its tip on `main`'s commit is GREEN or conflicted.
     case flowsUnchecked = "flows-unchecked"
@@ -270,14 +273,18 @@ public struct BuildMerge: Sendable {
   /// Prunes the scratch trees of gates that ended unfinished once an undo lands; `nil` leaves
   /// them.
   let leftovers: (any RunLeftovers)?
+  /// The store a `review-blocked` return's answered halt is read from; `nil` when telemetry is
+  /// off, so no halt is ever recorded and none is required.
+  let halts: BuildHaltLog?
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
     merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned,
-    leftovers: (any RunLeftovers)? = nil
+    leftovers: (any RunLeftovers)? = nil, halts: BuildHaltLog? = nil
   ) {
     self.profile = profile
     self.leftovers = leftovers
+    self.halts = halts
     self.plan = plan
     self.task = task
     self.fix = fix
