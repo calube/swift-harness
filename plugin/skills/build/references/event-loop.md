@@ -294,7 +294,9 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   gate. `check-return --fix` rejects any other run as `build-return.stale-gate`;
 - that it iterates on `"$SG" test-only <Target>/<Class>` for a failing test in a brownfield clone,
   or `"$SG" check --tier fast` in an owned project, and runs that tier only to confirm a fix that
-  passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
+  passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`, its `--json`
+  sent to `.harness/tmp/qa-<task>.json` and read by its `summary`, never piped through `head` or
+  `tail` (`guard.qa-run-truncated`). Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
   (`guard.fixer-gate-cap`);
 - that after 2 red `qa run`s of the same flow row it stops and returns `gate-red` with that row's
   evidence: its requirement, the failing step and its message, and both run ids. It writes them

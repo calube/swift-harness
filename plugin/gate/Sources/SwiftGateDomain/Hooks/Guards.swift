@@ -44,6 +44,34 @@ public enum BashGuard {
       if let violation = evaluate(simple) { return violation }
     }
     return processMatchWait(command, inSubagent: inSubagent) ?? bareListing(command)
+      ?? truncatedQARun(command)
+  }
+
+  /// A `swiftgate qa run` whose output reaches `head` or `tail` through a pipe. The report's rows
+  /// come first and its `summary` last, so a cut drops either the rows or the line that says
+  /// what they add up to.
+  private static func truncatedQARun(_ command: String) -> GuardViolation? {
+    var programs: Set<String> = []
+    var piped = false
+    for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
+      let simple = parsed.command
+      programs.formUnion(GateOutputGuard.programVariables(simple))
+      let isQARun =
+        (simple.name.map { GateOutputGuard.isProgram($0, variables: programs) } ?? false)
+        && simple.arguments.starts(with: ["qa", "run"])
+      piped = isQARun || (piped && parsed.links == [.pipe])
+      guard !isQARun, piped, let name = simple.name,
+        ["head", "tail"].contains(ShellSyntax.basename(name))
+      else { continue }
+      return GuardViolation(
+        ruleID: qaRunTruncatedRuleID,
+        reason:
+          "`\(name)` cuts `swiftgate qa run`'s output: the rows past the cut, or the closing "
+          + "`summary` that says what they add up to, never reach you. Write its `--json` to "
+          + "the plan's out folder, `<out>/<name>.json`, from a task worktree to its "
+          + "`.harness/tmp/<name>.json`, then read that file's `summary` and the rows you need.")
+    }
+    return nil
   }
 
   /// Whether the command line runs `git commit` (in any simple command of it).
