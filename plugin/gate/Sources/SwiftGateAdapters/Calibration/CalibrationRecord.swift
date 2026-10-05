@@ -193,9 +193,10 @@ public enum AgentFrontmatter {
 /// check compares `contentHash` with ``CalibrationHash`` over the working tree and each case's
 /// model with its agent's frontmatter.
 public struct CalibrationRecord: Sendable, Equatable, Codable {
-  /// Version 3 added each case's served models and the judge; a version 2 record still reads.
-  public static let currentSchemaVersion = 3
-  public static let readableSchemaVersions: Set<Int> = [2, 3]
+  /// Version 3 added each case's served models and the judge, and version 4 each case's
+  /// attempts; a version 2 or 3 record still reads.
+  public static let currentSchemaVersion = 4
+  public static let readableSchemaVersions: Set<Int> = [2, 3, 4]
 
   public struct QuestionResult: Sendable, Equatable, Codable {
     /// A judged answer counts only at this probability or above, so a coin-flip answer that
@@ -226,17 +227,22 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     public let model: String
     /// The ids the CLI says answered, which an alias can move between; `nil` when not recorded.
     public let servedModels: [String]?
+    /// The answers of the attempt that decided the case.
     public let answers: [QuestionResult]
+    /// How each attempt went, in order, such as `[miss, pass, pass]`; `nil` in a record from
+    /// before attempts were recorded, when every case had one.
+    public let attempts: [CalibrationAttemptOutcome]?
 
     public init(
       agent: String, caseName: String, model: String, servedModels: [String]? = nil,
-      answers: [QuestionResult]
+      answers: [QuestionResult], attempts: [CalibrationAttemptOutcome]? = nil
     ) {
       self.agent = agent
       self.caseName = caseName
       self.model = model
       self.servedModels = servedModels
       self.answers = answers
+      self.attempts = attempts
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -245,6 +251,7 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
       case model
       case servedModels
       case answers
+      case attempts
     }
   }
 
