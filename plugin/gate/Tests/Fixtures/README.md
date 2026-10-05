@@ -2761,6 +2761,27 @@ Its creation time in the clone was 03:00:00Z, which the gate-wait tests set agai
 keeps no creation time. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|/tmp'` matched
 nothing in either folder. `home` matches only a task title in send-money-2's `plan.json`.
 
+## Run view: a halt that went on without a task with time left
+
+`RunView/send-money-3/` is the state the third send-money trial left, build run
+`20261005T042439Z-4562bb34` of plan `spec`. Its screens task's return failed `check-return` on
+`build-return.tests-not-run` at 04:34:00Z, 684 s before no new starts, and the orchestrator's
+`question` halt went on without it. Its `send-flow` return was `review-blocked`, checked GREEN, and
+merged with no halt. With 4 tasks ready after the contract and `max_parallel = 3`, the validation
+task took a slot and `amount-input` started 482 s late. `events/build.jsonl` holds the checks,
+the halt and its resume; `ledger-events.jsonl`, `run.json`, `ledger.json` and `returns/` are the
+build run's. With `C` the trial's copied state root and `t=send-money-3`, copied 2026-10-05:
+
+```sh
+P=$C/plans/spec R=$P/build/20261005T042439Z-4562bb34
+S="s#/Users/[^/\"]*/Developer/trials/practice/$t/repo-#../repo-#g"
+mkdir -p events returns
+cp $C/events/build.jsonl events/; sed -E "$S" $P/ledger.json > ledger.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in the folder.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
@@ -3469,6 +3490,60 @@ PY
 
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## Brownfield trial: waiting on a gate by process name
+
+In a practice brownfield trial (2026-10-05), 2 build agents ran their slice gate at the Bash tool's
+default 120s timeout, so the tool moved it to the background. Each then waited with
+`while pgrep -f "swiftgate check" >/dev/null; do sleep 5; done`, which matches its own shell, so
+both loops ran to the 600s timeout after the gates had finished. The fix pass then ran
+`pkill -f "pgrep"`, and another call `pkill -f "swift-test|swift-build"`.
+`Hooks/practice-trial-process-match-wait-bash.json` holds those 4 calls with their `timeout`, and
+the tool result of each that timed out. `T` is the trial's copied `transcripts` folder. From the
+repository root:
+
+```sh
+T=<trial transcripts folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+T, F = os.environ["T"], os.environ["F"]
+calls = [
+    ("session/subagents/workflows/wf_b7641878-793/agent-aeb18af089741a5fa.jsonl", "toolu_019Sn67CartPsCYePjLdi6LW"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01Cqa4NGuGxn34gkz1qUvkM2"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01YXwHdeLYH914n8Qff9USxD"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a4a821ed2bf56fc5d.jsonl", "toolu_01AR6o1rTni1KPGAZnFf63Wk"),
+]
+scrubs = [
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec-[^/\s;]+", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;]|$)", "/CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/]+", "/HARNESS"),
+    (r"/private/tmp/claude-\d+/[^\s]+?/tasks/", "/TASKS/"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+def flat(content):
+    if isinstance(content, str): return content
+    return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+out = []
+for path, use in calls:
+    command = timeout = result = None
+    for line in open(f"{T}/{path}"):
+        entry = json.loads(line)
+        for block in (entry.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict): continue
+            if block.get("id") == use:
+                command = block["input"]["command"]; timeout = block["input"].get("timeout")
+            if block.get("tool_use_id") == use: result = flat(block["content"])
+    call = {"command": scrub(command), "timeout": timeout}
+    if "did not complete within" in result: call["result"] = scrub(result)
+    out.append(call)
+open(f"{F}/Hooks/practice-trial-process-match-wait-bash.json", "w").write(
+    json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
 ## Brownfield trial: the warm-up times and time box an area command's bound reads
 

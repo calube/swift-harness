@@ -180,6 +180,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case returnNotGreen = "return-not-green"
     /// The newest GREEN `build check-return` covered another commit than the branch tip.
     case returnStale = "return-stale"
+    /// The newest check is of a `review-blocked` return, and no halt of the task since then was
+    /// answered `merge`.
+    case reviewBlockedUnanswered = "review-blocked-unanswered"
     /// A validation row runs after this task with every other task it waits on merged, and no
     /// `qa run --before-merge` of the branch at its tip on `main`'s commit is GREEN or conflicted.
     case flowsUnchecked = "flows-unchecked"
@@ -270,14 +273,18 @@ public struct BuildMerge: Sendable {
   /// Prunes the scratch trees of gates that ended unfinished once an undo lands; `nil` leaves
   /// them.
   let leftovers: (any RunLeftovers)?
+  /// The store a `review-blocked` return's answered halt is read from; `nil` when telemetry is
+  /// off, so no halt is ever recorded and none is required.
+  let halts: BuildHaltLog?
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
     merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned,
-    leftovers: (any RunLeftovers)? = nil
+    leftovers: (any RunLeftovers)? = nil, halts: BuildHaltLog? = nil
   ) {
     self.profile = profile
     self.leftovers = leftovers
+    self.halts = halts
     self.plan = plan
     self.task = task
     self.fix = fix
@@ -625,6 +632,25 @@ public struct BuildMerge: Sendable {
           + "\(whose) was GREEN for commit \(check.commit ?? "none"), but \(branch) is at \(tip); "
           + "check the return that names \(tip) as its last commit before merging",
         reason: .returnStale)
+    }
+    guard check.outcome == .reviewBlocked, let halts else { return }
+    let events: [HarnessEvent]
+    do throws(BuildHaltLogError) {
+      events = try halts.events()
+    } catch {
+      throw stop(command, context, .blocked, "reading the build run's halts: \(error)")
+    }
+    let answer = BuildHalts.answer(
+      in: events, buildRun: context.run.runID, task: task, since: check.at)
+    guard answer == .merge else {
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.reviewBlockedUnanswered.rawValue): check "
+          + "\(check.checkID) is of a review-blocked return, and "
+          + (answer.map { "the newest halt of task `\(task)` since was answered \($0.rawValue)" }
+            ?? "no halt of task `\(task)` since has been answered")
+          + "; halt the task, and merge only after the person answers merge (`build resume "
+          + "--answer merge`)", reason: .reviewBlockedUnanswered)
     }
   }
 

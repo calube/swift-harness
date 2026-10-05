@@ -1,0 +1,20 @@
+[
+  {
+    "command": "while pgrep -f \"swiftgate check\" >/dev/null; do sleep 5; done; tail -25 /TASKS/by2q2vukb.output",
+    "timeout": 600000,
+    "result": "Command did not complete within its 600s timeout and was moved to the background (ID: b9vs12g19). Output is being written to: /TASKS/b9vs12g19.output. If it exits while you are still working you will be notified, but it is terminated when you give your final response and no notification can follow that — so do not end your turn to wait for it; if you need its result, wait for it before giving your final response. To check interim output, use Read on that file path."
+  },
+  {
+    "command": "while pgrep -f \"swiftgate check\" >/dev/null; do sleep 5; done; tail -30 /TASKS/b71oijdte.output",
+    "timeout": 600000,
+    "result": "Command did not complete within its 600s timeout and was moved to the background (ID: brdu45foh). Output is being written to: /TASKS/brdu45foh.output. If it exits while you are still working you will be notified, but it is terminated when you give your final response and no notification can follow that — so do not end your turn to wait for it; if you need its result, wait for it before giving your final response. To check interim output, use Read on that file path."
+  },
+  {
+    "command": "pkill -f \"pgrep\" ; cat /TASKS/b71oijdte.output | tail -30; cd /WORKTREE; git status --short; git log --oneline | head -3; tail -1 /CLONE/.git/worktrees/repo-spec-send-flow/swift-harness/runs/history.jsonl | cut -c1-400",
+    "timeout": null
+  },
+  {
+    "command": "cd /WORKTREE && pkill -f \"swift-test|swift-build\" ; sleep 2; cd Packages/AppFeature && swift test --filter SendMoneyFeatureTests 2>&1 | tail -30",
+    "timeout": 600000
+  }
+]

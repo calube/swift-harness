@@ -1,0 +1,159 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-account-fake",
+        "req-existing-tests"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 420,
+      "gate" : "slice",
+      "id" : "send-money-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-money-contract",
+      "writeSet" : [
+        "Packages/APIClient/Package.swift",
+        "Packages/APIClient/Sources/AccountClient/",
+        "Packages/APIClient/Tests/AccountClientTests/",
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/AppCore/HarnessScenario.swift",
+        "Packages/AppFeature/Sources/AppUI/AccessibilityID.swift",
+        ".swiftgate.toml"
+      ]
+    },
+    {
+      "branch" : "spec/amount-input",
+      "covers" : [
+        "req-keypad-entry",
+        "req-amount-format",
+        "req-continue-rule",
+        "req-decimal-money"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 180,
+      "gate" : "slice",
+      "id" : "amount-input",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-amount-input",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/send-flow",
+      "covers" : [
+        "req-contact-search",
+        "req-contact-select",
+        "req-confirm-screen",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "send-flow",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-flow",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/SendMoneyFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/ConfirmFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/SendMoneyFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/send-views",
+      "covers" : [
+        "req-contact-search",
+        "req-contact-select",
+        "req-keypad-entry",
+        "req-amount-format",
+        "req-confirm-screen",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 320,
+      "gate" : "slice",
+      "id" : "send-views",
+      "status" : "blocked",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-views",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppUI/SendMoneyView.swift",
+        "Packages/AppFeature/Sources/AppUI/AmountView.swift",
+        "Packages/AppFeature/Sources/AppUI/ConfirmView.swift",
+        "Packages/AppFeature/Sources/AppUI/AppView.swift",
+        "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift",
+        "App/InterviewStarterApp.swift",
+        "UITests/LaunchFlowUITests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-account-fake",
+        "req-contact-search",
+        "req-contact-select",
+        "req-keypad-entry",
+        "req-amount-format",
+        "req-continue-rule",
+        "req-decimal-money",
+        "req-confirm-screen",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "send-money-contract"
+    ],
+    [
+      "amount-input",
+      "send-flow",
+      "send-views"
+    ],
+    [
+      "spec-validation"
+    ]
+  ]
+}

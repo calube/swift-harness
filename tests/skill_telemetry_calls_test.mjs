@@ -411,7 +411,7 @@ const tests = {
     const values = { '<reason>': tableValues(files[LOOP], '--reason'), '<answer>': tableValues(files[LOOP], '--answer') }
     assert.deepEqual(values, {
       '<reason>': ['amend', 'budget', 'gate-red', 'merge-conflict', 'permission', 'question', 'stall'],
-      '<answer>': ['abandon', 'amend', 'continue', 'retry', 'wait'],
+      '<answer>': ['abandon', 'amend', 'continue', 'merge', 'retry', 'wait'],
     })
     const results = withRepository(false, dir => {
       const { runs, problems } = telemetryRuns(files, values, dir)

@@ -26,6 +26,8 @@ public enum BuildResumeAnswer: String, Sendable, Codable, CaseIterable {
   case amend
   /// Go on as the recommended option says.
   case `continue`
+  /// Merge a `review-blocked` return as it is: only the person's word, never a recommendation.
+  case merge
 }
 
 /// `build.halt`: a build run stopped to ask. Ids and a closed reason only: the question's text
@@ -95,6 +97,26 @@ public enum BuildHalts {
     // Ties keep write order, so the newest of 2 halts in 1 millisecond is the later line.
     return halts.sorted { ($0.element.time, $0.offset) < ($1.element.time, $1.offset) }
       .map(\.element)
+  }
+
+  /// The answer to the newest halt of `buildRun` scoped to exactly `task` made at or after
+  /// `since`, or `nil` when no such halt has been answered.
+  public static func answer(
+    in events: [HarnessEvent], buildRun: String, task: String?, since: Date
+  ) -> BuildResumeAnswer? {
+    var answers: [String: BuildResumeAnswer] = [:]
+    for event in events {
+      if case .buildResume(let resume) = event.payload, let parent = event.parentID {
+        answers[parent] = resume.answer
+      }
+    }
+    let halts = events.enumerated().filter {
+      guard case .buildHalt(let halt) = $0.element.payload else { return false }
+      return halt.buildRun == buildRun && halt.task == task && $0.element.time >= since
+        && answers[$0.element.eventID] != nil
+    }
+    let newest = halts.max { ($0.element.time, $0.offset) < ($1.element.time, $1.offset) }
+    return newest.flatMap { answers[$0.element.eventID] }
   }
 
   /// Whole milliseconds from `halt` to `resume`; `0` when the clock ran backwards.

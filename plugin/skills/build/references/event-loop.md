@@ -201,7 +201,8 @@ run.
 
 A task whose return `build check-return` passed, or whose merge is on `main`, holds no slot: its
 worker is done, so `build next` starts another task in its place. Its write set stays reserved until it
-merges, so no task that overlaps it starts.
+merges, so no task that overlaps it starts. The validation task never holds a slot: it runs beside
+`max_parallel`, so it never delays a build task.
 
 ## Merge gate watch
 
@@ -253,6 +254,7 @@ is a red gate, and the fixer gets only the new findings.
 | the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main`, records that gate run as the task's merge gate (`gateRunId`) when `build record-gate` hasn't, and cuts the fix worktree |
 | `build merge` exits 1 with another `reason` | halt: `main-moved`, `dirty-checkout` and `not-on-main` need the user; `already-merged` means the ledger lags, so run `ledger set … done` and go on |
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
+| `build merge` exits 1 with `review-blocked-unanswered` | the return is `review-blocked`: halt the task as [Task halts](#task-halts) says. Only the person's **merge as is** lets it merge |
 | `build merge` exits 1 with `flows-unchecked` or `flows-red` | run [before each merge](#before-each-merge)'s `qa run`, or send its red rows to the fixer in the fix worktree `flows-red` cut |
 | `build merge` exits 2 | halt |
 
@@ -375,6 +377,7 @@ the findings or the answer's words.
 | abandon, drop, stop the build, stop them now, stop | `abandon` |
 | an amend through the design skill | `amend` |
 | go on, go on without it, leave it blocked, let them finish, finish anyway | `continue` |
+| merge as is | `merge` |
 
 ## Recording usage
 
@@ -404,10 +407,17 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
    `blocked` task, and neither does a resumed build.
 2. Ask. Quote the check's findings, the return's `gate`, or the blocking review findings as
    `severity file: title`. A blocking finding has `verified: true` and severity blocker or major;
-   a `review-blocked` return with none names the unreviewed focus in its `notes`. Options:
-   - **Go on without it** (Recommended): it stays `blocked`; its dependents never start.
-   - **Retry**: `ledger set … pending`, then let `build next` start it again. Its worktree and
-     branch still exist, so skip `worktree create` and launch into the same worktree.
+   a `review-blocked` return with none names the unreviewed focus in its `notes`. Mark
+   recommended the option `check-return`'s `haltAdvice.answer` names, and quote its `why`: `retry`
+   for a finding a fix pass resolves (a gate to run again, a missing reason, a formatting fix, a
+   flaky launch) while a retry as long as the first run fits before the cutoff and no new starts
+   hasn't begun; `continue` for a design conflict or a retry the box can't hold. Options:
+   - **Retry**: `ledger set … pending`, then let `build next` start it again, its brief quoting
+     every finding. Its worktree and branch still exist, so skip `worktree create` and launch into
+     the same worktree.
+   - **Go on without it**: it stays `blocked`; its dependents never start.
+   - **Merge as is**, for a `review-blocked` return only and never recommended: `build merge`
+     takes it only after `build resume --answer merge` answers a halt of the task.
    - **Abandon**: `ledger set … abandoned`, then [discard its worktrees](#abandoned-task).
    - **Stop the build**: start nothing new; running tasks still merge, then [finish](#final-gate).
 
