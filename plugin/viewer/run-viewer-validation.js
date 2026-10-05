@@ -1,7 +1,9 @@
 // The Validation tab: a strip counting pass, red, unverified and waiting rows, plus abandoned
-// ones when there are any, the rows grouped by the task each runs after, then the kept XCUITest
-// flows by flow and test. A red row opens "Why it failed"; an unverified or abandoned row, or a
-// flow missing its video or sheet, "Why unverified". A flow
+// ones and rows only an at-base run checked when there are any, the rows grouped by the task each
+// runs after, then the kept XCUITest flows by flow and test. A row checked by more than 1 qa run
+// lists each run, newest first, with its own Why button and flow. A red row opens "Why it
+// failed"; an unverified or abandoned row, or a flow missing its video or sheet, "Why
+// unverified". A flow
 // lists its steps, each linked to the video at its offset, and links its contact sheet. Evidence
 // is linked or named by path, never embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
@@ -53,13 +55,36 @@
     return `<div class="qa-flow"><ol class="qa-steps" aria-label="Flow steps">${steps}</ol><div class="qa-links">${links}</div></div>`;
   }
 
+  const STAGE = { "at-base": "at base", final: "final", run: "qa run" };
+  const stageText = (a) => (a.stage === "after" ? "after " + (a.after != null ? a.after : "a task") : STAGE[a.stage] || a.stage);
+  const atBaseTag = (row) => (row.atBase ? `<span class="chip plain qa-at-base">at base</span>` : "");
+
+  // Every qa run that checked the row, newest first, when more than 1 did or the row's result is
+  // the merge base's. The run the row shows is marked; each other run carries its own flow.
+  function historyHtml(row, key) {
+    const history = row.history || [];
+    if (history.length < 2 && !row.atBase) return "";
+    const items = history.map((a, i) => {
+      const entry = Object.assign({}, row, a, { history: [] });
+      const hkey = key + ":h" + i;
+      shown[hkey] = entry;
+      const current = a.qaRun === row.qaRun;
+      const why = whyOf(entry);
+      const reused = a.reusedFrom != null ? `<span class="sub">reused from <span class="mono">${esc(a.reusedFrom)}</span></span>` : "";
+      return `<li class="qa-attempt" data-stage="${esc(a.stage)}" data-result="${esc(a.result)}" data-run="${esc(a.qaRun)}"${current ? ` aria-current="true"` : ""}>${chip(a.result)}
+        <span class="qa-stage">${esc(stageText(a))}</span><span class="mono sub">${esc(a.qaRun)}</span>${reused}
+        <span class="sub num">${a.result === "waiting" ? "" : esc(M.fmtMs(a.ms))}</span>${why ? whyButton(why, hkey) : ""}${!current && a.flow ? flowHtml(a.flow) : ""}</li>`;
+    }).join("");
+    return `<ol class="qa-history" aria-label="qa runs of row ${row.row}, newest first">${items}</ol>`;
+  }
+
   function rowHtml(row, key) {
     const why = whyOf(row);
-    return `<li class="qa-row" data-row="${row.row}" data-result="${esc(row.result)}">${chip(row.result)}
+    return `<li class="qa-row" data-row="${row.row}" data-result="${esc(row.result)}">${chip(row.result)}${atBaseTag(row)}
       <span class="mono">row ${row.row}</span><span class="qa-layer">${esc(row.layer)}</span>
       <span class="qa-req mono">${esc(row.requirement)}</span>
       ${row.check != null ? `<code class="qa-check">${esc(row.check)}</code>` : ""}
-      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}</li>`;
+      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${historyHtml(row, key)}</li>`;
   }
 
   function keptHtml(k, key) {
@@ -70,10 +95,10 @@
       <code class="qa-check">${esc(test)}</code><span class="sub">${where}</span>${gaps(k.flow) ? whyButton("Why unverified", key) : ""}${flowHtml(k.flow)}</li>`;
   }
 
-  function waitingHtml(row) {
+  function waitingHtml(row, key) {
     return `<li class="qa-row qa-waiting" data-row="${row.row}" data-result="waiting">${chip("waiting")}
       <span>waiting on ${row.waitingOn.map((t) => `<span class="mono">${esc(t)}</span>`).join(", ")}</span>
-      <span class="sub">row ${row.row} · ${esc(row.layer)} · <span class="mono">${esc(row.requirement)}</span></span></li>`;
+      <span class="sub">row ${row.row} · ${esc(row.layer)} · <span class="mono">${esc(row.requirement)}</span></span>${historyHtml(row, key)}</li>`;
   }
 
   function render(view) {
@@ -82,15 +107,15 @@
     const v = view.validation;
     if (!v) { mount.innerHTML = ""; return; }
     const c = v.counts;
-    const strip = [["pass", c.pass], ["red", c.red], ["unverified", c.unverified], ["waiting", c.waiting]].concat(c.abandoned ? [["abandoned", c.abandoned]] : [])
-      .map(([k, n]) => `<div class="stat qa-count" data-result="${k}"><b class="num">${n}</b><span>${k}</span></div>`).join("");
+    const strip = [["pass", c.pass], ["red", c.red], ["unverified", c.unverified], ["waiting", c.waiting]].concat(c.abandoned ? [["abandoned", c.abandoned]] : []).concat(c.atBase ? [["atBase", c.atBase]] : [])
+      .map(([k, n]) => `<div class="stat qa-count" data-result="${k}"><b class="num">${n}</b><span>${k === "atBase" ? "at base" : k}</span></div>`).join("");
     const groups = M.validationGroups(view).map((g, gi) => {
       const rows = g.rows.map((row) => { const key = gi + ":" + row.row; shown[key] = row; return rowHtml(row, key); });
       const title = g.task == null ? "no task named" : g.task;
       const task = g.task != null ? (view.tasks || []).find((t) => t.id === g.task) : null;
       return `<section class="qa-group" data-task="${esc(g.task == null ? "" : g.task)}" aria-label="${esc(title)}">
         <h3><span class="mono">${esc(title)}</span>${task ? ` <span class="chip plain">${esc(task.status)}</span>` : ""}</h3>
-        <ul class="qa-rows">${rows.join("")}${g.waiting.map(waitingHtml).join("")}</ul></section>`;
+        <ul class="qa-rows">${rows.join("")}${g.waiting.map((row) => waitingHtml(row, gi + ":" + row.row)).join("")}</ul></section>`;
     }).join("");
     const kept = M.keptFlowGroups(view).map((g, gi) => {
       const title = g.name == null ? "no flow named" : g.name;
@@ -152,7 +177,8 @@
         ["why", row.message != null ? row.message : "the report holds no reason"],
         ...gapRows(row.flow),
         ["evidence", evidence],
-        ["qa run", row.qaRun]
+        ["qa run", row.qaRun],
+        ...(row.reusedFrom != null ? [["reused from", row.reusedFrom]] : [])
       ], "Why it failed", output);
     } else if (row.result === "unverified" || row.result === "abandoned") {
       runViewer.openPopover(anchor, [

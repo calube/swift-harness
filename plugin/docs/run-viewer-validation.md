@@ -9,16 +9,25 @@ command wrote: nothing here runs a check.
 The reader keeps a `qa.check` event, and a qa.flow event with a row, when it names the build run's
 plan and its `qa run` started at or after the build run and before the plan's next build run. It
 keeps a qa.flow with no row, a kept XCUITest flow, when its gate run is the build run's. For each kept
-`qa run` it reads `.harness/runs/<run id>/qa/report.json` from the main checkout or a live task
-worktree, and each red row's `.txt` evidence as saved output, at most its last 16 KB.
+`qa run` it reads `runs/<run id>/qa/report.json` from the main checkout's state root, the clone's
+kept runs or a live task worktree, and each red row's `.txt` evidence as saved output, at most its
+last 16 KB. In a brownfield clone, `run checkout remove` keeps the plan checkout's runs in the git
+common dir's state root, whatever a committed config in the user's tree picks.
 
-Each row shows its newest result. A `qa run --at-base` should fail every row, so it neither sets
-a row's result nor draws a timeline bar.
+Each row shows its newest result outside the merge base. A `qa run --at-base` should fail every
+row, so it sets a row's result only when no other `qa run` checked the row, which then reads "at
+base", counted apart from red; it never draws a timeline bar. Each row keeps every `qa run` that
+checked it, newest first: its stage (at base, after a task, final, or plain), result, reason, saved
+output, flow, and the prepared at-base run a reused check took its result from.
 
 ## The tab
 
-- **Strip.** Counts of pass, red, unverified and waiting rows, and abandoned rows when any. The
-  tab's badges carry every count but pass, so a red check shows from any tab.
+- **Strip.** Counts of pass, red, unverified and waiting rows, and abandoned and at-base rows
+  when any. The tab's badges carry every count but pass and at base, so a red check shows from any
+  tab.
+- **Runs.** A row more than 1 `qa run` checked, or 1 at base only, lists each run under it, newest
+  first, marking the run the row shows. An earlier red run has its own Why button, and an earlier
+  flow its steps and links.
 - **Groups.** Rows group by the tasks they run after, in ledger order; a row that runs after several
   tasks shows under each. A waiting row ends each of its groups as "waiting on <task>". A row whose
   report didn't read sits under "no task named".
@@ -42,8 +51,8 @@ a row's result nor draws a timeline bar.
 
 The page names evidence by its path relative to its run's directory and never embeds it: the page holds no
 image or video. A report links `runs/<run id>/<path>` in its own folder, where `report` copies each video
-and contact sheet a flow links, so its links outlive the run stores; a linked file its run directory lacks is
-a footer line. A live page links `../runs/<run id>/<path>`, and its server answers each file a flow links
+and contact sheet a flow links, an earlier run's included, so its links outlive the run stores. A linked
+file its run directory lacks is a footer line. A live page links `../runs/<run id>/<path>`, and its server answers each file a flow links
 and 404s any other. Every string passes the payload guard. A check, reason, step label,
 test name or path the guard rejects, or a path that leaves its run directory, drops out as a footer
 line naming the `qa run` and row, or the gate run and kept flow. Output lines lose machine paths and stay

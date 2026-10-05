@@ -6,8 +6,9 @@ through the report folder `swiftgate report --html` writes.
 ## A run's end
 
 A run is done once `build finish`'s end is its newest ledger event; a ledger event after it, as in a resumed
-build or a fix loop after a red `final`, makes it running again. A log from before `build finish` recorded
-its end is done at a GREEN final gate. `build finish` and `run report` write the report folder each time,
+build or a fix loop after a red `final`, makes it running again. `build start` marks the run's `run.json`
+with `endsAtFinish`; a run whose record lacks the mark, written before `build finish` recorded its end, or
+that has no record, is done at a GREEN final gate. `build finish` and `run report` write the report folder each time,
 naming it in their output. A report of a run not done carries `snapshotAt`, and its header reads "Snapshot
 at <time>, run still <state>".
 

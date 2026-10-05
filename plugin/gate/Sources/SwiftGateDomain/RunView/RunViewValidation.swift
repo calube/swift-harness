@@ -1,7 +1,8 @@
 import Foundation
 
 /// The run viewer's Validation tab: the newest result of each validation row a `qa run` checked
-/// during the build run, with the counts its summary strip shows.
+/// during the build run, every earlier `qa run`'s result of it, and the counts its summary strip
+/// shows.
 public struct RunViewValidation: Sendable, Equatable, Encodable {
   /// How many lines of a red check's saved output the view keeps: the last ones.
   public static let maxOutputLines = 12
@@ -12,15 +13,74 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var unverified: Int
     public var waiting: Int
     public var abandoned: Int
+    /// Rows only a `qa run --at-base` checked, which are expected to fail there.
+    public var atBase: Int
 
     public init(
-      pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0, abandoned: Int = 0
+      pass: Int = 0, red: Int = 0, unverified: Int = 0, waiting: Int = 0, abandoned: Int = 0,
+      atBase: Int = 0
     ) {
       self.pass = pass
       self.red = red
       self.unverified = unverified
       self.waiting = waiting
       self.abandoned = abandoned
+      self.atBase = atBase
+    }
+  }
+
+  /// Which kind of `qa run` checked a row.
+  public enum Stage: String, Sendable, Equatable, Encodable {
+    case atBase = "at-base"
+    case after
+    case final
+    /// A `qa run` with none of `--at-base`, `--after` or `--final`, or one whose report didn't
+    /// read.
+    case run
+  }
+
+  /// 1 `qa run`'s check of a row, as the row's history lists it.
+  public struct Attempt: Sendable, Equatable, Encodable {
+    public var qaRun: String
+    public var stage: Stage
+    /// The task a `--after` run named; `nil` for another run, or when the guard rejected it.
+    public var after: String?
+    public var result: QAResult
+    /// `nil` when the report didn't read or the guard rejected it.
+    public var message: String?
+    public var exitStatus: Int?
+    public var milliseconds: Int
+    /// Run-relative paths under ``qaRun``'s run directory, each passed by the payload guard.
+    public var evidence: [String]
+    public var waitingOn: [String]
+    /// The prepared at-base run whose result this check took instead of running.
+    public var reusedFrom: String?
+    public var at: Date
+    /// The last lines of a red check's saved output, as ``Row/output`` holds them.
+    public var output: [String]
+    public var outputCut: Bool
+    public var flow: RunViewFlow?
+
+    public init(
+      qaRun: String, stage: Stage, after: String? = nil, result: QAResult,
+      message: String? = nil, exitStatus: Int? = nil, milliseconds: Int = 0,
+      evidence: [String] = [], waitingOn: [String] = [], reusedFrom: String? = nil, at: Date,
+      output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil
+    ) {
+      self.qaRun = qaRun
+      self.stage = stage
+      self.after = after
+      self.result = result
+      self.message = message
+      self.exitStatus = exitStatus
+      self.milliseconds = milliseconds
+      self.evidence = evidence
+      self.waitingOn = waitingOn
+      self.reusedFrom = reusedFrom
+      self.at = at
+      self.output = output
+      self.outputCut = outputCut
+      self.flow = flow
     }
   }
 
@@ -54,12 +114,17 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     /// The flow the row's newest check drove, from its `qa.flow`; `nil` for a row of another
     /// layer, or a flow row that never reached its device.
     public var flow: RunViewFlow?
+    /// Whether only a `qa run --at-base` checked the row, so its result is the merge base's.
+    public var atBase: Bool
+    /// Every kept `qa run`'s check of the row, newest first, the merge base's included.
+    public var history: [Attempt]
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
-      at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil
+      at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil,
+      atBase: Bool = false, history: [Attempt] = []
     ) {
       self.row = row
       self.requirement = requirement
@@ -77,6 +142,8 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.output = output
       self.outputCut = outputCut
       self.flow = flow
+      self.atBase = atBase
+      self.history = history
     }
   }
 
@@ -214,7 +281,7 @@ extension RunViewKeptFlow {
 extension RunViewValidation.Row {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence
-    case waitingOn, qaRun, at, output, outputCut, flow
+    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history
     case milliseconds = "ms"
   }
 
@@ -232,6 +299,34 @@ extension RunViewValidation.Row {
     try c.encode(evidence, forKey: .evidence)
     try c.encode(waitingOn, forKey: .waitingOn)
     try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(at, forKey: .at)
+    try c.encode(output, forKey: .output)
+    try c.encode(outputCut, forKey: .outputCut)
+    try c.encode(flow, forKey: .flow)
+    try c.encode(atBase, forKey: .atBase)
+    try c.encode(history, forKey: .history)
+  }
+}
+
+extension RunViewValidation.Attempt {
+  private enum CodingKeys: String, CodingKey {
+    case qaRun, stage, after, result, message, exitStatus, evidence, waitingOn, reusedFrom, at
+    case output, outputCut, flow
+    case milliseconds = "ms"
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(stage, forKey: .stage)
+    try c.encode(after, forKey: .after)
+    try c.encode(result, forKey: .result)
+    try c.encode(message, forKey: .message)
+    try c.encode(exitStatus, forKey: .exitStatus)
+    try c.encode(milliseconds, forKey: .milliseconds)
+    try c.encode(evidence, forKey: .evidence)
+    try c.encode(waitingOn, forKey: .waitingOn)
+    try c.encode(reusedFrom, forKey: .reusedFrom)
     try c.encode(at, forKey: .at)
     try c.encode(output, forKey: .output)
     try c.encode(outputCut, forKey: .outputCut)
@@ -259,18 +354,21 @@ public struct RunViewQARun: Sendable, Equatable {
 /// Folds the run's `qa.check` and `qa.flow` events and the reports they name into the view's
 /// validation section and its `qa.check` spans.
 ///
-/// A run at the merge base is expected to fail every row, so it neither sets a row's result nor
-/// draws a span, and its flows join nothing. A `qa.flow` with a row joins that row's check in the
-/// same `qa run`; one with no row is a kept XCUITest flow of the gate run it hangs off.
+/// Every `qa run`'s check of a row joins the row's history, newest first. A run at the merge base
+/// is expected to fail every row, so it sets a row's result only when no other run checked the
+/// row, and draws no span. A `qa.flow` with a row joins that row's check in the same `qa run`; one
+/// with no row is a kept XCUITest flow of the gate run it hangs off.
 enum RunViewValidationFold {
+  private typealias Entry = (event: HarnessEvent, check: QACheckEvent)
+
   /// - Parameter taskOfGateRun: the task each gate run belongs to, as the ledger and returns
   ///   name it.
   static func fold(
     _ events: [HarnessEvent], qaRuns: [String: RunViewQARun], roots: [String],
     taskOfGateRun: [String: String] = [:], into view: inout RunView
   ) {
-    let checks = events.compactMap { event -> (event: HarnessEvent, check: QACheckEvent)? in
-      guard case .qaCheck(let check) = event.payload, !check.atBase else { return nil }
+    let checks = events.compactMap { event -> Entry? in
+      guard case .qaCheck(let check) = event.payload else { return nil }
       return (event, check)
     }
     var damage: [RunView.Damage] = []
@@ -289,22 +387,33 @@ enum RunViewValidationFold {
     }
     guard !checks.isEmpty || !kept.isEmpty else { return }
     let scrubRoots = RunViewGateFailures.Scrub.roots(roots)
-    var newest: [Int: (event: HarnessEvent, check: QACheckEvent)] = [:]
-    for entry in checks {
-      if let seen = newest[entry.check.row], seen.event.time > entry.event.time { continue }
-      newest[entry.check.row] = entry
-    }
-    let rows = newest.keys.sorted().compactMap { number -> RunViewValidation.Row? in
-      guard let entry = newest[number] else { return nil }
-      let qaRun = entry.event.runID ?? ""
-      var row = row(
-        entry.check, at: entry.event.time, qaRun: qaRun, read: qaRuns[qaRun], roots: scrubRoots,
-        damage: &damage)
-      row.flow = flows[FlowKey(qaRun: qaRun, row: number)]
-      return row
+    var byRow: [Int: [Entry]] = [:]
+    for entry in checks { byRow[entry.check.row, default: []].append(entry) }
+    let rows = byRow.keys.sorted().compactMap { number -> RunViewValidation.Row? in
+      // Newest first; checks of 1 `qa run` share its time, so a later run id breaks a tie.
+      let entries = (byRow[number] ?? []).sorted {
+        ($0.event.time, $0.event.runID ?? "") > ($1.event.time, $1.event.runID ?? "")
+      }
+      let history = entries.map { entry -> RunViewValidation.Attempt in
+        let qaRun = entry.event.runID ?? ""
+        var attempt = attempt(
+          entry.check, at: entry.event.time, qaRun: qaRun, read: qaRuns[qaRun],
+          roots: scrubRoots, damage: &damage)
+        attempt.flow = flows[FlowKey(qaRun: qaRun, row: number, atBase: entry.check.atBase)]
+        return attempt
+      }
+      guard let index = entries.firstIndex(where: { !$0.check.atBase }) ?? entries.indices.first
+      else { return nil }
+      return row(
+        entries[index].check, shown: history[index], history: history,
+        read: qaRuns[history[index].qaRun], damage: &damage)
     }
     var counts = RunViewValidation.Counts()
     for row in rows {
+      if row.atBase {
+        counts.atBase += 1
+        continue
+      }
       switch row.result {
       case .pass: counts.pass += 1
       case .red: counts.red += 1
@@ -317,35 +426,41 @@ enum RunViewValidationFold {
     view.damage += damage
     let parent =
       view.spans.contains { $0.id == RunViewSpans.runSpanID } ? RunViewSpans.runSpanID : nil
-    let spans = checks.compactMap { entry -> RunView.Span? in
+    let spans = checks.filter { !$0.check.atBase }.compactMap { entry -> RunView.Span? in
       var span = span(entry.check, event: entry.event, parent: parent)
-      span?.flow = flows[FlowKey(qaRun: entry.event.runID ?? "", row: entry.check.row)]
+      span?.flow =
+        flows[
+          FlowKey(qaRun: entry.event.runID ?? "", row: entry.check.row, atBase: false)]
       return span
     }
     view.spans = (view.spans + spans).enumerated()
       .sorted { ($0.element.start, $0.offset) < ($1.element.start, $1.offset) }.map(\.element)
   }
 
+  /// A flow joins the check of its row in the same `qa run`, at the merge base or not as it was.
   private struct FlowKey: Hashable {
     var qaRun: String
     var row: Int
+    var atBase: Bool
   }
 
-  /// Each batch flow outside the merge base, by its `qa run` and row; the newest wins.
+  /// Each batch flow, by its `qa run` and row; the newest wins.
   private static func batchFlows(_ events: [HarnessEvent], damage: inout [RunView.Damage])
     -> [FlowKey: RunViewFlow]
   {
     var newest: [FlowKey: (time: Date, flow: QAFlowEvent)] = [:]
     for event in events {
-      guard case .qaFlow(let flow) = event.payload, let row = flow.row, !flow.atBase,
-        let qaRun = event.runID
+      guard case .qaFlow(let flow) = event.payload, let row = flow.row, let qaRun = event.runID
       else { continue }
-      let key = FlowKey(qaRun: qaRun, row: row)
+      let key = FlowKey(qaRun: qaRun, row: row, atBase: flow.atBase)
       if let seen = newest[key], seen.time > event.time { continue }
       newest[key] = (event.time, flow)
     }
     var flows: [FlowKey: RunViewFlow] = [:]
-    for key in newest.keys.sorted(by: { ($0.qaRun, $0.row) < ($1.qaRun, $1.row) }) {
+    let order = newest.keys.sorted {
+      ($0.qaRun, $0.row, $0.atBase ? 0 : 1) < ($1.qaRun, $1.row, $1.atBase ? 0 : 1)
+    }
+    for key in order {
       guard let entry = newest[key] else { continue }
       var guarded = Guarded(source: "qa run \(key.qaRun) row \(key.row)")
       flows[key] = guarded.flow(entry.flow, run: key.qaRun)
@@ -430,19 +545,20 @@ enum RunViewValidationFold {
     return !path.hasPrefix("/") && !components.contains("..") && !components.contains("")
   }
 
-  /// 1 row from its newest check and its report row; each string the guard rejects is dropped as
-  /// a damage row.
-  private static func row(
+  /// 1 `qa run`'s check of a row, joined to its report row; each string the guard rejects is
+  /// dropped as a damage row.
+  private static func attempt(
     _ check: QACheckEvent, at time: Date, qaRun: String, read: RunViewQARun?, roots: [String],
     damage: inout [RunView.Damage]
-  ) -> RunViewValidation.Row {
+  ) -> RunViewValidation.Attempt {
     let source = "qa run \(qaRun) row \(check.row)"
     func keep(_ text: String, _ field: String) -> String? {
       guard let reason = EventPayloadGuard.rejection(inJSON: text) else { return text }
       damage.append(RunView.Damage(source: source, reason: "\(field): \(reason.rawValue)"))
       return nil
     }
-    let reported = read?.report?.rows.first { $0.row == check.row }
+    let report = read?.report
+    let reported = report?.rows.first { $0.row == check.row }
     let evidence = check.evidence.enumerated().compactMap { index, path -> String? in
       guard let kept = keep(path, "evidence[\(index)]") else { return nil }
       guard staysInRun(kept) else {
@@ -462,13 +578,42 @@ enum RunViewValidationFold {
       output = Array(lines.suffix(RunViewValidation.maxOutputLines))
       cut = lines.count > output.count
     }
+    let stage: RunViewValidation.Stage =
+      if let report {
+        report.atBase ? .atBase : report.final ? .final : report.after != nil ? .after : .run
+      } else {
+        check.atBase ? .atBase : .run
+      }
+    return RunViewValidation.Attempt(
+      qaRun: qaRun, stage: stage, after: report?.after.flatMap { keep($0, "after") },
+      result: check.result, message: reported.flatMap { keep($0.message, "message") },
+      exitStatus: check.exitStatus, milliseconds: check.milliseconds, evidence: evidence,
+      waitingOn: check.waitingOn,
+      reusedFrom: check.reusedFrom.flatMap { keep($0, "reusedFrom") }, at: time, output: output,
+      outputCut: cut)
+  }
+
+  /// 1 row as the check it shows left it, with its report row's check and tasks; each string the
+  /// guard rejects is dropped as a damage row.
+  private static func row(
+    _ check: QACheckEvent, shown: RunViewValidation.Attempt,
+    history: [RunViewValidation.Attempt], read: RunViewQARun?, damage: inout [RunView.Damage]
+  ) -> RunViewValidation.Row {
+    let source = "qa run \(shown.qaRun) row \(check.row)"
+    func keep(_ text: String, _ field: String) -> String? {
+      guard let reason = EventPayloadGuard.rejection(inJSON: text) else { return text }
+      damage.append(RunView.Damage(source: source, reason: "\(field): \(reason.rawValue)"))
+      return nil
+    }
+    let reported = read?.report?.rows.first { $0.row == check.row }
     return RunViewValidation.Row(
       row: check.row, requirement: check.requirement, layer: check.layer,
       check: reported.flatMap { keep($0.check, "check") },
       runsAfter: (reported?.runsAfter ?? []).compactMap { keep($0, "runsAfter") },
-      result: check.result, message: reported.flatMap { keep($0.message, "message") },
-      exitStatus: check.exitStatus, milliseconds: check.milliseconds, evidence: evidence,
-      waitingOn: check.waitingOn, qaRun: qaRun, at: time, output: output, outputCut: cut)
+      result: shown.result, message: shown.message, exitStatus: shown.exitStatus,
+      milliseconds: shown.milliseconds, evidence: shown.evidence, waitingOn: shown.waitingOn,
+      qaRun: shown.qaRun, at: shown.at, output: shown.output, outputCut: shown.outputCut,
+      flow: shown.flow, atBase: check.atBase, history: history)
   }
 
   /// A check that answered, `pass` or `red`, as a span ending at its event; `nil` for a row that
@@ -493,10 +638,12 @@ enum RunViewValidationFold {
 }
 
 extension RunViewValidation {
-  /// Each video and contact sheet a flow links, as `<run id>/<run-relative path>`: the only files
-  /// a live page may fetch from a run directory.
+  /// Each video and contact sheet a flow links, a row's earlier runs' included, as
+  /// `<run id>/<run-relative path>`: the only files a live page may fetch from a run directory.
   public var linkedFiles: Set<String> {
-    let flows = rows.compactMap(\.flow) + keptFlows.map(\.flow)
+    let flows =
+      rows.compactMap(\.flow) + rows.flatMap { $0.history.compactMap(\.flow) }
+      + keptFlows.map(\.flow)
     return Set(
       flows.flatMap { flow in
         [flow.video, flow.sheet].compactMap { $0.map { "\(flow.run)/\($0)" } }

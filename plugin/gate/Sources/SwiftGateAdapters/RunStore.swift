@@ -190,6 +190,11 @@ public struct RunStore: Sendable {
   /// its own runs. A run already in `destination` counts as kept, since run ids are unique.
   /// - Throws: when this store's runs directory exists but can't be listed.
   public func keepRuns(in destination: RunStore) throws(RunStoreError) -> RunKeepOutcome {
+    try keepRuns(into: destination.state)
+  }
+
+  /// ``keepRuns(in:)`` into the runs of the state root `destination`.
+  public func keepRuns(into destination: StateRoot) throws(RunStoreError) -> RunKeepOutcome {
     let files = FileManager.default
     let source = state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
     let names: [String]
@@ -207,8 +212,7 @@ public struct RunStore: Sendable {
       var isDirectory: ObjCBool = false
       guard files.fileExists(atPath: from.path, isDirectory: &isDirectory), isDirectory.boolValue
       else { continue }
-      let to = destination.state.url(
-        RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
+      let to = destination.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
       var destinationIsDirectory: ObjCBool = false
       if files.fileExists(atPath: to.path, isDirectory: &destinationIsDirectory),
         destinationIsDirectory.boolValue

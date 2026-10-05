@@ -81,7 +81,8 @@ struct ViewCommand: AsyncParsableCommand {
     }
     if detached {
       try await serveDetached(
-        ViewRun(newestOf: reader, page: page), registry: ViewServerRegistry(commonDirectory: commonURL),
+        ViewRun(newestOf: reader, page: page),
+        registry: ViewServerRegistry(commonDirectory: commonURL),
         blocked: blocked)
       return
     }
@@ -224,9 +225,10 @@ final class ViewRun: Sendable {
   func respond(to request: LocalHTTPRequest) -> LocalHTTPResponse {
     watched.withLock { $0.requested = true }
     let path = request.path
-    let known = [
-      "/", Self.viewPath, Self.finalPath, Self.serverPath,
-    ].contains(path) || path.hasPrefix(Self.runsPrefix)
+    let known =
+      [
+        "/", Self.viewPath, Self.finalPath, Self.serverPath,
+      ].contains(path) || path.hasPrefix(Self.runsPrefix)
     guard known else { return .text(404, "view: no such page") }
     guard request.method == "GET" else { return .text(405, "view: only GET is served") }
     switch path {
@@ -302,14 +304,15 @@ final class ViewRun: Sendable {
     }
   }
 
-  /// A video or contact sheet the view's flows link, from this checkout's run directories; any
+  /// A video or contact sheet the view's flows link, from the reader's run directories; any
   /// other path is 404, so the page can't reach a file no flow names.
   private func runFile(_ encoded: Substring) -> LocalHTTPResponse {
     let missing = LocalHTTPResponse.text(404, "view: no such file")
     guard let relative = String(encoded).removingPercentEncoding, let buildRun,
       let view = try? build(buildRun), view.validation?.linkedFiles.contains(relative) == true,
-      let body = try? Data(
-        contentsOf: reader.stateRoot.url("\(RunLayout.runsDirectory)/\(relative)"))
+      let file = RunReportFolder.source(
+        relative, in: reader.runRoots.map { $0.url(RunLayout.runsDirectory) }),
+      let body = try? Data(contentsOf: file)
     else { return missing }
     let type =
       switch (relative as NSString).pathExtension {

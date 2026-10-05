@@ -39,10 +39,14 @@ public struct BuildRunRecord: Sendable, Equatable {
   /// A `swiftgate run`'s time box, which replaces the preset's budget fields for this run and
   /// measures from the run's launch, not from ``startedAt``. `nil` for every owned run.
   public let timeBox: RunTimeBox?
+  /// Whether `build finish` records this run's end as a `finish` event in its ledger log, so the
+  /// run hasn't ended until that event is the log's newest. `false` for a record a binary wrote
+  /// before the event existed, whose run ends at its GREEN final gate instead.
+  public let endsAtFinish: Bool
 
   public init(
     runID: String, plan: String, startedAt: Date, presetName: String, preset: BuildPreset,
-    timeBox: RunTimeBox? = nil
+    timeBox: RunTimeBox? = nil, endsAtFinish: Bool = true
   ) {
     self.runID = runID
     self.plan = plan
@@ -50,12 +54,13 @@ public struct BuildRunRecord: Sendable, Equatable {
     self.presetName = presetName
     self.preset = preset
     self.timeBox = timeBox
+    self.endsAtFinish = endsAtFinish
   }
 }
 
 extension BuildRunRecord: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runId, plan, startedAt, presetName, preset, timeBox
+    case schemaVersion, runId, plan, startedAt, presetName, preset, timeBox, endsAtFinish
   }
 
   public init(from decoder: any Decoder) throws {
@@ -72,7 +77,8 @@ extension BuildRunRecord: Codable {
       startedAt: try container.decode(Date.self, forKey: .startedAt),
       presetName: try container.decode(String.self, forKey: .presetName),
       preset: try container.decode(BuildPreset.self, forKey: .preset),
-      timeBox: try container.decodeIfPresent(RunTimeBox.self, forKey: .timeBox))
+      timeBox: try container.decodeIfPresent(RunTimeBox.self, forKey: .timeBox),
+      endsAtFinish: try container.decodeIfPresent(Bool.self, forKey: .endsAtFinish) ?? false)
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -84,6 +90,7 @@ extension BuildRunRecord: Codable {
     try container.encode(presetName, forKey: .presetName)
     try container.encode(preset, forKey: .preset)
     try container.encodeIfPresent(timeBox, forKey: .timeBox)
+    try container.encode(endsAtFinish, forKey: .endsAtFinish)
   }
 }
 
