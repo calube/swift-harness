@@ -51,9 +51,12 @@ struct CostSectionTests {
           priceTable: priceTable)))
   }
 
-  static func judgeCall(_ id: String, cost: Double?, cacheHit: Bool) -> HarnessEvent {
+  static func judgeCall(
+    _ id: String, cost: Double?, cacheHit: Bool, at seconds: Double = 0
+  ) -> HarnessEvent {
     HarnessEvent(
-      eventID: id, time: start, source: HarnessEventSource(route: .checkReady),
+      eventID: id, time: start.addingTimeInterval(seconds),
+      source: HarnessEventSource(route: .checkReady),
       payload: .judgeCall(
         JudgeCallEvent(
           role: .answer, backend: .claude, model: "sonnet", servedModel: nil,
@@ -216,6 +219,33 @@ struct CostSectionTests {
     #expect(Self.metric(report, "cost-usd", ["total"])?.value == 1)
     #expect(Self.metric(report, "cost-usd", ["build-run", "r2"]) == nil)
     #expect(CostSection(prices: Self.table).summarize(Self.input([])) == nil)
+  }
+
+  @Test(
+    "with a build run named, a judge call made between its first and last message counts toward it and one outside doesn't, and the total with the judge adds them — catches the judge's cost left out of a build's total"
+  )
+  func buildRunCountsItsJudgeCalls() throws {
+    let events = [
+      Self.judgeCall("before", cost: 0.5, cacheHit: false, at: -1),
+      Self.usage("a", buildRun: "r1", at: 0, cost: 1),
+      Self.usage("x", buildRun: "r2", at: 30, cost: 8),
+      Self.judgeCall("j1", cost: 0.02, cacheHit: false, at: 10),
+      Self.judgeCall("j2", cost: 0, cacheHit: true, at: 20),
+      Self.usage("b", buildRun: "r1", at: 100, cost: 2),
+      Self.judgeCall("after", cost: 0.5, cacheHit: false, at: 101),
+    ]
+    let report = try #require(
+      CostSection(prices: Self.table).summarize(
+        Self.input(events, query: EventQuery(buildRunID: "r1"))))
+    #expect(Self.metric(report, "cost-usd", ["total"])?.value == 3)
+    #expect(Self.metric(report, "calls", ["judge", "claude", "sonnet"])?.value == 2)
+    let judge = try #require(Self.metric(report, "cost-usd", ["judge", "claude", "sonnet"]))
+    #expect(judge.value == 0.02)
+    let all = try #require(Self.metric(report, "cost-usd", ["total-with-judge"]))
+    #expect(abs(all.value - 3.02) < 1e-12, "\(all.value)")
+    #expect(all.n == 4)
+    #expect(report.lines.contains { $0.hasPrefix("total with judge: $3.0200") }, "\(report.lines)")
+    #expect(!report.lines.contains { $0.contains("none is counted") }, "\(report.lines)")
   }
 
   @Test(

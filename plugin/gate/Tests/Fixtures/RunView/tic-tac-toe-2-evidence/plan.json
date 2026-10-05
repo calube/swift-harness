@@ -1,0 +1,98 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the flow checks against the contract's names, and record why each fails now.",
+        "why" : "every screen requirement needs a check that fails before its tasks merge and passes after."
+      },
+      "ttt-contract" : {
+        "acceptance" : [
+          "the area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any rules or screen behaviour"
+        ],
+        "scope" : [
+          "GameCore target with `Player`, `Outcome`, `Game` (stubbed `outcome` and `play(at:)`), GameCoreTests target, stubbed `GameFeature`, `AccessibilityID`, scheme testables"
+        ],
+        "title" : "Declare the Game rules types, the GameFeature reducer and the board's accessibility identifiers with no behaviour.",
+        "why" : "requirements req-rules-unit-tests and the screen requirements share 1 declared shape, so rules and screen build in parallel."
+      },
+      "ttt-rules" : {
+        "acceptance" : [
+          "Swift Testing tests in Packages/AppFeature/Tests/GameCoreTests/GameTests.swift fail first, then pass: alternation starting with X; occupied cell ignored; each of the 8 lines as a parameterised test for X, and at least 1 line for O; no move accepted after a win; a draw on a full board; a win on the 9th move is a win, not a draw; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the reducer, the view, and any UI test"
+        ],
+        "scope" : [
+          "`Game.play(at:)`: place the current player's mark on an empty cell in 0...8 and switch player; ignore occupied cells, out-of-range cells and any move once `outcome` is non-nil",
+          "`Game.outcome`: `.win(player)` for 3 marks in any of the 8 lines, `.draw` when the board is full with no line, else `nil`"
+        ],
+        "title" : "Implement the tic-tac-toe rules in GameCore, test-first.",
+        "why" : "spec section 1, \"The game rules\", and the criterion \"The rules have unit tests that run without the UI\"."
+      },
+      "ttt-screen" : {
+        "acceptance" : [
+          "GameFeature tests in Packages/AppFeature/Tests/AppCoreTests/GameFeatureTests.swift fail first, then pass: status text for \"X's turn\" on a new game, new game resets, and status text mapping for each `Outcome` and player (test the mapping without relying on GameCore's rules, which ttt-rules builds in parallel, e.g. through a static helper taking an `Outcome?` and a `Player`); the existing AppFeatureTests pass unchanged; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the rules themselves (ttt-rules), deleting the posts reducer or the API client"
+        ],
+        "scope" : [
+          "GameFeature: `cellTapped(i)` calls `state.game.play(at: i)`; `newGameButtonTapped` sets `state.game = Game()`; `statusText` maps `game.outcome` and `game.currentPlayer` to \"X's turn\", \"O's turn\", \"X wins\", \"O wins\" or \"Draw\"",
+          "AppFeature gains a `game: GameFeature.State` child (default `GameFeature.State()`) with `case game(GameFeature.Action)` and a `Scope`; its posts logic and existing init signatures stay",
+          "new `GameView` in AppUI: a 3×3 grid of buttons with `AccessibilityID.cell(i)` and label \"X\", \"O\" or \"Empty\", a status `Text` with `AccessibilityID.gameStatus`, and a \"New game\" button with `AccessibilityID.newGame`",
+          "AppView shows GameView scoped to the `game` child, titled \"Tic-tac-toe\", and no longer loads posts on appear",
+          "UITests/LaunchFlowUITests.swift checks launch shows 9 cells labelled \"Empty\" and status \"X's turn\""
+        ],
+        "title" : "Build the board screen on GameFeature and make it the app's first screen.",
+        "why" : "spec section 2, \"The board screen\", and \"Replace that screen with the game. Keep the existing tests passing.\""
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-launch-empty-board",
+        "title" : "Launching the app shows an empty 3×3 board and the status \"X's turn\"."
+      },
+      {
+        "id" : "req-alternate-turns",
+        "title" : "Tapping empty cells places X and O alternately, starting with X, and tapping an occupied cell changes nothing."
+      },
+      {
+        "id" : "req-win-lines",
+        "title" : "Each of the 8 winning lines (3 rows, 3 columns, 2 diagonals) ends the game with the status \"X wins\" or \"O wins\" for the right player, and no further moves are accepted."
+      },
+      {
+        "id" : "req-draw",
+        "title" : "A full board with no winning line shows the status \"Draw\"."
+      },
+      {
+        "id" : "req-new-game",
+        "title" : "The \"New game\" button clears the board and makes it X's turn again."
+      },
+      {
+        "id" : "req-rules-unit-tests",
+        "title" : "The rules live in the GameCore module, which imports no UI framework, and have unit tests that run without the UI."
+      },
+      {
+        "id" : "req-existing-tests",
+        "title" : "The existing AppCoreTests, APIClient and LogClient tests keep passing."
+      }
+    ]
+  },
+  "resume" : "planned; 4 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

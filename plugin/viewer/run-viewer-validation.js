@@ -4,8 +4,9 @@
 // lists each run, newest first, with its own Why button and flow. A red row opens "Why it
 // failed"; an unverified or abandoned row, or a flow missing its video or sheet, "Why
 // unverified". A flow
-// lists its steps, each linked to the video at its offset, and links its contact sheet. Evidence
-// is linked or named by path, never embedded. Loaded after the core page as a classic script; it
+// lists its steps, each linked to the video at its offset, and links its contact sheet. Each
+// row lists its evidence; a report links only the files its folder holds and names the rest by
+// path. Nothing is embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
 (function (root) {
   const M = root.RunViewModel;
@@ -41,19 +42,31 @@
   // A flow's steps with their marks, each linked to the video at its offset when there is a
   // video, then its contact sheet's link.
   function flowHtml(flow) {
+    const video = flow.video != null && M.carries(current, flow.run, flow.video);
+    const sheet = flow.sheet != null && M.carries(current, flow.run, flow.sheet);
     const steps = flow.steps.map((st) => {
       const label = `step ${st.n}${st.label != null ? " " + st.label : ""}`;
-      const text = flow.video != null
+      const text = video
         ? `<a class="qa-step-link" href="${esc(M.evidenceHref(flow.run, flow.video, st.offsetMs, current && current.evidenceBase))}" target="_blank" rel="noopener">${esc(label)}</a>`
         : `<span>${esc(label)}</span>`;
       return `<li class="qa-step" data-n="${st.n}" data-ok="${st.ok}"><span class="qa-mark ${st.ok ? "ok" : "bad"}" role="img" aria-label="${st.ok ? "passed" : "failed"}">${st.ok ? "✓" : "✗"}</span>${text}<span class="sub num">${seconds(st.offsetMs)}</span></li>`;
     }).join("");
     const links = [
-      flow.video != null ? `<a class="qa-video" href="${esc(M.evidenceHref(flow.run, flow.video, null, current && current.evidenceBase))}" target="_blank" rel="noopener">video</a>` : `<span class="sub">no video</span>`,
-      flow.sheet != null ? `<a class="qa-sheet" href="${esc(M.evidenceHref(flow.run, flow.sheet, null, current && current.evidenceBase))}" target="_blank" rel="noopener">contact sheet</a>` : `<span class="sub">no contact sheet</span>`
+      video ? `<a class="qa-video" href="${esc(M.evidenceHref(flow.run, flow.video, null, current && current.evidenceBase))}" target="_blank" rel="noopener">video</a>` : `<span class="sub">${flow.video != null ? "video not in this report" : "no video"}</span>`,
+      sheet ? `<a class="qa-sheet" href="${esc(M.evidenceHref(flow.run, flow.sheet, null, current && current.evidenceBase))}" target="_blank" rel="noopener">contact sheet</a>` : `<span class="sub">${flow.sheet != null ? "contact sheet not in this report" : "no contact sheet"}</span>`
     ].join(" · ");
     return `<div class="qa-flow"><ol class="qa-steps" aria-label="Flow steps">${steps}</ol><div class="qa-links">${links}</div></div>`;
   }
+
+  // Each evidence path a run of a row saved: linked when the page may link it, else named.
+  function evidenceItems(run, paths) {
+    return paths.map((path) => M.carries(current, run, path)
+      ? `<li><a class="mono" href="${esc(M.evidenceHref(run, path, null, current && current.evidenceBase))}" target="_blank" rel="noopener">${esc(path)}</a></li>`
+      : `<li><span class="mono qa-evidence-left" title="not in this report">${esc(path)}</span></li>`).join("");
+  }
+  const evidenceHtml = (run, paths) => (paths.length
+    ? `<details class="qa-evidence"><summary class="sub">evidence (${paths.length})</summary><ul>${evidenceItems(run, paths)}</ul></details>`
+    : "");
 
   const STAGE = { "at-base": "at base", final: "final", run: "qa run" };
   const stageText = (a) => (a.stage === "after" ? "after " + (a.after != null ? a.after : "a task") : STAGE[a.stage] || a.stage);
@@ -73,7 +86,7 @@
       const reused = a.reusedFrom != null ? `<span class="sub">reused from <span class="mono">${esc(a.reusedFrom)}</span></span>` : "";
       return `<li class="qa-attempt" data-stage="${esc(a.stage)}" data-result="${esc(a.result)}" data-run="${esc(a.qaRun)}"${current ? ` aria-current="true"` : ""}>${chip(a.result)}
         <span class="qa-stage">${esc(stageText(a))}</span><span class="mono sub">${esc(a.qaRun)}</span>${reused}
-        <span class="sub num">${a.result === "waiting" ? "" : esc(M.fmtMs(a.ms))}</span>${why ? whyButton(why, hkey) : ""}${!current && a.flow ? flowHtml(a.flow) : ""}</li>`;
+        <span class="sub num">${a.result === "waiting" ? "" : esc(M.fmtMs(a.ms))}</span>${why ? whyButton(why, hkey) : ""}${!current && a.flow ? flowHtml(a.flow) : ""}${!current ? evidenceHtml(a.qaRun, a.evidence || []) : ""}</li>`;
     }).join("");
     return `<ol class="qa-history" aria-label="qa runs of row ${row.row}, newest first">${items}</ol>`;
   }
@@ -84,7 +97,7 @@
       <span class="mono">row ${row.row}</span><span class="qa-layer">${esc(row.layer)}</span>
       <span class="qa-req mono">${esc(row.requirement)}</span>
       ${row.check != null ? `<code class="qa-check">${esc(row.check)}</code>` : ""}
-      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${historyHtml(row, key)}</li>`;
+      <span class="sub num">${row.result === "waiting" ? "" : esc(M.fmtMs(row.ms))}</span>${why ? whyButton(why, key) : ""}${row.flow ? flowHtml(row.flow) : ""}${evidenceHtml(row.qaRun, row.evidence)}${historyHtml(row, key)}</li>`;
   }
 
   function keptHtml(k, key) {
@@ -163,6 +176,7 @@
     }
     const row = entry;
     const evidence = row.evidence.length ? row.evidence.join(", ") : "none saved";
+    const evidenceLinks = row.evidence.length ? `<ul class="qa-evidence-list">${evidenceItems(row.qaRun, row.evidence)}</ul>` : null;
     if (row.result === "red") {
       const output = row.output.length
         ? `<div class="qa-output" role="group" aria-label="Saved output"><h4>Saved output${row.outputCut ? `, last ${row.output.length} lines` : ""}</h4><pre>${esc(row.output.join("\n"))}</pre></div>`
@@ -176,7 +190,7 @@
         ["exit status", row.exitStatus != null ? String(row.exitStatus) : "it never exited"],
         ["why", row.message != null ? row.message : "the report holds no reason"],
         ...gapRows(row.flow),
-        ["evidence", evidence],
+        ["evidence", evidence, evidenceLinks],
         ["qa run", row.qaRun],
         ...(row.reusedFrom != null ? [["reused from", row.reusedFrom]] : [])
       ], "Why it failed", output);

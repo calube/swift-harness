@@ -11,6 +11,8 @@ struct EventsIngestCommandTests {
   static let plainSession = "5812f394-1a00-4182-a6ec-fa7944ec92fb"
   static let subagentSession = "a9349a9c-0ea7-41a9-bd3a-8792745db8b1"
   static let buildRun = "20261001T040911Z-13708165"
+  /// A brownfield run's orchestrator: 1 Agent-tool subagent and 2 Workflows' agents beside it.
+  static let runSession = "b9ba71e8-b19d-4ef9-8629-bbce3c641242"
 
   /// A captured envelope's `total_cost_usd` and its 1 model's `modelUsage` token counts.
   struct Envelope {
@@ -32,6 +34,25 @@ struct EventsIngestCommandTests {
         "cache-write-tokens": try #require(usage["cacheCreationInputTokens"] as? Int),
         "cache-read-tokens": try #require(usage["cacheReadInputTokens"] as? Int),
       ])
+  }
+
+  /// A captured envelope's `total_cost_usd` and its token counts summed over every model.
+  static func envelopeOverModels(_ session: String) throws -> Envelope {
+    let url = Fixture.directory.appending(path: "Transcripts/\(session).envelope.json")
+    let object = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
+    let models = try #require(object["modelUsage"] as? [String: [String: Any]])
+    var tokens: [String: Int] = [:]
+    for usage in models.values {
+      for (name, key) in [
+        ("input-tokens", "inputTokens"), ("output-tokens", "outputTokens"),
+        ("cache-write-tokens", "cacheCreationInputTokens"),
+        ("cache-read-tokens", "cacheReadInputTokens"),
+      ] {
+        tokens[name, default: 0] += try #require(usage[key] as? Int)
+      }
+    }
+    return Envelope(cost: try #require(object["total_cost_usd"] as? Double), tokens: tokens)
   }
 
   /// `metrics`' token counts, by the cost section's metric names.
@@ -57,7 +78,7 @@ struct EventsIngestCommandTests {
       try FileManager.default.copyItem(
         at: Fixture.directory.appending(path: "Transcripts", directoryHint: .isDirectory),
         to: transcripts)
-      for session in [plainSession, subagentSession] {
+      for session in [plainSession, subagentSession, runSession] {
         try SessionRecordStore(worktreeRoot: repo.root).write(
           try SessionRecord(
             sessionId: session, recordedAt: Date(timeIntervalSince1970: 1_790_000_000),
@@ -499,5 +520,62 @@ struct EventsIngestCommandTests {
     #expect(!output.stderr.contains(scenario.transcripts.path))
     #expect(scenario.usages.isEmpty)
     #expect(scenario.toolWindows.isEmpty)
+  }
+
+  @Test(
+    "a whole run's orchestrator ingest at its end stores its Agent-tool subagent and every Workflow agent too, so the build run's total equals the envelope's total_cost_usd and tokens — catches a run's validation worker, reviewers and verifiers missing from its cost"
+  )
+  func runEndIngestCoversEveryAgent() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let output = scenario.shipIngest(Self.runSession)
+    #expect(output.status == 0, "\(output.stderr)")
+    #expect(output.stdout.contains("96 messages read"), "\(output.stdout)")
+
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    let envelope = try Self.envelopeOverModels(Self.runSession)
+    #expect(Self.tokens(metrics[["total"]]) == envelope.tokens)
+    let total = try #require(metrics[["total"]]?["cost-usd"]?.value)
+    #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 50)
+    #expect(metrics[["role", "no role"]]?["messages"]?.value == 46)
+  }
+
+  @Test(
+    "replaying the run's ingests: a Workflow completion leaves the session's own Agent-tool subagent untagged, its own ingest then tags it with its role and task, and the end-of-run ingest files only the session's messages as orchestrator, with the total equal to the envelope — catches a validation worker's cost filed as the orchestrator's"
+  )
+  func runIngestsTagEachAgentOnce() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflows = scenario.transcripts.appending(
+      path: "\(Self.runSession)/subagents/workflows", directoryHint: .isDirectory)
+    for (workflow, task) in [("wf_a08f0c62-a44", "first"), ("wf_23bb023d-80d", "second")] {
+      let output = scenario.buildIngest(
+        Self.runSession, workflow: workflows.appending(path: workflow).path, task: task)
+      #expect(output.status == 0, "\(output.stderr)")
+    }
+    let early = scenario.usages.filter { $0.agentID == "a9f3bfd905ad90faa" }
+    #expect(early.count == 16)
+    #expect(early.allSatisfy { $0.role == nil }, "\(Set(early.map(\.role)))")
+
+    let validation = scenario.ingest(
+      Self.runSession, role: .qa, task: "validation", buildRun: Self.buildRun,
+      agentID: "a9f3bfd905ad90faa")
+    #expect(validation.status == 0, "\(validation.stderr)")
+    #expect(validation.stdout.contains("16 retagged"), "\(validation.stdout)")
+    #expect(scenario.shipIngest(Self.runSession).status == 0)
+
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 34)
+    #expect(metrics[["role", "qa"]]?["messages"]?.value == 16)
+    #expect(metrics[["task", "validation"]]?["messages"]?.value == 16)
+    #expect(metrics[["role", "build-worker"]]?["messages"]?.value == 46)
+    #expect(metrics[["task", "first"]]?["messages"]?.value == 10)
+    #expect(metrics[["task", "second"]]?["messages"]?.value == 36)
+    #expect(metrics[["role", "no role"]] == nil)
+    let envelope = try Self.envelopeOverModels(Self.runSession)
+    #expect(Self.tokens(metrics[["total"]]) == envelope.tokens)
+    let total = try #require(metrics[["total"]]?["cost-usd"]?.value)
+    #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
   }
 }

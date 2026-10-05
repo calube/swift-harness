@@ -9,12 +9,18 @@ public struct TranscriptFile: Sendable, Equatable {
   /// What a message about the file names: its file name, never its path.
   public let label: String
   public let data: Data
+  /// A Workflow's agent, from `subagents/workflows/<workflow>/`, rather than 1 the session
+  /// launched itself with the Agent tool.
+  public let workflow: Bool
 
-  public init(agent: UsageAgent, agentID: String?, label: String, data: Data) {
+  public init(
+    agent: UsageAgent, agentID: String?, label: String, data: Data, workflow: Bool = false
+  ) {
     self.agent = agent
     self.agentID = agentID
     self.label = label
     self.data = data
+    self.workflow = workflow
   }
 }
 
@@ -32,7 +38,7 @@ public struct TranscriptReader: Sendable {
   public init() {}
 
   /// The session's transcript at `path`, then each `agent-*.jsonl` in the `subagents` directory
-  /// beside it.
+  /// beside it, then each in every Workflow's directory under `subagents/workflows/`.
   public func session(at path: URL) throws(TranscriptReadError) -> [TranscriptFile] {
     let main: Data
     do {
@@ -42,20 +48,43 @@ public struct TranscriptReader: Sendable {
     }
     let subagents = path.deletingPathExtension().appending(
       path: "subagents", directoryHint: .isDirectory)
-    var isDirectory: ObjCBool = false
-    let hasSubagents =
-      FileManager.default.fileExists(atPath: subagents.path, isDirectory: &isDirectory)
-      && isDirectory.boolValue
+    let hasSubagents = Self.isDirectory(subagents)
     return [TranscriptFile(agent: .main, agentID: nil, label: "the session transcript", data: main)]
-      + (hasSubagents ? try agents(in: subagents) : [])
+      + (hasSubagents ? try agents(in: subagents) + workflowAgents(in: subagents) : [])
+  }
+
+  private func workflowAgents(in subagents: URL) throws(TranscriptReadError) -> [TranscriptFile] {
+    let workflows = subagents.appending(path: "workflows", directoryHint: .isDirectory)
+    guard Self.isDirectory(workflows) else { return [] }
+    let names: [String]
+    do {
+      names = try FileManager.default.contentsOfDirectory(atPath: workflows.path)
+    } catch {
+      throw TranscriptReadError("a transcript directory can't be listed: \(Self.why(error))")
+    }
+    var files: [TranscriptFile] = []
+    for name in names.sorted() {
+      let directory = workflows.appending(path: name, directoryHint: .isDirectory)
+      guard Self.isDirectory(directory) else { continue }
+      files += try agents(in: directory, workflow: true)
+    }
+    return files
+  }
+
+  private static func isDirectory(_ url: URL) -> Bool {
+    var isDirectory: ObjCBool = false
+    return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+      && isDirectory.boolValue
   }
 
   /// Each `agent-*.jsonl` directly in `directory`, sorted by name.
   public func workflow(in directory: URL) throws(TranscriptReadError) -> [TranscriptFile] {
-    try agents(in: directory)
+    try agents(in: directory, workflow: true)
   }
 
-  private func agents(in directory: URL) throws(TranscriptReadError) -> [TranscriptFile] {
+  private func agents(in directory: URL, workflow: Bool = false) throws(TranscriptReadError)
+    -> [TranscriptFile]
+  {
     let names: [String]
     do {
       names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
@@ -69,7 +98,7 @@ public struct TranscriptReader: Sendable {
         files.append(
           TranscriptFile(
             agent: .subagent, agentID: Self.isAgentID(id) ? id : nil, label: name,
-            data: try Data(contentsOf: directory.appending(path: name))))
+            data: try Data(contentsOf: directory.appending(path: name)), workflow: workflow))
       } catch {
         throw TranscriptReadError("\(name) can't be read: \(Self.why(error))")
       }

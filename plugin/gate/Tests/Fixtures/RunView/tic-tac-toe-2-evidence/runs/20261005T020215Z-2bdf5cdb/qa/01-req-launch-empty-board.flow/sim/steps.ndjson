@@ -1,0 +1,11 @@
+{"elapsedMs":1427,"label":"after step 1: wait selector id=\"game.status\"","n":1,"screenshot":"steps\/001.png","settled":true,"tree":"steps\/001.tree.json"}
+{"assert":"Empty","elapsedMs":1255,"label":"after step 2: is text id=\"game.cell.0\" \"Empty\"","n":2,"screenshot":"steps\/002.png","settled":true,"tree":"steps\/002.tree.json"}
+{"assert":"Empty","elapsedMs":2209,"label":"after step 3: is text id=\"game.cell.1\" \"Empty\"","n":3,"screenshot":"steps\/003.png","settled":true,"tree":"steps\/003.tree.json"}
+{"assert":"Empty","elapsedMs":1952,"label":"after step 4: is text id=\"game.cell.2\" \"Empty\"","n":4,"screenshot":"steps\/004.png","settled":true,"tree":"steps\/004.tree.json"}
+{"assert":"Empty","elapsedMs":2822,"label":"after step 5: is text id=\"game.cell.3\" \"Empty\"","n":5,"screenshot":"steps\/005.png","settled":true,"tree":"steps\/005.tree.json"}
+{"assert":"Empty","elapsedMs":1307,"label":"after step 6: is text id=\"game.cell.4\" \"Empty\"","n":6,"screenshot":"steps\/006.png","settled":true,"tree":"steps\/006.tree.json"}
+{"assert":"Empty","elapsedMs":1371,"label":"after step 7: is text id=\"game.cell.5\" \"Empty\"","n":7,"screenshot":"steps\/007.png","settled":true,"tree":"steps\/007.tree.json"}
+{"assert":"Empty","elapsedMs":1596,"label":"after step 8: is text id=\"game.cell.6\" \"Empty\"","n":8,"screenshot":"steps\/008.png","settled":true,"tree":"steps\/008.tree.json"}
+{"assert":"Empty","elapsedMs":1384,"label":"after step 9: is text id=\"game.cell.7\" \"Empty\"","n":9,"screenshot":"steps\/009.png","settled":true,"tree":"steps\/009.tree.json"}
+{"assert":"Empty","elapsedMs":1394,"label":"after step 10: is text id=\"game.cell.8\" \"Empty\"","n":10,"screenshot":"steps\/010.png","settled":true,"tree":"steps\/010.tree.json"}
+{"assert":"X's turn","elapsedMs":1355,"label":"after step 11: is text id=\"game.status\" \"X's turn\"","n":11,"screenshot":"steps\/011.png","settled":true,"tree":"steps\/011.tree.json"}

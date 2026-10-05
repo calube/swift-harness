@@ -1375,6 +1375,36 @@ jq -c "$F" <worker transcript> | sed "s#$ROOT#/SCRATCH#g" > Transcripts/worker-w
 
 After the copy, both greps of `RunView/build-run-2` matched nothing in them.
 
+### A whole brownfield run's usage (`b9ba71e8-…`)
+
+The orchestrator session of a 31-minute `swiftgate run` trial, Claude Code 2.1.288, launched
+as `swiftgate run start spec.md -- -p --output-format stream-json --verbose`. Claude Code wrote its transcripts to
+`~/.claude/projects/<cwd slug>/`:
+
+| File | Holds |
+|---|---|
+| `b9ba71e8-….jsonl` | the orchestrator, 34 messages on `claude-opus-5-5` |
+| `b9ba71e8-…/subagents/agent-a9f3bfd905ad90faa.jsonl` | the 1 subagent it launched with the Agent tool (`model: opus`, in the background), 16 messages |
+| `b9ba71e8-…/subagents/workflows/wf_<id>/agent-<agentId>.jsonl` | 9 Workflow agents of 2 build-task workflows: build, review, verify and fix agents |
+| `b9ba71e8-….envelope.json` | the last line of the stream, the `result` |
+
+The filter keeps each assistant line's type, time, `isSidechain`, message id, model and usage, and
+drops `message.content` and every other line, so no prompt, reply, tool input or path; the envelope
+keeps `type`, `session_id`, `total_cost_usd`, `usage` and `modelUsage`. With `P` the session's
+project directory and `S` its session id:
+
+```sh
+F='select(.type=="assistant") | {type, timestamp, isSidechain, message: (.message | {id, model, usage})}'
+jq -c "$F" "$P/$S.jsonl" > "Transcripts/$S.jsonl"
+(cd "$P" && find "$S/subagents" -name 'agent-*.jsonl') | while read -r f; do
+  mkdir -p "Transcripts/$(dirname "$f")" && jq -c "$F" "$P/$f" > "Transcripts/$f"; done
+tail -1 <stream-json output> | jq '{type, session_id, total_cost_usd, usage, modelUsage}' > "Transcripts/$S.envelope.json"
+```
+
+Priced at table `2026-10-01` and deduplicated by `message.id`, the 11 transcripts sum to the
+envelope's `total_cost_usd`, 4.3562218. The trial's own `events ingest` calls, made at each task's
+completion, stored $2.27 of it. After the copy, the grep above matched nothing in these files.
+
 ## Events
 
 `Events/judge.jsonl` is a judge audit log as the writer at `bbf0c62` wrote it, before the store
@@ -1582,8 +1612,8 @@ printed 0.
 
 `RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
 `RunView/build-run-1` once `report --html` had written its final report, for the live view's
-snapshot test. The test drops `cursor`, a digest of file times. Captured at the commit that adds
-`/final`, from `plugin/gate` after `swift build`:
+snapshot test. The test drops `cursor`, a digest of file times. Captured again at the commit that
+adds the view's `evidenceFiles`, from `plugin/gate` after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
@@ -3226,6 +3256,40 @@ The `sed` replaces the trial folder in the ledger's worktree paths and the clock
 `/TRIAL/` and changes nothing else. The copy leaves out each row's saved output and result bundle,
 which hold machine paths. `grep -rniE '/Users|/private|/var/folders|caleb' RunView/tic-tac-toe-1-kept-runs`
 matched nothing.
+
+## Run report: every evidence path a row lists
+
+`RunView/tic-tac-toe-2-evidence/` is the second tic-tac-toe trial's plan state, build run
+`20261005T014044Z-0066dd3b` of plan `spec`, for the report folder's evidence copies. It holds every
+`qa run`'s `report.json`, and the whole evidence of row 1 of the final run
+`20261005T020215Z-2bdf5cdb`: its flow folder, its logs and its app container. Rows 2 to 5 and the
+earlier runs keep no evidence, so a report has paths it can't copy. Its `ledger-events.jsonl` also
+holds the same merge gate recorded twice. `S` is the trial folder. From the repository root:
+
+```sh
+S=<trial folder> R=$S/repo/.git/swift-harness X=$PWD/plugin/gate/Tests/Fixtures/RunView/tic-tac-toe-2-evidence
+B=$R/plans/spec/build/20261005T014044Z-0066dd3b Q=20261005T020215Z-2bdf5cdb
+scrub() { LC_ALL=C sed -e "s#$S/#/TRIAL/#g" -e "s#$HOME/#/HOME/#g" "$1" > "$2"; }
+mkdir -p $X/events $X/returns
+cp $R/events/qa.jsonl $R/events/store.json $X/events/
+scrub $R/plans/spec/ledger.json $X/ledger.json
+scrub $R/plans/spec/clock.json $X/clock.json
+cp $R/plans/spec/plan.json $X/plan.json
+cp $B/run.json $X/run.json
+cp $B/events.jsonl $X/ledger-events.jsonl
+cp $B/returns/*.json $X/returns/
+for d in $R/runs/*/qa; do r=$(basename $(dirname $d)); mkdir -p $X/runs/$r/qa; cp $d/report.json $X/runs/$r/qa/; done
+cd $R/runs/$Q
+find qa/01-req-launch-empty-board.flow qa/logs/01-req-launch-empty-board -type d -exec mkdir -p "$X/runs/$Q/{}" \;
+find qa/01-req-launch-empty-board.flow qa/logs/01-req-launch-empty-board -type f -print0 | while IFS= read -r -d '' f; do
+  if LC_ALL=C grep -qaF "$HOME/" "$f"; then scrub "$f" "$X/runs/$Q/$f"; else cp "$f" "$X/runs/$Q/$f"; fi
+done
+```
+
+`scrub` replaces the trial folder with `/TRIAL/` and the home folder with `/HOME/` in each text
+file that names them, and changes nothing else. Git keeps no empty folder, so the container's
+empty `Documents`, `tmp`, `SystemData`, `Library/Preferences` and `Library/Caches` aren't here.
+`grep -rlaE '/Users|/var/folders|caleb' RunView/tic-tac-toe-2-evidence` matched nothing.
 
 ## Run view: every qa run of a row
 

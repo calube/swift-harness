@@ -1,0 +1,15 @@
+{"at":"2026-10-05T01:40:49Z","from":"pending","kind":"transition","task":"ttt-rules","to":"in-progress"}
+{"at":"2026-10-05T01:40:49Z","from":"pending","kind":"transition","task":"ttt-screen","to":"in-progress"}
+{"at":"2026-10-05T01:40:50Z","from":"pending","kind":"transition","task":"spec-validation","to":"in-progress"}
+{"at":"2026-10-05T01:43:47Z","checkId":"10F22AF2-AEE7-463E-8EEE-7889F8512BDD","commit":"71fd8d783c0038ea2e5aa1e246e5ec7273722a1a","fix":false,"kind":"return-check","rules":[],"task":"ttt-rules","verdict":"GREEN"}
+{"at":"2026-10-05T01:45:53Z","checkId":"0B4B7B09-E8D1-4389-A7C7-2320DBD19E59","commit":"c2823b8de46588a8ec5401a0665c2d2fbe77d293","fix":false,"kind":"return-check","rules":[],"task":"ttt-screen","verdict":"GREEN"}
+{"at":"2026-10-05T01:51:45Z","from":"in-progress","kind":"transition","task":"spec-validation","to":"done"}
+{"at":"2026-10-05T01:51:55Z","kind":"merge","postCommit":"7571ad58e9688be1ddee8473f7ac7357f61ca7d3","preCommit":"bce654ab78aff08e9341095597f8bb04bd80dfbc","task":"ttt-rules"}
+{"at":"2026-10-05T01:53:17Z","gate":"merge","kind":"gate","runId":"20261005T015155Z-67673f20","task":"ttt-rules","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T01:53:18Z","from":"in-progress","kind":"transition","task":"ttt-rules","to":"done"}
+{"at":"2026-10-05T01:53:27Z","gate":"merge","kind":"gate","runId":"20261005T015155Z-67673f20","task":"ttt-rules","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T01:53:27Z","kind":"merge","postCommit":"df9ccd51a33f64984c61485eaf201cbb5c3d925d","preCommit":"7571ad58e9688be1ddee8473f7ac7357f61ca7d3","task":"ttt-screen"}
+{"at":"2026-10-05T01:54:51Z","gate":"merge","kind":"gate","runId":"20261005T015327Z-b51b9674","task":"ttt-screen","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T02:01:11Z","from":"in-progress","kind":"transition","task":"ttt-screen","to":"done"}
+{"at":"2026-10-05T02:02:15Z","gate":"final","kind":"gate","runId":"20261005T020111Z-db39bab7","tier":"final","verdict":"GREEN"}
+{"at":"2026-10-05T02:07:47Z","kind":"finish","qaRun":"20261005T020215Z-2bdf5cdb","validation":"GREEN"}

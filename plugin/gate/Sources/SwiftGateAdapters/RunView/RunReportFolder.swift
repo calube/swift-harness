@@ -2,9 +2,9 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
-/// A report's own folder: its page, the guarded run view the page embeds, and a copy of each run
-/// file its flows link under `runs/`, so the page opens with working links after the plan state
-/// and run stores are gone. It holds no event store, ledger or spec page: only what passed the
+/// A report's own folder: its page, the guarded run view the page embeds, and a copy under
+/// `runs/` of each run file the page links, within a byte budget, so the page opens with working
+/// links after the plan state and run stores are gone, or from anywhere it is moved to. It holds no event store, ledger or spec page: only what passed the
 /// view's guard, and the files the view names.
 public struct RunReportFolder: Sendable {
   public static let pageName = "index.html"
@@ -25,10 +25,94 @@ public struct RunReportFolder: Sendable {
     public init(_ description: String) { self.description = description }
   }
 
-  /// Each linked file, `<run id>/<run-relative path>`, that `runs` doesn't hold: the report can't
-  /// copy it, so its link would break.
-  public static func missing(_ linked: Set<String>, under runs: [URL]) -> [String] {
-    linked.filter { source($0, in: runs) == nil }.sorted()
+  /// The most bytes of run files 1 report copies; a file or folder past what is left of it stays
+  /// behind and the page names it without a link.
+  public static let evidenceBudget = 256 * 1024 * 1024
+
+  /// Which linked files a report copies, in copy order, and why each other one stays behind.
+  public struct Carriage: Sendable, Equatable {
+    /// 1 linked path the report doesn't copy.
+    public struct Left: Sendable, Equatable {
+      public let relative: String
+      /// Why, for a damage row; `nil` when a carried file stands in for it, as a result bundle's
+      /// test summary does.
+      public let reason: String?
+
+      public init(relative: String, reason: String?) {
+        self.relative = relative
+        self.reason = reason
+      }
+    }
+
+    /// Each file or folder the report copies, `<run id>/<run-relative path>`.
+    public let carried: [String]
+    public let left: [Left]
+
+    public init(carried: [String], left: [Left]) {
+      self.carried = carried
+      self.left = left
+    }
+  }
+
+  /// What a report of `linked` carries: `first` (the flows' videos and sheets) before the rest,
+  /// each in path order, while `budget` lasts. A path no run directory holds, a result bundle,
+  /// and a file past the budget stay behind.
+  public static func carriage(
+    _ linked: Set<String>, first: Set<String>, under runs: [URL], budget: Int = evidenceBudget
+  ) -> Carriage {
+    var carried: [String] = []
+    var left: [Carriage.Left] = []
+    var spent = 0
+    let ordered = first.intersection(linked).sorted() + linked.subtracting(first).sorted()
+    for relative in ordered {
+      guard let source = source(relative, in: runs) else {
+        left.append(
+          .init(relative: relative, reason: "linked but not in its run directory, so not copied"))
+        continue
+      }
+      if let summary = QAReport.testSummary(ofBundle: relative) {
+        let standIn = linked.contains(summary) && Self.source(summary, in: runs) != nil
+        left.append(
+          .init(
+            relative: relative,
+            reason: standIn
+              ? nil : "a result bundle, which a report doesn't copy, with no test summary beside it"
+          ))
+        continue
+      }
+      let bytes = Self.bytes(source)
+      guard spent + bytes <= budget else {
+        left.append(
+          .init(
+            relative: relative,
+            reason: "\(Self.megabytes(bytes)) past what is left of the report's "
+              + "\(Self.megabytes(budget)) budget for run files, so not copied"))
+        continue
+      }
+      spent += bytes
+      carried.append(relative)
+    }
+    return Carriage(carried: carried, left: left)
+  }
+
+  /// A file's size, or the sum of a folder's files.
+  static func bytes(_ url: URL) -> Int {
+    let keys: [URLResourceKey] = [.fileSizeKey, .isRegularFileKey, .isDirectoryKey]
+    guard let values = try? url.resourceValues(forKeys: Set(keys)) else { return 0 }
+    guard values.isDirectory == true else { return values.fileSize ?? 0 }
+    var total = 0
+    let walk = FileManager.default.enumerator(at: url, includingPropertiesForKeys: keys)
+    while let child = walk?.nextObject() as? URL {
+      guard let child = try? child.resourceValues(forKeys: Set(keys)), child.isRegularFile == true
+      else { continue }
+      total += child.fileSize ?? 0
+    }
+    return total
+  }
+
+  private static func megabytes(_ bytes: Int) -> String {
+    let tenths = (bytes * 10 + 512 * 1024) / (1024 * 1024)
+    return "\(tenths / 10).\(tenths % 10) MB"
   }
 
   /// `relative` under the first of `runs` that holds it; `nil` when none does.
@@ -37,15 +121,18 @@ public struct RunReportFolder: Sendable {
       .first { FileManager.default.fileExists(atPath: $0.path) }
   }
 
-  /// Copies each linked file that `runs` holds, then writes the view and the page. Every file
-  /// goes to a temporary name beside it and is renamed into place, so a reader never sees half a
-  /// file. A copy already there at the same size is kept.
-  public func write(page: Data, view: Data, linked: Set<String>, from runs: [URL]) throws(Failure) {
+  /// Copies each file `carriage` carries from `runs`, then writes the view and the page. Every
+  /// file goes to a temporary name beside it and is renamed into place, so a reader never sees
+  /// half a file. A copy already there at the same size is kept.
+  public func write(page: Data, view: Data, carrying carriage: Carriage, from runs: [URL])
+    throws(Failure)
+  {
     try makeDirectory(directory)
-    for relative in linked.sorted() {
+    for relative in carriage.carried {
       guard let source = Self.source(relative, in: runs) else { continue }
       let target = directory.appending(path: Self.evidenceBase + relative)
-      if let have = size(target), have == size(source) { continue }
+      let exists = FileManager.default.fileExists(atPath: target.path)
+      if exists, Self.bytes(target) == Self.bytes(source) { continue }
       try makeDirectory(target.deletingLastPathComponent())
       let staging = staged(target)
       do {
@@ -55,6 +142,8 @@ public struct RunReportFolder: Sendable {
         throw Failure(
           "\(Self.evidenceBase)\(relative) can't be copied: \(error.localizedDescription)")
       }
+      // A folder can't be renamed over a folder that holds files, so an older copy goes first.
+      if exists, Self.isDirectory(target) { try? FileManager.default.removeItem(at: target) }
       try place(staging, at: target)
     }
     try publish(view, as: Self.viewName)
@@ -120,7 +209,7 @@ public struct RunReportFolder: Sendable {
     }
   }
 
-  private func size(_ url: URL) -> Int? {
-    (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+  private static func isDirectory(_ url: URL) -> Bool {
+    (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true
   }
 }

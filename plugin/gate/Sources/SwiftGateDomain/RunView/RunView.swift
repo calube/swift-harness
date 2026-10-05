@@ -422,6 +422,10 @@ public struct RunView: Sendable, Equatable, Encodable {
   /// folder holds copies under `runs/`. `nil` for a live page, which reaches them through
   /// `../runs/`.
   public var evidenceBase: String?
+  /// Each run file a report's folder holds a copy of, as `<run id>/<run-relative path>`: the
+  /// page links only these, and names every other evidence path as plain text. `nil` for a live
+  /// page, which links each file its server serves.
+  public var evidenceFiles: [String]?
   /// Where a live page reaches the run's final report once it exists; `nil` in a report and
   /// until then.
   public var finalReport: String?
@@ -449,7 +453,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, validation
-    case damage, unwritten, evidenceBase, finalReport
+    case damage, unwritten, evidenceBase, evidenceFiles, finalReport
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -468,6 +472,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(damage, forKey: .damage)
     try c.encode(unwritten, forKey: .unwritten)
     try c.encode(evidenceBase, forKey: .evidenceBase)
+    try c.encode(evidenceFiles, forKey: .evidenceFiles)
     try c.encode(finalReport, forKey: .finalReport)
   }
 }

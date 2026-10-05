@@ -77,11 +77,11 @@ public struct CostSection: EventSummarySection {
 
   public func summarize(_ input: EventSummaryInput) -> EventSummarySectionReport? {
     var usages: [AgentUsageEvent] = []
-    var judgeCalls: [JudgeCallEvent] = []
+    var judgeCalls: [(call: JudgeCallEvent, time: Date)] = []
     for stored in input.events {
       switch stored.event.payload {
       case .agentUsage(let usage): usages.append(usage)
-      case .judgeCall(let call): judgeCalls.append(call)
+      case .judgeCall(let call): judgeCalls.append((call, stored.event.time))
       default: continue
       }
     }
@@ -92,8 +92,17 @@ public struct CostSection: EventSummarySection {
     }
     var lines: [String] = []
     if let buildRun = input.query.buildRunID, !judgeCalls.isEmpty {
-      lines.append("judge calls name no build run, so none is counted for build run \(buildRun)")
-      judgeCalls = []
+      // A judge call names no build run: it counts toward the one whose messages surround it.
+      let times = usages.map(\.messageTime)
+      let all = judgeCalls.count
+      if let first = times.min(), let last = times.max() {
+        judgeCalls = judgeCalls.filter { first <= $0.time && $0.time <= last }
+      } else {
+        judgeCalls = []
+      }
+      lines.append(
+        "judge calls name no build run: \(judgeCalls.count) of \(all) fall between build run "
+          + "\(buildRun)'s first and last message and are counted")
     }
     guard !usages.isEmpty || !judgeCalls.isEmpty else { return nil }
 
@@ -101,7 +110,9 @@ public struct CostSection: EventSummarySection {
     if !usages.isEmpty {
       report(usages: usages, files: input.files, lines: &lines, metrics: &metrics)
     }
-    report(judgeCalls: judgeCalls, lines: &lines, metrics: &metrics)
+    report(judgeCalls: judgeCalls.map(\.call), lines: &lines, metrics: &metrics)
+    totalWithJudge(
+      usages: usages, judgeCalls: judgeCalls.map(\.call), lines: &lines, metrics: &metrics)
     return EventSummarySectionReport(id: id, state: .reported, lines: lines, metrics: metrics)
   }
 
@@ -185,6 +196,25 @@ public struct CostSection: EventSummarySection {
             n: tally.calls))
       }
     }
+  }
+
+  /// The agents' priced messages and the judge's costed calls together, when there are both:
+  /// the judge runs apart from every agent session, so no transcript holds its cost.
+  private func totalWithJudge(
+    usages: [AgentUsageEvent], judgeCalls: [JudgeCallEvent], lines: inout [String],
+    metrics: inout [EventSummaryMetric]
+  ) {
+    let priced = usages.compactMap(\.costUSD)
+    let costed = judgeCalls.compactMap(\.costUSD)
+    guard !priced.isEmpty, !costed.isEmpty else { return }
+    let usd = priced.reduce(0, +) + costed.reduce(0, +)
+    let n = priced.count + costed.count
+    lines.append(
+      "total with judge: \(Self.money(usd)) (n=\(n): \(priced.count) messages, "
+        + "\(costed.count) judge calls)")
+    metrics.append(
+      EventSummaryMetric(
+        name: "cost-usd", group: ["total-with-judge"], value: usd, unit: .usd, n: n))
   }
 
   /// `<label>: $<usd> (n=<priced>)[; unpriced: <n> messages]; tokens … (n=<messages>)`, with no

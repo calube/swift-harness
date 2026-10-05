@@ -55,7 +55,8 @@ struct RunViewContractTests {
     #expect(
       keys(object) == [
         "schemaVersion", "cursor", "run", "spec", "tasks", "roles", "spans", "gates", "proofs",
-        "halts", "validation", "damage", "unwritten", "evidenceBase", "finalReport",
+        "halts", "validation", "damage", "unwritten", "evidenceBase", "evidenceFiles",
+        "finalReport",
       ])
     #expect(object["schemaVersion"] as? Int == 1)
     #expect(object["cursor"] is NSNull)

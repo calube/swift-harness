@@ -9,7 +9,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { gitPath } from './developer_tools.mjs'
 import { findChrome, launch } from './headless_chrome.mjs'
@@ -30,6 +30,9 @@ const RUNS = {
   // A brownfield run whose qa runs went at-base, after 1 task, then final, kept in the clone's
   // common state root as run checkout remove leaves them.
   history: { dir: 'aidoku-validation-3', buildRun: '20261004T234410Z-daacb3fb', plan: 'spec', brownfield: true, clone: 'aidoku-3' },
+  // The second tic-tac-toe trial: every qa run's report and the whole evidence of the final
+  // run's row 1, its logs and app container included, in the clone's common state root.
+  evidence: { dir: 'tic-tac-toe-2-evidence', buildRun: '20261005T014044Z-0066dd3b', plan: 'spec', brownfield: true, clone: 'tic-tac-toe-2' },
 }
 // build-run-1's merge gate of counter-ui-reset-button, RED on a snapshot test before the fixer.
 const RED_GATE = '20261004T050310Z-ed998508'
@@ -363,7 +366,10 @@ const tests = {
     const { view, acted: { tab, flows, kept, ticks } } = rendered
     const qaRun = '20261004T220955Z-1614d1ea'
     assert.deepEqual(tab.rows, ['3:red', '1:pass', '2:pass'])
-    assert.deepEqual(tab.damage, [])
+    // The capture kept only each flow's flow.json and the state row's output, so the report names
+    // each other evidence path it couldn't copy, and no video or sheet, which stand-ins fill.
+    for (const line of tab.damage) assert.match(line, /^runs\/[^:]+: linked but not in its run directory, so not copied$/)
+    assert.ok(!tab.damage.some((line) => /\/(video\.mp4|sheet\.png):/.test(line)), tab.damage.join('\n'))
     assert.equal(tab.media, 0)
     assert.equal(tab.errors, '0')
     const flowRows = view.validation.rows.filter((r) => r.flow)
@@ -444,6 +450,52 @@ const tests = {
       assert.ok(links.length > 0, 'the flows link no file')
       for (const href of links) assert.ok(existsSync(join(folder, decodeURIComponent(href.split('#')[0]))), `${href} broke with cleanup`)
       assert.equal(regions.errors, '0')
+      assert.deepEqual(page.errors, [])
+    } finally {
+      await close()
+    }
+  },
+  async 'a captured run\'s report, moved out of its repository, links each evidence file of a row it carries, names the ones it couldn\'t without a link, and every link on the page and in every Why popover resolves inside the moved folder — catches evidence links that break outside the repository'() {
+    const rendered = await renderReport(RUNS.evidence)
+    const parent = mkdtempSync(join(tmpdir(), 'run-viewer-moved-'))
+    repositories.push(parent)
+    const moved = join(parent, 'report')
+    cpSync(dirname(rendered.repository.report), moved, { recursive: true })
+    rmSync(rendered.repository.root, { recursive: true, force: true })
+    const HREFS = `(() => {
+      document.querySelector('[role=tab][data-tab="validation"]').click()
+      const hrefs = (root) => [...root.querySelectorAll('a[href]')].map((a) => a.getAttribute('href'))
+      const found = hrefs(document)
+      for (const button of document.querySelectorAll('.qa-why')) {
+        button.click()
+        found.push(...hrefs(document.getElementById('pop')))
+      }
+      const row = (n) => document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="' + n + '"]')
+      return {
+        hrefs: found,
+        linked: [1, 2].map((n) => row(n).querySelectorAll(':scope > .qa-evidence a').length),
+        named: [1, 2].map((n) => row(n).querySelectorAll(':scope > .qa-evidence .qa-evidence-left').length),
+      }
+    })()`
+    const { page, close } = await launch()
+    try {
+      await page.viewport(1280, 900)
+      await page.load(pathToFileURL(join(moved, 'index.html')).href)
+      const { hrefs, linked, named } = await page.evaluate(HREFS)
+      const view = rendered.view
+      const rows = view.validation.rows
+      assert.equal(linked[0], rows.find((r) => r.row === 1).evidence.length)
+      assert.equal(named[0], 0)
+      assert.equal(linked[1], 0)
+      assert.equal(named[1], rows.find((r) => r.row === 2).evidence.length)
+      assert.ok(hrefs.length > rows.find((r) => r.row === 1).evidence.length, 'the page links too few files')
+      for (const href of hrefs) {
+        if (href.startsWith('#')) continue
+        assert.doesNotMatch(href, /^[a-z]+:|^\//i, `${href} leaves the folder`)
+        const target = resolve(moved, decodeURIComponent(href.split('#')[0]))
+        assert.ok(target.startsWith(moved + '/'), `${href} leaves the folder`)
+        assert.ok(existsSync(target), `${href} is a dead link`)
+      }
       assert.deepEqual(page.errors, [])
     } finally {
       await close()

@@ -658,7 +658,15 @@ enum QARunRun {
       // lists the bundle and report files beside its output.
       if result != .red {
         var written = junit.map(JUnitReportFiles.files(at:)) ?? []
-        if case .tests = bundle, let resultBundle { written.append(resultBundle) }
+        if case .tests(let tests) = bundle, let resultBundle {
+          written.append(resultBundle)
+          // A report copies this small summary, never the bundle.
+          if let summary = QAReport.testSummary(ofBundle: resultBundle),
+            (try? QAFiles.write(tests, to: URL(filePath: summary))) != nil
+          {
+            written.append(summary)
+          }
+        }
         let prefix = qaDirectory.path + "/"
         evidence += written.filter { $0.hasPrefix(prefix) }.map {
           "\(QAReport.directory)/\($0.dropFirst(prefix.count))"
