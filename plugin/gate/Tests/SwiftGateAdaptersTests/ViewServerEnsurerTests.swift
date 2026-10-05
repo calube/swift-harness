@@ -186,4 +186,78 @@ struct ViewServerEnsurerTests {
     try FileManager.default.removeItem(at: folder.directory.appending(path: "index.html"))
     #expect(!folder.isFinal)
   }
+
+  @Test(
+    "shutdown signals the saved server only while it answers as itself and returns its record, and leaves a dead or missing one alone — catches a viewer outliving its run, or a signal sent to a pid the server no longer holds"
+  )
+  func shutdownStopsOnlyAnAnsweringServer() async throws {
+    let common = try Self.commonDirectory()
+    defer { TestTemporaryDirectory.remove(common.deletingLastPathComponent()) }
+    let registry = ViewServerRegistry(commonDirectory: common)
+    let servers = FakeServers(registry: registry)
+    let signalled = Mutex<[Int32]>([])
+    let shutdown = ViewServerShutdown(
+      registry: registry, probe: servers,
+      signal: { pid in
+        signalled.withLock { $0.append(pid) }
+        servers.kill(pid)
+        return true
+      })
+    #expect(await shutdown.stop() == nil, "no saved server")
+
+    let started = try await Self.ensure(Self.ensurer(servers))
+    guard case .started(let record) = started else {
+      Issue.record("no server started: \(started)")
+      return
+    }
+
+    #expect(await shutdown.stop() == record)
+    #expect(signalled.withLock { $0 } == [record.pid])
+    #expect(await shutdown.stop() == nil, "a stopped server isn't signalled again")
+    #expect(signalled.withLock { $0 } == [record.pid])
+  }
+
+  @Test(
+    "a report carries send-money-4's flow steps and batch log with every screenshot path relative to the run and every other machine path cut to its last component — catches a published report holding the machine's home folder"
+  )
+  func reportEvidenceJSONHasNoMachinePaths() throws {
+    let common = try Self.commonDirectory()
+    defer { TestTemporaryDirectory.remove(common.deletingLastPathComponent()) }
+    let runs = common.appending(path: "runs", directoryHint: .isDirectory)
+    let runID = "20261005T061244Z-0883dbbe"
+    let flow = "\(runID)/qa/01-req-contact-search.flow"
+    for name in ["steps.json", "batch.json"] {
+      let target = runs.appending(path: "\(flow)/\(name)")
+      try FileManager.default.createDirectory(
+        at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Fixture.data("RunView/send-money-4-evidence/\(flow)/\(name)").write(to: target)
+    }
+    let folder = RunReportFolder(directory: common.appending(path: "reports/run"))
+
+    try folder.write(
+      page: Data("<html></html>".utf8), view: Data("{}".utf8),
+      carrying: .init(carried: ["\(flow)/steps.json", "\(flow)/batch.json"], left: []),
+      from: [runs])
+
+    var strings: [String] = []
+    func collect(_ value: Any) {
+      if let text = value as? String { strings.append(text) }
+      if let object = value as? [String: Any] { object.values.forEach(collect) }
+      if let array = value as? [Any] { array.forEach(collect) }
+    }
+    for name in ["steps.json", "batch.json"] {
+      let copy = folder.directory.appending(path: "runs/\(flow)/\(name)")
+      collect(try JSONSerialization.jsonObject(with: Data(contentsOf: copy)))
+    }
+    #expect(!strings.isEmpty)
+    #expect(
+      !strings.contains {
+        $0.hasPrefix("/") || $0.hasPrefix("~") || $0.contains("/TRIAL/") || $0.contains("/HOME/")
+      })
+    let shot = "qa/01-req-contact-search.flow/sim/steps/.3865-C3C9E47B.png"
+    #expect(strings.contains(shot))
+    #expect(strings.contains("Saved screenshot: \(shot)"))
+    #expect(strings.contains("swiftgate-\(runID)-row1"))
+    #expect(strings.contains("com.example.InterviewStarter"))
+  }
 }
