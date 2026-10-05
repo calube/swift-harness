@@ -59,8 +59,8 @@ enum BuildNoRepairRun {
     guard let report = reports.first(where: { $0.runID == qaRun }) else {
       return .blocked(
         command, slug,
-        "no `qa run --before-merge` report of plan `\(slug)` with run id \(qaRun) under this "
-          + "checkout's runs")
+        "no `qa run --before-merge` report of plan `\(slug)` with run id \(qaRun) under the "
+          + "runs of any checkout of this clone")
     }
     let store: BuildRunStore
     let record: BuildRunRecord

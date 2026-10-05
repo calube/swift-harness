@@ -4,7 +4,8 @@
 // lists each run, newest first, with its own Why button and flow. A red row opens "Why it
 // failed"; an unverified or abandoned row, or a flow missing its video or sheet, "Why
 // unverified". A flow
-// lists its steps, each linked to the video at its offset, and links its contact sheet. A row
+// lists its steps, each linked to the video at its offset with the time qa run's captures after it
+// took, under its launch time, and links its contact sheet. A row
 // whose newest run isn't the pass to show also shows its last passing run's flow, labelled, and a
 // row whose flow a repair rewrote shows the repair's note. The plan's reason-only requirements
 // list after the rows, each with its reason. Each
@@ -52,13 +53,15 @@
       const text = video
         ? `<a class="qa-step-link" href="${esc(M.evidenceHref(flow.run, flow.video, st.offsetMs, current && current.evidenceBase))}" target="_blank" rel="noopener">${esc(label)}</a>`
         : `<span>${esc(label)}</span>`;
-      return `<li class="qa-step" data-n="${st.n}" data-ok="${st.ok}"><span class="qa-mark ${st.ok ? "ok" : "bad"}" role="img" aria-label="${st.ok ? "passed" : "failed"}">${st.ok ? "✓" : "✗"}</span>${text}<span class="sub num">${seconds(st.offsetMs)}</span></li>`;
+      const capture = st.captureMs != null ? `<span class="sub num qa-capture" title="the captures qa run added after this step">+${seconds(st.captureMs)} capture</span>` : "";
+      return `<li class="qa-step" data-n="${st.n}" data-ok="${st.ok}"><span class="qa-mark ${st.ok ? "ok" : "bad"}" role="img" aria-label="${st.ok ? "passed" : "failed"}">${st.ok ? "✓" : "✗"}</span>${text}<span class="sub num">${seconds(st.offsetMs)}</span>${capture}</li>`;
     }).join("");
+    const launch = flow.launch ? `<div class="sub qa-launch">launch ${seconds(flow.launch.launchMs)}${flow.launch.settleMs != null ? `, ${seconds(flow.launch.settleMs)} of it settling` : ""}</div>` : "";
     const links = [
       video ? `<a class="qa-video" href="${esc(M.evidenceHref(flow.run, flow.video, null, current && current.evidenceBase))}" target="_blank" rel="noopener">video</a>` : `<span class="sub">${flow.video != null ? "video not in this report" : "no video"}</span>`,
       sheet ? `<a class="qa-sheet" href="${esc(M.evidenceHref(flow.run, flow.sheet, null, current && current.evidenceBase))}" target="_blank" rel="noopener">contact sheet</a>` : `<span class="sub">${flow.sheet != null ? "contact sheet not in this report" : "no contact sheet"}</span>`
     ].join(" · ");
-    return `<div class="qa-flow"><ol class="qa-steps" aria-label="Flow steps">${steps}</ol><div class="qa-links">${links}</div></div>`;
+    return `<div class="qa-flow">${launch}<ol class="qa-steps" aria-label="Flow steps">${steps}</ol><div class="qa-links">${links}</div></div>`;
   }
 
   // Each evidence path a run of a row saved: linked when the page may link it, else named.

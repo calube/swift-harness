@@ -62,6 +62,13 @@ captures a snapshot, a screenshot and a snapshot after each `wait` or `is` step,
 over 10 s on a loaded machine. So a check of its starting state runs under the contract's `held`
 scenario, whose clock starts at the first input.
 
+## A state that changes on a clock
+
+After each `wait` or `is`, `qa run`'s captures take about 1 s before the next step, and far longer
+on a loaded machine: 1 screenshot has taken 11 s. A flow that reads a value the app changes on a
+timer races them. Launch it under a scenario that holds the clock until the first input. A red
+row's message says where the time before its failing step went.
+
 ## What `qa lint` refuses
 
 `qa.flow-kind-key` refuses a `wait` whose target key isn't the 1 its `kind` reads, a `wait` with no

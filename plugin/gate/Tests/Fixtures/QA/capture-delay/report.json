@@ -1,0 +1,75 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "b87b4bba60504e2d5c3124f1418584cf59df6717",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (slice-2-decrement-at-zero-stays-zero, flow) `wrong-status.flow.json`: step 3 `is` failed: Batch failed at step 6 (is): is text failed for selector id=\"app.status\": expected=\"5 posts available\" actual=\"100 posts available\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "2 of 2 rows verified: 1 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "2026-10-03-counter-reset-and-floor",
+  "reasonOnly" : 0,
+  "rows" : [
+    {
+      "check" : "status.flow.json",
+      "evidence" : [
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/steps.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/batch.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/flow.json",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps.ndjson",
+        "qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 2 steps",
+      "ms" : 79275,
+      "requirement" : "slice-1-reset-after-increments-shows-zero",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "counter-ui-reset-button"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "wrong-status.flow.json",
+      "evidence" : [
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/steps.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/batch.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/flow.json",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/steps.ndjson",
+        "qa/02-slice-2-decrement-at-zero-stays-zero.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 3 `is` failed: Batch failed at step 6 (is): is text failed for selector id=\"app.status\": expected=\"5 posts available\" actual=\"100 posts available\"",
+      "ms" : 18817,
+      "requirement" : "slice-2-decrement-at-zero-stays-zero",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "counter-core-reset-and-decrement-floor"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T181211Z-e93fca7a",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "RED"
+}

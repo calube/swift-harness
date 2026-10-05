@@ -89,12 +89,18 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   /// When the batch's `record start` ended: when the video's first frame came, on the batch's
   /// clock. `nil` when the batch recorded nothing.
   public var videoStartMs: Int?
+  /// Where the time before a failing flow step went; `nil` when no flow step failed.
+  public var delay: QAFlowDelay?
 
-  public init(stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil) {
+  public init(
+    stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil,
+    delay: QAFlowDelay? = nil
+  ) {
     self.stop = stop
     self.record = record
     self.files = files
     self.videoStartMs = videoStartMs
+    self.delay = delay
   }
 }
 
@@ -167,9 +173,13 @@ public struct BatchFlowRunner: Sendable {
     let results = printed.map(Self.results) ?? []
     commitEvidence(plan, stagings: stagings, results: results, store: store)
     let outcomes = results.map(\.outcome)
+    let delay: QAFlowDelay? =
+      if case .flow(.step, _)? = stop { plan.delay(results: outcomes, failedAt: failedAt) } else {
+        nil
+      }
     return BatchFlowOutcome(
       stop: stop, record: plan.record(results: outcomes, failedAt: failedAt),
-      files: files, videoStartMs: plan.videoStartMs(results: outcomes))
+      files: files, videoStartMs: plan.videoStartMs(results: outcomes), delay: delay)
   }
 
   /// A failing step is evidence about the app; a refused steps file is the flow's fault; any
@@ -222,9 +232,22 @@ public struct BatchFlowRunner: Sendable {
       else { return nil }
       return PrintedStep(
         outcome: BatchStepOutcome(
-          index: index, command: command, ok: ok, durationMs: step["durationMs"] as? Int ?? 0),
+          index: index, command: command, ok: ok, durationMs: step["durationMs"] as? Int ?? 0,
+          launch: command == "open" ? launch(step["data"]) : nil),
         data: step["data"])
     }
+  }
+
+  /// An `open`'s launch: `data.startup.durationMs`, from its dispatch until `agent-device` saw the
+  /// app settle, and `data.timing.postOpenSettleDurationMs`, the settling part of it.
+  private static func launch(_ data: Any?) -> QAFlowLaunch? {
+    let data = data as? [String: Any]
+    guard let startup = data?["startup"] as? [String: Any],
+      let launchMs = startup["durationMs"] as? Int
+    else { return nil }
+    let timing = data?["timing"] as? [String: Any]
+    return QAFlowLaunch(
+      launchMs: launchMs, settleMs: timing?["postOpenSettleDurationMs"] as? Int)
   }
 
   /// Commits 1 `sim/` step per assertion whose 3 captures all ran, with the first snapshot as
@@ -480,7 +503,8 @@ public actor QAFlowRunner {
     switch batch.stop {
     case .flow(.step(let n, let command), let why)?:
       let judged = verdict.result == .red ? "; \(verdict.message)" : ""
-      (result, message) = (.red, "step \(n) `\(command)` failed: \(why)\(judged)")
+      let delay = batch.delay.map { "; \($0.sentence)" } ?? ""
+      (result, message) = (.red, "step \(n) `\(command)` failed: \(why)\(judged)\(delay)")
     case .flow(.evidence(let after, let command), let why)?:
       (result, message) = (
         .unverified, "not judged: the \(command) after step \(after) failed: \(why)"

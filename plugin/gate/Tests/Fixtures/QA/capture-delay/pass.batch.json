@@ -1,0 +1,556 @@
+{
+  "success": true,
+  "data": {
+    "total": 9,
+    "executed": 9,
+    "totalDurationMs": 6169,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-20261005T181211Z-e93fca7a-row1",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-20261005T181211Z-e93fca7a-row1",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T181211Z-e93fca7a-row1/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T181211Z-e93fca7a-row1/requests/cecfb28535c74781.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T181211Z-e93fca7a-row1/events.ndjson",
+          "sessionReused": true,
+          "selection": {
+            "reason": "existing-session",
+            "source": "session",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "startup": {
+            "durationMs": 1818,
+            "measuredAt": "2026-10-05T18:13:25.522Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter"
+          },
+          "timing": {
+            "runnerDemand": "none",
+            "openDispatchDurationMs": 842,
+            "launchUrlDurationMs": 0,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 964,
+            "totalDurationMs": 1819
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "swift-harness-88049-20503d6c",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.InterviewStarter"
+        },
+        "durationMs": 2048
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 497,
+          "selector": "id=\"app.status\""
+        },
+        "durationMs": 503
+      },
+      {
+        "step": 3,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "InterviewStarter",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 98265,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "NavigationBar",
+              "role": "SwiftUI.UIKitNavigationBar",
+              "subrole": "UINavigationBar",
+              "identifier": "Posts",
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 402,
+                "height": 106
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "navigation-bar"
+            },
+            {
+              "index": 2,
+              "parentIndex": 1,
+              "type": "StaticText",
+              "role": "UILabel",
+              "label": "Posts",
+              "rect": {
+                "x": 15.999999999999993,
+                "y": 119.66666666666667,
+                "width": 89,
+                "height": 40.66666666666667
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "text"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "100 posts available",
+              "identifier": "app.status",
+              "rect": {
+                "x": 128.66666666666669,
+                "y": 493.8333333333333,
+                "width": 144.66666666666669,
+                "height": 20.333333333333314
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "text"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 4,
+            "totalNodeCount": 4,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 2,
+              "p50Ms": 488,
+              "p95Ms": 495,
+              "maxMs": 495,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 2
+              }
+            }
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "refsGeneration": 214848
+        },
+        "durationMs": 493
+      },
+      {
+        "step": 4,
+        "command": "screenshot",
+        "ok": true,
+        "data": {
+          "path": "/SCRATCH/app/.harness/runs/20261005T181211Z-e93fca7a/qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps/.87951-A6E38616.png",
+          "message": "Saved screenshot: /SCRATCH/app/.harness/runs/20261005T181211Z-e93fca7a/qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps/.87951-A6E38616.png",
+          "width": 402,
+          "height": 874,
+          "logicalWidth": 402,
+          "logicalHeight": 874,
+          "pixelDensity": 1
+        },
+        "durationMs": 1139
+      },
+      {
+        "step": 5,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "InterviewStarter",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 98265,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "NavigationBar",
+              "role": "SwiftUI.UIKitNavigationBar",
+              "subrole": "UINavigationBar",
+              "identifier": "Posts",
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 402,
+                "height": 106
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "navigation-bar"
+            },
+            {
+              "index": 2,
+              "parentIndex": 1,
+              "type": "StaticText",
+              "role": "UILabel",
+              "label": "Posts",
+              "rect": {
+                "x": 15.999999999999993,
+                "y": 119.66666666666667,
+                "width": 89,
+                "height": 40.66666666666667
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "text"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "100 posts available",
+              "identifier": "app.status",
+              "rect": {
+                "x": 128.66666666666669,
+                "y": 493.8333333333333,
+                "width": 144.66666666666669,
+                "height": 20.333333333333314
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "text"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 4,
+            "totalNodeCount": 4,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 3,
+              "p50Ms": 493,
+              "p95Ms": 495,
+              "maxMs": 495,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 3
+              }
+            }
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "refsGeneration": 214849
+        },
+        "durationMs": 497
+      },
+      {
+        "step": 6,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "text",
+          "pass": true,
+          "selector": "id=\"app.status\"",
+          "text": "100 posts available"
+        },
+        "durationMs": 6
+      },
+      {
+        "step": 7,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "InterviewStarter",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 98265,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "NavigationBar",
+              "role": "SwiftUI.UIKitNavigationBar",
+              "subrole": "UINavigationBar",
+              "identifier": "Posts",
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 402,
+                "height": 106
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "navigation-bar"
+            },
+            {
+              "index": 2,
+              "parentIndex": 1,
+              "type": "StaticText",
+              "role": "UILabel",
+              "label": "Posts",
+              "rect": {
+                "x": 15.999999999999993,
+                "y": 119.66666666666667,
+                "width": 89,
+                "height": 40.66666666666667
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "text"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "100 posts available",
+              "identifier": "app.status",
+              "rect": {
+                "x": 128.66666666666669,
+                "y": 493.8333333333333,
+                "width": 144.66666666666669,
+                "height": 20.333333333333314
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "text"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 4,
+            "totalNodeCount": 4,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 4,
+              "p50Ms": 488,
+              "p95Ms": 495,
+              "maxMs": 495,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 4
+              }
+            }
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "refsGeneration": 214851
+        },
+        "durationMs": 477
+      },
+      {
+        "step": 8,
+        "command": "screenshot",
+        "ok": true,
+        "data": {
+          "path": "/SCRATCH/app/.harness/runs/20261005T181211Z-e93fca7a/qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps/.87951-6D0DD206.png",
+          "message": "Saved screenshot: /SCRATCH/app/.harness/runs/20261005T181211Z-e93fca7a/qa/01-slice-1-reset-after-increments-shows-zero.flow/sim/steps/.87951-6D0DD206.png",
+          "width": 402,
+          "height": 874,
+          "logicalWidth": 402,
+          "logicalHeight": 874,
+          "pixelDensity": 1
+        },
+        "durationMs": 514
+      },
+      {
+        "step": 9,
+        "command": "snapshot",
+        "ok": true,
+        "data": {
+          "nodes": [
+            {
+              "index": 0,
+              "type": "Other",
+              "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
+              "subrole": "UIApplication",
+              "label": "InterviewStarter",
+              "rect": {
+                "x": 0,
+                "y": 0,
+                "width": 402,
+                "height": 874
+              },
+              "enabled": true,
+              "depth": 0,
+              "pid": 98265,
+              "hittable": false,
+              "ref": "e1",
+              "kind": "other"
+            },
+            {
+              "index": 1,
+              "parentIndex": 0,
+              "type": "NavigationBar",
+              "role": "SwiftUI.UIKitNavigationBar",
+              "subrole": "UINavigationBar",
+              "identifier": "Posts",
+              "rect": {
+                "x": 0,
+                "y": 62,
+                "width": 402,
+                "height": 106
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e2",
+              "kind": "navigation-bar"
+            },
+            {
+              "index": 2,
+              "parentIndex": 1,
+              "type": "StaticText",
+              "role": "UILabel",
+              "label": "Posts",
+              "rect": {
+                "x": 15.999999999999993,
+                "y": 119.66666666666667,
+                "width": 89,
+                "height": 40.66666666666667
+              },
+              "enabled": true,
+              "depth": 2,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e3",
+              "kind": "text"
+            },
+            {
+              "index": 3,
+              "parentIndex": 0,
+              "type": "StaticText",
+              "role": "SwiftUI.AccessibilityNode",
+              "subrole": "UIResponder",
+              "label": "100 posts available",
+              "identifier": "app.status",
+              "rect": {
+                "x": 128.66666666666669,
+                "y": 493.8333333333333,
+                "width": 144.66666666666669,
+                "height": 20.333333333333314
+              },
+              "enabled": true,
+              "depth": 1,
+              "pid": 98265,
+              "hittable": true,
+              "ref": "e4",
+              "kind": "text"
+            }
+          ],
+          "truncated": false,
+          "visibility": {
+            "partial": false,
+            "visibleNodeCount": 4,
+            "totalNodeCount": 4,
+            "reasons": []
+          },
+          "snapshotDiagnostics": {
+            "stats": {
+              "count": 5,
+              "p50Ms": 490,
+              "p95Ms": 495,
+              "maxMs": 495,
+              "slowThresholdMs": 1500,
+              "platform": "ios",
+              "backends": {
+                "xctest": 5
+              }
+            }
+          },
+          "appName": "com.example.InterviewStarter",
+          "appBundleId": "com.example.InterviewStarter",
+          "refsGeneration": 214852
+        },
+        "durationMs": 492
+      }
+    ]
+  }
+}

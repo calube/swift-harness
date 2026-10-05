@@ -98,7 +98,8 @@ Workflow({
     taskProof: "<per-task|final|prove>",
     planSurface: "<plan.json's surfaceCommit, or null>",
     buildRun: "<run>",
-    pluginRoot: "${CLAUDE_PLUGIN_ROOT}"
+    pluginRoot: "${CLAUDE_PLUGIN_ROOT}",
+    siblings: [{ task: "<sibling>", writeSet: ["<its writeSet>"] }]
   }
 })
 ```
@@ -130,6 +131,11 @@ ISO 8601 UTC time. The worker and its fix pass get it as their deadline. Leave i
   no Bash, so a plain span agent started beside each runs its span, and the task returns once every
   span it opened has ended. A span call that fails never changes a stage's outcome. Leaving
   `buildRun` out throws `build-task: buildRun is required`.
+- `siblings`: every other ledger task whose status isn't `done` or `abandoned` at launch, each
+  as its `id` and `writeSet`; `[]` when there is none, never left out. Their code is only the
+  plan's stubs on this task's branch, so the reviewers and the verifier get the list. A verified
+  defect whose test could pass only once a sibling merges comes back deferred to it, not
+  blocking. Leaving it out throws `build-task: siblings is required`.
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
@@ -201,6 +207,11 @@ reads red until a task adds the name.
 3. Exit 0 has stored the same bytes in `<returns><task>.json`, replacing any earlier return of
    the task, and the report's `stored` names that file. Never copy, move or write a return into
    `<returns>` yourself. It stores a `design-conflict` return too: that carries the conflict report.
+
+A return's `notes` line `deferred to <sibling>: <severity> <file>: <title>` is a verified review
+finding whose test can pass only once that sibling merges. It never blocks: the return merges as
+usual. Keep each line, and quote it in the report under deferred findings, naming whether the
+sibling merged. A retry of either task quotes it in its brief.
 
 `check-return` stores no return that fails the check, and no fixer's return, so no dependent
 pack quotes its notes.
@@ -529,7 +540,8 @@ main checkout:
 "$SG" build no-repair <slug> <task> --reply .harness/build/<run>/no-repair-<task>.txt --qa-run <red run id> --fix-return .harness/build/<run>/fix-<task>.json --session <session> --json
 ```
 
-`<red run id>` is the fixer's newest red before-merge run. Quote its `why`. It never answers stop
+`<red run id>` is the fixer's newest red before-merge run, read from any checkout of the clone,
+the fixer's slot included; so is the run `build merge --fix` credits. Quote its `why`. It never answers stop
 the build. Its `action`:
 
 - `amend-contract`: a contract gap with time before `noNewStartsAt` for the repair's proof and
@@ -607,7 +619,8 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
 1. `"$SG" ledger set <slug> <task> blocked --session <session> --json`. `build next` never lists a
    `blocked` task, and neither does a resumed build.
 2. Ask. Quote the check's findings, the return's `gate`, or the blocking review findings as
-   `severity file: title`. A blocking finding has `verified: true` and severity blocker or major;
+   `severity file: title`. A blocking finding has `verified: true` and severity blocker or major,
+   and no `deferred to` in its `verification_note`;
    a `review-blocked` return with none names the unreviewed focus in its `notes`. Mark
    recommended the option `check-return`'s `haltAdvice.answer` names, and quote its `why`: `retry`
    for a finding a fix pass resolves (a gate to run again, a missing reason, a formatting fix, a

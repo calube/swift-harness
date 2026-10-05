@@ -18,6 +18,8 @@
 .qa-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; }
 .qa-step { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
 .qa-step .num { margin-left: auto; }
+.qa-step .qa-capture { margin-left: 0; }
+.qa-launch { font-size: 12px; margin-bottom: 2px; }
 .qa-mark { font-weight: 700; width: 1em; flex: none; }
 .qa-mark.ok { color: var(--ok); }
 .qa-mark.bad { color: var(--bad); }

@@ -252,12 +252,15 @@ public struct RunViewFlow: Sendable, Equatable, Encodable {
     /// From the video's first frame when the flow has a video, else from the flow's start.
     public var offsetMs: Int
     public var ok: Bool
+    /// How long the steps `qa run` added after this one took; `nil` when it added none.
+    public var captureMs: Int?
 
-    public init(n: Int, label: String?, offsetMs: Int, ok: Bool) {
+    public init(n: Int, label: String?, offsetMs: Int, ok: Bool, captureMs: Int? = nil) {
       self.n = n
       self.label = label
       self.offsetMs = offsetMs
       self.ok = ok
+      self.captureMs = captureMs
     }
   }
 
@@ -272,12 +275,15 @@ public struct RunViewFlow: Sendable, Equatable, Encodable {
   public var sheet: String?
   public var videoUnverified: QARecordingGapReason?
   public var sheetUnverified: QARecordingGapReason?
+  /// How long the flow's opening `open` took to bring the app up; `nil` when it reported none.
+  public var launch: QAFlowLaunch?
 
   public init(
     source: QAFlowSource, run: String, steps: [Step] = [], video: String? = nil,
     sheet: String? = nil, videoUnverified: QARecordingGapReason? = nil,
-    sheetUnverified: QARecordingGapReason? = nil
+    sheetUnverified: QARecordingGapReason? = nil, launch: QAFlowLaunch? = nil
   ) {
+    self.launch = launch
     self.source = source
     self.run = run
     self.steps = steps
@@ -314,7 +320,7 @@ public struct RunViewKeptFlow: Sendable, Equatable, Encodable {
 }
 
 extension RunViewFlow.Step {
-  private enum CodingKeys: String, CodingKey { case n, label, offsetMs, ok }
+  private enum CodingKeys: String, CodingKey { case n, label, offsetMs, ok, captureMs }
 
   public func encode(to encoder: any Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
@@ -322,12 +328,13 @@ extension RunViewFlow.Step {
     try c.encode(label, forKey: .label)
     try c.encode(offsetMs, forKey: .offsetMs)
     try c.encode(ok, forKey: .ok)
+    try c.encodeIfPresent(captureMs, forKey: .captureMs)
   }
 }
 
 extension RunViewFlow {
   private enum CodingKeys: String, CodingKey {
-    case source, run, steps, video, sheet, videoUnverified, sheetUnverified
+    case source, run, steps, video, sheet, videoUnverified, sheetUnverified, launch
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -339,6 +346,7 @@ extension RunViewFlow {
     try c.encode(sheet, forKey: .sheet)
     try c.encode(videoUnverified, forKey: .videoUnverified)
     try c.encode(sheetUnverified, forKey: .sheetUnverified)
+    try c.encodeIfPresent(launch, forKey: .launch)
   }
 }
 
@@ -721,11 +729,12 @@ enum RunViewValidationFold {
         steps: flow.steps.enumerated().map { index, step in
           RunViewFlow.Step(
             n: step.n, label: keep(step.label, "steps[\(index)].label"),
-            offsetMs: step.offsetMs, ok: step.ok)
+            offsetMs: step.offsetMs, ok: step.ok, captureMs: step.captureMs)
         },
         video: flow.video.flatMap { path($0, "video") },
         sheet: flow.sheet.flatMap { path($0, "sheet") },
-        videoUnverified: flow.videoUnverified, sheetUnverified: flow.sheetUnverified)
+        videoUnverified: flow.videoUnverified, sheetUnverified: flow.sheetUnverified,
+        launch: flow.launch)
     }
   }
 

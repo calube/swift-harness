@@ -1,7 +1,6 @@
 # Simulator QA flows
 
-How `swiftgate qa run` checks a flow row (simulator QA amendment §6, §6.2, §8.2). The other rows and
-the layer order are in [`simulator-qa.md`](simulator-qa.md#qa-run), and the session commands in
+How `swiftgate qa run` checks a flow row. The other rows and the layer order are in [`simulator-qa.md`](simulator-qa.md#qa-run), and the session commands in
 [`simulator-qa-sim.md`](simulator-qa-sim.md). Rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index). Steps for gestures a selector alone
 doesn't drive, such as pull to refresh, are in
@@ -19,19 +18,19 @@ takes these steps, in this order:
    leading `open` step. A failed `sim up` leaves the row `unverified`, naming its rule.
 3. It runs 1 `agent-device batch --on-error stop` on the leased UDID and session. After each `wait`
    or `is` step it adds a `snapshot`, a `screenshot` and a second `snapshot`, so each assertion
-   leaves a `sim/` step with its tree and PNG, as `sim snap` would. An `is text` step's value
+   leaves a `sim/` step with its tree and PNG. An `is text` step's value
    becomes that step's assert.
 4. On a batch that exits 0 it runs the requirement's state rows while the device is up, if this is
    the requirement's last flow row. They get `QA_SIM_UDID`, `QA_SIM_SESSION`, `QA_SIM_BUNDLE_ID` and
    `QA_SIM_DIR` beside the usual variables.
-5. It runs `sim down`, on every path once it has asked for `sim up`, a failed `sim up` included, so 1
-   `qa run` holds at most 1 device.
+5. It runs `sim down` on every path once it asked for `sim up`, so 1 `qa run` holds at most 1
+   device.
 6. It runs `sim verify` over the row's `sim/` folder. It runs after `sim down`, which copies the
    app's crash reports into `sim/crashes/`, so the report names an app exit.
 
 The row passes only when the batch exits 0 and `sim verify` is GREEN. A failing step is `red`,
-named by its number in the flow file, with any `sim verify` RED findings added. A steps file
-`agent-device` refuses is `red`. A `sim verify` RED is `red` with its findings. A driver or machine failure, or a failed capture `qa run` added,
+named by its number in the flow file, with any `sim verify` RED findings. A steps file
+`agent-device` refuses, or a `sim verify` RED, is `red`. A driver or machine failure, or a failed capture `qa run` added,
 is `unverified`. A state row behind a flow that isn't `pass` reads `unverified`, even when it ran on
 the device first. `--at-base` runs flow rows too, in the scratch tree, and runs the state rows on
 the flow's device whatever the batch showed; with no device up, they read `unverified`.
@@ -47,10 +46,12 @@ Each flow row writes `qa/<NN>-<requirement>.flow/` in the run directory:
 - `lint.txt`, when the lint stopped the row.
 
 The record is also 1 qa.flow event: `{plan, row, requirement, atBase, source, steps, video, sheet,
-videoUnverified, sheetUnverified}`. `source` is `batch`, and each step that ran is
-`{n, label, offsetMs, ok}`, with `n` in the flow file's numbering. `offsetMs` counts from the
-video's first frame when `video` is present, else from the batch's start. The failing step is the last
-one, with `ok` false. The last 4 keys appear only after a recording.
+videoUnverified, sheetUnverified, launch}`. `source` is `batch`, and each step that ran is
+`{n, label, offsetMs, ok, captureMs}`, `n` in the flow file's numbering. `offsetMs` counts from the
+video's first frame when `video` is present, else from the batch's start. `captureMs`, when `qa run`
+added steps after this one (captures, `record start`), delays every later step. `launch` is the
+leading `open`'s `{launchMs, settleMs}` from `agent-device`. The failing step is last,
+with `ok` false, and a red row's message ends with where the time before it went. The 4 recording keys appear only after a recording.
 
 ## The final pass
 
