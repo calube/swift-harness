@@ -977,7 +977,9 @@ struct BuildMergeFlowsTests {
       ],
       trialMerge: QATrialMerge(
         branch: "\(MergeScenario.plan)/t1", tip: tips.0, base: base,
-        alongside: [QATrialMerge.Branch(task: "t2", branch: "\(MergeScenario.plan)/t2", tip: tips.1)]
+        alongside: [
+          QATrialMerge.Branch(task: "t2", branch: "\(MergeScenario.plan)/t2", tip: tips.1)
+        ]
       ))
     let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
       .appending(path: QAReport.directory, directoryHint: .isDirectory)

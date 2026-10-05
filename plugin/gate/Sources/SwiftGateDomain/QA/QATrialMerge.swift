@@ -64,10 +64,11 @@ public struct QATrialMerge: Sendable, Equatable, Codable {
   }
 }
 
-/// Whether `build merge` may land a task, going by the validation rows its merge makes ready and
-/// the `qa run --before-merge` reports of its branch.
+/// Whether `build merge` may land a task, going by the validation rows its merge makes ready, the
+/// rows it waits on with tasks whose checked returns wait to merge too, and the
+/// `qa run --before-merge` reports of its branch.
 public enum QAMergeReadiness: Sendable, Equatable {
-  /// No row runs after this task with every other task it waits on merged.
+  /// No row runs after this task with every other task it waits on merged, or waiting to merge.
   case notNeeded
   /// The newest report at this tip and base is GREEN.
   case checked(runID: String)
@@ -83,29 +84,43 @@ public enum QAMergeReadiness: Sendable, Equatable {
   ///   - merged: the tasks merged so far; `task` counts as merged.
   ///   - reports: the plan's `qa run` reports, in any order.
   ///   - waiting: the other tasks whose checked return waits to merge, each at its branch's tip.
+  ///     A row whose every unmerged task is here runs on 1 trial merge of all their branches,
+  ///     before the first of them lands: a report covers it only when it took each of those
+  ///     branches at its tip, and no other branch.
   public static func of(
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String,
     waiting: [QATrialMerge.Branch] = []
   ) -> QAMergeReadiness {
-    let ready = QARunPlan.make(table: table, merged: merged, after: task).entries
-      .filter(\.waitingOn.isEmpty).map(\.row)
-    guard !ready.isEmpty else { return .notNeeded }
+    let entries = QARunPlan.make(table: table, merged: merged, after: task).entries
+    let ready = entries.filter(\.waitingOn.isEmpty).map(\.row)
+    if !ready.isEmpty {
+      let covering = reports.filter { report in
+        report.plan == plan && report.after == task && report.trialMerge?.branch == branch
+          && report.trialMerge?.tip == tip && report.trialMerge?.base == base
+          && report.trialMerge?.alongside.isEmpty == true
+      }
+      return newest(of: covering, rows: ready)
+    }
+    let others = waiting.filter { $0.task != task }
+    let together = alongside(table: table, merged: merged, task: task, waiting: others)
+    guard !together.isEmpty else { return .notNeeded }
+    let held = Set(together)
+    let rows = entries.filter { !$0.waitingOn.isEmpty && held.isSuperset(of: $0.waitingOn) }
+      .map(\.row)
     let covering = reports.filter { report in
-      report.plan == plan && report.after == task && report.trialMerge?.branch == branch
-        && report.trialMerge?.tip == tip && report.trialMerge?.base == base
+      guard report.plan == plan, let merge = report.trialMerge, merge.base == base,
+        let after = report.after
+      else { return false }
+      let taken =
+        [QATrialMerge.Branch(task: after, branch: merge.branch, tip: merge.tip)] + merge.alongside
+      guard
+        taken.contains(QATrialMerge.Branch(task: task, branch: branch, tip: tip)),
+        Set(taken.map(\.task)) == held.union([task])
+      else { return false }
+      return taken.allSatisfy { $0.task == task || others.contains($0) }
     }
-    // Run ids start with their UTC start time, so the greatest is the newest.
-    guard
-      let newest = covering.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }),
-      let runID = newest.runID, let merge = newest.trialMerge
-    else { return .unchecked(rows: ready) }
-    if !merge.conflicts.isEmpty { return .conflicts(runID: runID, files: merge.conflicts) }
-    switch newest.verdict {
-    case .green: return .checked(runID: runID)
-    case .red: return .red(runID: runID, rows: newest.rows.filter { $0.result == .red })
-    case .blocked: return .unchecked(rows: ready)
-    }
+    return newest(of: covering, rows: rows)
   }
 
   /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming
@@ -113,6 +128,27 @@ public enum QAMergeReadiness: Sendable, Equatable {
   public static func alongside(
     table: ValidationTable, merged: Set<String>, task: String, waiting: [QATrialMerge.Branch]
   ) -> [String] {
-    []
+    let waitingTasks = Set(waiting.map(\.task)).subtracting([task])
+    let held = Set(
+      QARunPlan.make(table: table, merged: merged, after: task).entries
+        .filter { !$0.waitingOn.isEmpty && waitingTasks.isSuperset(of: $0.waitingOn) }
+        .flatMap(\.waitingOn))
+    var seen: Set<String> = []
+    return table.rows.flatMap(\.runsAfter).filter { held.contains($0) && seen.insert($0).inserted }
+  }
+
+  /// The readiness the newest of `covering` gives `rows`.
+  private static func newest(of covering: [QAReport], rows: [Int]) -> QAMergeReadiness {
+    // Run ids start with their UTC start time, so the greatest is the newest.
+    guard
+      let newest = covering.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }),
+      let runID = newest.runID, let merge = newest.trialMerge
+    else { return .unchecked(rows: rows) }
+    if !merge.conflicts.isEmpty { return .conflicts(runID: runID, files: merge.conflicts) }
+    switch newest.verdict {
+    case .green: return .checked(runID: runID)
+    case .red: return .red(runID: runID, rows: newest.rows.filter { $0.result == .red })
+    case .blocked: return .unchecked(rows: rows)
+    }
   }
 }
