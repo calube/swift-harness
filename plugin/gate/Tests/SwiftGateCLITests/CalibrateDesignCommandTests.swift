@@ -420,8 +420,9 @@ struct CalibrateDesignCommandTests {
         judgedProbability: 0.6))
     #expect(try Self.exitCode(weak) == 1)
     let missed = Self.findings(weak).filter { $0.ruleID == "calibrate-design.label-missed" }
-    #expect(missed.count == 1)
-    #expect(missed.first?.message.contains("p=0.60, below the 0.70") == true)
+    // Both attempts that decide the case miss by the margin.
+    #expect(missed.count == 2)
+    #expect(missed.allSatisfy { $0.message.contains("p=0.60, below the 0.70") })
     #expect(repository.data(DesignCalibrationLayout.recordPath) == nil)
 
     let firm = await Self.run(

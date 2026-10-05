@@ -33,11 +33,16 @@ public struct CalibrationRetryPolicy: Sendable, Equatable {
   public static let twoOfThree = CalibrationRetryPolicy(maxAttempts: 3, requiredPasses: 2)
 
   public func verdict(_ attempts: [CalibrationAttemptOutcome]) -> Verdict {
-    .retry
+    guard let first = attempts.first else { return .retry }
+    if first == .pass { return .passed }
+    let passes = attempts.filter { $0 == .pass }.count
+    if passes >= requiredPasses { return .passed }
+    let left = max(maxAttempts - attempts.count, 0)
+    return passes + left < requiredPasses ? .failed : .retry
   }
 
   /// Whether a run passes: every case's attempts are ``Verdict/passed``.
   public func runPassed(_ cases: [[CalibrationAttemptOutcome]]) -> Bool {
-    false
+    cases.allSatisfy { verdict($0) == .passed }
   }
 }

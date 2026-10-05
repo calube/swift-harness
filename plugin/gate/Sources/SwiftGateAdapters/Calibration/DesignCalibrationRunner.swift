@@ -272,20 +272,27 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
   /// A reply's path as messages name it. The first attempt at a case keeps `<seed>.txt`, and a
   /// retry `<seed>.attempt-<n>.txt`.
   public func replyPath(agent: String, seed: String, attempt: Int = 1) -> String {
-    path(agent: agent, seed: seed, "txt")
+    path(agent: agent, seed: seed, attempt: attempt, "txt")
   }
 
   public func metadataPath(agent: String, seed: String, attempt: Int = 1) -> String {
-    path(agent: agent, seed: seed, "json")
+    path(agent: agent, seed: seed, attempt: attempt, "json")
   }
 
-  private func path(agent: String, seed: String, _ suffix: String) -> String {
+  private static func name(seed: String, attempt: Int, _ suffix: String) -> String {
+    attempt <= 1 ? "\(seed).\(suffix)" : "\(seed).attempt-\(attempt).\(suffix)"
+  }
+
+  private func path(agent: String, seed: String, attempt: Int, _ suffix: String) -> String {
     state.displayPath(
-      "\(RunLayout.runDirectory(for: runID))\(Self.directoryName)/\(agent)/\(seed).\(suffix)")
+      "\(RunLayout.runDirectory(for: runID))\(Self.directoryName)/\(agent)/"
+        + Self.name(seed: seed, attempt: attempt, suffix))
   }
 
-  private func file(agent: String, seed: String, _ suffix: String) -> URL {
-    directory.appending(path: "\(agent)/\(seed).\(suffix)", directoryHint: .notDirectory)
+  private func file(agent: String, seed: String, attempt: Int, _ suffix: String) -> URL {
+    directory.appending(
+      path: "\(agent)/\(Self.name(seed: seed, attempt: attempt, suffix))",
+      directoryHint: .notDirectory)
   }
 
   /// `<seed>.json`: `requestedModel` is what the run passed to `--model`, often an alias;
@@ -302,7 +309,7 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
     let metadata: Metadata
   }
 
-  func keep(_ reply: String, metadata: Metadata, agent: String, seed: String)
+  func keep(_ reply: String, metadata: Metadata, agent: String, seed: String, attempt: Int)
     throws(CalibrationCaseError)
   {
     let encoder = JSONEncoder()
@@ -311,11 +318,14 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
       try FileManager.default.createDirectory(
         at: directory.appending(path: agent, directoryHint: .isDirectory),
         withIntermediateDirectories: true)
-      try Data(reply.utf8).write(to: file(agent: agent, seed: seed, "txt"), options: .atomic)
+      try Data(reply.utf8).write(
+        to: file(agent: agent, seed: seed, attempt: attempt, "txt"), options: .atomic)
       try encoder.encode(metadata).write(
-        to: file(agent: agent, seed: seed, "json"), options: .atomic)
+        to: file(agent: agent, seed: seed, attempt: attempt, "json"), options: .atomic)
     } catch {
-      throw .blocked("can't keep the reply at \(replyPath(agent: agent, seed: seed)): \(error)")
+      throw .blocked(
+        "can't keep the reply at \(replyPath(agent: agent, seed: seed, attempt: attempt)): "
+          + "\(error)")
     }
   }
 
@@ -361,19 +371,21 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
     return Observations(observations: observations, unreadable: unreadable)
   }
 
-  func stored(agent: String, seed: String) throws(CalibrationCaseError) -> Stored {
-    let replyPath = replyPath(agent: agent, seed: seed)
-    guard let data = try? Data(contentsOf: file(agent: agent, seed: seed, "txt")) else {
+  func stored(agent: String, seed: String, attempt: Int = 1) throws(CalibrationCaseError) -> Stored {
+    let replyPath = replyPath(agent: agent, seed: seed, attempt: attempt)
+    guard let data = try? Data(contentsOf: file(agent: agent, seed: seed, attempt: attempt, "txt"))
+    else {
       throw .blocked("no kept reply at \(replyPath) to replay")
     }
     guard let reply = String(data: data, encoding: .utf8) else {
       throw .blocked("the kept reply at \(replyPath) isn't UTF-8")
     }
-    let metadataPath = metadataPath(agent: agent, seed: seed)
+    let metadataPath = metadataPath(agent: agent, seed: seed, attempt: attempt)
     let metadata: Metadata
     do {
       metadata = try JSONDecoder().decode(
-        Metadata.self, from: Data(contentsOf: file(agent: agent, seed: seed, "json")))
+        Metadata.self,
+        from: Data(contentsOf: file(agent: agent, seed: seed, attempt: attempt, "json")))
     } catch {
       throw .blocked("can't read the kept models at \(metadataPath): \(error)")
     }
@@ -447,7 +459,7 @@ public struct DesignCalibrationRunner: Sendable {
     let reply: Reply
     let model: String
     if let replies, replies.mode == .replay {
-      let stored = try replies.stored(agent: agent.name, seed: seed.name)
+      let stored = try replies.stored(agent: agent.name, seed: seed.name, attempt: attempt)
       reply = Reply(
         result: stored.reply, costUSD: nil, durationMilliseconds: nil,
         servedModels: stored.metadata.servedModels)
@@ -460,7 +472,7 @@ public struct DesignCalibrationRunner: Sendable {
         metadata: .init(
           schemaVersion: DesignCalibrationReplies.Metadata.currentSchemaVersion,
           requestedModel: model, servedModels: reply.servedModels),
-        agent: agent.name, seed: seed.name)
+        agent: agent.name, seed: seed.name, attempt: attempt)
     }
     var answers: [CalibrationRecord.QuestionResult] = []
     let returned = Self.jsonObject(in: reply.result)
@@ -532,7 +544,7 @@ public struct DesignCalibrationRunner: Sendable {
         answers: answers),
       costUSD: reply.costUSD, durationMilliseconds: reply.durationMilliseconds,
       servedModels: reply.servedModels,
-      replyPath: replies?.replyPath(agent: agent.name, seed: seed.name),
+      replyPath: replies?.replyPath(agent: agent.name, seed: seed.name, attempt: attempt),
       judgeServedModels: judgeServedModels)
   }
 

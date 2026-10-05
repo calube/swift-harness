@@ -193,9 +193,10 @@ public enum AgentFrontmatter {
 /// check compares `contentHash` with ``CalibrationHash`` over the working tree and each case's
 /// model with its agent's frontmatter.
 public struct CalibrationRecord: Sendable, Equatable, Codable {
-  /// Version 3 added each case's served models and the judge; a version 2 record still reads.
-  public static let currentSchemaVersion = 3
-  public static let readableSchemaVersions: Set<Int> = [2, 3]
+  /// Version 3 added each case's served models and the judge, and version 4 each case's
+  /// attempts; a version 2 or 3 record still reads.
+  public static let currentSchemaVersion = 4
+  public static let readableSchemaVersions: Set<Int> = [2, 3, 4]
 
   public struct QuestionResult: Sendable, Equatable, Codable {
     /// A judged answer counts only at this probability or above, so a coin-flip answer that

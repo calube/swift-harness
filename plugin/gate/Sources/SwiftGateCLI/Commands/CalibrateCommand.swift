@@ -20,19 +20,20 @@ struct CalibrateDesignCommand: AsyncParsableCommand {
       + "<agent>/<case>/ through `claude -p`: the agent's prompt as the system prompt, the model "
       + "its frontmatter names, the case's input.md as the prompt. The label's checks score the "
       + "JSON the agent returns; a judge reads the output only for a label no field carries, and "
-      + "a judged answer passes at p >= 0.7. When every label is met it writes "
+      + "a judged answer passes at p >= 0.7. A case that misses any label runs up to twice more "
+      + "and passes when two of its attempts meet every label. When every case passes it writes "
       + "\(DesignCalibrationLayout.recordPath) with each case's requested and served models, the "
       + "judge's backend, model and served ids, and the content hash of "
       + "\(DesignCalibrationLayout.agentsDirectory)/design-*.md and "
       + "\(DesignCalibrationLayout.workflowsDirectory)/design-*.js. Each agent's reply is kept "
       + "unmodified at \(RunLayout.treePath(RunLayout.runsDirectory))/<run id>/\(DesignCalibrationReplies.directoryName)/"
-      + "<agent>/<case>.txt, with the requested and served models in <case>.json. `--replay <run "
-      + "id>` judges those replies instead of running the agents, and never writes the record. "
+      + "<agent>/<case>.txt (a retry's at <case>.attempt-<n>.txt), with the requested and served "
+      + "models in <case>.json. `--replay <run id>` judges those replies instead of running the agents, and never writes the record. "
       + "`--judge-backend jev` judges through Jev with TYPESAFE_API_KEY, which sends each "
       + "judged reply to api.typesafe.ai, so it needs `--send-to api.typesafe.ai` or a [judge] "
       + "config naming that host; push never counts a pass judged by any but the default Claude "
       + "judge. "
-      + "Exit 0 all labels met (record written, unless replayed), 1 on a missed label or a seed "
+      + "Exit 0 every case passed (record written, unless replayed), 1 on a failed case or a seed "
       + "defect (record untouched), 2 when claude can't run or answer, a seed can't be read, a "
       + "replayed reply is missing, or a remote judge's host isn't named.")
 
@@ -327,8 +328,8 @@ enum CalibrationRun {
     var notes: [Finding] = []
     var defects: [Finding] = []
     let jobs = seeds.agents.flatMap { agent in agent.cases.map { (agent: agent, seed: $0) } }
-    var outcomes = [Result<CaseRun, CalibrationCaseError>?](repeating: nil, count: jobs.count)
-    await withTaskGroup(of: (Int, Result<CaseRun, CalibrationCaseError>).self) { group in
+    var outcomes = [Result<[CaseRun], CalibrationCaseError>?](repeating: nil, count: jobs.count)
+    await withTaskGroup(of: (Int, Result<[CaseRun], CalibrationCaseError>).self) { group in
       var next = 0
       var inFlight = 0
       // A blocked case means the environment can't answer, so no new case starts after one.
@@ -338,8 +339,13 @@ enum CalibrationRun {
           let index = next
           let job = jobs[index]
           group.addTask {
+            // A case's attempts run one after another: each depends on how the last went.
+            var runs: [CaseRun] = []
             do throws(CalibrationCaseError) {
-              return (index, .success(try await runCase(job.agent, job.seed, 1)))
+              repeat {
+                runs.append(try await runCase(job.agent, job.seed, runs.count + 1))
+              } while retry.verdict(runs.map { attemptOutcome($0.result) }) == .retry
+              return (index, .success(runs))
             } catch {
               return (index, .failure(error))
             }
@@ -353,13 +359,50 @@ enum CalibrationRun {
         if case .failure(.blocked) = outcome { blocked = true }
       }
     }
+    var missed: [Finding] = []
+    var attemptsByCase: [[CalibrationAttemptOutcome]] = []
     for (job, outcome) in zip(jobs, outcomes) {
       switch outcome {
-      case .success(let run):
-        results.append(run.result)
-        judgeServed.formUnion(run.judgeServedModels)
-        if let note = run.note {
-          notes += make(suite, .usage, .nit, file: job.seed.directory, note)
+      case .success(let runs):
+        let attempts = runs.map { attemptOutcome($0.result) }
+        attemptsByCase.append(attempts)
+        let file = "\(suite.seedsDirectory)/\(job.agent.name)/\(job.seed.name)"
+        let tally = "[" + attempts.map(\.rawValue).joined(separator: ", ") + "]"
+        for (offset, run) in runs.enumerated() {
+          judgeServed.formUnion(run.judgeServedModels)
+          if let note = run.note {
+            let attempt = runs.count > 1 ? "attempt \(offset + 1): " : ""
+            notes += make(suite, .usage, .nit, file: job.seed.directory, attempt + note)
+          }
+        }
+        guard let decided = runs.last?.result else { continue }
+        if retry.verdict(attempts) == .passed {
+          let served = runs.compactMap(\.result.servedModels)
+          results.append(
+            .init(
+              agent: decided.agent, caseName: decided.caseName, model: decided.model,
+              servedModels: served.isEmpty ? nil : Array(Set(served.joined())).sorted(),
+              answers: decided.answers, attempts: attempts))
+          if runs.count > 1 {
+            let misses = runs.enumerated().flatMap { offset, run in
+              run.result.answers.filter { !$0.met }.map {
+                "attempt \(offset + 1) \(missDescription($0))"
+              }
+            }
+            notes += make(
+              suite, .usage, .nit, file: file,
+              "\(decided.agent)/\(decided.caseName) on \(decided.model) passed \(tally): "
+                + misses.joined(separator: "; "))
+          }
+          continue
+        }
+        for (offset, run) in runs.enumerated() {
+          for answer in run.result.answers where !answer.met {
+            missed += make(
+              suite, .labelMissed, .major, file: file,
+              "\(run.result.agent)/\(run.result.caseName) on \(run.result.model), attempt "
+                + "\(offset + 1) of \(tally): \(missDescription(answer))")
+          }
         }
       case .failure(.seedDefect(let reason)):
         defects += make(
@@ -374,31 +417,21 @@ enum CalibrationRun {
       }
     }
 
-    var missed: [Finding] = defects
-    for result in results {
-      for answer in result.answers where !answer.met {
-        let margin =
-          answer.answered == answer.expected
-          ? ", below the \(String(format: "%.2f", CalibrationRecord.QuestionResult.passMargin)) "
-            + "a judged answer needs"
-          : ""
-        missed += make(
-          suite, .labelMissed, .major,
-          file: "\(suite.seedsDirectory)/\(result.agent)/\(result.caseName)",
-          "\(result.agent)/\(result.caseName) on \(result.model): `\(answer.question)` answered "
-            + "`\(answer.answered)` (p=\(String(format: "%.2f", answer.probability))\(margin)), "
-            + "label expects `\(answer.expected)`")
-      }
-    }
-    if !missed.isEmpty { return checked(missed + notes) }
+    missed = defects + missed
+    if !missed.isEmpty || !retry.runPassed(attemptsByCase) { return checked(missed + notes) }
 
     let agents = Set(results.map(\.agent)).count
+    let retried = results.filter { ($0.attempts?.count ?? 1) > 1 }.count
+    let metEvery =
+      "met every label"
+      + (retried == 0 ? "" : " (\(retried) of them after a miss, on \(retry.requiredPasses) of "
+        + "\(retry.maxAttempts) attempts)")
     if let replayOf {
       return checked(
         make(
           suite, .passed, .nit, file: suite.recordPath,
-          "replay of \(replayOf): \(results.count) case(s) across \(agents) agent(s) met every "
-            + "label; \(suite.recordPath) is left untouched, since a replay runs no agent")
+          "replay of \(replayOf): \(results.count) case(s) across \(agents) agent(s) \(metEvery); "
+            + "\(suite.recordPath) is left untouched, since a replay runs no agent")
           + notes)
     }
 
@@ -425,11 +458,29 @@ enum CalibrationRun {
     return checked(
       make(
         suite, .passed, .nit, file: suite.recordPath,
-        "\(results.count) case(s) across \(agents) agent(s) met every label; recorded content "
+        "\(results.count) case(s) across \(agents) agent(s) \(metEvery); recorded content "
           + "hash \(record.contentHash)"
           + (modelOverride.map {
             " on the `--model \($0)` override, which push never counts as fresh"
           } ?? " with each agent on its own model")) + notes)
+  }
+
+  /// An attempt passes when every one of its label checks is met.
+  private static func attemptOutcome(_ result: CalibrationRecord.CaseResult)
+    -> CalibrationAttemptOutcome
+  {
+    result.answers.allSatisfy(\.met) ? .pass : .miss
+  }
+
+  private static func missDescription(_ answer: CalibrationRecord.QuestionResult) -> String {
+    let margin =
+      answer.answered == answer.expected
+      ? ", below the \(String(format: "%.2f", CalibrationRecord.QuestionResult.passMargin)) "
+        + "a judged answer needs"
+      : ""
+    return "`\(answer.question)` answered `\(answer.answered)` "
+      + "(p=\(String(format: "%.2f", answer.probability))\(margin)), label expects "
+      + "`\(answer.expected)`"
   }
 
   private static func checked(_ findings: [Finding]) -> StaticCheckOutcome {
