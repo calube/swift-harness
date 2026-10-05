@@ -269,12 +269,13 @@ public struct DesignCalibrationReplies: Sendable, Equatable {
       RunLayout.runDirectory(for: runID) + Self.directoryName, directoryHint: .isDirectory)
   }
 
-  /// A reply's path as messages name it.
-  public func replyPath(agent: String, seed: String) -> String {
+  /// A reply's path as messages name it. The first attempt at a case keeps `<seed>.txt`, and a
+  /// retry `<seed>.attempt-<n>.txt`.
+  public func replyPath(agent: String, seed: String, attempt: Int = 1) -> String {
     path(agent: agent, seed: seed, "txt")
   }
 
-  public func metadataPath(agent: String, seed: String) -> String {
+  public func metadataPath(agent: String, seed: String, attempt: Int = 1) -> String {
     path(agent: agent, seed: seed, "json")
   }
 
@@ -438,9 +439,11 @@ public struct DesignCalibrationRunner: Sendable {
     modelOverride ?? agent.model ?? unpinnedModel
   }
 
-  public func run(agent: DesignCalibrationSeeds.Agent, seed: DesignCalibrationSeeds.Case)
-    async throws(CalibrationCaseError) -> CaseRun
-  {
+  /// - Parameter attempt: which attempt at the case this is, from 1; a replay reads the reply
+  ///   that attempt kept.
+  public func run(
+    agent: DesignCalibrationSeeds.Agent, seed: DesignCalibrationSeeds.Case, attempt: Int = 1
+  ) async throws(CalibrationCaseError) -> CaseRun {
     let reply: Reply
     let model: String
     if let replies, replies.mode == .replay {

@@ -226,17 +226,22 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
     public let model: String
     /// The ids the CLI says answered, which an alias can move between; `nil` when not recorded.
     public let servedModels: [String]?
+    /// The answers of the attempt that decided the case.
     public let answers: [QuestionResult]
+    /// How each attempt went, in order, such as `[miss, pass, pass]`; `nil` in a record from
+    /// before attempts were recorded, when every case had one.
+    public let attempts: [CalibrationAttemptOutcome]?
 
     public init(
       agent: String, caseName: String, model: String, servedModels: [String]? = nil,
-      answers: [QuestionResult]
+      answers: [QuestionResult], attempts: [CalibrationAttemptOutcome]? = nil
     ) {
       self.agent = agent
       self.caseName = caseName
       self.model = model
       self.servedModels = servedModels
       self.answers = answers
+      self.attempts = attempts
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -245,6 +250,7 @@ public struct CalibrationRecord: Sendable, Equatable, Codable {
       case model
       case servedModels
       case answers
+      case attempts
     }
   }
 

@@ -208,9 +208,9 @@ enum CalibrateDesignRun {
       root: root, seeds: DesignCalibrationSeeds.load(root: root),
       modelOverride: calibration.modelOverride, now: now, concurrentCases: concurrentCases,
       replayOf: replies?.mode == .replay ? replies?.runID : nil,
-      judge: calibration.judgeIdentity
-    ) { agent, seed throws(CalibrationCaseError) in
-      let run = try await calibration.run(agent: agent, seed: seed)
+      judge: calibration.judgeIdentity, retry: .twoOfThree
+    ) { agent, seed, attempt throws(CalibrationCaseError) in
+      let run = try await calibration.run(agent: agent, seed: seed, attempt: attempt)
       var what = "\(agent.name)/\(seed.name) on \(run.result.model)"
       if !run.servedModels.isEmpty {
         what += " (served \(run.servedModels.joined(separator: ", ")))"
@@ -237,7 +237,7 @@ enum CalibrateBuildRun {
     await CalibrationRun.run(
       root: root, seeds: BuildCalibrationSeeds.load(root: root),
       modelOverride: calibration.modelOverride, now: now
-    ) { agent, seed throws(CalibrationCaseError) in
+    ) { agent, seed, _ throws(CalibrationCaseError) in
       let run = try await calibration.run(agent: agent, seed: seed)
       var note = CalibrationRun.usage(
         "\(agent.name)/\(seed.name) on \(calibration.model(of: agent))", costUSD: run.costUSD,
@@ -291,11 +291,14 @@ enum CalibrationRun {
   ///     agents, so it never writes the record.
   ///   - judge: who answers judged labels, recorded with the ids that served it; `nil` for a suite
   ///     with no judge.
+  ///   - retry: when a case that missed runs again, and what its attempts add up to.
+  ///   - runCase: runs one attempt at a case, numbered from 1.
   static func run<Label>(
     root: URL, seeds: CalibrationSeeds<Label>, modelOverride: String?, now: Date,
     concurrentCases: Int = 1, replayOf: String? = nil, judge: JudgeIdentity? = nil,
+    retry: CalibrationRetryPolicy = .singleAttempt,
     runCase:
-      @escaping @Sendable (CalibrationSeeds<Label>.Agent, CalibrationSeeds<Label>.Case)
+      @escaping @Sendable (CalibrationSeeds<Label>.Agent, CalibrationSeeds<Label>.Case, Int)
       async throws(CalibrationCaseError) -> CaseRun
   ) async -> StaticCheckOutcome {
     let suite = Label.suite
@@ -336,7 +339,7 @@ enum CalibrationRun {
           let job = jobs[index]
           group.addTask {
             do throws(CalibrationCaseError) {
-              return (index, .success(try await runCase(job.agent, job.seed)))
+              return (index, .success(try await runCase(job.agent, job.seed, 1)))
             } catch {
               return (index, .failure(error))
             }
