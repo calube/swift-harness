@@ -1576,7 +1576,7 @@ const tests = {
       `git -C ${args.worktree} diff --quiet HEAD...${args.base} -- ${engine.writeSet.map(p => `'${p}'`).join(' ')}`,
     ])
     assert.equal(baseMergeCalls.length, 1, 'the base was not merged before the fix pass')
-    assert.ok(baseMergeCalls[0].prompt.includes(`git -C ${args.worktree} merge --no-edit ${args.base}`), baseMergeCalls[0].prompt)
+    assert.ok(baseMergeCalls[0].prompt.includes(`git -C ${args.worktree} merge --no-edit -m 'Merge the base for the code a review finding tests' ${args.base}`), baseMergeCalls[0].prompt)
     assert.ok(order.indexOf(`done:${baseMergeCalls[0].opts.label}`) < order.indexOf(`call:fix:${args.task}`), 'the fix pass started before the merge')
     assert.equal(workerCalls.length, 2, 'no fix pass for the finding its merged sibling now lets it test')
     const fixPrompt = workerCalls[1].prompt
