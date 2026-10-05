@@ -2,14 +2,16 @@
 // the span popover works from the keyboard and closes on Escape or an outside click, it is a bottom
 // sheet at phone width, the zoom scales the track and not the page, the task drawer opens with and
 // without a brief, and a module that throws can't blank the page. Served by a stub server, the page
-// polls for changes, merges each partial, and shows the now strip; the embedded report hides it.
+// polls /view.json with its token, replaces its view with each whole answer, keeps it on a 204,
+// shows the now strip, and an end banner linking /final once the run is done; the embedded report
+// hides the strip.
 // The tabs: Overview by default or the URL's #token, badges counted from the view, the arrow keys,
 // a task row's popover, and a poll that keeps the open tab and its scroll.
 // Run: node tests/run_viewer_page_test.mjs
 // Regressions caught: a popover the keyboard can't reach or that keeps focus, a zoom that widens
 // the page, a drawer that needs a brief, a module able to blank the core regions, and a console
-// error on load, a poll that refetches the whole view, a failed poll that stops live mode, and a
-// strip shown in a static report.
+// error on load, a poll that loses its token, a failed poll that stops live mode, a strip shown in a
+// static report, and a finished run with no end banner.
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -112,16 +114,41 @@ const liveView = {
   ],
   gates: [], proofs: [], halts: [], damage: [],
 }
-// Each cursor's answer. The second request after c1 fails once, so a failed poll must keep going.
-const changes = {
-  c0: [{ cursor: 'c1', spans: [span('w-store', 't-store', 'worker', 0, 0, { task: 'store', start: ago(10), end: ago(1), outcome: 'ok' }), span('g-store', 't-store', 'gate', 0, null, { task: 'store', start: ago(1) })] }],
-  c1: [null, { cursor: 'c2', spans: [span('v-store', 't-store', 'verify', 0, null, { task: 'store', start: ago(0.5) })] }],
-  c2: [{ cursor: 'c3', halts: [{ task: 'list', reason: 'gate-red', at: ago(9), answer: null, waitMs: null }] }],
-  c3: [{ cursor: 'c3' }],
+// The whole view the next poll answers: `view` with each row of `rows` in place of the row with
+// its key, or added after the rest.
+function nextView(view, rows) {
+  const out = { ...view }
+  for (const [field, list] of Object.entries(rows)) {
+    if (!Array.isArray(list)) { out[field] = list; continue }
+    const key = field === 'gates' ? 'runId' : 'id'
+    const merged = (view[field] || []).slice()
+    for (const row of list) {
+      const at = merged.findIndex((r) => r[key] === row[key])
+      if (at >= 0) merged[at] = row; else merged.push(row)
+    }
+    out[field] = merged
+  }
+  return out
 }
+const firstPoll = nextView(liveView, { cursor: 'c1', spans: [span('w-store', 't-store', 'worker', 0, 0, { task: 'store', start: ago(10), end: ago(1), outcome: 'ok' }), span('g-store', 't-store', 'gate', 0, null, { task: 'store', start: ago(1) })] })
+const secondPoll = nextView(firstPoll, { cursor: 'c2', spans: [span('v-store', 't-store', 'verify', 0, null, { task: 'store', start: ago(0.5) })] })
+const thirdPoll = nextView(secondPoll, { cursor: 'c3', halts: [{ task: 'list', reason: 'gate-red', at: ago(9), answer: null, waitMs: null }] })
+// What each poll after a token answers: a whole view, `null` for a failed poll, 204 for no change.
+// The second poll after c1 fails once, so a failed poll must keep going.
+const answers = {
+  c0: [firstPoll],
+  c1: [null, secondPoll],
+  c2: [thirdPoll],
+  c3: [204],
+}
+// A run that ends: the poll after c3 carries the done run and its final report's link.
+const finishedPoll = nextView(thirdPoll, {
+  cursor: 'c4', run: { ...thirdPoll.run, state: 'done', endedAt: ago(0) }, finalReport: '/final',
+})
+const finishing = { ...answers, c3: [finishedPoll], c4: [204] }
 
 // Serves the page as `swiftgate view` does; `modules` adds those module scripts and styles.
-function startLiveServer(modules = []) {
+function startLiveServer(modules = [], script = answers) {
   const files = PAGE_FILES.concat(modules.flatMap((m) => [`run-viewer-${m}.js`, `run-viewer-${m}.css`]))
   const requests = []
   const missing = []
@@ -130,13 +157,15 @@ function startLiveServer(modules = []) {
     const url = new URL(req.url, 'http://127.0.0.1')
     requests.push(url.pathname + url.search)
     const json = (status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)) }
-    if (url.pathname === '/view.json') return json(200, liveView)
-    if (url.pathname === '/changes') {
+    if (url.pathname === '/final') { res.writeHead(200, { 'content-type': 'text/html' }); return res.end('<title>final report</title>') }
+    if (url.pathname === '/view.json') {
       const after = url.searchParams.get('after')
-      const answers = changes[after]
-      if (!answers) return json(400, { error: 'unknown cursor' })
+      if (after == null) return json(200, liveView)
+      const list = script[after]
+      if (!list) return json(200, liveView)
       const n = seen[after] = (seen[after] ?? -1) + 1
-      const body = answers[Math.min(n, answers.length - 1)]
+      const body = list[Math.min(n, list.length - 1)]
+      if (body === 204) { res.writeHead(204); return res.end() }
       return body ? json(200, body) : json(503, { error: 'store busy' })
     }
     const name = url.pathname === '/' ? 'run-viewer.html' : url.pathname.slice(1)
@@ -436,16 +465,17 @@ const tests = {
     assert.equal(await page.evaluate("document.querySelector('[data-module=\"board\"]').hidden"), true)
   },
 
-  async 'served, the page merges 3 polled partials through a failed poll, the cursor advances, and the strip badges a halt and a stall, which the embedded report hides — catches a poll that refetches everything'() {
+  async 'served, the page replaces its view with 3 polled views through a failed poll, each poll names the token it holds, an unchanged run answers 204, and the strip badges a halt and a stall, which the embedded report hides — catches a page that merges stale rows or loses its token'() {
     const live = await startLiveServer()
     try {
       await page.load(live.url)
       const failedLine = await page.evaluate(until("document.body.dataset.pollFailures === '1' && document.getElementById('live-error').textContent"))
       assert.match(failedLine, /503/, 'a failed poll shows no line in the header')
-      await page.evaluate(until("Number(document.body.dataset.polls) >= 4"))
-      const after = live.requests.filter((r) => r.startsWith('/changes')).map((r) => new URL(r, 'http://x').searchParams.get('after'))
-      assert.deepEqual(after.slice(0, 4), ['c0', 'c1', 'c1', 'c2'], 'the cursor does not advance with each answer')
-      assert.equal(live.requests.filter((r) => r === '/view.json').length, 1, 'the page refetches the full view')
+      await page.evaluate(until("Number(document.body.dataset.polls) >= 5"))
+      const after = live.requests.filter((r) => r.startsWith('/view.json?')).map((r) => new URL(r, 'http://x').searchParams.get('after'))
+      assert.deepEqual(after.slice(0, 5), ['c0', 'c1', 'c1', 'c2', 'c3'], 'a poll does not name the token of the view it holds')
+      assert.equal(live.requests.filter((r) => r === '/view.json').length, 1, 'the page polls with no token after its first fetch')
+      assert.equal(await page.evaluate("document.querySelectorAll('#tl .bar[data-id=\"v-store\"]').length"), 1, 'a 204 poll lost or doubled a span')
       const state = await page.evaluate(`(() => ({
         error: document.getElementById('live-error').hidden,
         cards: [...document.querySelectorAll('#now .now-card')].map((c) => ({ task: c.dataset.task, text: c.textContent })),
@@ -455,8 +485,8 @@ const tests = {
         errors: document.body.dataset.errors,
       }))()`)
       assert.equal(state.error, true, 'the failed-poll line stays after a poll succeeds')
-      assert.equal(state.storeWorkerOpen, false, 'the first partial did not end the worker span')
-      assert.ok(state.verify, 'the second partial did not add its span')
+      assert.equal(state.storeWorkerOpen, false, 'the first polled view did not end the worker span')
+      assert.ok(state.verify, 'the second polled view did not add its span')
       assert.deepEqual(state.cards.map((c) => c.task), ['store', 'list'])
       assert.match(state.cards[0].text, /verify/, 'the card does not name the newest open stage')
       assert.doesNotMatch(state.cards[0].text, /halted|stalled/)
@@ -467,12 +497,32 @@ const tests = {
       // Chrome logs each failed load; the stubbed 503 is meant, and the browser asks for a favicon.
       assert.deepEqual(live.missing.filter((p) => p !== '/favicon.ico'), [], 'the page asks for a file it does not ship')
       assert.deepEqual(page.errors.filter((e) => !/status of (503|404)/.test(e)), [])
+      assert.equal(await page.evaluate("document.getElementById('end-banner')?.hidden ?? true"), true, 'a running run shows the end banner')
     } finally {
       await new Promise((resolve) => live.server.close(resolve))
     }
     await page.load(main.url)
     const embedded = await page.evaluate("({ strip: document.getElementById('now')?.offsetHeight ?? 0, live: document.body.dataset.live ?? null })")
     assert.deepEqual(embedded, { strip: 0, live: null }, 'the embedded report shows the now strip')
+  },
+
+  async 'served, a poll that finishes the run shows the end banner linking the final report, and the now strip clears — catches a live page that never says its run ended'() {
+    const live = await startLiveServer([], finishing)
+    try {
+      await page.load(live.url)
+      const banner = await page.evaluate(until("(() => { const b = document.getElementById('end-banner'); return b && !b.hidden && b.textContent })()"))
+      assert.match(banner, /finished/i)
+      const link = await page.evaluate("(() => { const a = document.querySelector('#end-banner a'); return a && { href: new URL(a.href).pathname, text: a.textContent } })()")
+      assert.deepEqual(link?.href, '/final', 'the banner links no /final')
+      assert.match(link.text, /final report/i)
+      assert.equal(await page.evaluate("document.getElementById('state').textContent"), 'done')
+      assert.equal(await page.evaluate("document.getElementById('now').hidden"), true, 'a done run keeps its now strip')
+      const response = await page.evaluate("fetch(document.querySelector('#end-banner a').href).then((r) => r.text())")
+      assert.match(response, /final report/)
+      assert.equal(await page.evaluate("document.body.dataset.errors"), '0')
+    } finally {
+      await new Promise((resolve) => live.server.close(resolve))
+    }
   },
 
   async 'served with the board module on #board, the board draws from the fetched view and its cards move on each poll — catches a module that registered before live data and never drew'() {

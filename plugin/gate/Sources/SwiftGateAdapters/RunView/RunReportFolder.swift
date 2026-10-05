@@ -66,6 +66,18 @@ public struct RunReportFolder: Sendable {
     }
   }
 
+  /// Whether the folder holds a final report: its page is written and the view it embeds is of
+  /// a done run, not a snapshot of one still going.
+  public var isFinal: Bool {
+    guard FileManager.default.fileExists(atPath: directory.appending(path: Self.pageName).path),
+      let data = try? Data(contentsOf: directory.appending(path: Self.viewName)),
+      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let run = object["run"] as? [String: Any]
+    else { return false }
+    return run["state"] as? String == RunView.RunState.done.rawValue
+      && (run["snapshotAt"] == nil || run["snapshotAt"] is NSNull)
+  }
+
   /// Rewrites the page alone, from a view the folder already holds.
   public func writePage(_ page: Data) throws(Failure) {
     try publish(page, as: Self.pageName)

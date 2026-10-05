@@ -457,7 +457,8 @@ struct RunViewReaderTests {
       gate.first {
         $0.contains("\"kind\":\"gate.run\"") && $0.contains("20261004T045901Z-e384a82a")
       })
-    let time = Date(timeIntervalSince1970: 1_791_000_000)
+    // Inside the run, which started at 04:55:28.
+    let time = Date(timeIntervalSince1970: 1_791_090_000)
     let source = HarnessEventSource(route: .check)
     func event(_ id: String, parent: String?, _ payload: HarnessEventPayload) throws -> String {
       let event = HarnessEvent(

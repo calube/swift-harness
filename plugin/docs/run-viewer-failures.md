@@ -27,7 +27,7 @@ later gates excuse, so its bar and outcome read amber, "baseline", and the Timel
 doesn't count it as failed.
 
 The builder computes each reason, puts it on 1 line, takes machine paths out as it does for
-finding messages, and cuts it to 15 words and 120 bytes, so a live `/changes` row carries it too.
+finding messages, and cuts it to 15 words and 120 bytes, so a live poll carries it too.
 
 ## A red span
 
