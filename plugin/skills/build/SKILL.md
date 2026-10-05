@@ -152,17 +152,18 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
    its `notes` from there.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
-4. `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
+4. A plan with a `validation.json` first runs the rows this merge makes ready on a trial merge of
+   the branch, as [before each merge](references/event-loop.md#before-each-merge) says.
+   `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
    its own command: `build merge` refuses unless the build run's newest check of this return is
-   GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`). Then
+   GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`), and unless
+   that run is GREEN at the tip (`flows-unchecked`, `flows-red`). Then
    `"$SG" check --tier <mergeGate>` on main (with a plan surface,
    `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
    gate whose every gating finding is one of the step 1 baseline's counts as GREEN: a task that
-   tests 1 of the surface's modules clears its finding and leaves the others. A plan with a
-   `validation.json` then runs the rows this merge unblocks, as
-   [after each merge](references/event-loop.md#after-each-merge) says.
+   tests 1 of the surface's modules clears its finding and leaves the others.
 5. `"$SG" ledger set <slug> <task> done --session <session> --json`, then
    `"$SG" worktree remove <slug> <task> --session <session> --json`. After a fix merge, also
    `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.

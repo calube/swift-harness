@@ -28,7 +28,7 @@ The verdict is RED (exit 1) on any finding but the note, and BLOCKED (exit 2) wh
 
 ## qa run
 
-`swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
+`swiftgate qa run [--plan <slug>] [--after <task> [--before-merge [--fix]]] [--at-base [--prepared-by <task>]] [--final] [--json]` runs the rows of a plan's
 validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes the 1 plan holding a
 validation.json: none is GREEN with a note, several exit 2. A row runs once each `Runs after`
 task merged, per the ledger or build events, `--after` counting as merged and keeping only its
@@ -52,7 +52,8 @@ passed and lists them as evidence. A screenshot, tree or log never
 passes a row. A state row runs only after its requirement's flow rows all pass.
 
 `--at-base` runs every row at the merge base, and `--prepared-by` a validation worker's rows before
-`qa adopt`; see [`simulator-qa-at-base.md`](simulator-qa-at-base.md).
+`qa adopt`, and `--before-merge` a task's rows before it merges; see
+[`simulator-qa-at-base.md`](simulator-qa-at-base.md).
 
 `--final` runs every ready row and records each flow, with its logs (see
 [the final pass](simulator-qa-flows.md#the-final-pass)). It takes neither `--at-base` nor `--after`.

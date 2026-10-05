@@ -72,6 +72,14 @@ enum QARunRun {
         "--prepared-by runs a validation task's checks at the merge base before `qa adopt`, so "
           + "it needs --at-base and takes neither --after nor --final")
     }
+    if options.beforeMerge, options.after == nil || options.atBase || options.final {
+      return blocked(
+        "--before-merge runs the rows --after names on a trial merge of that task's branch, so "
+          + "it needs --after and takes neither --at-base nor --final")
+    }
+    if options.fix, !options.beforeMerge {
+      return blocked("--fix names the branch --before-merge merges, so it needs --before-merge")
+    }
     if options.final, dependencies.flows != nil, dependencies.finalPass == nil {
       return blocked("--final has no recorder to record its flows with")
     }
@@ -233,7 +241,76 @@ enum QARunRun {
     let rows: [QARow]
     let commit: String?
     var atBaseRecord: String?
-    if options.atBase {
+    var trialMerge: QATrialMerge?
+    if options.beforeMerge, let after = options.after {
+      let names: TaskWorktree
+      let tip: String
+      let base: String
+      do {
+        names = try TaskWorktree(
+          commonDirectory: common, plan: slug, task: options.fix ? "fix-\(after)" : after,
+          profile: BuildPresetCatalog.profile(root: root))
+        guard let found = try await git.revision("refs/heads/\(names.branch)") else {
+          return blocked(
+            "branch \(names.branch) doesn't exist, so there is nothing to merge", plan: slug)
+        }
+        tip = found
+        guard let main = try await git.revision("refs/heads/\(names.baseBranch)") else {
+          return blocked("branch \(names.baseBranch) doesn't exist to merge into", plan: slug)
+        }
+        base = main
+      } catch {
+        return blocked("reading the branch to merge: \(error)", plan: slug)
+      }
+      let scratch =
+        dependencies.scratch
+        ?? LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
+      let merger = dependencies.merger
+      let ran: TrialMergeRun
+      do throws(ScratchWorktreeError) {
+        // The rows' shared device goes back while the tree its holder runs in still exists.
+        ran = try await scratch.withScratchTree(
+          ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
+        ) { tree in
+          let outcome: MergeOutcome
+          do throws(GitWorkspaceError) {
+            outcome = try await merger.merge(
+              names.branch, message: "Merge: \(names.branch) before build merge", in: tree.path)
+          } catch {
+            return .failed("\(error)")
+          }
+          switch outcome {
+          case .conflicted(let files):
+            let rows = await runPlan.execute(atBase: false) { _ in
+              QACheckOutcome(
+                result: .unverified,
+                message: "not run: \(names.branch) conflicts with \(names.baseBranch) in "
+                  + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
+            }
+            return .conflicted(files: files, rows: rows)
+          case .merged(let commit):
+            let rows = await runPlan.execute(atBase: false) { await checks.run($0, in: tree.path) }
+            return .merged(commit: commit, rows: rows, released: await checks.finishFlows())
+          }
+        }
+      } catch {
+        return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
+      }
+      switch ran {
+      case .failed(let message):
+        return blocked(
+          "merging \(names.branch) into \(base) in a scratch tree: \(message)", plan: slug)
+      case .conflicted(let files, let ran):
+        rows = ran
+        commit = nil
+        trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base, conflicts: files)
+      case .merged(let merged, let ran, let released):
+        rows = ran
+        commit = merged
+        notes += released
+        trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base)
+      }
+    } else if options.atBase {
       let main =
         BuildPresetCatalog.profile(root: root) == .brownfield
         ? BrownfieldRunReport.planBranch(slug: slug) : TaskWorktree.base
@@ -333,7 +410,7 @@ enum QARunRun {
       runID: runID, plan: slug, after: options.after, atBase: options.atBase,
       final: options.final, settled: ended != nil, commit: commit, rows: rows, gaps: gaps,
       notes: notes, reasonOnly: table.unitOnly.count, checkableRows: table.rows.count,
-      atBaseRecord: atBaseRecord)
+      atBaseRecord: atBaseRecord, trialMerge: trialMerge)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data
@@ -347,6 +424,15 @@ enum QARunRun {
       return report.adding(notes: ["\(QAReport.fileName) not written: \(error)"])
     }
     return report
+  }
+
+  /// What a `--before-merge` run's scratch tree came to.
+  private enum TrialMergeRun: Sendable {
+    /// The merge commit, the rows run on it and the shared device's release notes.
+    case merged(commit: String, rows: [QARow], released: [String])
+    /// The files the merge conflicted in, and the ready rows read unverified.
+    case conflicted(files: [String], rows: [QARow])
+    case failed(String)
   }
 
   /// The plan's newest build run's events; `nil`, with a note when reading failed, when it has
@@ -743,7 +829,8 @@ struct QARunCommand: AsyncParsableCommand {
 
   @Option(
     help:
-      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
+      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/."
+  )
   var preparedBy: String?
 
   @Flag(
@@ -763,7 +850,8 @@ struct QARunCommand: AsyncParsableCommand {
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(
+      root: root,
+      options: QARunRun.Options(
         plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy,
         beforeMerge: beforeMerge, fix: fix),
       git: LiveGit(runner: runner, repositoryRoot: root.path),

@@ -11,7 +11,7 @@ Contents:
 - [Validation task](#validation-task): the 1 task that commits nothing
 - [Returns](#returns): where each file goes
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
-- [After each merge](#after-each-merge): the validation rows a merge unblocks
+- [Before each merge](#before-each-merge): the validation rows a merge makes ready
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -204,6 +204,7 @@ is a red gate, and the fixer gets only the new findings.
 | the merge gate isn't GREEN | `"$SG" build merge <slug> <task> --undo --session <session> --json` resets `main`, records that gate run as the task's merge gate (`gateRunId`) when `build record-gate` hasn't, and cuts the fix worktree |
 | `build merge` exits 1 with another `reason` | halt: `main-moved`, `dirty-checkout` and `not-on-main` need the user; `already-merged` means the ledger lags, so run `ledger set … done` and go on |
 | `build merge` exits 1 with `return-unchecked`, `return-not-green` or `return-stale` | the return's newest `check-return` is missing, failed, or checked an older tip: check it again, and merge only after that check exits 0; a check that won't pass halts the task |
+| `build merge` exits 1 with `flows-unchecked` or `flows-red` | run [before each merge](#before-each-merge)'s `qa run`, or send its red rows to the fixer in the fix worktree `flows-red` cut |
 | `build merge` exits 2 | halt |
 
 An `--undo` that exits non-zero halts: `main` may still hold the red merge. Quote its `reason`.
@@ -251,7 +252,9 @@ The notice HTML-escapes it: turn `&lt;`, `&gt;` and `&amp;` back into `<`, `>` a
 read the output file the notice names, which is the fixer's whole transcript:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
 
-- The check passes and `outcome` is `ready-to-merge`:
+- The check passes and `outcome` is `ready-to-merge`: with a `validation.json`,
+  `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json` first, as
+  [before each merge](#before-each-merge) says; a RED one halts as below. Then
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, as its own command after the
   check exits 0 (it refuses a fix whose newest `--fix` check isn't GREEN at the fix branch's tip),
   then the merge gate on
@@ -263,31 +266,33 @@ read the output file the notice names, which is the fixer's whole transcript:
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
 
-## After each merge
+## Before each merge
 
-A plan with a `validation.json` runs the rows a merge unblocks right after that merge's gate is
-GREEN and recorded, before `ledger set … done`, on `main`:
+A plan with a `validation.json` runs the rows a task's merge makes ready before `build merge`,
+on the task's branch merged into `main`'s tip in a scratch tree, from the main checkout:
 
 ```
-"$SG" qa run --plan <slug> --after <task> --json
+"$SG" qa run --plan <slug> --after <task> --before-merge --json
 ```
 
-It runs only the rows whose `Runs after` names `<task>` and whose other tasks are done, in layer
-order: acceptance, then flow, then state. A red row stops its own requirement's later layers,
-never another requirement's (simulator QA amendment §6). A plan with no table reads GREEN with a note.
+It runs only the rows whose `Runs after` names `<task>` and whose other tasks are merged, in layer
+order: acceptance, then flow, then state, on 1 held device. `main` doesn't move. A red row stops
+its own requirement's later layers, never another requirement's (simulator QA amendment §6).
+`build merge` refuses `flows-unchecked` while a ready row has no such run GREEN at the branch's
+tip on `main`'s commit, so run it again after any commit to either.
 
-- GREEN: go on. Rows that read `unverified` or `waiting` go in the report with their messages.
-- RED: a red row stops the next merge, as a red `main` does, and is a halt answered by rule:
+- GREEN: merge. Rows that read `unverified` or `waiting` go in the report with their messages.
+  A branch that conflicts with `main` runs no row and names the files: merge, and the conflict
+  goes to the fixer as any conflict does.
+- RED: `build merge` refuses `flows-red` and cuts the fix worktree with the task merged in,
+  `main` untouched, as for a conflict. It is a halt answered by rule:
   `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
-  `"$SG" build merge <slug> <task> --undo --session <session> --json`, then
   `"$SG" build resume --run <run> --task <task> --answer retry`, then the fixer as for a red
   merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON.
-  After its fix merge, the merge gate runs again and then this command. Never keep the merge on
-  your own judgement. The 1 exception is a pre-existing issue, shown by the newest `--at-base`
-  report: that row is `red` there too, and every finding the red row names appears in it. Then
-  keep the merge, skip the halt and name the row and both run ids in the report.
-- Exit 2 (BLOCKED): the table or the ledger doesn't read. Keep its `message` for the report and go
-  on; the merge gate already passed.
+  The fixer's branch runs it again with `--fix` before `build merge --fix`. Never merge on your
+  own judgement: a row red at the newest `--at-base` report too goes to the fixer like any other.
+- Exit 2 (BLOCKED): the table, the ledger or the scratch tree failed. Keep its `message` for the
+  report; `build merge` keeps refusing until a run is GREEN, so a second BLOCKED halts the task.
 
 ## Recording halts
 
@@ -303,7 +308,7 @@ the findings or the answer's words.
 |---|---|---|
 | a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
 | a `gate-red` return, or the fix merge's gate still red | the task | `gate-red` |
-| a RED `qa run --after`, resumed with `retry` before its fixer | the task | `gate-red` |
+| a RED `qa run --before-merge`, resumed with `retry` before its fixer | the task | `gate-red` |
 | the fixer's merge still conflicted | the task | `merge-conflict` |
 | a `design-conflict` return | the reporting task | `amend` |
 | the time budget's cutoff with tasks running | none | `budget` |

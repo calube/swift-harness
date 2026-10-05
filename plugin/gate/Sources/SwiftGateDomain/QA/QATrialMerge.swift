@@ -42,6 +42,23 @@ public enum QAMergeReadiness: Sendable, Equatable {
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String
   ) -> QAMergeReadiness {
-    .notNeeded
+    let ready = QARunPlan.make(table: table, merged: merged, after: task).entries
+      .filter(\.waitingOn.isEmpty).map(\.row)
+    guard !ready.isEmpty else { return .notNeeded }
+    let covering = reports.filter { report in
+      report.plan == plan && report.after == task && report.trialMerge?.branch == branch
+        && report.trialMerge?.tip == tip && report.trialMerge?.base == base
+    }
+    // Run ids start with their UTC start time, so the greatest is the newest.
+    guard
+      let newest = covering.max(by: { ($0.runID ?? "") < ($1.runID ?? "") }),
+      let runID = newest.runID, let merge = newest.trialMerge
+    else { return .unchecked(rows: ready) }
+    if !merge.conflicts.isEmpty { return .conflicts(runID: runID, files: merge.conflicts) }
+    switch newest.verdict {
+    case .green: return .checked(runID: runID)
+    case .red: return .red(runID: runID, rows: newest.rows.filter { $0.result == .red })
+    case .blocked: return .unchecked(rows: ready)
+    }
   }
 }

@@ -283,17 +283,17 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `worktree remove … --abandoned` it, which
      frees the merges waiting on item 3; its rows have no checks, so `qa run` reads them red and
      the report quotes them.
-   - **Validate each merge**, as [the build loop's after-merge step](../build/references/event-loop.md#after-each-merge)
-     says: once a merge gate is GREEN and recorded, `"$SG" qa run --plan <slug> --after <task> --json`
-     in `<checkout>` runs the rows that merge unblocks, acceptance, then flow, then state. A RED
-     verdict is a red merge gate: `"$SG" build halt --run <run> --task <task> --reason gate-red`,
-     `"$SG" build merge <slug> <task> --undo --session <session> --json`, then
-     `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer, as the loop
-     does for a red merge gate; at the cutoff, undo and abandon as its item 2 says. Never keep the
-     merge on your own judgement, whatever you think caused the red. The 1 exception is a
-     pre-existing issue, shown by the newest `--at-base` report: that row is `red` there too, and
-     every finding the red row names appears in it. Then keep the merge and add 1 assumption
-     naming the row and both run ids. No `--at-base` run, no exception.
+   - **Validate before each merge**, as [the build loop's before-merge step](../build/references/event-loop.md#before-each-merge)
+     says: before `build merge`, `"$SG" qa run --plan <slug> --after <task> --before-merge --json`
+     in `<checkout>` runs the rows that merge makes ready, acceptance, then flow, then state, on
+     the task's branch merged into `<plan-branch>` in a scratch tree; `<plan-branch>` doesn't
+     move. `build merge` refuses `flows-unchecked` until that run is GREEN at the branch's tip.
+     A RED run is a red merge gate before the merge: `build merge` refuses `flows-red` and cuts
+     the fix worktree, then `"$SG" build halt --run <run> --task <task> --reason gate-red`,
+     `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer, given the red
+     rows; its branch runs the same command with `--fix` before `build merge --fix`. At the
+     cutoff, abandon as its item 2 says. Never merge on your own judgement, whatever you think
+     caused the red.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
@@ -313,9 +313,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         removes the task's and its fixer's, merged or not, and keeps their branches.
      2. Merge each task in `finish`, in order, as the build loop's completion step does, from
         where it stands: a task already merged skips `build merge`, and one in `landed` skips
-        its merge gate too, going straight to `qa run --after`, `ledger set … done` and
-        `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
-        gets no fixer at the cutoff: `build merge --undo`, then
+        its merge gate too, going straight to `ledger set … done` and `worktree remove` (with
+        `--fix` after a fix merge). A task not yet merged runs its `qa run --before-merge` first.
+        A conflict, a `flows-red` refusal or a RED `merge` gate gets no fixer at the cutoff:
+        `build merge --undo` when the merge landed, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
         `worktree remove … --abandoned` as item 1 says.
      3. Start nothing else, and go to step 8.
