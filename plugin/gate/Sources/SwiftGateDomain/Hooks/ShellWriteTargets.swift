@@ -32,7 +32,7 @@ extension ShellSyntax {
     let parsed = parse(line)
     let directories = parsed.filter { !$0.isHeredocBody }.map(\.command)
       .compactMap(changedDirectory)
-    let known = knownDirectories(parsed, directoryExists: directoryExists)
+    let possible = possibleDirectories(parsed, directoryExists: directoryExists)
     var targets: [ShellWriteTarget] = []
     for (index, entry) in parsed.enumerated() where !entry.isHeredocBody {
       let command = entry.command
@@ -43,8 +43,13 @@ extension ShellSyntax {
         let spellings: [String]
         if path.hasPrefix("/") || path.hasPrefix("~") {
           spellings = [path]
-        } else if let directory = known[index] {
-          spellings = [directory + "/" + path]
+        } else if let directories = possible[index] {
+          spellings = directories.map { directory in
+            switch directory {
+            case .start: path
+            case .path(let base): base + "/" + path
+            }
+          }
         } else {
           spellings = [path] + directories.map { $0 + "/" + path }
         }
@@ -59,6 +64,22 @@ extension ShellSyntax {
   }
 
   // MARK: - The working directory a cd leaves
+
+  /// A directory a command may run in.
+  enum ShellDirectory: Hashable {
+    /// The shell's starting directory.
+    case start
+    /// A path as a `cd` spelled it: absolute, or relative to the starting directory.
+    case path(String)
+  }
+
+  /// Every directory each top-level command may run in, by index into `commands`. A command
+  /// missing from the map may run anywhere a static reading can't follow.
+  static func possibleDirectories(
+    _ commands: [ParsedCommand], directoryExists: (String) -> Bool
+  ) -> [Int: [ShellDirectory]] {
+    knownDirectories(commands, directoryExists: directoryExists).mapValues { [.path($0)] }
+  }
 
   /// Commands that can move the shell, or define something that does, out of a static reading's
   /// sight. A line holding one at top level is read as if no `cd` were certain.
