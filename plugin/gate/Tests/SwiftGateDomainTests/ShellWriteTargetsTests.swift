@@ -91,7 +91,9 @@ struct ShellWriteTargetsTests {
     let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
     #expect(denied == "\(call.cwd)/launch-list.flow.json")
     #expect(
-      Set(paths) == [slot + "/.harness/qa/spec/launch-list.flow.json", slot + "/launch-list.flow.json"],
+      Set(paths) == [
+        slot + "/.harness/qa/spec/launch-list.flow.json", slot + "/launch-list.flow.json",
+      ],
       "\(paths)")
   }
 
