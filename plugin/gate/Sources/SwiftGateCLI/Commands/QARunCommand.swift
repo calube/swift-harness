@@ -602,7 +602,10 @@ enum QARunRun {
             HarnessEvent(
               eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
               source: HarnessEventSource(route: nil),
-              payload: .qaCheck(QACheckEvent(plan: slug, row: row, atBase: options.atBase)))
+              payload: .qaCheck(
+                QACheckEvent(
+                  plan: slug, row: row, atBase: options.atBase,
+                  repairProof: options.preparedBy != nil && options.requirement != nil)))
           }
             + rows.compactMap { row in
               flowRecords[row.row].map { record in

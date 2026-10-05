@@ -97,15 +97,8 @@ enum BuildCheckReturnRun {
     if let store = try? await BuildRunStore.latest(plan: plan, git: git),
       let record = try? store.record()
     {
-      if let box = record.timeBox {
-        noNewStartsAt = box.deadlines.noNewStartsAt
-        cutoffAt = box.deadlines.cutoffAt
-      } else if record.preset.timeBudgetMin > 0 {
-        let budget = TimeInterval(record.preset.timeBudgetMin * 60)
-        noNewStartsAt = record.startedAt.addingTimeInterval(
-          budget - TimeInterval(record.preset.stopStartsBeforeMin * 60))
-        cutoffAt = record.startedAt.addingTimeInterval(budget)
-      }
+      noNewStartsAt = record.noNewStartsAt
+      cutoffAt = record.cutoffAt
       if !fix, let log = try? store.events() {
         startedAt =
           log.events.compactMap { event -> Date? in

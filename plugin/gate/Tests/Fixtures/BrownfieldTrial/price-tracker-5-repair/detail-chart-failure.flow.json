@@ -1,0 +1,59 @@
+[
+  {
+    "command": "open",
+    "input": {
+      "app": "com.example.InterviewStarter",
+      "relaunch": true,
+      "launchArgs": [
+        "-harness-scenario",
+        "detail-failure"
+      ]
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.row.bitcoin\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "click",
+    "input": {
+      "target": {
+        "kind": "selector",
+        "selector": "id=\"watchlist.row.bitcoin\""
+      }
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"detail.chart.error\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"detail.price\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"detail.chart.retry\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "absent",
+      "selector": "id=\"detail.chart\""
+    }
+  }
+]

@@ -1,0 +1,203 @@
+{
+  "after" : "spec-detail",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "292cd2ab104e4d058c6b2096b56f203fad06e8c3",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-watchlist, flow) `qa/watchlist-launch.flow.json`: step 18 `wait` failed: Batch failed at step 67 (wait): wait timed out for text: 2.5%",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 2 (req-refresh, flow) `qa/watchlist-refresh.flow.json`: step 6 `wait` failed: Batch failed at step 16 (wait): wait timed out for text: 64,100.12",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-error-retry, flow) `qa/watchlist-retry.flow.json`: step 7 `wait` failed: Batch failed at step 20 (wait): wait timed out for selector: id=\"watchlist.error\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-detail-chart, flow) `qa/detail-chart.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.price\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-chart-failure, flow) `qa/detail-chart-failure.flow.json`: step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.chart.error\". Current surface: Watchlist, Bitcoin, Bitcoin, $64,000.12, +2.50%, Ethereum.",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 8 rows verified (3 reason-only): 0 pass, 5 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-launch.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist.flow/steps.json",
+        "qa/01-req-watchlist.flow/batch.json",
+        "qa/01-req-watchlist.flow/flow.json",
+        "qa/01-req-watchlist.flow/video.mp4",
+        "qa/01-req-watchlist.flow/sheet.png",
+        "qa/01-req-watchlist.flow/sim/steps.ndjson",
+        "qa/01-req-watchlist.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 18 `wait` failed: Batch failed at step 67 (wait): wait timed out for text: 2.5%",
+      "ms" : 57058,
+      "requirement" : "req-watchlist",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-refresh.flow.json",
+      "evidence" : [
+        "qa/02-req-refresh.flow/steps.json",
+        "qa/02-req-refresh.flow/batch.json",
+        "qa/02-req-refresh.flow/flow.json",
+        "qa/02-req-refresh.flow/video.mp4",
+        "qa/02-req-refresh.flow/sheet.png",
+        "qa/02-req-refresh.flow/sim/steps.ndjson",
+        "qa/02-req-refresh.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 6 `wait` failed: Batch failed at step 16 (wait): wait timed out for text: 64,100.12",
+      "ms" : 32532,
+      "requirement" : "req-refresh",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/watchlist-retry.flow.json",
+      "evidence" : [
+        "qa/03-req-error-retry.flow/steps.json",
+        "qa/03-req-error-retry.flow/batch.json",
+        "qa/03-req-error-retry.flow/flow.json",
+        "qa/03-req-error-retry.flow/video.mp4",
+        "qa/03-req-error-retry.flow/sheet.png",
+        "qa/03-req-error-retry.flow/sim/steps.ndjson",
+        "qa/03-req-error-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 7 `wait` failed: Batch failed at step 20 (wait): wait timed out for selector: id=\"watchlist.error\"",
+      "ms" : 43066,
+      "requirement" : "req-error-retry",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+        "qa/04-req-detail-chart.flow/steps.json",
+        "qa/04-req-detail-chart.flow/batch.json",
+        "qa/04-req-detail-chart.flow/flow.json",
+        "qa/04-req-detail-chart.flow/video.mp4",
+        "qa/04-req-detail-chart.flow/sheet.png",
+        "qa/04-req-detail-chart.flow/sim/steps.ndjson",
+        "qa/04-req-detail-chart.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.price\"",
+      "ms" : 36163,
+      "requirement" : "req-detail-chart",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart-failure.flow.json",
+      "evidence" : [
+        "qa/05-req-chart-failure.flow/steps.json",
+        "qa/05-req-chart-failure.flow/batch.json",
+        "qa/05-req-chart-failure.flow/flow.json",
+        "qa/05-req-chart-failure.flow/video.mp4",
+        "qa/05-req-chart-failure.flow/sheet.png",
+        "qa/05-req-chart-failure.flow/sim/steps.ndjson",
+        "qa/05-req-chart-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 4 `wait` failed: Batch failed at step 8 (wait): wait timed out for selector: id=\"detail.chart.error\". Current surface: Watchlist, Bitcoin, Bitcoin, $64,000.12, +2.50%, Ethereum.",
+      "ms" : 37601,
+      "requirement" : "req-chart-failure",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T094133Z-a656b868",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/spec-watchlist",
+        "task" : "spec-watchlist",
+        "tip" : "f14b83438704c8609584145854bd9113b7c1ea16"
+      }
+    ],
+    "base" : "5e61a9a398feca6c404f22183d13e9a2bfeff22e",
+    "branch" : "spec/spec-detail",
+    "conflicts" : [
+
+    ],
+    "tip" : "a02965ae33ff0bc21f0c3fee63418ede93731588"
+  },
+  "verdict" : "RED"
+}

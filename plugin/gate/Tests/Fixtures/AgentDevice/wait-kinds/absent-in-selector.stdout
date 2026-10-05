@@ -1,0 +1,115 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 3 (wait): wait timed out for selector: id=\"probe.loading\"",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muv39sz9-a3c106a3",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/requests/1e1b7680583e5164.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-wait-kinds",
+      "requestId": "1e1b7680583e5164"
+    },
+    "details": {
+      "reason": "wait_deadline_exceeded",
+      "captureTruncated": true,
+      "timeoutMs": 3000,
+      "readableCaptures": 4,
+      "captures": 5,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 404,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 706,
+          "durationMs": 412,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1421,
+          "durationMs": 416,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2140,
+          "durationMs": 445,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2887,
+          "durationMs": 117,
+          "outcome": "deadline"
+        }
+      ],
+      "waitedMs": 3004,
+      "step": 3,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.loading\"",
+        "3000"
+      ],
+      "executed": 2,
+      "total": 3,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-wait-kinds",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/requests/1e1b7680583e5164.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.WaitProbe",
+            "appBundleId": "com.example.WaitProbe",
+            "startup": {
+              "durationMs": 1040,
+              "measuredAt": "2026-10-05T10:10:23.205Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.WaitProbe",
+              "appBundleId": "com.example.WaitProbe"
+            },
+            "timing": {
+              "runnerDemand": "none",
+              "openDispatchDurationMs": 332,
+              "launchUrlDurationMs": 0,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 695,
+              "totalDurationMs": 1040
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-77443",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.WaitProbe"
+          },
+          "durationMs": 1378
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 4750,
+            "selector": "id=\"probe.done\""
+          },
+          "durationMs": 4750
+        }
+      ]
+    }
+  }
+}

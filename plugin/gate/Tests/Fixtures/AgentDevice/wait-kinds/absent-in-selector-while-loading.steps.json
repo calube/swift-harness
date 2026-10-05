@@ -1,0 +1,5 @@
+[
+  {"command": "open", "input": {"app": "com.example.WaitProbe", "relaunch": true}},
+  {"command": "wait", "input": {"kind": "absent", "selector": "id=\"probe.loading\"", "timeoutMs": 15000}},
+  {"command": "is", "input": {"predicate": "absent", "selector": "id=\"probe.loading\""}}
+]
