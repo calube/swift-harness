@@ -49,8 +49,7 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
 - `SpanToolAttribution.attribute(windows:spans:)` gives each window to the innermost span of its agent's task
   open at the window's start.
 - `RunViewGuard.rejection(of:) -> Rejection?` runs `EventPayloadGuard` over every string and names the field.
-- `RunViewSnapshot.cursor`, `RunViewChanges.between(_:_:)` and `RunViewCursorBook.answer(after:snapshot:build:)`
-  (holds 8 answered views; an unknown cursor gets `.full`).
+- `RunViewSnapshot.cursor`: the run's token, from its files' stamps.
 
 **Adapters** (`A/RunView/`).
 - `RunViewReader(commonDirectory:stateRoot:profile:)`, behind `RunViewReading`: `read(buildRun:)`,
@@ -61,8 +60,10 @@ them. The brownfield side of the seam (the state root, `plan import`, `discover.
   foreign `Host`. `LocalHTTPRequest` and `LocalHTTPResponse` are the handler's types.
 
 **CLI** (`C/Commands/`). `ReportRun.run(buildRun:format:out:root:commonDirectory:pluginRoot:)` and
-`ViewRun.respond(to:)` hold the logic; both commands find `viewer/` through `SWIFTGATE_HARNESS_ROOT`, which
-`plugin/bin/swiftgate` sets.
+`ViewRun.respond(to:)` hold the logic. `ViewRun` serves `/view.json?after=<token>` (204 when the token is
+the run's token now, else the whole view under the new token), `/final` (the done run's report page, 404
+before it exists) and `/server` (the serving pid, for `view --ensure`). Both commands find `viewer/`
+through `SWIFTGATE_HARNESS_ROOT`, which `plugin/bin/swiftgate` sets.
 
 **Page** (`V/`).
 - `window.runViewer = { register(name, {render(view, mount), apply(view)}), addTab(id, spec),

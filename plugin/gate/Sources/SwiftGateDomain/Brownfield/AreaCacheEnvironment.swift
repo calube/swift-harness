@@ -32,7 +32,12 @@ public struct AreaCacheEnvironment: Sendable, Equatable {
       variables[cache.variable] = "\(caches)/\(cache.directory)"
     }
     return AreaCacheEnvironment(
-      variables: variables, derivedDataSeed: "\(caches)/derived-data/\(area.name)")
+      variables: variables, derivedDataSeed: derivedDataSeed(area: area.name, layout: layout))
+  }
+
+  /// `<common>/swift-harness/caches/derived-data/<area>`, absolute.
+  public static func derivedDataSeed(area: String, layout: BrownfieldStateLayout) -> String {
+    "\(cachesDirectory(layout: layout))/derived-data/\(area)"
   }
 
   /// 1 file and key that, when the repository sets it, means the repository chose its own cache.

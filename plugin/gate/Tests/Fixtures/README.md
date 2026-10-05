@@ -161,6 +161,12 @@ machine's device list from the "no destination" error; the rest is verbatim.
 | `record` | `CounterViewSnapshotTests`, `ProbeFailXCTests`, with `RECORD=all` (`TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all`) | exit 65; the snapshot case fails with `Issue recorded: Record mode is on. Automatically recorded snapshot: …` beside a real assertion failure |
 | `missing-bundle` | `xcresulttool` against a path that does not exist | `.stderr` + `.status` per subcommand (exit 64) |
 
+`Xcresult/runner-launch-failed.tests.json` comes from a brownfield trial's `qa run`: an XCUITest acceptance row whose
+`xcodebuild test -only-testing:` exited 65 because the shared simulator refused to launch the test runner ("Busy",
+"Application failed preflight checks"). Xcode 26.2 files that failure as a failed `Test Case` named
+`<target>-Runner encountered an error` under a `System Failures` suite, owned by no test. Captured with
+`xcrun xcresulttool get test-results tests --path <row>.acceptance.xcresult | sed -E 's/"deviceId" : "[0-9A-F-]+"/"deviceId" : "DEVICE-UDID"/'`.
+
 `Xcresult/ui-pass.{tests,build-results}.json` are captured by `gate/Fixtures/xcresult/capture-ui.sh`
 (run from the repository root): a real `swiftgate test --tier t3` of the SampleApp's app scheme
 (its one XCUITest, `CounterFlowUITests`), read back with the same two `xcresulttool` subcommands.
@@ -1725,6 +1731,16 @@ git clone -q --no-checkout <path to the trial's memos clone> "$R"
 git -C "$R" reset -q 0d989707f82c33f74bb852edd8965ec88fcf041b
 ```
 
+`interview-starter` (Swift) came on 2026-10-04 from a brownfield trial's clone of `evals/apps/interview-starter`,
+whose first commit is the starter as committed. Its synchronized `UITests` folder belongs to the scheme's only
+testable, `InterviewStarterUITests`, and its 3 local packages keep their tests under `Tests/`. Capture it with the
+commands above, the commit `533b9165147c54297ab09847d5a2aacc9b04c568` and, in place of the first 2 lines:
+
+```sh
+git clone -q --no-checkout <path to the trial's clone> "$R"
+git -C "$R" reset -q 533b9165147c54297ab09847d5a2aacc9b04c568
+```
+
 The 2 `after-build/` directories are the negative case: build output on disk that git ignores.
 After the capture above, in the same clone and before deleting it, `git -C "$R" checkout -q -f <commit>`, then the repository's own build
 or install, then `git -C "$R" ls-files -z | tr '\0' '\n' > "$O/after-build/ls-files.txt"` and
@@ -3050,6 +3066,28 @@ cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
 nothing.
+
+## Brownfield trial: an iOS area's resolved packages in its DerivedData seed
+
+`BrownfieldTrial/aidoku-workspace-state.json` is `SourcePackages/workspace-state.json` from the
+DerivedData that `xcodebuild build-for-testing`, with the third iOS validation trial's scheme and
+destination, built on a scratch clone of `Aidoku/Aidoku` at
+`3091ef26e593d303e34afed70bc8c5997c105f80` (Xcode 26.2). It names each binary artifact's absolute
+path inside that DerivedData, which becomes `/SEED`. `M` is the scratch directory; from the
+repository root:
+
+```sh
+git clone -q --local <a clone of Aidoku/Aidoku> $M/clone
+git -C $M/clone checkout -q 3091ef26e593d303e34afed70bc8c5997c105f80
+(cd $M/clone && xcodebuild build-for-testing -project Aidoku.xcodeproj -scheme Aidoku \
+  -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation \
+  -skipPackagePluginValidation -derivedDataPath $M/seed)
+sed "s#$M/seed#/SEED#g" $M/seed/SourcePackages/workspace-state.json \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/aidoku-workspace-state.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-workspace-state.json`
+matched nothing.
 
 ## QA: a test runner the busy shared simulator refused to launch
 

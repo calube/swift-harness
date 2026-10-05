@@ -123,7 +123,7 @@ struct DiscoverSwiftXcodeTests {
     let test = try #require(buy.commands[.test])
     #expect(test.value.hasPrefix("xcodebuild test -project Buy.xcodeproj -scheme Buy "))
     #expect(test.confidence == .guessed)
-    #expect(buy.testGlobs == ["**/BuyTests/**/*.swift"])
+    #expect(buy.testGlobs == ["BuyTests/**/*.swift", "Tests/**/*.swift"])
     #expect(buy.commands[.lint]?.value == "swiftlint lint --config .swiftlint.yml {files}")
 
     let alamofire = try #require(
