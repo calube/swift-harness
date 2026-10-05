@@ -12,19 +12,23 @@ public struct BrownfieldWorkerInputs: Sendable, Equatable {
   /// The harness's `docs/standards.md`, whose brownfield profile section holds the rules.
   public let standards: ContextSource
   public let dependencyNotes: [DependencyReturnNotes]
+  /// The review findings other tasks deferred that this task's worker writes the test for.
+  public let deferred: [DeferredFinding]
   /// The clone's state layout, which places each swiftpm area's shared scratch path; `nil` leaves
   /// the pack without a build-only line.
   public let layout: BrownfieldStateLayout?
 
   public init(
     task: LedgerTask, plan: ContextSource, areas: [BrownfieldArea], standards: ContextSource,
-    dependencyNotes: [DependencyReturnNotes], layout: BrownfieldStateLayout? = nil
+    dependencyNotes: [DependencyReturnNotes], deferred: [DeferredFinding] = [],
+    layout: BrownfieldStateLayout? = nil
   ) {
     self.task = task
     self.plan = plan
     self.areas = areas
     self.standards = standards
     self.dependencyNotes = dependencyNotes
+    self.deferred = deferred
     self.layout = layout
   }
 }

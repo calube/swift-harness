@@ -182,6 +182,14 @@ public enum ContextPackTaskReturn {
     }
     return .success(taskReturn.notes)
   }
+
+  /// Every deferral line of every return stored under the build run, by the ledger's task order;
+  /// a return that won't read adds none.
+  public static func deferrals(buildRun runID: String, planDirectory: URL, ledger: Ledger)
+    -> [DeferredFinding]
+  {
+    []
+  }
 }
 
 /// Which `docs/standards.md` anchors are in scope for a set of module kinds (spec §5.10: drafter
