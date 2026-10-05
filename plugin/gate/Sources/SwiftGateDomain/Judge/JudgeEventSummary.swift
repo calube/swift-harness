@@ -43,7 +43,8 @@ public struct JudgeEventFilter: Sendable, Equatable {
       case .hookDecision, .testResult, .cacheLookup, .agentUsage: return false
       case .buildHalt, .buildResume, .buildReturnChecked: return false
       case .discoverRun, .warmupRun: return false
-      case .spanStart, .spanEnd, .proveResult, .agentTools, .qaCheck, .qaFlow, .qaSetup: return false
+      case .spanStart, .spanEnd, .proveResult, .agentTools, .qaCheck, .qaFlow, .qaSetup:
+        return false
       }
     }
     return true
