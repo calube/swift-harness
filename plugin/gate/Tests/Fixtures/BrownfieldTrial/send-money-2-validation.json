@@ -1,0 +1,69 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/search-contacts.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-search",
+      "runsAfter" : [
+        "send-flow",
+        "send-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-success",
+      "runsAfter" : [
+        "account-fake",
+        "amount-entry",
+        "send-flow",
+        "send-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure",
+      "runsAfter" : [
+        "account-fake",
+        "amount-entry",
+        "send-flow",
+        "send-ui"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the InMemoryAccountTests in account-fake check the starting balance, the contacts and a failing send",
+      "requirement" : "req-fake"
+    },
+    {
+      "reason" : "the AppFeatureTests in send-flow check a tap pushes the amount screen; the send flows drive it in the app",
+      "requirement" : "req-pick-contact"
+    },
+    {
+      "reason" : "the AmountInputTests in amount-entry check each keypad rule; the send flows drive the keypad in the app",
+      "requirement" : "req-keypad"
+    },
+    {
+      "reason" : "the AmountInputTests in amount-entry check the formatting",
+      "requirement" : "req-amount-format"
+    },
+    {
+      "reason" : "the AmountInputTests in amount-entry check the bounds",
+      "requirement" : "req-continue"
+    },
+    {
+      "reason" : "the types declare Decimal; the AmountInputTests check exact cent arithmetic",
+      "requirement" : "req-decimal"
+    },
+    {
+      "reason" : "the ConfirmFeatureTests in send-flow check Send calls the client; the send flows pass through the confirmation screen",
+      "requirement" : "req-confirm"
+    }
+  ]
+}

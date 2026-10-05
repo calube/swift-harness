@@ -685,3 +685,121 @@ private enum Memos5 {
     }
   }
 }
+
+/// `build merge` of a task a validation row runs after, with the trial's red rows as the
+/// `qa run --before-merge` report that row's run left in the main checkout.
+@Suite("build merge: a task's ready validation rows run before it lands")
+struct BuildMergeFlowsTests {
+  /// Writes a table with 1 row that runs after `t1` alone, and a ledger with `t1` in progress.
+  fileprivate static func plan(_ scenario: MergeScenario) throws {
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    let directory = URL(filePath: plan.directory, directoryHint: .isDirectory)
+    try ValidationTableJSON.encode(
+      ValidationTable(rows: [
+        ValidationRow(
+          requirement: "req-search", layer: .flow, check: "qa/search-contacts.flow.json",
+          runsAfter: ["t1"], writer: "validation")
+      ])
+    ).write(to: directory.appending(path: ValidationTable.fileName))
+    try LedgerJSON.encode(
+      Ledger(
+        schemaVersion: 1, resume: "", maxParallel: 2,
+        tasks: [
+          LedgerTask(
+            id: "t1", deps: [], writeSet: [], gate: .push, tests: [], covers: [], estLines: 10,
+            status: .inProgress, worktree: scenario.checkout.path + "-search-t1")
+        ], waves: [["t1"]])
+    ).write(to: directory.appending(path: "ledger.json"))
+  }
+
+  /// Writes a `qa run --before-merge` report of `search/t1` at `tip` on `base` in the main
+  /// checkout's runs, with the trial's first row and that row's captured result, or a pass.
+  fileprivate static func report(
+    _ scenario: MergeScenario, runID: String, tip: String, base: String, red: Bool
+  ) throws {
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-2-qa-after-send-ui.json"))
+    let row = try #require(captured.rows.first)
+    let ran = QARow(
+      row: 1, requirement: row.requirement, layer: row.layer, check: row.check,
+      runsAfter: ["t1"], result: red ? row.result : .pass,
+      message: red ? row.message : "batch passed", evidence: row.evidence)
+    let report = QAReport(
+      runID: runID, plan: MergeScenario.plan, after: "t1", atBase: false, commit: nil,
+      rows: [ran],
+      trialMerge: QATrialMerge(branch: "\(MergeScenario.plan)/t1", tip: tip, base: base))
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
+  }
+
+  @Test(
+    "a task whose row is ready, merged with no qa run --before-merge of its tip, is refused flows-unchecked with main unchanged — catches a screen task landing with its flows unrun"
+  )
+  func unrunRowsRefuse() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.plan(scenario)
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+
+    let report = await scenario.merge("t1")
+
+    #expect(report.status == .refused, "\(report.message)")
+    #expect(report.reason == .flowsUnchecked)
+    #expect(report.message.contains("--before-merge"), "\(report.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+    #expect(report.fixWorktree == nil)
+  }
+
+  @Test(
+    "a RED qa run --before-merge of the tip on main's commit is refused flows-red, main unchanged, with the fix worktree cut holding the task's merge — catches the red flows found only after main moved"
+  )
+  func redRunCutsTheFixWorktree() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.plan(scenario)
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    try Self.report(scenario, runID: "20261005T031853Z-43708cc1", tip: tip, base: pre, red: true)
+
+    let report = await scenario.merge("t1")
+
+    #expect(report.status == .refused, "\(report.message)")
+    #expect(report.reason == .flowsRed)
+    #expect(report.message.contains("20261005T031853Z-43708cc1"), "\(report.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+    let fix = scenario.fixPath("t1")
+    #expect(report.fixWorktree == fix)
+    #expect(report.fixBranch == "search/fix-t1")
+    #expect(FileManager.default.fileExists(atPath: fix + "/B.swift"))
+  }
+
+  @Test(
+    "a GREEN qa run --before-merge of the tip on main's commit merges, while one of an older tip is refused — catches a stale run vouching for new commits"
+  )
+  func greenRunAtTheTipMerges() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.plan(scenario)
+    let old = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    try Self.report(scenario, runID: "20261005T031853Z-00000001", tip: old, base: pre, red: false)
+    try await scenario.repo.git("switch", "-q", "search/t1")
+    try scenario.repo.write("C.swift", "c\n")
+    let tip = try await scenario.repo.commitAll("feat: t1 more work")
+    try await scenario.repo.git("switch", "-q", "main")
+
+    let stale = await scenario.merge("t1")
+    try Self.report(scenario, runID: "20261005T031853Z-00000002", tip: tip, base: pre, red: false)
+    let merged = await scenario.merge("t1")
+
+    #expect(stale.reason == .flowsUnchecked, "\(stale.message)")
+    #expect(merged.status == .merged, "\(merged.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
+  }
+}
