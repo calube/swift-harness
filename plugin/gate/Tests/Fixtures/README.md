@@ -4295,3 +4295,48 @@ for f in "$P"/906f7d75-4c8b-4434-bedd-0e8173d509ba/workflows/wf_*.json; do
 ```
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` matched nothing in either folder.
+
+## Brownfield trial: price-tracker-5's refresh marker, user-checkout writes and halts
+
+The fifth price-tracker trial (2026-10-05) declared its refresh drag's bottom marker in the
+contract without placing it; the watchlist worker added it as the last `List` row, and the fixer
+moved it into `.safeAreaInset(edge: .bottom)`. `BrownfieldTrial/price-tracker-5-PLAN.md` is the
+run's `PLAN.md`, and `BrownfieldTrial/price-tracker-5-watchlist/{contract,worker,fixer}/` holds
+`WatchlistView.swift` at the contract commit, the worker's commit and the fixer's commit.
+`RunView/price-tracker-5/` holds the run's `build`, `gate`, `span` and `qa` event streams, the
+`qa/report.json` of the combined `qa run --before-merge` and of the fixer's `qa run --fix`, and the
+plan's `validation.json`. `Hooks/price-tracker-5-user-checkout-bash.json` is the orchestrator's Bash
+call that moved a return it had written into the user's checkout over to the plan checkout, with
+the session's `cwd`, the clone replaced with `/CLONE` and the harness checkout with `/HARNESS`.
+With `T` the trial folder, `S=$T/state` and `R` the trial's repository:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial; V=Packages/AppFeature/Sources/AppUI/WatchlistView.swift
+cp $T/PLAN.md $F/price-tracker-5-PLAN.md
+for pair in contract:c414b67 worker:f14b834 fixer:e500035; do d=${pair%%:*}; c=${pair##*:}
+  mkdir -p $F/price-tracker-5-watchlist/$d/$(dirname $V)
+  git -C $R show $c:$V > $F/price-tracker-5-watchlist/$d/$V; done
+G=plugin/gate/Tests/Fixtures/RunView/price-tracker-5; mkdir -p $G/events
+for e in build gate span qa; do cp $S/events/$e.jsonl $G/events/$e.jsonl; done
+for r in 20261005T094133Z-a656b868 20261005T094737Z-871120b2; do
+  mkdir -p $G/runs/$r/qa; cp $S/runs/$r/qa/report.json $G/runs/$r/qa/report.json; done
+cp $S/plans/spec/validation.json $G/validation.json
+python3 - $T/transcripts/8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9.jsonl \
+  > plugin/gate/Tests/Fixtures/Hooks/price-tracker-5-user-checkout-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/price-tracker-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-price-tracker-5','/HARNESS',c)
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    c=d.get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')!='tool_use': continue
+        cmd=b.get('input',{}).get('command','')
+        if 'rm -rf ../repo/.harness/build' in cmd:
+            json.dump({"cwd":scrub(d.get('cwd','')),"command":scrub(cmd)},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
