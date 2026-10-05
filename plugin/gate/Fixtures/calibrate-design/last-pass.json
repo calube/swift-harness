@@ -6,9 +6,12 @@
         {
           "answered" : "its APIs passed their probes, or no finding says",
           "expected" : "its APIs passed their probes, or no finding says",
-          "probability" : 0.98,
+          "probability" : 0.97,
           "question" : "gating-finding-on-failed-probe"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "option-on-probe-passed-api",
       "model" : "opus",
@@ -28,9 +31,12 @@
         {
           "answered" : "an API it calls failed its probe or doesn't exist",
           "expected" : "an API it calls failed its probe or doesn't exist",
-          "probability" : 0.97,
+          "probability" : 0.98,
           "question" : "gating-finding-on-failed-probe"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "option-on-probe-refuted-api",
       "model" : "opus",
@@ -48,6 +54,9 @@
           "question" : "verdict"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "genuine-quote",
       "model" : "opus",
       "servedModels" : [
@@ -63,6 +72,9 @@
           "probability" : 1,
           "question" : "verdict"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "overstated-claim",
       "model" : "opus",
@@ -80,6 +92,9 @@
           "question" : "gate"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "flow-test-needs-ready-gate",
       "model" : "opus",
       "servedModels" : [
@@ -95,6 +110,9 @@
           "probability" : 1,
           "question" : "gate"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "host-test-needs-fast-gate",
       "model" : "opus",
@@ -112,6 +130,9 @@
           "question" : "interval-tag"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "point-with-supported-claim",
       "model" : "opus",
       "servedModels" : [
@@ -124,7 +145,7 @@
         {
           "answered" : "the UNVERIFIED tag",
           "expected" : "the UNVERIFIED tag",
-          "probability" : 0.96,
+          "probability" : 0.98,
           "question" : "interval-tag"
         },
         {
@@ -133,6 +154,9 @@
           "probability" : 0.97,
           "question" : "interval-repeated"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "point-without-supported-claim",
       "model" : "opus",
@@ -150,6 +174,9 @@
           "question" : "blocker-at-decision"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "decision-contradicts-evidence",
       "model" : "opus",
       "servedModels" : [
@@ -165,6 +192,9 @@
           "probability" : 1,
           "question" : "gating-finding-at-decision"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "decision-follows-evidence",
       "model" : "opus",
@@ -182,6 +212,9 @@
           "question" : "blocker-at-decision"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "option-on-probe-refuted-api",
       "model" : "opus",
       "servedModels" : [
@@ -197,6 +230,9 @@
           "probability" : 1,
           "question" : "snapshot-claim"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "semantics-from-snapshot",
       "model" : "sonnet",
@@ -220,6 +256,9 @@
           "question" : "probe-snippet"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "signature-needs-probe",
       "model" : "sonnet",
       "servedModels" : [
@@ -235,6 +274,9 @@
           "probability" : 1,
           "question" : "file-claim"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "code-fact-question",
       "model" : "sonnet",
@@ -252,6 +294,9 @@
           "question" : "asks-the-user"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "product-intent-question",
       "model" : "sonnet",
       "servedModels" : [
@@ -267,6 +312,9 @@
           "probability" : 1,
           "question" : "checkout-claim"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "pinned-package-checked-out",
       "model" : "sonnet",
@@ -290,6 +338,9 @@
           "question" : "claim-on-missing-checkout"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "pinned-package-not-checked-out",
       "model" : "sonnet",
       "servedModels" : [
@@ -312,6 +363,9 @@
           "question" : "warning-cites-earlier-design"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "refuted-prior-claim",
       "model" : "sonnet",
       "servedModels" : [
@@ -328,6 +382,9 @@
           "question" : "carried-status"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "supported-prior-file-claim",
       "model" : "sonnet",
       "servedModels" : [
@@ -343,6 +400,9 @@
           "probability" : 0.98,
           "question" : "download-concurrency"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "bounded-prefetch",
       "model" : "opus",
@@ -366,6 +426,9 @@
           "question" : "download-concurrency"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "unbounded-prefetch",
       "model" : "opus",
       "servedModels" : [
@@ -381,6 +444,9 @@
           "probability" : 1,
           "question" : "a2-finding"
         }
+      ],
+      "attempts" : [
+        "pass"
       ],
       "case" : "uikit-in-core-module",
       "model" : "opus",
@@ -398,6 +464,9 @@
           "question" : "a2-finding"
         }
       ],
+      "attempts" : [
+        "pass"
+      ],
       "case" : "uikit-in-live-module-only",
       "model" : "opus",
       "servedModels" : [
@@ -405,7 +474,7 @@
       ]
     }
   ],
-  "contentHash" : "d34bd0e1fed1143a2412a269f600012d46891cc1eebc3b2b2dac11fdabfa914b",
+  "contentHash" : "07f8d927b128a0dbd5ee4a10a4e2a39e557a2a8fc9b80491cc7ee49cd2cf5817",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -428,6 +497,6 @@
       "claude-sonnet-5-5"
     ]
   },
-  "passedAt" : "2026-09-30T16:56:20Z",
-  "schemaVersion" : 3
+  "passedAt" : "2026-10-05T00:29:08Z",
+  "schemaVersion" : 4
 }
