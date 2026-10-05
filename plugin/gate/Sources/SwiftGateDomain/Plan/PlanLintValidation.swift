@@ -35,7 +35,7 @@ public enum PlanLintValidation {
   }
 
   /// Every finding, each `major`: uncovered requirements in plan order, then each row's findings
-  /// in table order.
+  /// in table order, then the screen requirements with no flow row in plan order.
   ///
   /// - Parameters:
   ///   - requirements: the plan's requirement ids, in plan order.

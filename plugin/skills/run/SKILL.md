@@ -171,7 +171,8 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
 - A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
-  when an acceptance UI test also checks it, so its journey is recorded and proved red first. A
+  when an acceptance UI test also checks it, so `qa run` records its journey and proves it red
+  first. A
   task writes a screen when a `Writes` path inside the area's root has a folder or file named
   `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
   `.storyboard` or `.xib`. A requirement no flow can check gives the reason in its row's `Reason`.
