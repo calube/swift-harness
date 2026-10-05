@@ -4204,3 +4204,29 @@ cp $S/runs/20261005T081116Z-e407d716/qa/report.json $F/price-tracker-4-qa-before
 `fix-send-flow-orchestrator.json` is the return the orchestrator rewrote by hand from the fixer's
 before its `check-return --fix`. The cutoff tests read `BuildCutoff/price-tracker-4/cutoff.json`. The gate runs give each worker's GREEN slice at the tip its return check named.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+`Hooks/send-money-5-qa-run-output-bash.json` holds 2 Bash calls of that trial: the fixer's `qa run`
+piped through `tail -60`, which cut its search row and `summary`, then the orchestrator's `qa run`
+sent to its out folder. A python script over the fixer's and the orchestrator's transcripts took
+each call's `tool_use` input and replaced the clone with `/CLONE` and the harness checkout with
+`/HARNESS`:
+
+```sh
+python3 - $T/transcripts/<session>/subagents/agent-a780f362b4a9c997c.jsonl $T/transcripts/<session>.jsonl \
+  > Hooks/send-money-5-qa-run-output-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/send-money-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-send-money-5','/HARNESS',c)
+def commands(path, want):
+    for l in open(path):
+        c=json.loads(l).get('message',{}).get('content')
+        if not isinstance(c,list): continue
+        for b in c:
+            cmd=b.get('input',{}).get('command','') if b.get('type')=='tool_use' else ''
+            if want(cmd): yield cmd
+fixer=list(commands(sys.argv[1], lambda c: 'qa run' in c and '| tail' in c))
+orch=list(commands(sys.argv[2], lambda c: 'qa run --plan spec --after send-flow --before-merge --json >' in c))
+json.dump([{"command":scrub(fixer[0])},{"command":scrub(orch[0])}],sys.stdout,indent=2); print()
+PY
+```
