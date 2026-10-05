@@ -25,6 +25,7 @@ look for what a tool can't see.
 | A T2/T3 test that could be a T1 test on Core logic, or a T1 test that is secretly integration-heavy | tiers § 1 | `wrong-tier` |
 | Non-exhaustive `TestStore` without a real reason; `TestClock` tests outside a `.serialized` suite or `withMainSerialExecutor` | P5, P6 | `store-exhaustivity`, `clock-isolation` |
 | Changed behavior with no test for its edge: empty input, duplicate calls, failure and cancellation paths, time boundaries | P9 | `missing-edge-case` |
+| A wait that can spin forever: a loop polling a flag (`while !x { await Task.yield() }`) or an `await` on an effect with no deadline, attempt cap or exit, which hangs the gate when the code under test is reverted | P12 | `unbounded-wait` |
 | Snapshot tests that can record, or references changed with no reviewed reason | P4 | `snapshot-record` |
 
 For `would-not-fail`, the failure scenario is the mutation that survives: "change `>` to `>=` at

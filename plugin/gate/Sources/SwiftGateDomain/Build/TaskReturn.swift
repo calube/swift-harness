@@ -289,7 +289,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     }
   }
 
-  /// 1 test file the return's `testsAdded` names, in the brownfield area that owns it.
+  /// 1 test file the task branch adds or changes, in the brownfield area that owns it.
   public struct AddedTest: Sendable, Equatable {
     public let path: String
     public let area: String
@@ -334,8 +334,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   /// The task branch's new and changed host tests, built at the plan's proof bases. `nil` when
   /// the plan has no surface commit or the branch changes no host test.
   public let testBuild: ProofBaseTestBuild?
-  /// The return's added tests in brownfield areas whose `slice` runs changed tests alone, so a
-  /// green task gate must have run them. Empty outside the brownfield profile.
+  /// The test files the task branch adds or changes in brownfield areas whose `slice` runs changed
+  /// tests alone, so a green task gate must have run them. Empty outside the brownfield profile.
   public let addedTests: [AddedTest]
 
   public init(
@@ -682,6 +682,7 @@ public enum TaskReturnCheck {
         }
       }
       findings += staleGateFindings(gate, run, evidence)
+      findings += testsNotRunFindings(gate, run, evidence)
       if !(run.tier.map { covers($0, evidence.taskGate) } ?? false) {
         findings.append(
           .init(
@@ -734,6 +735,31 @@ public enum TaskReturnCheck {
             + "the task gate again with this swiftgate and cite that run"))
     }
     return findings
+  }
+
+  /// A test the task adds or changes in an area whose `slice` runs changed tests alone must have
+  /// run in the gate the return cites, or it first runs at the merge gate, after review. 1
+  /// finding per area.
+  private static func testsNotRunFindings(
+    _ gate: TaskReturn.Gate, _ run: TaskReturnEvidence.GateRun, _ evidence: TaskReturnEvidence
+  ) -> [TaskReturnFinding] {
+    let byArea = Dictionary(grouping: evidence.addedTests, by: \.area)
+    return byArea.keys.sorted().compactMap { area in
+      guard run.testedAreas?.contains(area) != true else { return nil }
+      let files = (byArea[area] ?? []).map(\.path).joined(separator: ", ")
+      let why =
+        run.testedAreas == nil
+        ? "gate run \(gate.runID)'s history line doesn't record which areas' tests it ran, so "
+          + "nothing shows that the task's tests in \(area) (\(files)) ran"
+        : "gate run \(gate.runID) ran no test of area \(area), so the task's tests there "
+          + "(\(files)) have never run"
+      return TaskReturnFinding(
+        rule: .testsNotRun,
+        message:
+          why + ". The slice tier runs an area's changed tests through its test_files even when "
+          + "its whole suite is over the budget; run the task gate again with this swiftgate and "
+          + "cite that run")
+    }
   }
 
   private static func reviewFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)

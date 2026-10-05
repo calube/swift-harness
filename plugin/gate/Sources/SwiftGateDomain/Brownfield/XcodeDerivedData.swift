@@ -65,7 +65,19 @@ public enum XcodeDerivedData {
   public static func buildDirectories(
     _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout
   ) -> [String] {
-    []
+    switch kind {
+    case .xcode:
+      let given = [
+        path(area: request.area, layout: layout), provePath(area: request.area, layout: layout),
+      ].first { request.command.contains(" \(option) \(AreaCommandExpansion.shellQuoted($0))") }
+      return given.map { ["\($0)/Build"] } ?? []
+    case .swiftpm:
+      var directory = request.workingDirectory
+      while directory.count > 1, directory.hasSuffix("/") { directory.removeLast() }
+      return ["\(directory)/.build"]
+    default:
+      return []
+    }
   }
 
   /// `request` as `prove` runs it in a scratch tree: an `xcodebuild` builds in the worktree's own
@@ -74,6 +86,24 @@ public enum XcodeDerivedData {
   public static func proveRequest(_ request: AreaCommandRequest, layout: BrownfieldStateLayout)
     -> AreaCommandRequest
   {
-    request
+    let path = provePath(area: request.area, layout: layout)
+    let command = command(request.command, derivedDataPath: path)
+    guard command != request.command else { return request }
+    return AreaCommandRequest(
+      area: request.area, step: request.step, command: command,
+      workingDirectory: request.workingDirectory, deadline: request.deadline,
+      environment: request.environment, junitPath: request.junitPath,
+      resultBundlePath: request.resultBundlePath,
+      derivedDataSeed: DerivedDataSeedCopy(
+        seed: AreaCacheEnvironment.derivedDataSeed(area: request.area, layout: layout),
+        destination: path))
+  }
+
+  /// `<git-dir>/swift-harness/derived-data/prove/<area>`: 1 per worktree and area, since a
+  /// worktree runs 1 gate at a time. Absolute.
+  public static func provePath(area: String, layout: BrownfieldStateLayout) -> String {
+    layout.worktreeRoot.appending(
+      path: "derived-data/prove/\(area)", directoryHint: .notDirectory
+    ).path(percentEncoded: false)
   }
 }

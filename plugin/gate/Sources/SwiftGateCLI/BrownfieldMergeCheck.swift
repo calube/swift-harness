@@ -16,7 +16,7 @@ enum BrownfieldMergeCheck {
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline file's name.
     let tree: @Sendable (_ commit: String) async throws -> String
-    /// Whether `slice` only builds the area, so its changed tests and their prove run here.
+    /// Whether `slice` may have left the area's changed tests unproved, so their prove runs here.
     let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
     /// Per command run.
     let deadline: Duration
@@ -25,12 +25,10 @@ enum BrownfieldMergeCheck {
     static let liveDeadline: Duration = .seconds(3600)
 
     /// The clone's config and state, live git, scratch trees under the worktree's git dir and
-    /// `/bin/sh` commands. `slice` builds only the areas whose warm test time, as the warm-up
-    /// measured it at the merge base with `base`, doesn't fit the slice budget; with no `base`,
-    /// every area.
-    static func live(root: URL, base: String? = nil) async throws(BrownfieldCheckSetupError)
-      -> Dependencies
-    {
+    /// `/bin/sh` commands. `slice` runs and proves the changed tests of every area whose
+    /// `test_files` narrows a run to them, whatever its warm test time; any other area's it may
+    /// leave to this tier, which proves them again.
+    static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
       let process = LiveProcessRunner()
       let tracked = GitTrackedTree(runner: process, directory: root)
       let layout: BrownfieldStateLayout
@@ -74,20 +72,11 @@ enum BrownfieldMergeCheck {
         }
         return tree
       }
-      // With no merge base or no warm-up there, no area is known to have run its changed tests
-      // at `slice`, so every touched area proves again here.
-      var times = WarmupTimesFile(tree: "")
-      if let base, let mergeBase = try? await prove.git.mergeBase("HEAD", base),
-        let baseTree = try? await tree(mergeBase)
-      {
-        times = WarmupTimesStore(layout: layout).load(tree: baseTree).file
-      }
-      let budget = config.brownfield.sliceBudgetSeconds
       return Dependencies(
         config: config, layout: layout, git: prove.git, runner: runner,
         baseline: BaselineStore(layout: layout, runner: runner, scratch: prove.scratch),
         prove: prove, trackedTree: snapshot, tree: tree,
-        sliceBuildsOnly: { [times] area in times.buildsOnly(area.name, budgetSeconds: budget) },
+        sliceBuildsOnly: { !$0.selectsChangedTests },
         deadline: liveDeadline)
     }
   }
@@ -97,7 +86,7 @@ enum BrownfieldMergeCheck {
   {
     let dependencies: Dependencies
     do {
-      dependencies = try await .live(root: root, base: base)
+      dependencies = try await .live(root: root)
     } catch {
       return try BrownfieldCheck.notRun(tier, because: error.reason)
     }
@@ -250,6 +239,7 @@ enum BrownfieldMergeCheck {
         brownfield: dependencies.config.brownfield, areas: proved,
         allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
         judge: dependencies.config.judge)
+      let derivedData = BrownfieldProve.derivedData(proved, layout: dependencies.layout)
       let (judgement, milliseconds) = await GateRun.timed {
         await BrownfieldProve.run(
           root: root, base: proofBase, config: config,
@@ -258,7 +248,8 @@ enum BrownfieldMergeCheck {
           proofs: context.proofs, dependencies: dependencies.prove)
       }
       context.steps.record(
-        .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict)
+        .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict,
+        derivedData: derivedData)
       outcome.findings += judgement.findings
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
@@ -304,10 +295,12 @@ enum BrownfieldMergeCheck {
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
           dependencies: dependencies)
       else { continue }
-      let (outcome, milliseconds) = await GateRun.timed {
-        await dependencies.runner.run(
-          XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
-      }
+      let request = XcodeDerivedData.request(prepared.request, layout: dependencies.layout)
+      let derivedData = GateStepCollector.derivedData(
+        buildDirectories: XcodeDerivedData.buildDirectories(
+          request, kind: area.kind, layout: dependencies.layout
+        ).map { URL(filePath: $0, directoryHint: .isDirectory) })
+      let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(request) }
       var lintFindings: [Finding] = []
       var lintUnread = false
       if step == .lint, case .failed(let exit, let tail, _) = outcome {
@@ -321,7 +314,8 @@ enum BrownfieldMergeCheck {
       }
       context.steps.record(
         gateStep(step), tier: nil, milliseconds: milliseconds,
-        verdict: outcome == .passed ? .green : .red, area: area.name)
+        verdict: outcome == .passed ? .green : .red,
+        derivedData: step == .lint ? .none : derivedData, area: area.name)
       runs.append(
         StepRun(
           area: area, step: step, template: template, selection: selection,

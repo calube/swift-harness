@@ -108,7 +108,7 @@ public struct RunStore: Sendable {
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,
           proofBases: proofBases, headCommit: headCommit, base: base, dirty: dirty,
-          reuseKey: reuseKey))
+          reuseKey: reuseKey, testedAreas: GateStepTiming.testedAreas(in: gateSteps)))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }

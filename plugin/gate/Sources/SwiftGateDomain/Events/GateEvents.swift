@@ -78,7 +78,8 @@ extension GateStepTiming {
   /// The areas an `area-test` step ran for, sorted; `nil` when no step ran for an area, so the
   /// run wasn't a brownfield tier's.
   public static func testedAreas(in steps: [GateStepTiming]) -> [String]? {
-    nil
+    guard steps.contains(where: { $0.area != nil }) else { return nil }
+    return Set(steps.filter { $0.step == .areaTest }.compactMap(\.area)).sorted()
   }
 }
 

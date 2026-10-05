@@ -47,6 +47,19 @@ enum BrownfieldProve {
     }
   }
 
+  /// Whether the prove DerivedData of each `xcode` area in `areas` already holds a build; `none`
+  /// when none is an `xcode` area, since a scratch tree's other builds start in a fresh folder.
+  static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
+    -> GateDerivedData
+  {
+    GateStepCollector.derivedData(
+      buildDirectories: areas.filter { $0.kind == .xcode }.map {
+        URL(
+          filePath: XcodeDerivedData.provePath(area: $0.name, layout: layout) + "/Build",
+          directoryHint: .isDirectory)
+      })
+  }
+
   /// - Parameters:
   ///   - root: the worktree's toplevel.
   ///   - junitDirectory: where `{junit}` paths point.

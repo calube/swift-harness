@@ -115,8 +115,13 @@ public struct BrownfieldArea: Sendable, Equatable {
 extension BrownfieldArea {
   /// Whether `test_files` narrows a run to the changed tests (`{tests}` or `{files}`), so `slice`
   /// can run and prove them even when the whole suite is over its budget.
+  /// A `{tests}` command selects only in a kind whose test ids `prove` reads.
   public var selectsChangedTests: Bool {
-    false
+    guard let template = testFiles else { return false }
+    if template.contains(AreaCommandExpansion.testsPlaceholder) {
+      return kind != .xcode && kind != .command
+    }
+    return template.contains(AreaCommandExpansion.filesPlaceholder)
   }
 }
 
