@@ -32,6 +32,17 @@ struct BrownfieldMergeCheckTests {
     }
   }
 
+  /// A wait that ends only when its task is cancelled: a bound that never runs out first.
+  private static func untilCancelled() async throws {
+    let (stream, continuation) = AsyncStream<Void>.makeStream()
+    await withTaskCancellationHandler {
+      for await _ in stream {}
+    } onCancel: {
+      continuation.finish()
+    }
+    throw CancellationError()
+  }
+
   private static func area(
     _ name: String, test: String? = "test-all", testFiles: String? = "check {files}",
     lint: String? = "lint {files}", build: String? = "build", e2e: String? = nil
@@ -417,6 +428,9 @@ struct BrownfieldMergeCheckTests {
           .map { String($0.dropFirst(key.count + 4).dropLast()) })
     }
     let leases = FakeTestDeviceLeases()
+    // A wall clock would let a loaded machine run out the step's 5 s device wait, turning the
+    // test step red and sending it to a merge-base rerun that leases a clone of its own.
+    let still = SimHoldClock(now: { .zero }, sleep: { _ in try await Self.untilCancelled() })
     let askedAtBuild = Mutex<[Int]>([])
     let base = FakeAreaCommandRunner { request in
       if request.step == .build { askedAtBuild.withLock { $0.append(leases.destinations.count) } }
@@ -427,10 +441,11 @@ struct BrownfieldMergeCheckTests {
 
     _ = try await Self.run(
       clone, tier: .merge, areas: [area], changed: ["app/Sources/View.swift"], runner: base,
-      areaRunner: LeasedDeviceAreaRunner(base: base, leases: leases))
+      areaRunner: LeasedDeviceAreaRunner(base: base, leases: leases, clock: still))
 
     #expect(askedAtBuild.withLock { $0 } == [1])
     let test = try #require(base.requests.first { $0.step == .test })
+    #expect(!clone.inScratch(test), "\(test.workingDirectory)")
     #expect(
       test.command.contains("-destination 'id=\(FakeDevices.device.udid)'"), "\(test.command)")
     #expect((leases.entered, leases.left) == (1, 1))
