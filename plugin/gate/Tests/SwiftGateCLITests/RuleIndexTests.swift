@@ -94,7 +94,7 @@ struct RuleIndexTests {
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
       BashGuard.validationFlowByHandRuleID, BashGuard.bareStdinReaderRuleID,
       BashGuard.processMatchWaitRuleID, BashGuard.qaRunTruncatedRuleID,
-      BashGuard.qaRunTimeoutRuleID,
+      BashGuard.qaRunTimeoutRuleID, BrownfieldBuildGuard.rawSwiftBuildRuleID,
       FixerGateCapGuard.ruleID,
       BuildAgentLaunchGuard.ruleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
