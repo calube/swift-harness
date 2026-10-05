@@ -6,12 +6,17 @@ import SwiftGateTestSupport
 import Synchronization
 import Testing
 
-@Suite("LiveAreaCommandRunner")
+@Suite("LiveAreaCommandRunner", .timeLimit(.minutes(5)))
 struct LiveAreaCommandRunnerTests {
+  /// Long enough that no command a test expects to finish runs out of it on a loaded machine; a
+  /// command that hangs is ended by the suite's time limit instead.
+  static let ample = Duration.seconds(3600)
+
+  // A drain limit a busy machine's scheduling could outlast would cut a finished command's tail.
   let runner = LiveAreaCommandRunner(
     processRunner: LiveProcessRunner(
       baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .milliseconds(200),
-      postExitDrainLimit: .milliseconds(200)))
+      postExitDrainLimit: .seconds(60)))
 
   private func temporaryDirectory() throws -> URL {
     let url = TestTemporaryDirectory.root
@@ -24,7 +29,7 @@ struct LiveAreaCommandRunnerTests {
   }
 
   private func request(
-    _ command: String, in directory: URL, deadline: Duration = .seconds(20),
+    _ command: String, in directory: URL, deadline: Duration = Self.ample,
     environment: [String: String] = [:], junitPath: String? = nil
   ) -> AreaCommandRequest {
     AreaCommandRequest(
@@ -39,10 +44,25 @@ struct LiveAreaCommandRunnerTests {
     let directory = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
     let pidFile = directory.appending(path: "pid")
-    let outcome = await runner.run(
+    let ready = try HeldPipe()
+    defer { ready.remove() }
+    var lines = ready.lines().makeAsyncIterator()
+    let clock = ShiftableClock()
+    let runner = LiveAreaCommandRunner(
+      processRunner: LiveProcessRunner(
+        baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .milliseconds(200),
+        postExitDrainLimit: .seconds(60), now: clock.now))
+    async let run = runner.run(
       request(
-        "echo started; sleep 60 & echo $! > '\(pidFile.path)'; wait", in: directory,
-        deadline: .seconds(2)))
+        "echo started; sleep 60 & echo $! > '\(pidFile.path)'; echo ready > '\(ready.path)'; wait",
+        in: directory))
+
+    // The deadline passes only once the command has printed and recorded its child, so a slow
+    // start can't time it out before there is a group to kill.
+    #expect(await lines.next() == "ready")
+    clock.advance(by: Self.ample)
+    let outcome = await run
+
     #expect(outcome == .timedOut(tail: "started"))
     let pid = try #require(
       pid_t(
@@ -171,43 +191,54 @@ struct LiveAreaCommandRunnerTests {
   }
 
   @Test(
-    "2 builds into 1 worktree's DerivedData run 1 at a time, and builds into 2 DerivedData run together — catches a gate's xcodebuild starting in a slot while the warm-up still builds there, which xcodebuild fails on its locked build database"
+    "a build into a worktree's DerivedData can't start while another builds there, and builds into 2 DerivedData run together — catches a gate's xcodebuild starting in a slot while the warm-up still builds there, which xcodebuild fails on its locked build database"
   )
   func oneBuildPerDerivedData() async throws {
     let directory = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
-    let active = Mutex((now: 0, most: 0))
-    // Each command waits, yielding, for a second one to arrive, so 2 that may overlap do.
-    let processes = FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
-      active.withLock {
-        $0.now += 1
-        $0.most = max($0.most, $0.now)
-      }
-      let deadline = ContinuousClock.now + .seconds(1)
-      while active.withLock({ $0.now }) < 2, ContinuousClock.now < deadline { await Task.yield() }
-      active.withLock { $0.now -= 1 }
-      return ProcessOutput(status: .exited(0), stdout: "", stderr: "")
-    }
-    let runner = LiveAreaCommandRunner(processRunner: processes)
-    func build(into derivedData: String) -> AreaCommandRequest {
+    func build(into derivedData: String, deadline: Duration = Self.ample) -> AreaCommandRequest {
       AreaCommandRequest(
         area: "app", step: .build, command: "xcodebuild build", workingDirectory: directory.path,
-        deadline: .seconds(20), environment: [:], junitPath: nil,
+        deadline: deadline, environment: [:], junitPath: nil,
         derivedDataSeed: DerivedDataSeedCopy(
           seed: directory.appending(path: "seed").path,
           destination: directory.appending(path: derivedData).path))
     }
+    let passed = ProcessOutput(status: .exited(0), stdout: "", stderr: "")
 
-    async let first = runner.run(build(into: "slot/areas/app"))
-    async let second = runner.run(build(into: "slot/areas/app"))
-    #expect(await [first, second] == [.passed, .passed])
-    #expect(active.withLock { $0.most } == 1)
+    // While the first build runs, a second into the same DerivedData asks with next to no time to
+    // wait: the first holds the lock until it answers, so it times out; a runner that let it in
+    // would run it.
+    let second = LiveAreaCommandRunner(
+      processRunner: FakeProcessRunner { _ async throws(ProcessRunnerError) in passed })
+    let alongside = Mutex<AreaCommandOutcome?>(nil)
+    let unwaited = build(into: "slot/areas/app", deadline: .milliseconds(1))
+    let first = LiveAreaCommandRunner(
+      processRunner: FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
+        let outcome = await second.run(unwaited)
+        alongside.withLock { $0 = outcome }
+        return passed
+      })
+    #expect(await first.run(build(into: "slot/areas/app")) == .passed)
+    let refused = try #require(alongside.withLock { $0 })
+    guard case .timedOut(let tail) = refused else {
+      Issue.record("expected the second build to wait for the first, got \(refused)")
+      return
+    }
+    #expect(tail.contains("for another build in"), "\(tail)")
 
-    active.withLock { $0 = (0, 0) }
-    async let own = runner.run(build(into: "slot/areas/app"))
-    async let other = runner.run(build(into: "other/areas/app"))
+    // Each build waits for the other to start, so 2 that may overlap both finish, and 2 run 1 at
+    // a time never do: the suite's time limit fails them.
+    let started = Arrivals()
+    let together = LiveAreaCommandRunner(
+      processRunner: FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
+        started.arrive()
+        _ = await started.reached(2)
+        return passed
+      })
+    async let own = together.run(build(into: "slot/areas/app"))
+    async let other = together.run(build(into: "other/areas/app"))
     #expect(await [own, other] == [.passed, .passed])
-    #expect(active.withLock { $0.most } == 2)
   }
 
   @Test(
@@ -216,36 +247,59 @@ struct LiveAreaCommandRunnerTests {
   func swiftPMScratchPathTurnsAreTimed() async throws {
     let directory = try temporaryDirectory()
     defer { try? FileManager.default.removeItem(at: directory) }
+    // The wait is measured on a clock only the first build's command moves, so it reads the
+    // same however busy the machine is.
+    let base = ContinuousClock.now
+    let offset = Mutex(Duration.zero)
+    let reads = Arrivals()
+    let now: @Sendable () -> ContinuousClock.Instant = {
+      reads.arrive()
+      return base + offset.withLock { $0 }
+    }
+    let holding = Arrivals()
+    let calls = Mutex(0)
     let active = Mutex((now: 0, most: 0))
     let processes = FakeProcessRunner { _ async throws(ProcessRunnerError) -> ProcessOutput in
       active.withLock {
         $0.now += 1
         $0.most = max($0.most, $0.now)
       }
-      try? await Task.sleep(for: .milliseconds(400))
+      let call = calls.withLock { count in
+        count += 1
+        return count
+      }
+      if call == 1 {
+        // Holds the lock until the second build has read the clock to start its wait, then
+        // takes 400 ms on it.
+        let seen = reads.count
+        holding.arrive()
+        _ = await reads.reached(seen + 1)
+        offset.withLock { $0 += .milliseconds(400) }
+      }
       active.withLock { $0.now -= 1 }
       return ProcessOutput(status: .exited(0), stdout: "", stderr: "")
     }
-    let runner = LiveAreaCommandRunner(processRunner: processes)
+    let runner = LiveAreaCommandRunner(processRunner: processes, now: now)
     let scratch = directory.appending(path: "slot/derived-data/prove/Feature").path
     func test(_ waits: BuildLockWaits) -> AreaCommandRequest {
       AreaCommandRequest(
         area: "Feature", step: .testFiles, command: "swift test --scratch-path '\(scratch)'",
-        workingDirectory: directory.path, deadline: .seconds(20), environment: [:],
+        workingDirectory: directory.path, deadline: Self.ample, environment: [:],
         junitPath: nil, buildLock: BuildDirectoryLock(directory: scratch, waits: waits))
     }
 
     let shared = BuildLockWaits()
     async let first = runner.run(test(shared))
-    async let second = runner.run(test(shared))
-    #expect(await [first, second] == [.passed, .passed])
+    _ = await holding.reached(1)
+    let second = await runner.run(test(shared))
+    #expect(await first == .passed)
+    #expect(second == .passed)
     #expect(active.withLock { $0.most } == 1)
-    let waited = try #require(shared.milliseconds)
-    #expect(waited >= 300, "the second build waited out most of the first's 400 ms")
+    #expect(shared.milliseconds == 400, "the second build waited out the first's 400 ms")
 
     let alone = BuildLockWaits()
     #expect(await runner.run(test(alone)) == .passed)
-    #expect(alone.milliseconds.map { $0 < 300 } == true)
+    #expect(alone.milliseconds == 0)
   }
 
   @Test("a passing command is passed — catches exit 0 read as a failure")
@@ -270,5 +324,47 @@ struct LiveAreaCommandRunnerTests {
     }
     #expect(exit == 127)
     #expect(tail == "working directory \(missing.path) doesn't exist")
+  }
+}
+
+/// Counts arrivals, and lets a caller wait for a number of them with no bound of its own: a
+/// deadline here would lose to a loaded machine that starts the last arrival late. A wait that
+/// never ends is a regression the suite's time limit ends by cancelling it.
+private final class Arrivals: Sendable {
+  private struct State {
+    var arrived = 0
+    var waiting: [UUID: (count: Int, continuation: CheckedContinuation<Void, Never>)] = [:]
+  }
+
+  private let state = Mutex(State())
+
+  var count: Int { state.withLock { $0.arrived } }
+
+  func arrive() {
+    let released = state.withLock { state in
+      state.arrived += 1
+      let ready = state.waiting.filter { $0.value.count <= state.arrived }
+      for id in ready.keys { state.waiting[id] = nil }
+      return ready.values.map(\.continuation)
+    }
+    for continuation in released { continuation.resume() }
+  }
+
+  /// Whether `count` have arrived, once they have or the wait is cancelled.
+  func reached(_ count: Int) async -> Bool {
+    let id = UUID()
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        let done = state.withLock { state in
+          if state.arrived >= count || Task.isCancelled { return true }
+          state.waiting[id] = (count, continuation)
+          return false
+        }
+        if done { continuation.resume() }
+      }
+    } onCancel: {
+      state.withLock { $0.waiting.removeValue(forKey: id) }?.continuation.resume()
+    }
+    return state.withLock { $0.arrived >= count }
   }
 }

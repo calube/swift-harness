@@ -107,7 +107,7 @@ struct DerivedDataSeedingTests {
       AreaCommandRequest(
         area: "Aidoku", step: .build,
         command: "test -f '\(rig.destination)/SourcePackages/checkouts/Nuke/Package.swift'",
-        workingDirectory: rig.base.path(percentEncoded: false), deadline: .seconds(20),
+        workingDirectory: rig.base.path(percentEncoded: false), deadline: .seconds(3600),
         environment: [:], junitPath: nil,
         derivedDataSeed: DerivedDataSeedCopy(seed: rig.seed, destination: rig.destination)))
 
