@@ -67,7 +67,9 @@ struct PlanLintScreenFlowTests {
   )
   func reasonOrFlowClearsTheRequirement() throws {
     let text = try TrialPlan.text("tic-tac-toe-1-PLAN.md")
-    let old = "| req-new-game | acceptance | `test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |"
+    let old =
+      "| req-new-game | acceptance | `test: InterviewStarterUITests/GameFlowUITests` "
+      + "| ttt-screen | ttt-screen | |"
     #expect(text.contains(old))
     let reasoned = text.replacingOccurrences(
       of: old,
