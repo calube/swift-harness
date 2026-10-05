@@ -29,6 +29,12 @@ public protocol MergeRunner: Sendable {
   /// The tree the commit `ref` names holds.
   func tree(of ref: String, in checkout: String) async throws(GitWorkspaceError) -> String
 
+  /// The tree merging `revision` into `base` makes, written to the object store without touching
+  /// any checkout: `git merge-tree --write-tree`, which `git merge` agrees with on a clean merge.
+  /// - Returns: `nil` when the merge conflicts.
+  func mergedTree(of revision: String, into base: String, in checkout: String)
+    async throws(GitWorkspaceError) -> String?
+
   /// `git merge --no-ff -m <message> <branch>` into the checked-out branch.
   /// - Throws: when the merge fails for any reason other than conflicts.
   func merge(_ branch: String, message: String, in checkout: String)
@@ -89,6 +95,12 @@ public struct LiveMergeRunner: MergeRunner {
     try Self.checkRef(ref)
     return try await succeed(["rev-parse", "--verify", "--quiet", "\(ref)^{tree}"], in: checkout)
       .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  public func mergedTree(of revision: String, into base: String, in checkout: String)
+    async throws(GitWorkspaceError) -> String?
+  {
+    nil
   }
 
   public func merge(_ branch: String, message: String, in checkout: String)

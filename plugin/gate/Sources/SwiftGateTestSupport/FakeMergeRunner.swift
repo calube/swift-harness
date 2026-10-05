@@ -66,6 +66,13 @@ public final class FakeMergeRunner: MergeRunner {
     "tree-" + (try await commit(of: ref, in: checkout))
   }
 
+  /// No tree: every trial merge reads as unread, so no run is credited by its tree.
+  public func mergedTree(of revision: String, into base: String, in checkout: String)
+    async throws(GitWorkspaceError) -> String?
+  {
+    nil
+  }
+
   public func merge(_ branch: String, message: String, in checkout: String)
     async throws(GitWorkspaceError) -> MergeOutcome
   {
