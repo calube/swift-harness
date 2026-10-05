@@ -209,6 +209,8 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The merge gate run `--undo` recorded in the build run's log for the commit it undid; `nil`
   /// when the log already held it or no `check` run started at that commit.
   public let gateRunId: String?
+  /// The scratch trees an undo pruned, left by gates that ended without removing them.
+  public var prunedScratchTrees: [String]?
   public let message: String
 
   public init(
@@ -255,12 +257,17 @@ public struct BuildMerge: Sendable {
   let clock: any BuildClock
   /// Which ``TaskWorktree`` layout names the checkout and branch merges land in.
   let profile: RepositoryProfile
+  /// Prunes the scratch trees of gates that ended unfinished once an undo lands; `nil` leaves
+  /// them.
+  let leftovers: (any RunLeftovers)?
 
   public init(
     plan: String, task: String, fix: Bool = false, git: any Git, workspace: any GitWorkspace,
-    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned
+    merger: any MergeRunner, clock: any BuildClock, profile: RepositoryProfile = .owned,
+    leftovers: (any RunLeftovers)? = nil
   ) {
     self.profile = profile
+    self.leftovers = leftovers
     self.plan = plan
     self.task = task
     self.fix = fix

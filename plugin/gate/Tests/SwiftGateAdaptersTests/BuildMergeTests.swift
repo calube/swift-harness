@@ -2,6 +2,7 @@ import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
 import SwiftGateTestSupport
+import Synchronization
 import Testing
 
 private struct FixedClock: BuildClock {
@@ -81,15 +82,18 @@ private struct MergeScenario {
           at: Self.at)))
   }
 
-  func undo(_ task: String) async -> BuildMergeReport {
-    await flow(task).undo()
+  func undo(_ task: String, leftovers: (any RunLeftovers)? = nil) async -> BuildMergeReport {
+    await flow(task, leftovers: leftovers).undo()
   }
 
-  private func flow(_ task: String, fix: Bool = false) -> BuildMerge {
+  private func flow(_ task: String, fix: Bool = false, leftovers: (any RunLeftovers)? = nil)
+    -> BuildMerge
+  {
     BuildMerge(
       plan: Self.plan, task: task, fix: fix, git: repo.adapter,
       workspace: LiveGitWorkspace(runner: repo.runner, repositoryRoot: repo.root.path),
-      merger: LiveMergeRunner(runner: repo.runner), clock: FixedClock(date: Self.at))
+      merger: LiveMergeRunner(runner: repo.runner), clock: FixedClock(date: Self.at),
+      leftovers: leftovers)
   }
 
   func merges() throws -> [BuildEvent.Merge] {
@@ -284,6 +288,27 @@ struct BuildMergeTests {
       try await scenario.repo.git("rev-parse", "search/fix-t1^1", "search/fix-t1^2")
         == "\(pre)\n\(tip)")
     #expect(try await scenario.status(in: fix) == "")
+  }
+
+  @Test(
+    "--undo prunes the scratch trees gates left behind and names them, and a refused undo prunes nothing — catches a killed gate's prove tree registered after the undo"
+  )
+  func undoPrunesScratchTrees() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    _ = await scenario.merge("t1")
+    let leftovers = PruneCounter()
+
+    let refused = await scenario.undo("t2", leftovers: leftovers)
+    #expect(refused.status != .undone, "\(refused.message)")
+    #expect(leftovers.count == 0)
+
+    let report = await scenario.undo("t1", leftovers: leftovers)
+
+    #expect(report.status == .undone, "\(report.message)")
+    #expect(leftovers.count == 1)
+    #expect(report.prunedScratchTrees == ["/scratch/.repo-swiftgate-prove-7-ab"])
   }
 
   @Test(
@@ -683,5 +708,19 @@ private enum Memos5 {
       return Check(
         fix: checked.fix, verdict: checked.verdict, checkID: event.eventID, rules: checked.rules)
     }
+  }
+}
+
+/// Counts prunes, each finding 1 orphaned scratch tree.
+private final class PruneCounter: RunLeftovers {
+  private let pruned = Mutex(0)
+
+  var count: Int { pruned.withLock { $0 } }
+
+  func stopGates(in worktrees: [String]) async -> [RunningGate] { [] }
+
+  func pruneScratchTrees() async -> ScratchWorktreeSweep {
+    pruned.withLock { $0 += 1 }
+    return ScratchWorktreeSweep(removed: ["/scratch/.repo-swiftgate-prove-7-ab"])
   }
 }

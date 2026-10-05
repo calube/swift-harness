@@ -3431,3 +3431,20 @@ PY
 
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## Brownfield trial: the warm-up times and time box an area command's bound reads
+
+`BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run on the
+interview starter wrote at its base tree: AppFeature's warm test took 31.7 s, and that run's
+merge gate then held a hung test's prove step for 1033 s. `price-tracker-1-clock.json` is the same
+run's launch clock, with its absolute spec paths cut to `/trial/repo/`. From the trial's copied
+state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/warmup/20356747eb132f654aa83d669d3156442e11a963.json $F/price-tracker-1-warmup.json
+sed -E 's#"/[^"]*/price-tracker-1/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
+  > $F/price-tracker-1-clock.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-1-*` matched nothing.

@@ -13,11 +13,18 @@ public struct AreaCommandBound: Sendable, Equatable {
   public let duration: Duration
   /// What set it, for the finding a time-out makes: "5 × AppFeature's 31.7 s warm test".
   public let reason: String
+  /// What the command took when the warm-up measured it; `nil` when nothing did.
+  public let expected: Duration?
 
-  public init(duration: Duration, reason: String) {
+  public init(duration: Duration, reason: String, expected: Duration? = nil) {
     self.duration = duration
     self.reason = reason
+    self.expected = expected
   }
+
+  /// The box leaves the command less than its measured time: starting it would only end in a
+  /// kill.
+  public var cannotFinish: Bool { expected.map { duration < $0 } ?? false }
 
   /// Whole seconds, rounded up, as findings name it.
   public var seconds: Int {

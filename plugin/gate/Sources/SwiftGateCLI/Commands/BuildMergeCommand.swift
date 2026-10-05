@@ -24,7 +24,7 @@ enum BuildMergeRun {
     let flow = BuildMerge(
       plan: slug, task: task, fix: fix, git: git, workspace: workspace, merger: merger,
       clock: clock,
-      profile: profile)
+      profile: profile, leftovers: leftovers)
     return undo ? await flow.undo() : await flow.merge()
   }
 
