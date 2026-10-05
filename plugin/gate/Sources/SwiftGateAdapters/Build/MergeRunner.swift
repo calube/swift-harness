@@ -222,6 +222,10 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED in a
     /// row that runs after this task.
     case flowsRed = "flows-red"
+    /// A validation row this merge makes ready passed its before-merge run, and no
+    /// `qa run --at-base` has taken it yet, so that pass shows nothing the row lacked at the merge
+    /// base.
+    case atBaseUnchecked = "at-base-unchecked"
     /// The fixer's branch holds another task's commits that task's own merge hasn't landed: the
     /// fix worktree took its branch in for a RED run over both.
     case fixCarriesUnmerged = "fix-carries-unmerged"

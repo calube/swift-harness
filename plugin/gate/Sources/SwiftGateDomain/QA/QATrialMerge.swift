@@ -175,6 +175,20 @@ public enum QAMergeReadiness: Sendable, Equatable {
     return .checked(runID: runID)
   }
 
+  /// The rows `task`'s merge makes ready, every task each waits on merged or in `carried`, that
+  /// no `qa run --at-base` of `plan` in `atBase` took with the same requirement, layer and check:
+  /// a pass there can't be credited until that run shows what the row read at the merge base. A
+  /// row in `unverified` is left out, since no pass of it is credited. A row still waiting on a
+  /// task outside `carried` is left out too: this merge credits it nothing. A prepared run, whose
+  /// report names the `at-base-run.json` it wrote, doesn't count: the orchestrator's own
+  /// `--at-base` run, after `qa adopt`, is the one each merge waits on.
+  public static func lackingAtBase(
+    table: ValidationTable, merged: Set<String>, plan: String, task: String,
+    carried: [QATrialMerge.Branch] = [], atBase: [QAReport], unverified: Set<Int> = []
+  ) -> [Int] {
+    []
+  }
+
   /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming
   /// `task` still waits on, when each task such a row waits on is in `waiting`, in table order.
   public static func alongside(

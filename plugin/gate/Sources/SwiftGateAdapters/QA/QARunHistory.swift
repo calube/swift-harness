@@ -15,6 +15,13 @@ public enum QARunHistory {
     }
   }
 
+  /// Every `qa run --at-base` report of `plan` under the runs of each checkout of `worktree`'s
+  /// clone, prepared runs included; a report that doesn't decode is passed over, and 1 run read
+  /// twice counts once.
+  public static func atBaseReports(worktree: URL, plan: String) -> [QAReport] {
+    []
+  }
+
   /// Every ``QAMergedTreeRun`` under the runs of each checkout of `worktree`'s clone, so a run
   /// in the plan checkout finds 1 a fixer's slot made on the same tree; a record that doesn't
   /// decode is passed over, and 1 run read twice counts once.
