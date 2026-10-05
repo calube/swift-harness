@@ -28,12 +28,13 @@ module: move it to Core or a client and test it at T1.
 |---|---|---|
 | TCA reducer | T1 | Exhaustive `TestStore`: assert every state change in `send`/`receive` closures (`P5`). Override only the dependency endpoints the behavior uses |
 | Anything advancing a `TestClock` | T1 | Suite `@Suite(.serialized, .timeLimit(.minutes(1)))`, body in `withMainSerialExecutor { … }` (`P6`) |
+| A reducer's repeating timer effect | T1 | The plugin's `docs/testing-clock-effects.md`: start it with its action, advance N intervals and receive N ticks, stop, advance again with no `receive`, store exhaustive |
 | `FooClientLive` | T1 | Drive it through the interface of the transport it depends on (`HTTPClient` under `APIClientLive`), with `TestClock` for retries |
 | Engine | T1 | Replay: seed + input log → identical final state (`P10`, `G1`); properties over seeded random inputs |
 | View rendering | T2 | Snapshot with recording off (`P4`); record only via `"$SG" snapshots record` |
 | End-to-end flow | T3 | XCUITest named after a `[[flows]]` entry (`P11`); rare |
 
-Never in a test: `Task.sleep`/`usleep`, `try?` or an empty `catch`, `Date()`/`UUID()`/`.random`
+Never in a test: `Task.sleep`/`usleep` or a counted `Task.yield()` loop, `try?` or an empty `catch`, `Date()`/`UUID()`/`.random`
 read directly (`P7`, `D1`), asserting only what the test configured on its own double, `!= nil` as
 the only assertion.
 

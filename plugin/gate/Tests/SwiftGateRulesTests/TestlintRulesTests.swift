@@ -245,4 +245,13 @@ struct TestlintRulesTests {
     #expect(try lines("test.unbounded-wait", "bad/ForAwaitFirstElement.swift") == [79])
     #expect(try lines("test.unbounded-wait", "good/BoundedWaits.swift") == [])
   }
+
+  @Test(
+    "a captured reducer test that waits for its timer effect with `for _ in 0..<200 { await Task.yield() }` twice is RED at both loops, and a counted loop that checks a condition, a deadline poll, per-item and child-task yields and the clock-driven recipe pass — catches a scheduler-turn guess standing in for a wait"
+  )
+  func yieldLoopCapturedCountedYields() throws {
+    #expect(try lines("test.yield-loop", "bad/SimFeatureTests.swift") == [65, 104])
+    #expect(try lines("test.yield-loop", "good/ConditionedYields.swift") == [])
+    #expect(try lines("test.yield-loop", "good/RepeatingTimer.swift") == [])
+  }
 }

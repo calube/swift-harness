@@ -653,6 +653,7 @@ Every rule id `swiftgate` can report. `P<n>` and `§<n>` cite [testing-playbook.
 | `test.leaked-id` | design plan workflows §5.1 (id policy) |
 | `test.hang-without-deadline` | playbook P12 |
 | `test.unbounded-wait` | playbook P12 |
+| `test.yield-loop` | playbook P7 |
 
 ### Test evidence (`test`, `check`)
 
