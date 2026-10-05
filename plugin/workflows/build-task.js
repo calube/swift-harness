@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>", cutoffAt?: "<ISO 8601 UTC time of a swiftgate run\'s cutoff>"}. The worker and fix pass open and close their own run-viewer span in that build run; reviewers and verifiers hold no Bash, so the workflow records their spans through a plain agent started beside each. Every swiftgate command runs through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>", cutoffAt?: "<ISO 8601 UTC time of a swiftgate run\'s cutoff>", siblings?: [{task, writeSet}]}. siblings lists the plan\'s other tasks not yet done or abandoned at launch: a verified finding whose test could pass only once one of them merges is deferred to it, recorded in the return\'s notes, and never blocks. The worker and fix pass open and close their own run-viewer span in that build run; reviewers and verifiers hold no Bash, so the workflow records their spans through a plain agent started beside each. Every swiftgate command runs through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
@@ -77,7 +77,7 @@ const SEVERITY_RANK = { blocker: 0, major: 1, minor: 2, nit: 3 }
 const BLOCKING = ['blocker', 'major']
 const KINDS = ['defect', 'standards-violation']
 const CITATION_KINDS = ['file', 'snapshot', 'capture', 'probe', 'answer']
-const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun', 'cutoffAt']
+const ARG_KEYS = ['task', 'plan', 'worktree', 'branch', 'writeSet', 'taskGate', 'tests', 'contextPack', 'model', 'review', 'taskProof', 'reviewers', 'planSurface', 'pluginRoot', 'stateRoot', 'base', 'buildRun', 'cutoffAt', 'siblings']
 // A brownfield worktree keeps its state in its git dir's `swift-harness/`, never in the tree.
 const GIT_DIR_STATE = '/swift-harness'
 
@@ -188,7 +188,26 @@ function validateArgs(a) {
   if (a.cutoffAt !== undefined && !(typeof a.cutoffAt === 'string' && CUTOFF_AT.test(a.cutoffAt))) {
     invalid(`cutoffAt must be an ISO 8601 UTC time such as 2026-10-05T06:28:02Z, got ${JSON.stringify(a.cutoffAt)}`)
   }
-  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main' }
+  return { ...a, reviewers, pluginRoot, profile, stateRoot, base: a.base ?? 'main', siblings: validateSiblings(a) }
+}
+
+// The plan's tasks that build beside this one. Their code is on this branch only as the plan's
+// stubs, so a test of behaviour only their write sets build can't pass here yet.
+function validateSiblings(a) {
+  if (a.siblings === undefined) return []
+  if (!Array.isArray(a.siblings)) invalid(`siblings must be an array of {task, writeSet}, got ${JSON.stringify(a.siblings)}`)
+  const seen = new Set()
+  return a.siblings.map(s => {
+    if (!s || typeof s !== 'object' || Array.isArray(s)) invalid(`a sibling must be {task, writeSet}, got ${JSON.stringify(s)}`)
+    const extra = Object.keys(s).filter(k => k !== 'task' && k !== 'writeSet')
+    if (extra.length) invalid(`unknown sibling keys: ${extra.join(', ')}`)
+    if (!nonEmptyString(s.task)) invalid(`a sibling's task must be a non-empty string, got ${JSON.stringify(s.task)}`)
+    if (s.task === a.task) invalid(`siblings lists the task itself, ${s.task}`)
+    if (seen.has(s.task)) invalid(`siblings lists ${s.task} twice`)
+    seen.add(s.task)
+    if (!stringArray(s.writeSet) || s.writeSet.length === 0) invalid(`sibling ${s.task}'s writeSet must be a non-empty array of paths`)
+    return { task: s.task, writeSet: s.writeSet }
+  })
 }
 
 const A = validateArgs(ARGS)
