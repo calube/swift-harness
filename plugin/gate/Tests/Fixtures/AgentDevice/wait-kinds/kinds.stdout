@@ -1,0 +1,118 @@
+{
+  "success": true,
+  "data": {
+    "total": 7,
+    "executed": 7,
+    "totalDurationMs": 8852,
+    "results": [
+      {
+        "step": 1,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-wait-kinds",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/requests/72d08541f21c39e7.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-wait-kinds/events.ndjson",
+          "sessionReused": false,
+          "selection": {
+            "reason": "explicit-selector",
+            "source": "local",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.WaitProbe",
+          "appBundleId": "com.example.WaitProbe",
+          "startup": {
+            "durationMs": 3216,
+            "measuredAt": "2026-10-05T10:10:16.717Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.WaitProbe",
+            "appBundleId": "com.example.WaitProbe"
+          },
+          "timing": {
+            "runnerDemand": "none",
+            "openDispatchDurationMs": 466,
+            "launchUrlDurationMs": 0,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 2749,
+            "totalDurationMs": 3216
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-77443",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.WaitProbe"
+        },
+        "durationMs": 3820
+      },
+      {
+        "step": 2,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 2114
+        },
+        "durationMs": 2120
+      },
+      {
+        "step": 3,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 428,
+          "selector": "id=\"probe.done\""
+        },
+        "durationMs": 430
+      },
+      {
+        "step": 4,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 403,
+          "text": "Done"
+        },
+        "durationMs": 405
+      },
+      {
+        "step": 5,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 500
+        },
+        "durationMs": 502
+      },
+      {
+        "step": 6,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 1166,
+          "captures": 2,
+          "nodeCount": 2,
+          "hint": "Settled on a nearly-empty tree — the app may still be loading. Wait for specific content (wait text ...) before interacting."
+        },
+        "durationMs": 1167
+      },
+      {
+        "step": 7,
+        "command": "is",
+        "ok": true,
+        "data": {
+          "predicate": "absent",
+          "pass": true,
+          "selector": "id=\"probe.loading\"",
+          "matches": 0
+        },
+        "durationMs": 407
+      }
+    ]
+  }
+}
