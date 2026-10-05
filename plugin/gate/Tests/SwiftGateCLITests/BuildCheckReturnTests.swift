@@ -1000,6 +1000,79 @@ struct BuildCheckReturnRecordTests {
     #expect(checks.allSatisfy { $0.fix && $0.task == ReturnScenario.task })
   }
 
+  /// The plan's newest build run's `returns/<task>.json` path.
+  private static func storedReturn(_ scenario: ReturnScenario) async throws -> String {
+    let run = try #require(
+      try await BuildRunStore.latest(plan: ReturnScenario.plan, git: scenario.git))
+    return run.layout.returnFile(task: ReturnScenario.task)
+  }
+
+  @Test(
+    "a GREEN check stores the checked return byte for byte in the build run's returns store, replacing a read-only return already there, and names the path in the report — catches a checked return the orchestrator has to copy by hand, where an aliased cp -i waits on an overwrite prompt"
+  )
+  func greenCheckStoresTheReturn() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let destination = try await Self.storedReturn(scenario)
+    try FileManager.default.createDirectory(
+      atPath: URL(filePath: destination).deletingLastPathComponent().path,
+      withIntermediateDirectories: true)
+    try Data("{\"earlier\": true}".utf8).write(to: URL(filePath: destination))
+    try FileManager.default.setAttributes(
+      [.posixPermissions: 0o444], ofItemAtPath: destination)
+    let file = try scenario.write(
+      try TaskReturnJSON.encode(
+        scenario.returnValue(gate: .init(tier: .push, verdict: .green, runID: runID))))
+
+    let checked = await BuildCheckReturnRun.check(
+      file: file, plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+
+    #expect(checked.report.verdict == .green, "\(checked.report.findings)")
+    #expect(checked.notRecorded == [], "\(checked.notRecorded)")
+    #expect(checked.report.stored == destination)
+    #expect(
+      try Data(contentsOf: URL(filePath: destination))
+        == Data(contentsOf: URL(filePath: file)))
+  }
+
+  @Test(
+    "a RED check stores nothing and leaves the return already stored, and a fixer's GREEN return is not stored over the task's — catches a rejected or fixer return quoted in dependents' packs"
+  )
+  func onlyAPassingTaskReturnIsStored() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 2)
+    let gate = TaskReturn.Gate(tier: .push, verdict: .green, runID: runID)
+    let passing = try scenario.write(try TaskReturnJSON.encode(scenario.returnValue(gate: gate)))
+    let first = await BuildCheckReturnRun.check(
+      file: passing, plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+    let destination = try await Self.storedReturn(scenario)
+    let stored = try Data(contentsOf: URL(filePath: destination))
+
+    let red = await BuildCheckReturnRun.check(
+      file: try scenario.write(
+        try TaskReturnJSON.encode(scenario.returnValue(gate: gate, review: nil))),
+      plan: ReturnScenario.plan, git: scenario.git, directory: scenario.main.path)
+    let (_, commit) = try await scenario.cutFixWorktree()
+    var object = try #require(
+      try JSONSerialization.jsonObject(
+        with: Fixture.data("BuildReturn/send-money-5/fix-send-flow-orchestrator.json"))
+        as? [String: Any])
+    object["task"] = ReturnScenario.task
+    object["commits"] = [commit]
+    let fix = await BuildCheckReturnRun.check(
+      file: try scenario.write(try JSONSerialization.data(withJSONObject: object)),
+      plan: ReturnScenario.plan, fix: true, git: scenario.git, directory: scenario.main.path)
+
+    #expect(first.report.stored == destination)
+    #expect(red.report.verdict == .red)
+    #expect(red.report.stored == nil)
+    #expect(fix.report.verdict == .green, "\(fix.report.findings)")
+    #expect(fix.report.stored == nil)
+    #expect(try Data(contentsOf: URL(filePath: destination)) == stored)
+  }
+
   @Test(
     "a GREEN return citing a gate run recorded at the commit before its last, or on a dirty tree at its last, fails build-return.stale-gate with exit 1 — catches a stale-head or dirty-tree gate accepted"
   )

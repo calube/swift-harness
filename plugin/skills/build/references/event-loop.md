@@ -193,12 +193,14 @@ reads red until a task adds the name.
    branch tasks merge into, from whichever checkout runs it.
 2. `"$SG" build check-return .harness/build/<run>/<task>.json --plan <slug> --session <session> --json`.
    Exit 0 is `verdict` GREEN. Exit 1 lists `findings` as `{rule, message}`: the return claims more
-   than git or the run store shows. Exit 2 means the file is unreadable or isn't a task return.
-3. After exit 0, write the same bytes to `<returns><task>.json` with the Write tool. The edit
-   guard lets the session that holds the plan's lock write inside the plan directory. Store
-   `design-conflict` returns too: they carry the conflict report.
+   than git or the run store shows. Exit 2 means the file is unreadable or isn't a task return,
+   or it couldn't store a passing return.
+3. Exit 0 has stored the same bytes in `<returns><task>.json`, replacing any earlier return of
+   the task, and the report's `stored` names that file. Never copy, move or write a return into
+   `<returns>` yourself. It stores a `design-conflict` return too: that carries the conflict report.
 
-This skill never stores a return that fails the check, so no dependent pack quotes its notes.
+`check-return` stores no return that fails the check, and no fixer's return, so no dependent
+pack quotes its notes.
 `context-pack --build-run` exits 1 when a dependency's return is missing, so a dependent can't
 start from a return this skill skipped.
 
@@ -486,9 +488,10 @@ Repair 1 requirement per round. With several `flow row:` lines, run a round for 
 another in the same fix worktree, starting with the row whose step failed first.
 
 1. Fill the fix worktree's prepared folder with this requirement's adopted checks alone, its flow
-   and state rows' files: `/bin/rm -rf <fixWorktree>/.harness/qa`, then
-   `mkdir -p <fixWorktree>/.harness/qa/<slug>` and
-   `/bin/cp -p <plans>/<slug>/qa/<file> <fixWorktree>/.harness/qa/<slug>/` for each.
+   and state rows' files:
+   `"$SG" qa stage <fixWorktree> --plan <slug> --requirement <requirement> --json`. It empties
+   `<fixWorktree>/.harness/qa` first. Never copy a plan state file yourself. A non-GREEN stage
+   halts that task.
 2. Launch 1 Agent tool call in the background, passing `run_in_background: true`, with
    `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the fix worktree as its
    worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from

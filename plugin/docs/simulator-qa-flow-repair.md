@@ -1,7 +1,7 @@
 # Simulator QA flow repair
 
 How a flow row that stays red because of its flow file, not the app, gets rewritten and taken back
-into plan state with `swiftgate qa adopt --repair`, without anyone stepping in. The flags of
+into plan state with `swiftgate qa adopt --repair`. The flags of
 `qa run` are in [`simulator-qa.md`](simulator-qa.md#qa-run), the prepared at-base run in
 [`simulator-qa-at-base.md`](simulator-qa-at-base.md), and the steps a gesture needs in
 [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md). Rule ids are in
@@ -20,8 +20,8 @@ plan state, which only `qa adopt` writes.
 ## The repair worker's red run
 
 The worker rewrites only that requirement's check files in its checkout's `.harness/qa/<plan>/`,
-which the orchestrator fills with that requirement's adopted copies alone, and proves them red at
-the merge base itself. The build loop repairs several rows 1 requirement at a time, each in its
+which `qa stage <worktree> --plan <plan> --requirement <requirement>` empties and fills with
+those adopted checks alone, and proves them red at the merge base itself. The build loop repairs several rows 1 requirement at a time, each in its
 own folder:
 
 ```bash
