@@ -299,9 +299,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
         `"$SG" qa run --plan <slug> --at-base --json --output <out>/qa-at-base.json` in
-        `<checkout>`, in the background under the qa run watch. This `--at-base` run is never skipped, and
-        no task that a row's `Runs after` names merges before it has run: such a task that
-        finishes first keeps its checked return and merges once this run is done. It takes each
+        `<checkout>`, in the background under the qa run watch. This `--at-base` run is never
+        skipped, and no row's pass counts before it has run: `build merge` refuses
+        `at-base-unchecked` for a merge that makes a row ready until this run took the row. A task
+        whose rows all still wait on other tasks merges without waiting for it. It takes each
         row the worker's `--prepared-by` run proved from the `at-base-run.json` the adopt copied
         while its check is byte-identical, naming that run in the row's `reusedFrom`, and runs
         only the rest. A row that reads `pass` there fails it with

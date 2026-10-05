@@ -165,8 +165,8 @@ export function atBaseReuseProblems(text) {
 }
 
 /** Every way `text` lets a validation task's checks reach a merge with no red run behind them:
- * no `qa run --at-base` after `qa adopt`, an at-base run that reads as optional, or a task its
- * rows wait for that may merge before it. */
+ * no `qa run --at-base` after `qa adopt`, an at-base run that reads as optional, or a row's pass
+ * that may count before it, with no `at-base-unchecked` refusal holding that merge back. */
 export function atBaseProblems(text) {
   const calls = extractInvocations(text)
   const adopt = calls.find(inv => inv.words.join(' ').startsWith('qa adopt'))
@@ -177,8 +177,8 @@ export function atBaseProblems(text) {
   else if (atBase.line < adopt.line) problems.push('runs `qa run --at-base` before `qa adopt`')
   const prose = text.replace(/\s+/g, ' ')
   if (!/`--at-base` run is never skipped/.test(prose)) problems.push('never says the `--at-base` run is never skipped')
-  if (!/no task[^.]*`Runs after`[^.]*merges before/.test(prose)) {
-    problems.push('lets a task a row\'s `Runs after` names merge before the `--at-base` run')
+  if (!/no row's pass counts before it has run/.test(prose) || !/`at-base-unchecked`/.test(prose)) {
+    problems.push('lets a row\'s pass count before the `--at-base` run')
   }
   return problems
 }
@@ -737,7 +737,7 @@ const tests = {
       ['x.md:1: an Agent launch with no run_in_background: true', 'x.md:1: an Agent launch in the foreground'])
   },
 
-  'the run skill and the build loop run qa run --at-base after qa adopt, never skip it, and merge no task its rows wait for before it — catches checks adopted after their tasks merged with no red run'() {
+  'the run skill and the build loop run qa run --at-base after qa adopt, never skip it, and count no row\'s pass before it — catches checks adopted after their tasks merged with no red run'() {
     const skill = read('skills/run/SKILL.md')
     assert.deepEqual(atBaseProblems(skill), [], 'skills/run/SKILL.md')
     const loop = read('skills/build/references/event-loop.md')
@@ -770,16 +770,16 @@ const tests = {
     ])
   },
 
-  'the at-base check names a missing at-base run, one before the adopt, an optional one and an early merge — catches a checker that passes anything'() {
+  'the at-base check names a missing at-base run, one before the adopt, an optional one and a pass counted before it — catches a checker that passes anything'() {
     assert.deepEqual(atBaseProblems('1. `"$SG" qa run --plan <slug> --at-base --json`\n2. `"$SG" qa adopt <worktree> --json`\n'), [
       'runs `qa run --at-base` before `qa adopt`',
       'never says the `--at-base` run is never skipped',
-      'lets a task a row\'s `Runs after` names merge before the `--at-base` run',
+      'lets a row\'s pass count before the `--at-base` run',
     ])
     assert.deepEqual(atBaseProblems('`"$SG" qa adopt <worktree> --json`'), [
       'never runs `swiftgate qa run --at-base`',
       'never says the `--at-base` run is never skipped',
-      'lets a task a row\'s `Runs after` names merge before the `--at-base` run',
+      'lets a row\'s pass count before the `--at-base` run',
     ])
     assert.deepEqual(atBaseProblems('no adopt'), ['never runs `swiftgate qa adopt`'])
   },

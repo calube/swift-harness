@@ -1,0 +1,97 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-launch-list",
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/list-loading.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-list-loading",
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/list-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-list-retry",
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/thread-open.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-thread-open",
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-sending.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-sending",
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-retry",
+      "runsAfter" : [
+        "fake-client",
+        "thread-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-preview-update",
+      "runsAfter" : [
+        "fake-client",
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the AppFakeTests in fake-client check latency, per-call failure and idempotent send; no screen shows the fake's controls",
+      "requirement" : "req-fake-client"
+    },
+    {
+      "reason" : "gate: merge runs the AppFeature suite, where the list, thread and root tests use the fake client",
+      "requirement" : "req-unit-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite, including the untouched APIClient and LogClient tests",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

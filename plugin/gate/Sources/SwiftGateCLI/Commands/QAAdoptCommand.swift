@@ -13,7 +13,7 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
   }
 
   /// A running task whose checked return waits to merge and that a validation row runs after:
-  /// the adopted checks' `--at-base` run was all it waited on.
+  /// a merge of it that makes a row ready waits only on the adopted checks' `--at-base` run.
   struct Unblocked: Sendable, Equatable, Encodable {
     var plan: String
     var task: String
