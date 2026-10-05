@@ -146,9 +146,10 @@ at `<base>`, in parallel, to the end. Every checkout builds a `swiftpm` area in 
 the warm-up fills, and proves it in a scratch path of its own. Then it runs each `xcode` area's
 `build` in `<checkout>`, which `swiftgate run` checked out at launch, and each `swiftpm` area's into
 that checkout's prove scratch path. After that it adds `max_parallel` + 1 worktree slots, since a task
-waiting to merge keeps its slot, and builds there too, so the first builds and proves in each start
-warm; a build of yours there waits for its build. When `sim up` can build the app, it adds 1 more
-slot and builds only the app there, kept for `qa run`'s trees. It waits for nothing and you don't wait for it either; read
+waiting to merge keeps its slot, and builds there too, 1 slot at a time so your contract's gate isn't
+starved, so the first builds and proves in each start warm; a build of yours there waits for its
+build. When `sim up` can build the app, it adds 1 more slot and builds only the app there, right
+after the first slot, kept for `qa run`'s trees. It waits for nothing and you don't wait for it either; read
 what it has recorded so far with `"$SG" events list --kind warmup.run`. Each event names an
 `area`, a `step`, its `ms`, `cache` and `outcome` (`passed`, `failed`, `dropped`,
 `not-installed`).

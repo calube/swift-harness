@@ -222,12 +222,16 @@ public enum Warmup {
   }
 
   /// How many task slots build at once.
-  public static let slotsAtOnce = Int.max
+  public static let slotsAtOnce = 1
 
   /// The order the warm-up builds the slots in, 1 turn after another: ``slotsAtOnce`` task slots
   /// a turn, with the qa slot after the first turn.
   public static func slotTurns(tasks: [String], qa: String?) -> [SlotTurn] {
-    (tasks.isEmpty ? [] : [.tasks(tasks)]) + (qa.map { [.qa($0)] } ?? [])
+    var turns: [SlotTurn] = stride(from: 0, to: tasks.count, by: slotsAtOnce).map {
+      .tasks(Array(tasks[$0..<min($0 + slotsAtOnce, tasks.count)]))
+    }
+    if let qa { turns.insert(.qa(qa), at: min(1, turns.count)) }
+    return turns
   }
 
   public struct Dependencies: Sendable {
