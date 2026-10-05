@@ -66,6 +66,9 @@ struct WorktreeReport: Sendable, Equatable, Encodable {
   /// `run checkout remove`: what became of the build run's shared device. Absent when none was
   /// held.
   var device: String? = nil
+  /// `run checkout remove`: the gates and `qa run`s still running in a tree it removes, which it
+  /// stopped first, as `<kind> in <path>`. Absent when none ran.
+  var stoppedRuns: [String]? = nil
 
   /// 1 node dependency install `create` ran in the new worktree. A failed one leaves the
   /// worktree created; its area's commands then run as they would without it.

@@ -15,11 +15,69 @@ public struct BorrowedDevice: Sendable {
   public func release() { lease?.release() }
 }
 
+/// What a `qa run`'s ask for its build run's device came to.
+public enum QADeviceLoan: Sendable {
+  /// The build run's device, once the borrower before had let go: `waitedMilliseconds` is how
+  /// long that took, `nil` when it was free at once.
+  case borrowed(BorrowedDevice, waitedMilliseconds: Int?)
+  /// No build run is going on for the plan: the run holds a device of its own.
+  case own
+  /// The device was still borrowed when the run's deadline came: its flow rows don't run.
+  case refused(String, waitedMilliseconds: Int)
+}
+
 /// Lends a `qa run` its build run's device.
 public protocol QADeviceLending: Sendable {
-  /// `nil` when the plan has no build run going on, or another `qa run` is borrowing its device:
-  /// the run then holds a device of its own.
-  func borrow(plan: String) async -> BorrowedDevice?
+  /// Queues behind whoever borrows the device now, a gate's test step or another `qa run`, until
+  /// `deadline`; `waiting` is called once if the device isn't free at once.
+  func borrow(
+    plan: String, until deadline: QARunDeadline?, waiting: @escaping @Sendable () -> Void
+  ) async -> QADeviceLoan
+}
+
+/// The queue a `qa run` joins for its build run's device: the 1-slot borrow lock, waited on until
+/// the run's deadline rather than given up on.
+public struct BuildRunDeviceQueue: Sendable {
+  /// How long a run outside any box waits for the device.
+  public static let undatedWait: Duration = .seconds(600)
+  /// How long a borrow counts as free at once.
+  public static let freeAtOnce: Duration = .milliseconds(200)
+
+  /// What ``take(until:waiting:)`` came to.
+  public enum Outcome: Sendable {
+    case taken(LockLease, waitedMilliseconds: Int?)
+    case timedOut(String, waitedMilliseconds: Int)
+  }
+
+  private let lock: any CountingLock
+  private let now: @Sendable () -> Date
+  private let holders: @Sendable () -> [Int32]
+
+  /// - Parameter holders: the PIDs borrowing the device now, named when the wait runs out.
+  public init(
+    lock: any CountingLock, now: @escaping @Sendable () -> Date,
+    holders: @escaping @Sendable () -> [Int32]
+  ) {
+    self.lock = lock
+    self.now = now
+    self.holders = holders
+  }
+
+  /// The queue for `buildRunID`'s device, on the machine's borrow lock.
+  public static func live(buildRunID: String, lockDirectory: URL) -> BuildRunDeviceQueue {
+    let lock = BuildRunDevice.borrowLock(
+      buildRunID: buildRunID, lockDirectory: lockDirectory, pollInterval: .milliseconds(250))
+    return BuildRunDeviceQueue(
+      lock: lock,
+      now: { Date() },  // swiftgate:allow det.date-init — the wait is measured on the wall clock
+      holders: { lock.livePIDs() })
+  }
+
+  public func take(until deadline: QARunDeadline?, waiting: @Sendable () -> Void) async
+    -> Outcome
+  {
+    .timedOut("", waitedMilliseconds: 0)
+  }
 }
 
 /// The 1 booted device every `qa run` of a build run borrows in turn, so only the first flow row
@@ -49,12 +107,29 @@ public enum BuildRunDevice {
         path: "\(RunLayout.gitDirDirectory)/run-device/\(buildRunID)", directoryHint: .isDirectory)
   }
 
-  /// The lock 1 `qa run` holds while it borrows the device; `nil` when another run has it.
-  public static func borrow(buildRunID: String, lockDirectory: URL) async -> LockLease? {
-    let lock = FileCountingLock(
+  /// Whether `runID` is a build run's hold: its device takes no `sim` slot.
+  public static func isHoldRunID(_ runID: String) -> Bool {
+    let suffix = holdRunID(buildRunID: "")
+    return runID.count > suffix.count && runID.hasSuffix(suffix)
+  }
+
+  /// The 1-slot lock whoever borrows the device holds.
+  public static func borrowLock(
+    buildRunID: String, lockDirectory: URL, pollInterval: Duration = .milliseconds(5)
+  ) -> FileCountingLock {
+    FileCountingLock(
       directory: lockDirectory, name: "\(holdRunID(buildRunID: buildRunID)).borrow", capacity: 1,
-      pollInterval: .milliseconds(5))
-    return try? await lock.acquire(timeout: .milliseconds(200))
+      pollInterval: pollInterval)
+  }
+
+  /// The lock 1 borrower holds while it borrows the device; `nil` when another still has it
+  /// after `timeout`.
+  public static func borrow(
+    buildRunID: String, lockDirectory: URL,
+    timeout: Duration = BuildRunDeviceQueue.freeAtOnce
+  ) async -> LockLease? {
+    try? await borrowLock(buildRunID: buildRunID, lockDirectory: lockDirectory)
+      .acquire(timeout: timeout)
   }
 
   /// Ends the hold by removing its lease, which its holder watches: the holder then deletes the
@@ -108,8 +183,11 @@ public struct RunDeviceLender: Sendable {
   }
 
   /// The held device and the borrow lock, kept until the caller releases it; `nil` when this
-  /// clone's build run holds no live device for `destination`, or a `qa run` is borrowing it.
-  public func borrow(for destination: XcodeTestDestination) async
+  /// clone's build run holds no live device for `destination`, or another borrower still has it
+  /// after `wait`.
+  public func borrow(
+    for destination: XcodeTestDestination, wait: Duration = BuildRunDeviceQueue.freeAtOnce
+  ) async
     -> (device: SimulatorDevice, lease: LockLease)?
   {
     let suffix = BuildRunDevice.holdRunID(buildRunID: "")

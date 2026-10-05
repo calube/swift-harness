@@ -310,7 +310,13 @@ enum QARunRun {
     dependencies.started?(runID, qaDirectory.appending(path: QAReport.fileName))
     // A build run's device stays booted across its qa runs; a run that can't borrow it, or runs
     // outside a build, holds its own for its rows.
-    let borrowed = dependencies.flows == nil ? nil : await dependencies.devices?.borrow(plan: slug)
+    let loan: QADeviceLoan =
+      dependencies.flows == nil
+      ? .own
+      : await dependencies.devices?.borrow(
+        plan: slug, until: dependencies.deadline, waiting: {}) ?? .own
+    let borrowed: BorrowedDevice? =
+      if case .borrowed(let device, _) = loan { device } else { nil }
     defer { borrowed?.release() }
     let hold =
       borrowed?.hold
@@ -1140,12 +1146,14 @@ struct LiveQADeviceLender: QADeviceLending {
   let root: URL
   let git: any Git
 
-  func borrow(plan: String) async -> BorrowedDevice? {
+  func borrow(
+    plan: String, until deadline: QARunDeadline?, waiting: @escaping @Sendable () -> Void
+  ) async -> QADeviceLoan {
     guard BuildPresetCatalog.profile(root: root) == .brownfield,
       let store = try? await BuildRunStore.latest(plan: plan, git: git),
       let box = try? store.record().timeBox,
       let common = try? await git.commonDirectory()
-    else { return nil }
+    else { return .own }
     let now = Date()  // swiftgate:allow det.date-init — the CLI edge reads the clock
     let left = box.deadlines.endsAt.timeIntervalSince(now) / 60
     let minutes = min(
@@ -1154,13 +1162,14 @@ struct LiveQADeviceLender: QADeviceLending {
     guard
       let lease = await BuildRunDevice.borrow(
         buildRunID: store.runID, lockDirectory: FileCountingLock.defaultDirectory())
-    else { return nil }
-    return BorrowedDevice(
-      hold: QAFlowDeviceHold(
-        runID: BuildRunDevice.holdRunID(buildRunID: store.runID),
-        directory: BuildRunDevice.logDirectory(commonDirectory: common, buildRunID: store.runID),
-        keptAfterRun: true, timeoutMinutes: minutes),
-      lease: lease)
+    else { return .own }
+    return .borrowed(
+      BorrowedDevice(
+        hold: QAFlowDeviceHold(
+          runID: BuildRunDevice.holdRunID(buildRunID: store.runID),
+          directory: BuildRunDevice.logDirectory(commonDirectory: common, buildRunID: store.runID),
+          keptAfterRun: true, timeoutMinutes: minutes),
+        lease: lease), waitedMilliseconds: nil)
   }
 }
 

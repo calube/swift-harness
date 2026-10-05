@@ -2,7 +2,8 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
-/// 1 brownfield gate in flight, as `<clone root>/gates/<pid>.json` records it while it runs.
+/// 1 brownfield gate or `qa run` in flight, as `<clone root>/gates/<pid>.json` records it while it
+/// runs.
 public struct RunningGate: Sendable, Equatable, Codable {
   public let pid: Int32
   /// When the process started, in seconds since 1970, so a pid the system reused for another
@@ -10,6 +11,7 @@ public struct RunningGate: Sendable, Equatable, Codable {
   public let processStart: Double
   /// Absolute: the worktree the gate checks.
   public let toplevel: String
+  /// The gate's tier, or ``RunningGateRegistry/qaRunKind`` for a `qa run`.
   public let tier: String
   public let startedAt: Date
 
@@ -49,12 +51,21 @@ public struct RunningGateRegistry: Sendable {
       processes: processes)
   }
 
+  /// What a `qa run`'s record names in place of a tier.
+  public static let qaRunKind = "qa"
+
   /// Records this process as a gate checking `toplevel`; `nil` when it can't, and the gate runs
   /// unrecorded.
   public func register(pid: Int32, toplevel: String, tier: CheckTier, now: Date) -> URL? {
+    register(pid: pid, toplevel: toplevel, kind: tier.rawValue, now: now)
+  }
+
+  /// Records this process as a `kind` run in `toplevel`, a gate tier or ``qaRunKind``; `nil` when
+  /// it can't.
+  public func register(pid: Int32, toplevel: String, kind: String, now: Date) -> URL? {
     guard let start = processes.startTime(of: pid) else { return nil }
     let gate = RunningGate(
-      pid: pid, processStart: start, toplevel: Self.canonical(toplevel), tier: tier.rawValue,
+      pid: pid, processStart: start, toplevel: Self.canonical(toplevel), tier: kind,
       startedAt: now)
     let record = directory.appending(path: "\(pid).json")
     do {

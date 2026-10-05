@@ -51,10 +51,14 @@ public struct SimUp: Sendable {
     /// The `swiftgate` binary the holder runs as.
     public var swiftgateExecutable: String
     public var device: SimUpDevice
+    /// When a holder still waiting for a `sim` slot is stopped and the run reads `sim.no-slot`;
+    /// `nil` waits the lease timeout.
+    public var slotDeadline: QARunDeadline?
 
     public init(
       worktree: URL, target: SimTarget, scenario: String?, runID: String, simDirectory: URL,
-      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own
+      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own,
+      slotDeadline: QARunDeadline? = nil
     ) {
       self.worktree = worktree
       self.target = target
@@ -64,6 +68,7 @@ public struct SimUp: Sendable {
       self.derivedDataPath = derivedDataPath
       self.swiftgateExecutable = swiftgateExecutable
       self.device = device
+      self.slotDeadline = slotDeadline
     }
 
     /// An owned repository's request, from its `.swiftgate.toml`.

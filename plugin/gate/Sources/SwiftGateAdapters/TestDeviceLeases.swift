@@ -240,10 +240,16 @@ public final class WarmedAreaRunner: AreaCommandRunning {
 public struct LeasedDeviceAreaRunner: TestDeviceWarming {
   private let base: any AreaCommandRunning
   private let leases: any TestDeviceLeasing
+  private let clock: SimHoldClock
 
-  public init(base: any AreaCommandRunning, leases: any TestDeviceLeasing) {
+  /// - Parameter clock: times the wait for a device, which the step's bound covers.
+  public init(
+    base: any AreaCommandRunning, leases: any TestDeviceLeasing,
+    clock: SimHoldClock = .continuous()
+  ) {
     self.base = base
     self.leases = leases
+    self.clock = clock
   }
 
   public func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {

@@ -59,7 +59,7 @@ struct SimHoldCommand: AsyncParsableCommand {
     }
     let holder = SimHolder(
       devices: SimulatorClones.live(
-        config: simulator, runner: runner,
+        config: simulator, runner: runner, holding: runID,
         releaseClaims: SimulatorClones.agentDeviceClaimRelease(
           LiveAgentDevice(runner: runner), failed: { Self.log("sim hold: \($0)") }),
         sweepLeases: { await Self.sweepDeadHolders(SimDown.live(runner: runner)) }),
