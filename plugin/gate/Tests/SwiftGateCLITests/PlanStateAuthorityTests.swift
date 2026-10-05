@@ -454,6 +454,7 @@ struct PlanStateAuthorityTests {
       denied.reason
         == "swiftgate \(EditGuard.planStateRuleID): a subagent never runs `swiftgate plan set`: "
         + "claiming, releasing and indexing a plan belong to the main session that orchestrates "
-        + "it. Report `design-conflict` or `needs-replan` to it instead.")
+        + "it. Report `design-conflict` or `needs-replan` to it instead. "
+        + GuardViolation.commandNotRunNote)
   }
 }

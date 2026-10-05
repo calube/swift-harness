@@ -153,11 +153,13 @@ enum BuildCutoffRun {
       let common = try? await git.commonDirectory()
       let worktrees = ledger.tasks.filter { task in abandoned.contains { $0.task == task.id } }
         .flatMap { task -> [String] in
-          guard let common else { return [task.worktree] }
-          return [task.id, "fix-\(task.id)"].compactMap { name in
-            try? TaskWorktree(commonDirectory: common, plan: slug, task: name, profile: .brownfield)
-              .path
+          let names = [task.id, "fix-\(task.id)"].compactMap { name in
+            common.flatMap {
+              try? TaskWorktree(commonDirectory: $0, plan: slug, task: name, profile: .brownfield)
+                .path
+            }
           }
+          return names.isEmpty ? [task.worktree] : names
         }
       let stopped = await leftovers?.stopGates(in: worktrees) ?? []
       let sweep = await leftovers?.pruneScratchTrees() ?? ScratchWorktreeSweep()
