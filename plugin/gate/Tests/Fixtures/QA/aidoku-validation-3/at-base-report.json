@@ -1,0 +1,103 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "commit" : "c1766cda9015b1fc09d574fdd174de5bbe772027",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "4 of 4 rows verified: 0 pass, 4 red, 0 unverified, 0 waiting",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "test: AidokuTests/LargeDownloadConfirmationTests",
+      "evidence" : [
+        "qa/04-req-download-check.acceptance.txt"
+      ],
+      "exitStatus" : 0,
+      "layer" : "acceptance",
+      "message" : "exit 0, but no test matched `AidokuTests/LargeDownloadConfirmationTests`",
+      "ms" : 86834,
+      "requirement" : "req-download-check",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "confirm-downloads-check"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-toggle.flow.json",
+      "evidence" : [
+        "qa/01-req-setting-toggle.flow/steps.json",
+        "qa/01-req-setting-toggle.flow/batch.json",
+        "qa/01-req-setting-toggle.flow/flow.json",
+        "qa/01-req-setting-toggle.flow/sim/steps.ndjson",
+        "qa/01-req-setting-toggle.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 6 `wait` failed: Batch failed at step 12 (wait): wait timed out for selector: id=\"Downloads.confirmLargeDownloads\". Current surface: Settings, Incognito Mode, Downloads, Total Downloads.",
+      "ms" : 141213,
+      "requirement" : "req-setting-toggle",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.flow.json",
+      "evidence" : [
+        "qa/02-req-stored-value.flow/steps.json",
+        "qa/02-req-stored-value.flow/batch.json",
+        "qa/02-req-stored-value.flow/flow.json",
+        "qa/02-req-stored-value.flow/sim/steps.ndjson",
+        "qa/02-req-stored-value.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 6 `wait` failed: Batch failed at step 12 (wait): wait timed out for selector: id=\"Downloads.confirmLargeDownloads\"",
+      "ms" : 57575,
+      "requirement" : "req-stored-value",
+      "result" : "red",
+      "row" : 2,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.state.sh",
+      "evidence" : [
+        "qa/03-req-stored-value.state.txt"
+      ],
+      "exitStatus" : 1,
+      "layer" : "state",
+      "message" : "exit 1: The domain/default pair of (app.aidoku.Aidoku, Downloads.confirmLargeDownloads) does not exist",
+      "ms" : 514,
+      "requirement" : "req-stored-value",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261004T235239Z-4acebe48",
+  "schemaVersion" : 1,
+  "verdict" : "GREEN"
+}

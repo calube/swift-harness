@@ -1,13 +1,14 @@
-// The Validation tab: a strip counting pass, red, unverified and waiting rows, the rows grouped
-// by the task each runs after, then the kept XCUITest flows by flow and test. A red row opens "Why
-// it failed"; an unverified row, or a flow missing its video or sheet, "Why unverified". A flow
+// The Validation tab: a strip counting pass, red, unverified and waiting rows, plus abandoned
+// ones when there are any, the rows grouped by the task each runs after, then the kept XCUITest
+// flows by flow and test. A red row opens "Why it failed"; an unverified or abandoned row, or a
+// flow missing its video or sheet, "Why unverified". A flow
 // lists its steps, each linked to the video at its offset, and links its contact sheet. Evidence
 // is linked or named by path, never embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
 (function (root) {
   const M = root.RunViewModel;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-  const RESULT = { pass: "ok", red: "bad", unverified: "warn", waiting: "plain" };
+  const RESULT = { pass: "ok", red: "bad", unverified: "warn", waiting: "plain", abandoned: "bad" };
   let current = null;
   let mount = null;
   // The rows on screen, by their group and row number, for the popover a button opens; the rows
@@ -31,7 +32,7 @@
   const what = (row) => `${row.layer} check ${row.check != null ? row.check : "of row " + row.row}`;
 
   const gaps = (flow) => (flow ? [flow.videoUnverified, flow.sheetUnverified].some((g) => g != null) : false);
-  const whyOf = (row) => (row.result === "red" ? "Why it failed" : row.result === "unverified" || gaps(row.flow) ? "Why unverified" : null);
+  const whyOf = (row) => (row.result === "red" ? "Why it failed" : row.result === "unverified" || row.result === "abandoned" || gaps(row.flow) ? "Why unverified" : null);
   const whyButton = (why, key) => `<button type="button" class="link-btn qa-why" data-key="${esc(key)}" aria-haspopup="dialog" aria-expanded="false">${why}</button>`;
   const seconds = (ms) => (Math.max(0, ms) / 1000).toFixed(1) + " s";
 
@@ -81,7 +82,7 @@
     const v = view.validation;
     if (!v) { mount.innerHTML = ""; return; }
     const c = v.counts;
-    const strip = [["pass", c.pass], ["red", c.red], ["unverified", c.unverified], ["waiting", c.waiting]]
+    const strip = [["pass", c.pass], ["red", c.red], ["unverified", c.unverified], ["waiting", c.waiting]].concat(c.abandoned ? [["abandoned", c.abandoned]] : [])
       .map(([k, n]) => `<div class="stat qa-count" data-result="${k}"><b class="num">${n}</b><span>${k}</span></div>`).join("");
     const groups = M.validationGroups(view).map((g, gi) => {
       const rows = g.rows.map((row) => { const key = gi + ":" + row.row; shown[key] = row; return rowHtml(row, key); });
@@ -153,7 +154,7 @@
         ["evidence", evidence],
         ["qa run", row.qaRun]
       ], "Why it failed", output);
-    } else if (row.result === "unverified") {
+    } else if (row.result === "unverified" || row.result === "abandoned") {
       runViewer.openPopover(anchor, [
         ["requirement", row.requirement],
         ["didn't run", what(row)],

@@ -24,9 +24,13 @@ public struct QARunPlan: Sendable, Equatable {
   public static let layerOrder: [ValidationLayer] = [.acceptance, .flow, .state]
 
   public let entries: [Entry]
+  /// Each task's ledger status once the build has ended, when no later merge can make a row
+  /// ready; `nil` while tasks can still merge, so a row with an unmerged task reads `waiting`.
+  public let ended: [String: TaskStatus]?
 
-  public init(entries: [Entry]) {
+  public init(entries: [Entry], ended: [String: TaskStatus]? = nil) {
     self.entries = entries
+    self.ended = ended
   }
 
   /// - Parameters:
@@ -34,9 +38,11 @@ public struct QARunPlan: Sendable, Equatable {
   ///     base does, since there no row's tasks have merged by definition.
   ///   - after: when set, only the rows whose `runsAfter` names this task, which counts as
   ///     merged: the caller runs this straight after merging it.
-  public static func make(table: ValidationTable, merged: Set<String>?, after: String?)
-    -> QARunPlan
-  {
+  ///   - ended: each task's ledger status when the build has ended; see ``ended``.
+  public static func make(
+    table: ValidationTable, merged: Set<String>?, after: String?,
+    ended: [String: TaskStatus]? = nil
+  ) -> QARunPlan {
     let numbered = table.rows.enumerated().map { (row: $0.offset + 1, validation: $0.element) }
     let layered = layerOrder.flatMap { layer in
       numbered
@@ -50,7 +56,7 @@ public struct QARunPlan: Sendable, Equatable {
           return Entry(row: candidate.row, validation: candidate.validation, waitingOn: unmerged)
         }
     }
-    return QARunPlan(entries: statesAfterTheirFlows(layered))
+    return QARunPlan(entries: statesAfterTheirFlows(layered), ended: ended)
   }
 
   /// Moves each requirement's state rows to just after its last flow row: a state check reads
@@ -83,14 +89,20 @@ public struct QARunPlan: Sendable, Equatable {
   ///   plan passed; another requirement's red row stops nothing, since it crosses another
   ///   boundary. `true` runs every ready row, since each is expected to fail there, except a state
   ///   row whose flow row didn't run: with no device, its red would prove nothing.
+  ///
+  /// An acceptance check that rows share runs once, for the first of them; each later row takes
+  /// its result and evidence, naming the row that ran it.
   public func execute(atBase: Bool, check: (Entry) async -> QACheckOutcome) async -> [QARow] {
     var rows: [QARow] = []
     var reds: [String: QARow] = [:]
     var flows: [String: [QARow]] = [:]
+    var ran: [String: (row: Int, outcome: QACheckOutcome)] = [:]
     for entry in entries {
       let validation = entry.validation
       let row: QARow
-      if !entry.waitingOn.isEmpty {
+      if !entry.waitingOn.isEmpty, let ended {
+        row = Self.neverReady(entry, ended: ended)
+      } else if !entry.waitingOn.isEmpty {
         row = Self.row(
           entry, result: .waiting,
           message: "waiting on \(entry.waitingOn.joined(separator: ", "))",
@@ -114,12 +126,19 @@ public struct QARunPlan: Sendable, Equatable {
             "not run: flow row \(flow.row) `\(flow.check)` for \(validation.requirement) is "
             + flow.result.rawValue)
       } else {
-        let outcome = await check(entry)
+        let outcome: QACheckOutcome
+        if validation.layer == .acceptance, let first = ran[validation.check] {
+          outcome = Self.shared(first.outcome, ranFor: first.row)
+        } else {
+          outcome = await check(entry)
+          if validation.layer == .acceptance { ran[validation.check] = (entry.row, outcome) }
+        }
         row = QARow(
           row: entry.row, requirement: validation.requirement, layer: validation.layer,
           check: validation.check, runsAfter: validation.runsAfter, result: outcome.result,
           message: outcome.message, exitStatus: outcome.exitStatus,
-          milliseconds: outcome.milliseconds, evidence: outcome.evidence)
+          milliseconds: outcome.milliseconds, evidence: outcome.evidence,
+          reusedFrom: outcome.reusedFrom)
         if outcome.result == .red, reds[validation.requirement] == nil {
           reds[validation.requirement] = row
         }
@@ -128,6 +147,31 @@ public struct QARunPlan: Sendable, Equatable {
       rows.append(row)
     }
     return rows
+  }
+
+  /// The outcome of a check another row ran, for a row that names the same check. It took this
+  /// row no time.
+  private static func shared(_ outcome: QACheckOutcome, ranFor row: Int) -> QACheckOutcome {
+    QACheckOutcome(
+      result: outcome.result, message: "row \(row) ran this same check: \(outcome.message)",
+      exitStatus: outcome.exitStatus, milliseconds: 0, evidence: outcome.evidence)
+  }
+
+  /// A row whose tasks the build ended without merging: `abandoned` when any of them was, and
+  /// `unverified` naming each task's status otherwise.
+  private static func neverReady(_ entry: Entry, ended: [String: TaskStatus]) -> QARow {
+    let abandoned = entry.waitingOn.filter { ended[$0] == .abandoned }
+    if !abandoned.isEmpty {
+      return row(
+        entry, result: .abandoned,
+        message: "not run: \(abandoned.joined(separator: ", ")) was abandoned before it merged")
+    }
+    let statuses = entry.waitingOn.map { task in
+      "\(task) (\(ended[task]?.rawValue ?? "not in the ledger"))"
+    }
+    return row(
+      entry, result: .unverified,
+      message: "not run: the build ended with \(statuses.joined(separator: ", ")) unmerged")
   }
 
   /// Whether `earlier` runs before `later` in ``layerOrder``.
@@ -153,15 +197,18 @@ public struct QACheckOutcome: Sendable, Equatable {
   public let exitStatus: Int?
   public let milliseconds: Int
   public let evidence: [String]
+  /// The prepared at-base run whose recorded result this is, for a row that didn't run again.
+  public let reusedFrom: String?
 
   public init(
     result: QAResult, message: String, exitStatus: Int? = nil, milliseconds: Int = 0,
-    evidence: [String] = []
+    evidence: [String] = [], reusedFrom: String? = nil
   ) {
     self.result = result
     self.message = message
     self.exitStatus = exitStatus
     self.milliseconds = milliseconds
     self.evidence = evidence
+    self.reusedFrom = reusedFrom
   }
 }

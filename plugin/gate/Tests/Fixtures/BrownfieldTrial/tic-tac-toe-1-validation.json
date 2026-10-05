@@ -1,0 +1,54 @@
+{
+  "rows" : [
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "layer" : "acceptance",
+      "requirement" : "req-board-screen",
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "writer" : "ttt-screen"
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "layer" : "acceptance",
+      "requirement" : "req-status-text",
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "writer" : "ttt-screen"
+    },
+    {
+      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "layer" : "acceptance",
+      "requirement" : "req-new-game",
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "writer" : "ttt-screen"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "GameTests in ttt-engine check X first and alternation",
+      "requirement" : "req-turns"
+    },
+    {
+      "reason" : "GameTests in ttt-engine check occupied cells and moves after the end",
+      "requirement" : "req-ignored-moves"
+    },
+    {
+      "reason" : "GameTests in ttt-engine check all 8 lines for both players",
+      "requirement" : "req-win-lines"
+    },
+    {
+      "reason" : "GameTests in ttt-engine check a full board with no line",
+      "requirement" : "req-draw"
+    },
+    {
+      "reason" : "TicTacToeTests import only TicTacToe, no UI module",
+      "requirement" : "req-rules-tested"
+    }
+  ]
+}

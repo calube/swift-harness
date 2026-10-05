@@ -57,7 +57,9 @@ enum BrownfieldMergeCheck {
       } catch {
         throw BrownfieldCheckSetupError(reason: "\(error)")
       }
-      let runner = LiveAreaCommandRunner(processRunner: process)
+      let runner = LeasedDeviceAreaRunner(
+        base: LiveAreaCommandRunner(processRunner: process),
+        leases: LiveTestDeviceLeases(runner: process))
       let prove = BrownfieldProve.Dependencies.live(
         root: root, layout: layout, runner: runner, deadline: liveDeadline)
       let tree: @Sendable (String) async throws -> String = { commit in

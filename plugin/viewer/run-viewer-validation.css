@@ -1,5 +1,5 @@
 /* validation: a count strip, then 1 group of rows per task */
-.qa-count[data-result="red"] b { color: var(--bad); }
+.qa-count[data-result="red"] b, .qa-count[data-result="abandoned"] b { color: var(--bad); }
 .qa-count[data-result="unverified"] b { color: var(--warn); }
 .qa-count[data-result="pass"] b { color: var(--ok); }
 .qa-group { display: grid; gap: 6px; }

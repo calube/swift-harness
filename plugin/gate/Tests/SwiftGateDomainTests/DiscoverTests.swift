@@ -546,6 +546,22 @@ struct DiscoverTests {
   }
 
   @Test(
+    "a first discovery leaves stall_min unset, so the stall watch waits the default 15 minutes, longer than a cold slice gate — catches a stall watch that fires during the run's first cold build"
+  )
+  func freshPresetStallsAtTheDefault() throws {
+    let config = Discover.config(
+      from: DiscoverProposal(head: "abc", areas: [], dirty: []), keeping: nil)
+    // A trial's contract slice gate ran a cold xcodebuild build for 295 s.
+    let coldSliceGateSeconds = 295
+
+    let preset = try #require(config.buildPresets["brownfield"])
+    #expect(preset.stallMin == nil)
+    #expect(preset.effectiveStallMin == BuildPreset.defaultStallMin)
+    #expect(preset.effectiveStallMin * 60 > coldSliceGateSeconds)
+    #expect(!BrownfieldConfigTOML.render(config).contains("stall_min"))
+  }
+
+  @Test(
     "a rediscovery keeps a user's time_budget_min and stop_starts_before_min, and fills only a brownfield preset that is gone — catches a rediscovery dropping a user's time_budget_min"
   )
   func rediscoveryKeepsTheBox() {

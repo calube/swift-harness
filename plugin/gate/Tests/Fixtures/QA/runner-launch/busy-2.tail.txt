@@ -1,0 +1,155 @@
+*** If you believe this error represents a bug, please attach the result bundle at /TRIAL/repo/.git/worktrees/repo-spec/swift-harness/runs/20261005T010144Z-9350394a/qa/02-req-status-text.acceptance.xcresult
+
+
+Test session results, code coverage, and logs:
+	/TRIAL/repo/.git/worktrees/repo-spec/swift-harness/runs/20261005T010144Z-9350394a/qa/02-req-status-text.acceptance.xcresult
+
+Testing started
+
+--- stderr ---
+2026-10-04 20:03:15.288 xcodebuild[40120:83026632]  iOSSimulator: AA8B08DE-DB63-4FE1-960D-00834C0B6740: Failed to launch app with identifier: com.example.AppUITests.xctrunner and options: {
+    "activate_suspended" = 1;
+    arguments =     (
+    );
+    environment =     {
+        "APP_DISTRIBUTOR_ID_OVERRIDE" = "com.apple.AppStore";
+        "CA_ASSERT_MAIN_THREAD_TRANSACTIONS" = 0;
+        "CA_DEBUG_TRANSACTIONS" = 0;
+        "DYLD_FRAMEWORK_PATH" = "/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator/PackageFrameworks:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator/PackageFrameworks:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/Library/Frameworks";
+        "DYLD_INSERT_LIBRARIES" = "/usr/lib/libRPAC.dylib:/Library/Developer/CoreSimulator/Volumes/iOS_23C52/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.2.simruntime/Contents/Resources/RuntimeRoot/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib:/Library/Developer/CoreSimulator/Volumes/iOS_23C52/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.2.simruntime/Contents/Resources/RuntimeRoot/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib";
+        "DYLD_LIBRARY_PATH" = "/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib";
+        "LLVM_PROFILE_FILE" = "/dev/null";
+        NSUnbufferedIO = YES;
+        "OS_ACTIVITY_DT_MODE" = YES;
+        "PERFC_ENABLE_EXTENDED_DIAGNOSTIC_FORMAT" = 1;
+        "PERFC_ENABLE_PROFILE_MODE" = 1;
+        "PERFC_RESET_INSERT_LIBRARIES" = 1;
+        "PERFC_SUPPRESS_SYSTEM_REPORTS" = 1;
+        "RUN_DESTINATION_DEVICE_NAME" = "iPhone 17";
+        "RUN_DESTINATION_DEVICE_PLATFORM_IDENTIFIER" = "com.apple.platform.iphonesimulator";
+        "RUN_DESTINATION_DEVICE_UDID" = "AA8B08DE-DB63-4FE1-960D-00834C0B6740";
+        "SQLITE_ENABLE_THREAD_ASSERTIONS" = 1;
+        TERM = dumb;
+        "XCODE_SCHEME_NAME" = App;
+        XCTestBundleInjectPath = "/usr/lib/libRPAC.dylib:/Library/Developer/CoreSimulator/Volumes/iOS_23C52/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.2.simruntime/Contents/Resources/RuntimeRoot/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib:/Library/Developer/CoreSimulator/Volumes/iOS_23C52/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.2.simruntime/Contents/Resources/RuntimeRoot/usr/lib/libMainThreadChecker.dylib:/usr/lib/libRPAC.dylib";
+        XCTestBundlePath = "PlugIns/AppUITests.xctest";
+        XCTestConfigurationFilePath = "";
+        XCTestSessionIdentifier = "47290452-A1F6-478D-B32B-FA436741EA12";
+        "__XCODE_BUILT_PRODUCTS_DIR_PATHS" = "/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator";
+        "__XPC_DYLD_FRAMEWORK_PATH" = "/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator";
+        "__XPC_DYLD_LIBRARY_PATH" = "/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator:/HOME/Library/Developer/Xcode/DerivedData/App-ddsakrhapfetsmaacxtvndvstnkb/Build/Products/Debug-iphonesimulator";
+        "__XPC_LLVM_PROFILE_FILE" = "/dev/null";
+    };
+    stderr = "/dev/ttys000";
+    stdout = "/dev/ttys000";
+    "terminate_running_process" = 1;
+    "wait_for_debugger" = 1;
+} (error = Error Domain=FBSOpenApplicationServiceErrorDomain Code=1 "Simulator device failed to launch com.example.AppUITests.xctrunner." UserInfo={NSLocalizedDescription=Simulator device failed to launch com.example.AppUITests.xctrunner., NSUnderlyingError=0xadacc01b0 {Error Domain=FBSOpenApplicationServiceErrorDomain Code=1 "The request to open "com.example.AppUITests.xctrunner" failed." UserInfo={BSErrorCodeDescription=RequestDenied, NSLocalizedDescription=The request to open "com.example.AppUITests.xctrunner" failed., NSUnderlyingError=0xadacc0e40 {Error Domain=FBSOpenApplicationErrorDomain Code=6 "Application failed preflight checks" UserInfo={BSErrorCodeDescription=Busy, NSLocalizedFailureReason=Application failed preflight checks}}, FBSOpenApplicationRequestID=0xb5e0, NSLocalizedFailureReason=The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks").}}, NSLocalizedFailureReason=The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks")., FBSOpenApplicationRequestID=0xb5e0, SimCallingSelector=launchApplicationWithID:options:pid:error:, BSErrorCodeDescription=RequestDenied})
+2026-10-04 20:03:15.290 xcodebuild[40120:83026570] [MT] IDELaunchReport: 1cc61778f1b408c0:1cc61778f1b408c0: Finished with error: Simulator device failed to launch com.example.AppUITests.xctrunner.
+Domain: FBSOpenApplicationServiceErrorDomain
+Code: 1
+Failure Reason: The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks").
+User Info: {
+    BSErrorCodeDescription = RequestDenied;
+    DVTErrorCreationDateKey = "2026-10-05 01:03:15 +0000";
+    FBSOpenApplicationRequestID = 0xb5e0;
+    IDERunOperationFailingWorker = IDELaunchiPhoneSimulatorLauncher;
+    SimCallingSelector = "launchApplicationWithID:options:pid:error:";
+}
+--
+The request to open "com.example.AppUITests.xctrunner" failed.
+Domain: FBSOpenApplicationServiceErrorDomain
+Code: 1
+Failure Reason: The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks").
+User Info: {
+    BSErrorCodeDescription = RequestDenied;
+    FBSOpenApplicationRequestID = 0xb5e0;
+}
+--
+The operation couldn’t be completed. Application failed preflight checks
+Domain: FBSOpenApplicationErrorDomain
+Code: 6
+Failure Reason: Application failed preflight checks
+User Info: {
+    BSErrorCodeDescription = Busy;
+}
+--
+
+2026-10-04 20:03:15.290 xcodebuild[40120:83026570] [MT] IDELaunchReport: 1cc61778f1b408c0:1cc61778f1b408c0: com.apple.dt.IDERunOperationWorkerFinished {
+    "device_identifier" = "AA8B08DE-DB63-4FE1-960D-00834C0B6740";
+    "device_model" = "iPhone18,3";
+    "device_osBuild" = "26.2 (23C52)";
+    "device_osBuild_monotonic" = 2302005200;
+    "device_os_variant" = 1;
+    "device_platform" = "com.apple.platform.iphonesimulator";
+    "device_platform_family" = 2;
+    "device_reality" = 2;
+    "device_thinningType" = "iPhone18,3";
+    "device_transport" = 4;
+    "launchSession_schemeCommand" = Test;
+    "launchSession_schemeCommand_enum" = 2;
+    "launchSession_targetArch" = arm64;
+    "launchSession_targetArch_enum" = 6;
+    "operation_duration_ms" = 17702;
+    "operation_errorCode" = 1;
+    "operation_errorDomain" = FBSOpenApplicationServiceErrorDomain;
+    "operation_errorWorker" = IDELaunchiPhoneSimulatorLauncher;
+    "operation_error_reportable" = 1;
+    "operation_name" = IDERunOperationWorkerGroup;
+    "param_consoleMode" = 0;
+    "param_debugger_attachToExtensions" = 0;
+    "param_debugger_attachToXPC" = 0;
+    "param_debugger_type" = 1;
+    "param_destination_isProxy" = 0;
+    "param_destination_platform" = "com.apple.platform.iphonesimulator";
+    "param_diag_MTE_enable" = 0;
+    "param_diag_MainThreadChecker_stopOnIssue" = 0;
+    "param_diag_MallocStackLogging_enableDuringAttach" = 0;
+    "param_diag_MallocStackLogging_enableForXPC" = 0;
+    "param_diag_allowLocationSimulation" = 1;
+    "param_diag_checker_mtc_enable" = 0;
+    "param_diag_checker_tpc_enable" = 1;
+    "param_diag_gpu_frameCapture_enable" = 3;
+    "param_diag_gpu_shaderValidation_enable" = 0;
+    "param_diag_gpu_validation_enable" = 1;
+    "param_diag_guardMalloc_enable" = 0;
+    "param_diag_memoryGraphOnResourceException" = 0;
+    "param_diag_queueDebugging_enable" = 1;
+    "param_diag_runtimeProfile_generate" = 0;
+    "param_diag_sanitizer_asan_enable" = 0;
+    "param_diag_sanitizer_tsan_enable" = 0;
+    "param_diag_sanitizer_tsan_stopOnIssue" = 0;
+    "param_diag_sanitizer_ubsan_enable" = 0;
+    "param_diag_sanitizer_ubsan_stopOnIssue" = 0;
+    "param_diag_showNonLocalizedStrings" = 0;
+    "param_diag_viewDebugging_enabled" = 0;
+    "param_diag_viewDebugging_insertDylibOnLaunch" = 0;
+    "param_install_style" = 2;
+    "param_launcher_UID" = 2;
+    "param_launcher_allowDeviceSensorReplayData" = 0;
+    "param_launcher_kind" = 0;
+    "param_launcher_style" = 0;
+    "param_launcher_substyle" = 64;
+    "param_lldbVersion_component_idx_1" = 0;
+    "param_lldbVersion_monotonic" = 170302360020;
+    "param_runnable_appExtensionHostRunMode" = 0;
+    "param_runnable_productType" = "com.apple.product-type.application";
+    "param_testing_launchedForTesting" = 1;
+    "param_testing_suppressSimulatorApp" = 1;
+    "param_testing_usingCLI" = 0;
+    "sdk_canonicalName" = "iphonesimulator26.2";
+    "sdk_osVersion" = "26.2";
+    "sdk_platformID" = 7;
+    "sdk_variant" = iphonesimulator;
+    "sdk_version_monotonic" = 2302005000;
+}
+2026-10-04 20:03:26.562 xcodebuild[40120:83026570] [MT] IDETestOperationsObserverDebug: 31.276 elapsed -- Testing started completed.
+2026-10-04 20:03:26.562 xcodebuild[40120:83026570] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-04 20:03:26.562 xcodebuild[40120:83026570] [MT] IDETestOperationsObserverDebug: 31.276 sec, +31.276 sec -- end
+Testing failed:
+	Simulator device failed to launch com.example.AppUITests.xctrunner.
+	AppUITests-Runner encountered an error (Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.AppUITests.xctrunner. The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks"). (Underlying Error: The request to open "com.example.AppUITests.xctrunner" failed. The request was denied by service delegate (SBMainWorkspace) for reason: Busy ("Application failed preflight checks"). (Underlying Error: The operation couldn’t be completed. Application failed preflight checks))))
+
+** TEST FAILED **
+
+

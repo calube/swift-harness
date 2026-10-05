@@ -1,0 +1,43 @@
+schema = 1
+
+[harness]
+profile = "brownfield"
+
+[brownfield]
+discovered_at = "3091ef26e593d303e34afed70bc8c5997c105f80"
+slice_budget_s = 30
+time_budget_min = 0
+sensitive = []
+
+[[areas]]
+name = "Aidoku"
+root = "."
+language = "swift"
+kind = "xcode"
+test = "xcodebuild test -project Aidoku.xcodeproj -scheme Aidoku -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation"
+build = "xcodebuild build -project Aidoku.xcodeproj -scheme Aidoku -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
+test_globs = ["**/AidokuTests/**/*.swift"]
+packs = []
+
+[areas.xcode]
+project = "Aidoku.xcodeproj"
+inclusion = "synchronized"
+schemes = ["Aidoku"]
+
+[judge]
+backend = "claude"
+advisory_threshold = 0.6
+block_threshold = 0.9
+
+[build.presets.brownfield]
+design_tier = "none"
+max_parallel = 3
+review = "classified"
+task_gate = "slice"
+merge_gate = "merge"
+worker_model = "claude-sonnet-5-5"
+time_budget_min = 45
+stop_starts_before_min = 13
+on_design_conflict = "amend"
+task_proof = "prove"
+stall_min = 2

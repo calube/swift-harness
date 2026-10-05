@@ -340,6 +340,65 @@ struct QARunCommandTests {
   }
 
   @Test(
+    "--at-base --prepared-by runs only the rows that task writes, with each check and QA_DIR read from the checkout's .harness/qa/<plan>/ rather than plan state — catches a validation worker's red proven against checks qa adopt hasn't copied yet, or spent on another task's rows"
+  )
+  func preparedAtBase() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [
+        ValidationRow(
+          requirement: "req-toggle", layer: .acceptance, check: "exit 0",
+          runsAfter: ["toggle-ui"], writer: "toggle-ui"),
+        validationRow("req-toggle", .state, "qa/toggle.state.sh", after: ["toggle-ui"]),
+      ], tasks: ["toggle-ui": .pending])
+    try repo.qaFile("toggle.state.sh", "exit 0\n")
+    let prepared = repo.root.appending(
+      path: ".harness/qa/\(QARepo.slug)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+    try Data("test -f \"$QA_DIR/toggle.state.sh\" || exit 9\nexit 5\n".utf8)
+      .write(to: prepared.appending(path: "toggle.state.sh"))
+
+    let report = await repo.run(QARunRun.Options(atBase: true, preparedBy: "validation"))
+
+    #expect(report.atBase)
+    #expect(report.rows.map(\.row) == [2], "\(report.rows)")
+    #expect(report.rows.first?.result == .red)
+    #expect(report.rows.first?.exitStatus == 5, "\(report.rows)")
+    #expect(report.findings.isEmpty, "\(report.findings)")
+    #expect(report.verdict == .green, "\(report.message)")
+    #expect(report.notes.contains { $0.contains(".harness/qa/\(QARepo.slug)") }, "\(report.notes)")
+  }
+
+  @Test(
+    "--prepared-by without --at-base, naming no row's writer, or with no prepared folder is BLOCKED and runs nothing — catches a worker's checks run on the changed tree, or a typo'd task that proves no row"
+  )
+  func preparedBlocked() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [validationRow("req-toggle", .state, "qa/toggle.state.sh", after: ["toggle-ui"])],
+      tasks: ["toggle-ui": .pending])
+
+    let notAtBase = await repo.run(QARunRun.Options(preparedBy: "validation"))
+    let noFolder = await repo.run(
+      QARunRun.Options(atBase: true, preparedBy: "validation"), suffix: 2)
+    try FileManager.default.createDirectory(
+      at: repo.root.appending(path: ".harness/qa/\(QARepo.slug)", directoryHint: .isDirectory),
+      withIntermediateDirectories: true)
+    let unknown = await repo.run(
+      QARunRun.Options(atBase: true, preparedBy: "validaton"), suffix: 3)
+
+    #expect(notAtBase.verdict == .blocked)
+    #expect(notAtBase.message.contains("--at-base"), "\(notAtBase.message)")
+    #expect(noFolder.verdict == .blocked)
+    #expect(noFolder.message.contains(".harness/qa/\(QARepo.slug)"), "\(noFolder.message)")
+    #expect(unknown.verdict == .blocked)
+    #expect(unknown.message.contains("validaton"), "\(unknown.message)")
+    #expect([notAtBase, noFolder, unknown].allSatisfy { $0.rows.isEmpty })
+  }
+
+  @Test(
     "--after naming no ledger task is BLOCKED, and runs nothing — catches a typo'd task id read as a merge that unblocks no row"
   )
   func unknownAfterBlocks() async throws {

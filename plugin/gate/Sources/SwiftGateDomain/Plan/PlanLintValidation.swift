@@ -6,9 +6,36 @@ public enum PlanLintValidation {
   public static let stateWithoutFlowRuleID = "plan-lint.validation-state-without-flow"
   public static let flowWithoutIOSRuleID = "plan-lint.validation-flow-without-ios"
   public static let checkSourceFileRuleID = "plan-lint.validation-check-source-file"
+  public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
+
+  /// A task as the screen check reads it: the requirements it covers and the paths it writes.
+  public struct TaskWrites: Sendable, Equatable {
+    public let id: String
+    public let covers: [String]
+    /// Repository-relative paths; a path ending in `/` is a prefix.
+    public let writes: [String]
+
+    public init(id: String, covers: [String], writes: [String]) {
+      self.id = id
+      self.covers = covers
+      self.writes = writes
+    }
+  }
+
+  /// An `xcode` area: an app whose screens a flow row can drive.
+  public struct AppArea: Sendable, Equatable {
+    public let name: String
+    /// Repository-relative; `.` is the repository root.
+    public let root: String
+
+    public init(name: String, root: String) {
+      self.name = name
+      self.root = root
+    }
+  }
 
   /// Every finding, each `major`: uncovered requirements in plan order, then each row's findings
-  /// in table order.
+  /// in table order, then the screen requirements with no flow row in plan order.
   ///
   /// - Parameters:
   ///   - requirements: the plan's requirement ids, in plan order.
@@ -17,9 +44,12 @@ public enum PlanLintValidation {
   ///   - file: the file findings name: `PLAN.md` or `validation.json`.
   ///   - rowLines: the line of each of `table.rows`, when the table came from markdown.
   ///   - sectionLine: the line the table starts on, when it came from markdown.
+  ///   - tasks: each task's covers and writes, for the screen check; empty skips it.
+  ///   - appAreas: the repository's `xcode` areas, whose screens a task can touch.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
-    file: String, rowLines: [Int] = [], sectionLine: Int? = nil
+    file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
+    appAreas: [AppArea] = []
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))
@@ -89,7 +119,87 @@ public enum PlanLintValidation {
               + "fails on leftovers"))
       }
     }
+    findings += try screenFindings(
+      table: table, requirements: requirements, tasks: tasks, appAreas: appAreas, file: file,
+      rowLines: rowLines, sectionLine: sectionLine)
     return findings
+  }
+
+  /// 1 finding per requirement, in plan order, that a task covers while writing a screen of an
+  /// `xcode` area, with no `flow` row and no reason on any of its rows.
+  private static func screenFindings(
+    table: ValidationTable, requirements: [String], tasks: [TaskWrites], appAreas: [AppArea],
+    file: String, rowLines: [Int], sectionLine: Int?
+  ) throws(ReportContractViolation) -> [Finding] {
+    guard !appAreas.isEmpty else { return [] }
+    var findings: [Finding] = []
+    for requirement in requirements {
+      let rows = table.rows.enumerated().filter { $0.element.requirement == requirement }
+      let reasoned =
+        table.unitOnly.contains { $0.requirement == requirement }
+        || rows.contains { !($0.element.reason ?? "").trimmingCharacters(in: .whitespaces).isEmpty }
+      guard !reasoned, !rows.contains(where: { $0.element.layer == .flow }) else { continue }
+      guard
+        let (task, path, area) = tasks.lazy.filter({ $0.covers.contains(requirement) })
+          .compactMap({ task in screenPath(task, appAreas).map { (task.id, $0.path, $0.area) } })
+          .first
+      else { continue }
+      let line = rows.first.flatMap { $0.offset < rowLines.count ? rowLines[$0.offset] : nil }
+      findings.append(
+        try Finding(
+          ruleID: screenWithoutFlowRuleID, severity: .major, file: file,
+          line: line ?? sectionLine,
+          message:
+            "\(requirement) is on screen: `\(task)` writes `\(path)` in the xcode area "
+            + "`\(area)`, but \(requirement) has no flow row; add a flow row for its journey, "
+            + "or say in its row's Reason why no flow can check it",
+          failureScenario:
+            "the screen merges with no flow, so no video is recorded, nothing runs red at the "
+            + "base, and the Validation tab has no journey for \(requirement)"))
+    }
+    return findings
+  }
+
+  /// The first path `task` writes that is a screen inside 1 of `appAreas`, with that area's name.
+  private static func screenPath(_ task: TaskWrites, _ appAreas: [AppArea])
+    -> (path: String, area: String)?
+  {
+    for path in task.writes where isScreen(path) {
+      if let area = appAreas.first(where: { contains($0.root, path) }) {
+        return (path, area.name)
+      }
+    }
+    return nil
+  }
+
+  /// Whether `root`, repository-relative with `.` for the root, holds `path`.
+  private static func contains(_ root: String, _ path: String) -> Bool {
+    var prefix = root
+    while prefix.hasPrefix("./") { prefix.removeFirst(2) }
+    while prefix.hasSuffix("/") { prefix.removeLast() }
+    guard !prefix.isEmpty, prefix != "." else { return true }
+    return path == prefix || path.hasPrefix(prefix + "/")
+  }
+
+  /// Name endings that mark a screen: SwiftUI and UIKit views, screens, UI modules and UI tests.
+  private static let screenSuffixes = [
+    "View", "Views", "Screen", "Screens", "ViewController", "UI", "UITests",
+  ]
+  private static let screenExtensions: Set<String> = ["storyboard", "xib"]
+
+  /// Whether a folder or file of `path` names a screen, by its name up to the first `.`.
+  private static func isScreen(_ path: String) -> Bool {
+    path.split(separator: "/").contains { component in
+      let parts = component.split(separator: ".", maxSplits: 1)
+      if parts.count == 2, let ext = component.split(separator: ".").last,
+        screenExtensions.contains(ext.lowercased())
+      {
+        return true
+      }
+      guard let stem = parts.first else { return false }
+      return screenSuffixes.contains { stem.hasSuffix($0) }
+        || ["ui", "views", "screens"].contains(stem.lowercased())
+    }
   }
 
   /// Extensions of the source files test frameworks read; a check naming 1 is never a command.

@@ -17,6 +17,9 @@ enum QARunRun {
     var atBase = false
     /// Every ready row, with each flow recorded and its logs saved.
     var final = false
+    /// With `atBase`, only the rows this task writes, read from the checkout's prepared
+    /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
+    var preparedBy: String?
   }
 
   struct Dependencies: Sendable {
@@ -38,6 +41,9 @@ enum QARunRun {
     var finalPass: QAFinalPass?
     /// Reads the result bundle an `xcode` area's `test:` row writes.
     var xcresults: any XcresultReader = LiveXcresultReader(runner: LiveProcessRunner())
+    /// Clones of the simulator a `test:` row's `xcodebuild test` names; `nil` runs the command on
+    /// the device as written.
+    var testDevices: (any TestDeviceLeasing)?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -53,6 +59,11 @@ enum QARunRun {
     if options.final, options.atBase || options.after != nil {
       return blocked(
         "--final runs every ready row on the checkout, so it takes neither --at-base nor --after")
+    }
+    if options.preparedBy != nil, !options.atBase || options.after != nil || options.final {
+      return blocked(
+        "--prepared-by runs a validation task's checks at the merge base before `qa adopt`, so "
+          + "it needs --at-base and takes neither --after nor --final")
     }
     if options.final, dependencies.flows != nil, dependencies.finalPass == nil {
       return blocked("--final has no recorder to record its flows with")
@@ -114,7 +125,9 @@ enum QARunRun {
       return blocked("\(tablePath) doesn't read: \(error)", plan: slug)
     }
 
+    var notes: [String] = []
     var merged: Set<String>?
+    var ended: [String: TaskStatus]?
     if !options.atBase || options.after != nil {
       let progress: LedgerProgress
       do throws(PlanStateStoreError) {
@@ -127,10 +140,65 @@ enum QARunRun {
           "--after `\(after)` names no task in \(plan.ledgerFile); no row ran", plan: slug)
       }
       if !options.atBase {
-        merged = progress.merged
+        let build = await buildEvents(slug: slug, git: git, notes: &notes)
+        merged = progress.merged(per: build)
+        if options.after == nil, options.final || build?.finalGated == true {
+          ended = progress.statuses
+        }
       }
     }
-    let runPlan = QARunPlan.make(table: table, merged: merged, after: options.after)
+    var runPlan = QARunPlan.make(
+      table: table, merged: merged, after: options.after, ended: ended)
+    var prepared: String?
+    if let writer = options.preparedBy {
+      let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
+      let folder = root.appending(path: relative, directoryHint: .isDirectory).path
+      var isDirectory: ObjCBool = false
+      guard files.fileExists(atPath: folder, isDirectory: &isDirectory), isDirectory.boolValue
+      else {
+        return blocked(
+          "this checkout has no \(relative)/ folder, so --prepared-by has no checks to run",
+          plan: slug)
+      }
+      runPlan = QARunPlan(
+        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended)
+      guard !runPlan.entries.isEmpty else {
+        return blocked(
+          "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
+      }
+      prepared = folder
+      notes.append(
+        "checks read from \(relative)/ before qa adopt: only the \(runPlan.entries.count) rows "
+          + "`\(writer)` writes ran")
+    }
+
+    let digests = Dictionary(
+      uniqueKeysWithValues: runPlan.entries.map { entry in
+        let check = entry.validation.check
+        let file = Checks.checkFile(
+          check, preparedDirectory: prepared, planDirectory: plan.directory)
+        var isDirectory: ObjCBool = false
+        let bytes =
+          files.fileExists(atPath: file.path, isDirectory: &isDirectory) && !isDirectory.boolValue
+          ? files.contents(atPath: file.path) : nil
+        return (
+          entry.row, QAAtBaseRun.digest(layer: entry.validation.layer, check: check, file: bytes)
+        )
+      })
+    var reused: [Int: QACheckOutcome] = [:]
+    if options.atBase, prepared == nil {
+      let recordFile = "\(plan.directory)/\(QAReport.directory)/\(QAAtBaseRun.fileName)"
+      if let data = files.contents(atPath: recordFile) {
+        do {
+          let record = try QAAtBaseRunJSON.decode(data)
+          let reuse = record.reuse(in: runPlan, digests: digests)
+          reused = reuse.outcomes
+          notes += reuseNotes(record: record, reuse: reuse)
+        } catch {
+          notes.append("\(recordFile) doesn't read, so every row ran: \(error)")
+        }
+      }
+    }
 
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
@@ -142,15 +210,16 @@ enum QARunRun {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
     let checks = Checks(
-      planDirectory: plan.directory, qaDirectory: qaDirectory, dependencies: dependencies,
-      runID: runID, plan: runPlan, atBase: options.atBase,
+      planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
+      dependencies: dependencies,
+      runID: runID, plan: runPlan, atBase: options.atBase, reused: reused,
       areas: testAreas(root: root, common: common, table: table),
+      testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
         QAFlowRunner(
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil)
       })
 
-    var notes: [String] = []
     let rows: [QARow]
     let commit: String?
     if options.atBase {
@@ -169,16 +238,38 @@ enum QARunRun {
       let scratch =
         dependencies.scratch
         ?? LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
-      do throws(ScratchWorktreeError) {
-        rows = try await scratch.withScratchTree(
-          ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
-        ) { tree in
-          await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+      if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
+        rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
+      } else {
+        do throws(ScratchWorktreeError) {
+          rows = try await scratch.withScratchTree(
+            ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
+          ) { tree in
+            await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
+          }
+        } catch {
+          return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
         }
-      } catch {
-        return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
       }
       commit = base
+      if let writer = options.preparedBy, let prepared {
+        let record = QAAtBaseRun(
+          runID: runID, preparedBy: writer, commit: base, rows: rows, digests: digests)
+        let file = URL(filePath: prepared).appending(path: QAAtBaseRun.fileName)
+        do {
+          let data: Data
+          do {
+            data = try QAAtBaseRunJSON.encode(record)
+          } catch {
+            throw QAFilesError(path: file.path, reason: "encoding: \(error)")
+          }
+          try QAFiles.write(data, to: file)
+        } catch {
+          notes.append(
+            "\(QAAtBaseRun.fileName) not written, so the at-base run after qa adopt runs "
+              + "every row again: \(error)")
+        }
+      }
     } else {
       do {
         commit = try await git.revision("HEAD")
@@ -188,6 +279,7 @@ enum QARunRun {
       }
       rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
     }
+    await checks.testDevices?.releaseAll()
     let flowRecords = await checks.flowRecords()
     let gaps = await checks.gaps()
 
@@ -222,7 +314,8 @@ enum QARunRun {
 
     let report = QAReport(
       runID: runID, plan: slug, after: options.after, atBase: options.atBase,
-      final: options.final, commit: commit, rows: rows, gaps: gaps, notes: notes)
+      final: options.final, settled: ended != nil, commit: commit, rows: rows, gaps: gaps,
+      notes: notes)
     let reportFile = qaDirectory.appending(path: QAReport.fileName)
     do {
       let data: Data
@@ -236,6 +329,44 @@ enum QARunRun {
       return report.adding(notes: ["\(QAReport.fileName) not written: \(error)"])
     }
     return report
+  }
+
+  /// The plan's newest build run's events; `nil`, with a note when reading failed, when it has
+  /// none, so only the ledger says what merged.
+  private static func buildEvents(slug: String, git: any Git, notes: inout [String]) async
+    -> BuildEventLog?
+  {
+    do throws(BuildRunStoreError) {
+      guard let store = try await BuildRunStore.latest(plan: slug, git: git) else { return nil }
+      let log = try store.events()
+      if !log.damage.isEmpty {
+        notes.append(
+          "build run \(store.runID)'s events have \(log.damage.count) unreadable line(s); "
+            + "a merge on them isn't counted")
+      }
+      return log
+    } catch {
+      notes.append(
+        "the build run's events didn't read, so only the ledger says what merged: \(error)")
+      return nil
+    }
+  }
+
+  /// 1 note naming the rows taken from `record`, and 1 per ready row that ran instead.
+  private static func reuseNotes(record: QAAtBaseRun, reuse: QAAtBaseRun.Reuse) -> [String] {
+    let taken = reuse.outcomes.keys.sorted()
+    let named = taken.map(String.init).joined(separator: ", ")
+    var notes: [String] = []
+    if !taken.isEmpty {
+      notes.append(
+        "\(taken.count) \(taken.count == 1 ? "row" : "rows") (\(named)) reused from qa run "
+          + "\(record.runID) by \(record.preparedBy): each check is byte-identical to the one "
+          + "it ran")
+    }
+    notes += reuse.reasons.keys.sorted().compactMap { row in
+      reuse.reasons[row].map { "row \(row) ran: \($0)" }
+    }
+    return notes
   }
 
   /// The areas a `test:` acceptance row resolves in: the brownfield config's, read only when a
@@ -269,13 +400,21 @@ enum QARunRun {
   /// script, or a flow row through ``QAFlowRunner``.
   private struct Checks: Sendable {
     let planDirectory: String
+    /// The checkout's `.harness/qa/<plan>/` a `--prepared-by` run reads checks from, which holds
+    /// what plan state's `qa/` holds once adopted.
+    let preparedDirectory: String?
     let qaDirectory: URL
     let dependencies: Dependencies
     let runID: String
     let plan: QARunPlan
     let atBase: Bool
+    /// The recorded outcomes of the rows a prepared at-base run proved, by row.
+    let reused: [Int: QACheckOutcome]
     /// What a `test:` acceptance row resolves in.
     let areas: Result<[BrownfieldArea], AcceptanceTestUnresolved>
+    /// The clones `test:` rows run on, held across the acceptance rows and given back before the
+    /// first flow row brings its own device up.
+    let testDevices: HeldTestDevices?
     let flows: QAFlowRunner?
     /// State rows a flow row already ran on its device, by row.
     let stateResults = StateResults()
@@ -292,6 +431,20 @@ enum QARunRun {
       }
     }
 
+    /// Where a row's `qa/<name>` check is read from.
+    func checkFile(_ check: String) -> URL {
+      Self.checkFile(check, preparedDirectory: preparedDirectory, planDirectory: planDirectory)
+    }
+
+    static func checkFile(_ check: String, preparedDirectory: String?, planDirectory: String)
+      -> URL
+    {
+      if let preparedDirectory, check.hasPrefix("qa/") {
+        return URL(filePath: preparedDirectory).appending(path: String(check.dropFirst(3)))
+      }
+      return URL(filePath: planDirectory).appending(path: check)
+    }
+
     func flowRecords() async -> [Int: QAFlowRecord] {
       await flows?.records ?? [:]
     }
@@ -301,7 +454,9 @@ enum QARunRun {
     }
 
     func run(_ entry: QARunPlan.Entry, in workingDirectory: String) async -> QACheckOutcome {
+      if let outcome = reused[entry.row] { return outcome }
       let row = entry.validation
+      if row.layer != .acceptance { await testDevices?.releaseAll() }
       if row.layer == .flow {
         return await flow(entry, in: workingDirectory)
       }
@@ -339,7 +494,7 @@ enum QARunRun {
         return QACheckOutcome(result: .unverified, message: QARunPlan.flowRunnerMissing)
       }
       let row = entry.validation
-      let stepsFile = URL(filePath: planDirectory).appending(path: row.check)
+      let stepsFile = checkFile(row.check)
       let worktree = URL(filePath: workingDirectory, directoryHint: .isDirectory)
       let lint = QALintRun.run(
         files: [stepsFile.path], root: worktree, pluginRoot: dependencies.pluginRoot)
@@ -383,21 +538,32 @@ enum QARunRun {
         row.layer == .acceptance
         ? qaDirectory.appending(path: name.dropLast(".txt".count) + ".junit.xml").path : nil
       var resultBundle: String?
+      var notes: [String] = []
       if let junit, let test = AcceptanceTestReference.parse(row.check) {
         reference = test.id
         let bundle = qaDirectory.appending(path: name.dropLast(".txt".count) + ".xcresult").path
         switch areas.flatMap({ test.resolve(in: $0, junitPath: junit, resultBundlePath: bundle) })
         {
         case .success(let resolved):
-          program = .command(resolved.command)
-          shown = resolved.command
+          var command = resolved.command
+          if let testDevices, let destination = XcodeTestDestination.simulator(in: command) {
+            switch await testDevices.device(for: destination) {
+            case .success(let device):
+              command = XcodeTestDestination.leased(command, udid: device.udid) ?? command
+            case .failure(let error):
+              notes.append(
+                "ran on the shared \(destination.device), with no clone to run on: \(error.reason)")
+            }
+          }
+          program = .command(command)
+          shown = command
           resultBundle = resolved.resultBundlePath
           if resolved.root != "." { directory += "/" + resolved.root }
         case .failure(let unresolved):
           return QACheckOutcome(result: .unverified, message: "not run: \(unresolved.reason)")
         }
       } else {
-        let script = URL(filePath: planDirectory).appending(path: row.check).path
+        let script = checkFile(row.check).path
         var isDirectory: ObjCBool = false
         program =
           !row.check.hasPrefix("/")
@@ -406,18 +572,27 @@ enum QARunRun {
           ? .script(path: script) : .command(row.check)
       }
       var environment = [
-        "QA_PORT": "\(port)", "QA_DIR": planDirectory + "/qa",
+        "QA_PORT": "\(port)", "QA_DIR": preparedDirectory ?? planDirectory + "/qa",
         "QA_EVIDENCE_DIR": qaDirectory.path,
       ]
       if let junit {
         JUnitReportFiles.clear(at: junit)
         environment[QACheckJudgement.reportVariable] = junit
       }
-      let output = await dependencies.checks.run(
-        QACheckRequest(
-          program: program, workingDirectory: directory,
-          environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
-          timeout: dependencies.timeout))
+      let request = QACheckRequest(
+        program: program, workingDirectory: directory,
+        environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
+        timeout: dependencies.timeout)
+      var output = await dependencies.checks.run(request)
+      if case .exited(let code) = output.exit, code != 0,
+        let launch = TestRunnerLaunchFailure.reason(in: output.stdout + "\n" + output.stderr)
+      {
+        // `xcodebuild` refuses to write over a result bundle, and the retry's report must be its own.
+        if let resultBundle { try? FileManager.default.removeItem(atPath: resultBundle) }
+        if let junit { JUnitReportFiles.clear(at: junit) }
+        notes.append("retried once after \(launch)")
+        output = await dependencies.checks.run(request)
+      }
 
       var exitStatus: Int?
       let end: QACheckJudgement.End
@@ -451,12 +626,14 @@ enum QARunRun {
           end: end, stdout: output.stdout, stderr: output.stderr,
           report: junit.flatMap(JUnitReportFiles.read(at:)), resultBundle: bundle,
           reference: reference, atBase: atBase,
-          roots: [directory, workingDirectory, qaDirectory.path, planDirectory]))
+          roots: [directory, workingDirectory, qaDirectory.path, planDirectory]
+            + (preparedDirectory.map { [$0] } ?? [])))
       let result = judgement.result
       let text =
         "$ \(shown)\nQA_PORT=\(port)\nexit: \(status)\n"
+        + notes.map { "note: \($0)\n" }.joined()
         + "--- stdout ---\n\(output.stdout)\n--- stderr ---\n\(output.stderr)\n"
-      var message = judgement.message
+      var message = ([judgement.message] + notes).joined(separator: "; ")
       var evidence: [String] = []
       do {
         try QAFiles.write(Data(text.utf8), to: qaDirectory.appending(path: name))
@@ -513,7 +690,8 @@ enum QARunRun {
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base] [--final] [--json]`.
+/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final]
+/// [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -531,6 +709,11 @@ struct QARunCommand: AsyncParsableCommand {
   @Flag(help: "Run every ready row, recording each flow and saving its logs: the final pass.")
   var final = false
 
+  @Option(
+    help:
+      "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
+  var preparedBy: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -539,7 +722,8 @@ struct QARunCommand: AsyncParsableCommand {
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
-      root: root, options: QARunRun.Options(plan: plan, after: after, atBase: atBase, final: final),
+      root: root, options: QARunRun.Options(
+        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,
@@ -559,7 +743,8 @@ struct QARunCommand: AsyncParsableCommand {
               agentDevice: agentDevice,
               lock: FileCountingLock(name: FinalPassRecorder.lockName, capacity: 1),
               clock: .continuous())),
-          evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner))))
+          evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
+        testDevices: LiveTestDeviceLeases(runner: runner)))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
