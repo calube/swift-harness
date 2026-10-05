@@ -4145,3 +4145,19 @@ PY
 Line 35 of the fixer's transcript is its first return, the one the orchestrator halted on. The
 clock capture drops the span and ingest lines before it and the shell's cwd note after it.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
+`BuildCutoff/price-tracker-4/` is the fourth price-tracker trial's cutoff. Its watchlist task was
+merged with a merge gate BLOCKED on time (`prove.no-evidence`: the time left before the cutoff
+couldn't hold the prove), `cutoff.json` said `finish-merge` for it, and the orchestrator undid it
+anyway. `run.json` and `cutoff.json` are the build run's, and `events-before-undo.jsonl` is its
+ledger log up to the line before that undo. `P` is the trial folder under the practice-trial runs
+folder, holding the clone's state copied after the run as `state/`. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+B=20261005T074707Z-2fab1421 F=BuildCutoff/price-tracker-4
+mkdir -p $F
+cp $P/state/plans/spec/build/$B/run.json $P/state/plans/spec/build/$B/cutoff.json $F/
+sed -n '1,/"kind":"undo","task":"tracker-watchlist"/p' $P/state/plans/spec/build/$B/events.jsonl | sed '$d' > $F/events-before-undo.jsonl
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
