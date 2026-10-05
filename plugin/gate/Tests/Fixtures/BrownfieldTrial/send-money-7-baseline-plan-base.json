@@ -1,0 +1,87 @@
+{
+  "records" : [
+    {
+      "area" : "APIClient",
+      "command" : "swift test --parallel --xunit-output {junit}",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "test"
+    },
+    {
+      "area" : "APIClient",
+      "command" : "swift build",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "LogClient",
+      "command" : "swift test --parallel --xunit-output {junit}",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "test"
+    },
+    {
+      "area" : "LogClient",
+      "command" : "swift build",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "AppFeature",
+      "command" : "swift test --parallel --xunit-output {junit}",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "test"
+    },
+    {
+      "area" : "AppFeature",
+      "command" : "swift build",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "InterviewStarter",
+      "command" : "xcodebuild test -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "test"
+    },
+    {
+      "area" : "InterviewStarter",
+      "command" : "xcodebuild build -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'generic\/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    },
+    {
+      "area" : "InterviewStarter",
+      "command" : "xcodebuild build-for-testing -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
+      "result" : "passed",
+      "selection" : [
+
+      ],
+      "step" : "build"
+    }
+  ],
+  "tree" : "a12c4719959d18b4f7d759e4eeab4fe56f0a9cb5",
+  "version" : 1
+}

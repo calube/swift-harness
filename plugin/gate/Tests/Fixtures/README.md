@@ -4663,3 +4663,28 @@ with the `test-only not run:` line its result printed: a `tool_use` whose `comma
 with its `tool_result`. The first call's output went through `grep`, so it kept no refusal line.
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trials: same-tree work send-money-7 and price-tracker-6 ran twice
+
+Both trials (2026-10-05) ran a step on inputs an earlier step had already answered. price-tracker-6's
+orchestrator re-drove 5 qa rows for 95 s on the merged tree its fixer's `--fix` run
+(`20261005T115303Z-d69a2a72`) had passed in its own slot. send-money-7's slices reran the app's
+`build-for-testing` at merge bases whose answer was already known: at the plan base the warm-up's
+passing `xcodebuild test` implied it (a 43 s cold rerun), and at the contract's tree an earlier
+GREEN slice had passed it (part of a 111 s rerun). `T` is the trials' folder under the harness
+runs, each clone's state copied to `$T/<trial>/state`:
+
+```sh
+T=<harness runs folder> F=BrownfieldTrial
+cp $T/price-tracker-6/state/runs/20261005T115303Z-d69a2a72/qa/merged-tree-run.json \
+  $F/price-tracker-6-fixer-merged-tree-run.json
+cp $T/send-money-7/state/baseline/a12c4719959d18b4f7d759e4eeab4fe56f0a9cb5.json \
+  $F/send-money-7-baseline-plan-base.json
+cp $T/send-money-7/state/baseline/bf8ec9fb54cc37235d92d4b06cd15cc7d11d55ca.json \
+  $F/send-money-7-baseline-contract.json
+```
+
+`send-money-7-baseline-plan-base.json` holds the warm-up's records and the `build-for-testing`
+record the 43 s rerun added; the tests drop that record to read the file as the rerun found it.
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on these 3 files matched nothing.
