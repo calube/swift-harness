@@ -79,3 +79,113 @@ public enum BuildRunDevice {
     }
   }
 }
+
+/// Lends a gate's `xcodebuild test` the build run's held device while no `qa run` borrows it, so
+/// the gate takes no `sim` slot of its own. The device must be booted and be the destination's:
+/// its device type, and its iOS version when the destination names one.
+///
+/// The build run is the one whose holder logs under this clone's common dir
+/// (``BuildRunDevice/logDirectory(commonDirectory:buildRunID:)``), so 2 build runs on 1 machine
+/// never borrow each other's device. A test run leaves its app and runner installed; the next
+/// `qa run` row on the device uninstalls the app and resets the keychain before installing.
+public struct RunDeviceLender: Sendable {
+  private let commonDirectory: String
+  private let leases: SimLeaseStore
+  private let lockDirectory: URL
+  private let devices: @Sendable () async -> [SimulatorDevice]
+  private let isAlive: @Sendable (Int32) -> Bool
+
+  public init(
+    commonDirectory: String, leases: SimLeaseStore, lockDirectory: URL,
+    devices: @escaping @Sendable () async -> [SimulatorDevice],
+    isAlive: @escaping @Sendable (Int32) -> Bool
+  ) {
+    self.commonDirectory = commonDirectory
+    self.leases = leases
+    self.lockDirectory = lockDirectory
+    self.devices = devices
+    self.isAlive = isAlive
+  }
+
+  /// The held device and the borrow lock, kept until the caller releases it; `nil` when this
+  /// clone's build run holds no live device for `destination`, or a `qa run` is borrowing it.
+  public func borrow(for destination: XcodeTestDestination) async
+    -> (device: SimulatorDevice, lease: LockLease)?
+  {
+    let suffix = BuildRunDevice.holdRunID(buildRunID: "")
+    guard let listed = try? leases.all() else { return nil }
+    let held = listed.leases.filter { lease in
+      lease.runID.hasSuffix(suffix) && isAlive(lease.holderPID)
+        && FileManager.default.fileExists(
+          atPath: BuildRunDevice.logDirectory(
+            commonDirectory: commonDirectory,
+            buildRunID: String(lease.runID.dropLast(suffix.count))
+          ).path)
+    }
+    guard let hold = held.first else { return nil }
+    let buildRunID = String(hold.runID.dropLast(suffix.count))
+    guard
+      let device = await devices().first(where: { $0.udid == hold.udid }),
+      Self.matches(device, destination)
+    else { return nil }
+    guard
+      let lease = await BuildRunDevice.borrow(
+        buildRunID: buildRunID, lockDirectory: lockDirectory)
+    else { return nil }
+    // Read again under the lock: the hold may have ended while the lock was taken.
+    guard (try? leases.read(runID: hold.runID))?.map({ isAlive($0.holderPID) }) == true else {
+      lease.release()
+      return nil
+    }
+    return (device, lease)
+  }
+
+  /// A booted device of `destination`'s type, on its iOS version when it names one.
+  public static func matches(_ device: SimulatorDevice, _ destination: XcodeTestDestination) -> Bool
+  {
+    guard device.state == "Booted", device.isAvailable,
+      let type = device.deviceTypeIdentifier?.split(separator: ".").last
+    else { return false }
+    let wanted = destination.device.map { $0.isLetter || $0.isNumber ? $0 : "-" }
+    guard type == Substring(String(wanted)) else { return false }
+    guard let os = destination.os else { return device.runtime?.platform == "iOS" }
+    return device.runtime.map { $0.platform == "iOS" && $0.version == os } == true
+  }
+}
+
+/// ``TestDeviceLeasing`` that hands a test command the build run's idle device first, and leases
+/// a clone from `base` only while that device is busy or there is none.
+public struct RunDeviceTestLeases: TestDeviceLeasing {
+  private let base: any TestDeviceLeasing
+  private let lender: RunDeviceLender
+
+  public init(base: any TestDeviceLeasing, lender: RunDeviceLender) {
+    self.base = base
+    self.lender = lender
+  }
+
+  public func devices(for destination: XcodeTestDestination) async
+    -> Result<any SimulatorDeviceProvider, TestDeviceLeaseError>
+  {
+    .success(Provider(destination: destination, base: base, lender: lender))
+  }
+
+  private struct Provider: SimulatorDeviceProvider {
+    let destination: XcodeTestDestination
+    let base: any TestDeviceLeasing
+    let lender: RunDeviceLender
+
+    func withDevice<T: Sendable>(_ body: @Sendable (SimulatorDevice) async throws -> T)
+      async throws -> T
+    {
+      if let (device, lease) = await lender.borrow(for: destination) {
+        defer { lease.release() }
+        return try await body(device)
+      }
+      switch await base.devices(for: destination) {
+      case .success(let provider): return try await provider.withDevice(body)
+      case .failure(let error): throw error
+      }
+    }
+  }
+}
