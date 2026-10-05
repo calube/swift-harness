@@ -31,7 +31,7 @@ struct RuleIndexTests {
     ]
     let changedTests = [
       ProofRules.notProvenRuleID, ProofRules.compileOnlyRuleID, ProofRules.crashedRuleID,
-      ProofRules.hangsAtBaseRuleID,
+      ProofRules.hangsAtBaseRuleID, ProofRules.unprovenRuleID,
       ProofRules.failsAtHeadRuleID, ProofRules.noEvidenceRuleID, ProofRules.summaryRuleID,
       StressRules.failedRuleID, StressRules.crashedRuleID, StressRules.noEvidenceRuleID,
       ReachRules.noProductionLinesRuleID, ReachRules.failsAloneRuleID, ReachRules.noDataRuleID,
