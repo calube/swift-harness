@@ -456,7 +456,7 @@ public struct BuildEventLog: Sendable, Equatable {
       case .gate(let gate):
         guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
         stage = gate.verdict == .green ? .landed : .merged
-      case .merge, .undo, .transition, .returnCheck: continue
+      case .merge, .undo, .transition, .returnCheck, .finish: continue
       }
     }
     return stage
