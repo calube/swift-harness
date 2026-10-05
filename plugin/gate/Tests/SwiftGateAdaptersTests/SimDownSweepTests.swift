@@ -33,10 +33,11 @@ extension SimDownTests {
         executable: "/bin/sleep", arguments: ["600"], workingDirectory: root.path,
         logPath: root.appending(path: "holder.log").path))
     let holderAgent = FakeAgentDevice()
+    // A timeout the hold could reach would let it give its device back before a slow sweep starts.
     let holder = SimHolder(
       devices: SimulatorClones(simctl: simctl, lock: lock, config: config, ownerPID: child),
       leases: store, agentDevice: holderAgent, worktree: Self.worktree, holderPID: child,
-      timeout: Self.holdTimeout, pollInterval: .milliseconds(5), clock: .continuous())
+      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous())
     let holding = Task { try await holder.hold(runID: Self.runID) }
     var lease: SimLease?
     let deadline = ContinuousClock.now + .seconds(20)
@@ -78,6 +79,7 @@ extension SimDownTests {
     #expect(agent.calls.contains(.releaseStale(udid: recorded.udid)))
     #expect(try store.read(runID: Self.runID) == nil)
     #expect(Self.harnessDevices(simctl).isEmpty)
+    try? store.remove(runID: Self.runID)
     let outcome = try await holding.value
     #expect(outcome == SimHoldOutcome(udid: recorded.udid, end: .released))
   }

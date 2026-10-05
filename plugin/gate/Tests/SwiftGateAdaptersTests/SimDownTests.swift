@@ -361,10 +361,11 @@ struct SimDownTests {
       DetachedLaunch(
         executable: "/bin/sleep", arguments: ["600"], workingDirectory: root.path,
         logPath: root.appending(path: "holder.log").path))
+    // A timeout the hold could reach would let it give its device back before a slow sweep starts.
     let holder = SimHolder(
       devices: SimulatorClones(simctl: simctl, lock: lock, config: config, ownerPID: child),
       leases: store, agentDevice: FakeAgentDevice(), worktree: Self.worktree, holderPID: child,
-      timeout: Self.holdTimeout, pollInterval: .milliseconds(5), clock: .continuous())
+      timeout: SimHolderTests.forever, pollInterval: .milliseconds(5), clock: .continuous())
     let holding = Task { try await holder.hold(runID: Self.runID) }
     var lease: SimLease?
     let deadline = ContinuousClock.now + .seconds(20)

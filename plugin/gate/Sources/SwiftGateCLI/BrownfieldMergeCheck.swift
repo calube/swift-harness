@@ -115,7 +115,9 @@ enum BrownfieldMergeCheck {
       }
       let box = ActiveRunTimeBox.find(
         layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
-      let bounds = AreaCommandBounds(times: times, box: box, tier: tier, fallback: liveDeadline)
+      let bounds = AreaCommandBounds(
+        times: times, box: box, tier: tier, fallback: liveDeadline,
+        measuredTests: MeasuredAreaTestsReader.milliseconds(worktree: root))
       // Each bound is taken as its command starts, so the box's time left is current.
       let areas = config.areas
       let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
@@ -215,13 +217,14 @@ enum BrownfieldMergeCheck {
     let added: [AddedLines]
     do throws(GitError) {
       guard let found = try await git.mergeBase("HEAD", base) else {
-        return blocked("HEAD and \(base) share no history, so there is no baseline to compare")
+        return blocked(
+          tier, "HEAD and \(base) share no history, so there is no baseline to compare")
       }
       mergeBase = found
       changed = try await git.changedFiles(since: mergeBase)
       added = try await git.addedLines(since: mergeBase)
     } catch {
-      return blocked("git: \(error)")
+      return blocked(tier, "git: \(error)")
     }
     let areas = dependencies.config.areas
     let touched = AreaGating.touched(by: changed, in: areas)
@@ -263,7 +266,7 @@ enum BrownfieldMergeCheck {
       do {
         tree = try await dependencies.tree(mergeBase)
       } catch {
-        return blocked("can't read the tree of the merge base \(mergeBase): \(error)")
+        return blocked(tier, "can't read the tree of the merge base \(mergeBase): \(error)")
       }
       // The merge base's rerun of a step writes its reports where the head's run did.
       let evidence = context.directory.appending(path: "baseline-evidence")
@@ -331,7 +334,7 @@ enum BrownfieldMergeCheck {
       do throws(GitError) {
         proofBase = try await Self.proofBase(tier: tier, base: base, git: git)
       } catch {
-        return blocked("git: \(error)")
+        return blocked(tier, "git: \(error)")
       }
       let config = BrownfieldConfig(
         brownfield: dependencies.config.brownfield, areas: proved,
@@ -464,13 +467,6 @@ enum BrownfieldMergeCheck {
         continue
       }
       let bound = dependencies.bound(area.name, step, .checkout)
-      if bound.cannotFinish {
-        result.refused = true
-        if let refusal = notStarted(area, step: step, bound: bound) {
-          result.findings.append(refusal)
-        }
-        break
-      }
       guard
         let prepared = prepare(
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
@@ -480,6 +476,7 @@ enum BrownfieldMergeCheck {
         GateReuse.areaStepKey(
           $0.inputs, area: area.name, step: step, command: prepared.request.command)
       }
+      // A pass on the same inputs costs no time, so the box refuses only a step it must run.
       if let key, let pass = dependencies.reuse?.store.pass(key) {
         context.steps.record(
           gateStep(step), tier: nil, milliseconds: 0, verdict: .green, derivedData: .reused,
@@ -487,6 +484,13 @@ enum BrownfieldMergeCheck {
         if let tests = pass.tests { context.areaTests.record(tests.reused(from: pass.runID)) }
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
+      }
+      if bound.cannotFinish {
+        result.refused = true
+        if let refusal = notStarted(area, step: step, tier: tier, bound: bound) {
+          result.findings.append(refusal)
+        }
+        break
       }
       let request = AreaBuildPlacement.checkout(
         prepared.request, kind: area.kind, layout: dependencies.layout)
@@ -601,14 +605,14 @@ enum BrownfieldMergeCheck {
   }
 
   /// Why a step wasn't started: a BLOCKED tier, never a RED one, since nothing ran.
-  private static func notStarted(_ area: BrownfieldArea, step: AreaStep, bound: AreaCommandBound)
-    -> Finding?
-  {
+  private static func notStarted(
+    _ area: BrownfieldArea, step: AreaStep, tier: CheckTier, bound: AreaCommandBound
+  ) -> Finding? {
     let expected = bound.expected.map { " its measured \($0.components.seconds) s" } ?? ""
     return try? Finding(
       ruleID: CheckRun.notRunRuleID, severity: .minor, file: area.root, line: nil,
       message:
-        "merge: \(area.name) \(step.rawValue) not started: \(bound.reason) can't hold"
+        "\(tier.rawValue): \(area.name) \(step.rawValue) not started: \(bound.reason) can't hold"
         + "\(expected), so it would only be killed",
       failureScenario: nil)
   }
@@ -629,10 +633,10 @@ enum BrownfieldMergeCheck {
     return finding.map { [$0] } ?? []
   }
 
-  private static func blocked(_ reason: String) -> Outcome {
+  private static func blocked(_ tier: CheckTier, _ reason: String) -> Outcome {
     let finding = try? Finding(
       ruleID: CheckRun.notRunRuleID, severity: .minor, file: ".", line: nil,
-      message: "merge: \(reason)", failureScenario: nil)
+      message: "\(tier.rawValue): \(reason)", failureScenario: nil)
     return Outcome(findings: finding.map { [$0] } ?? [], blocked: true)
   }
 }
