@@ -303,7 +303,7 @@ struct WarmupSeedCheckoutTests {
   }
 
   @Test(
-    "the warm-up adds the preset's 3 slots at the base and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, and each swiftpm area there into the checkout's own prove scratch path; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched, and each slot's first prove compiling the package's dependencies cold"
+    "the warm-up adds 4 slots at the base, 1 more than the preset's 3 workers since a task waiting to merge still holds its slot, and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, and each swiftpm area there into the checkout's own prove scratch path; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched, as send-money-7's 4th task did in slot-5 (97 s build, 65 s prove build), and each slot's first prove compiling the package's dependencies cold"
   )
   func warmsThePlanCheckoutAndEachSlot() async throws {
     let (clone, checkout) = try await Self.clone()
@@ -314,7 +314,7 @@ struct WarmupSeedCheckoutTests {
       "-C", checkout.path(percentEncoded: false), "rev-parse", "--show-toplevel"
     ).trimmingCharacters(in: .whitespacesAndNewlines)
     let common = URL(filePath: "\(root)/.git", directoryHint: .isDirectory)
-    let names = (1...3).map {
+    let names = (1...4).map {
       try? TaskWorktree.slotPath(
         commonDirectory: common.path(percentEncoded: false), plan: Self.plan, number: $0)
     }
@@ -373,14 +373,14 @@ struct WarmupSeedCheckoutTests {
   }
 
   @Test(
-    "a warm-up of the swiftpm areas alone still adds the preset's 3 slots and builds each area into each slot's own prove scratch path — catches slots and their prove builds left to the first tasks when a clone has no xcode area"
+    "a warm-up of the swiftpm areas alone still adds the 4 task slots and builds each area into each slot's own prove scratch path — catches slots and their prove builds left to the first tasks when a clone has no xcode area"
   )
   func swiftPMAreasAloneGetSlots() async throws {
     let (clone, checkout) = try await Self.clone()
     let root = try await clone.git("rev-parse", "--show-toplevel").trimmingCharacters(
       in: .whitespacesAndNewlines)
     let common = URL(filePath: "\(root)/.git", directoryHint: .isDirectory)
-    let names = (1...3).map {
+    let names = (1...4).map {
       try? TaskWorktree.slotPath(
         commonDirectory: common.path(percentEncoded: false), plan: Self.plan, number: $0)
     }
@@ -401,6 +401,52 @@ struct WarmupSeedCheckoutTests {
         builds.map(\.command)
           == ["swift build --scratch-path '\(gitDir)/swift-harness/derived-data/prove/AppFeature'"])
     }
+  }
+}
+
+extension WarmupSeedCheckoutTests {
+  @Test(
+    "with an app sim up can build, the warm-up adds a 5th slot past the 4 task slots and builds only that app there, in the slot's sim up DerivedData, which the pool keeps for qa run's trees — catches send-money-7's and price-tracker-6's at-base qa runs building the app cold, 94 s and 117 s, outside the warm-up during the run's busiest minutes"
+  )
+  func buildsTheQAAppInItsOwnSlot() async throws {
+    let (clone, checkout) = try await Self.clone()
+    let project = clone.root.appending(path: "InterviewStarter.xcodeproj/project.pbxproj")
+    try FileManager.default.createDirectory(
+      at: project.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data("// !$*UTF8*$!\n".utf8).write(to: project)
+    try await clone.git("add", "-A")
+    try await clone.git("commit", "-q", "-m", "project")
+    let root = try await clone.git("rev-parse", "--show-toplevel").trimmingCharacters(
+      in: .whitespacesAndNewlines)
+    let common = URL(filePath: "\(root)/.git", directoryHint: .isDirectory)
+    let names = (1...5).map {
+      try? TaskWorktree.slotPath(
+        commonDirectory: common.path(percentEncoded: false), plan: Self.plan, number: $0)
+    }
+    defer { Self.remove(clone, slots: names.compactMap { $0 }) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let xcodebuild = FakeXcodebuild()
+    var dependencies = clone.dependencies(runner: runner)
+    dependencies.xcodebuild = xcodebuild
+
+    let outcome = try await WarmupCommand.warm(
+      directory: clone.root, areaNames: nil, seedCheckout: checkout, plan: Self.plan,
+      dependencies: dependencies)
+
+    let slots = try names.map { try #require($0) }
+    #expect(outcome.slots == Array(slots.prefix(4)))
+    let qa = try #require(outcome.qaSlot)
+    #expect(qa == slots[4])
+    #expect(!runner.requests.contains { Self.inside($0.workingDirectory, qa) })
+    let build = try #require(xcodebuild.buildRequests.first)
+    #expect(xcodebuild.buildRequests.count == 1)
+    #expect(build.scheme == "InterviewStarter")
+    #expect(build.container == .project(path: "\(qa)/InterviewStarter.xcodeproj"))
+    #expect(
+      build.derivedDataPath
+        == SimUpCommand.derivedDataDirectory(root: URL(filePath: qa, directoryHint: .isDirectory))
+        .path)
+    #expect(outcome.seeded.contains { $0.checkout == qa && $0.outcome == .passed })
   }
 }
 

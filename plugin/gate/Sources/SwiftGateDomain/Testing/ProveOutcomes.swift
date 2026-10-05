@@ -43,6 +43,8 @@ public struct ProvedTest: Sendable, Equatable {
   }
 }
 
+extension ProvedTest: Codable {}
+
 extension ProveResultEvent {
   public init(_ proved: ProvedTest) {
     // The payload guard would drop the whole event; a hash keeps the result and still joins runs.

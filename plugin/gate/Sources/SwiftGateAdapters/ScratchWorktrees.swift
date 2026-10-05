@@ -201,18 +201,10 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
   private func renames(from base: String, to revision: String, in scratch: URL)
     async throws(ScratchWorktreeError) -> [String: String]
   {
-    let listed = try await git(
-      ["diff", "-z", "--name-status", "--find-renames", "--diff-filter=R", base, revision, "--"],
-      in: scratch.path)
-    var fields = listed.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)[
-      ...]
-    var moved: [String: String] = [:]
-    while let status = fields.popFirst() {
-      guard status.hasPrefix("R"), let old = fields.popFirst(), let new = fields.popFirst() else {
-        throw .git(
-          .unparseableOutput(command: "diff --name-status", detail: "unexpected entry \(status)"))
-      }
-      moved[new] = old
+    let listed = try await git(GitRenames.arguments(from: base, to: revision), in: scratch.path)
+    guard let moved = GitRenames.parse(listed) else {
+      throw .git(
+        .unparseableOutput(command: "diff --name-status", detail: "unexpected entry in \(listed)"))
     }
     return moved
   }
@@ -353,5 +345,43 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
         .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
     }
     return output.stdout.bytes
+  }
+}
+
+/// The files `git` sees as renamed between 2 commits, as a scratch tree puts them back.
+public enum GitRenames {
+  /// The `git diff` that lists them, NUL-separated.
+  static func arguments(from base: String, to revision: String) -> [String] {
+    ["diff", "-z", "--name-status", "--find-renames", "--diff-filter=R", base, revision, "--"]
+  }
+
+  /// New path → old path from ``arguments(from:to:)``'s output; `nil` when an entry doesn't read.
+  static func parse(_ listed: String) -> [String: String]? {
+    var fields = listed.split(separator: "\0", omittingEmptySubsequences: true).map(String.init)[
+      ...]
+    var moved: [String: String] = [:]
+    while let status = fields.popFirst() {
+      guard status.hasPrefix("R"), let old = fields.popFirst(), let new = fields.popFirst() else {
+        return nil
+      }
+      moved[new] = old
+    }
+    return moved
+  }
+
+  /// New path → old path for each file renamed from `base` to `revision` in the repository at
+  /// `directory`; `nil` when git can't say.
+  public static func between(
+    _ base: String, _ revision: String, runner: any ProcessRunner, directory: String
+  ) async -> [String: String]? {
+    guard !base.hasPrefix("-"), !revision.hasPrefix("-"),
+      let output = try? await runner.run(
+        ProcessInvocation(
+          executable: "git",
+          arguments: ["--literal-pathspecs"] + arguments(from: base, to: revision),
+          workingDirectory: directory, timeout: .seconds(60))),
+      output.status.isSuccess
+    else { return nil }
+    return parse(output.stdout.text)
   }
 }

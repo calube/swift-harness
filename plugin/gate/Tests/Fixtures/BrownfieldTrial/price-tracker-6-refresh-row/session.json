@@ -1,0 +1,10 @@
+{
+  "agentDeviceVersion" : "0.21.18",
+  "bundleID" : "com.example.InterviewStarter",
+  "deviceType" : "iPhone 17",
+  "headCommit" : "715eb260547009bf7da2f3b42fd1ba4e8e0c987b",
+  "runtime" : "com.apple.CoreSimulator.SimRuntime.iOS-26-2",
+  "schemaVersion" : 1,
+  "startedAt" : "2026-10-05T11:56:15Z",
+  "udid" : "F6871B69-22D8-4C0A-B848-5AC190B95693"
+}

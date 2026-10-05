@@ -43,6 +43,9 @@ public struct SimUp: Sendable {
     public var worktree: URL
     public var target: SimTarget
     public var scenario: String?
+    /// What the app opens with in place of the scenario's argument; `nil` opens it with the
+    /// scenario's. A `qa run` row passes its flow's first `open` arguments.
+    public var launchArguments: [String]?
     public var runID: String
     /// The run's `sim/` folder, created if missing.
     public var simDirectory: URL
@@ -58,11 +61,12 @@ public struct SimUp: Sendable {
     public init(
       worktree: URL, target: SimTarget, scenario: String?, runID: String, simDirectory: URL,
       derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own,
-      slotDeadline: QARunDeadline? = nil
+      slotDeadline: QARunDeadline? = nil, launchArguments: [String]? = nil
     ) {
       self.worktree = worktree
       self.target = target
       self.scenario = scenario
+      self.launchArguments = launchArguments
       self.runID = runID
       self.simDirectory = simDirectory
       self.derivedDataPath = derivedDataPath
@@ -379,7 +383,8 @@ public struct SimUp: Sendable {
     do {
       _ = try await dependencies.agentDevice.open(
         bundleID: app.bundleID,
-        launchArguments: SimSession.launchArguments(scenario: request.scenario),
+        launchArguments: request.launchArguments
+          ?? SimSession.launchArguments(scenario: request.scenario),
         on: target)
     } catch {
       Self.append("sim up: \(error.message)", to: log)
@@ -502,6 +507,19 @@ public struct SimUp: Sendable {
         to: log)
       return nil
     }
+  }
+
+  /// The folder under a worktree's DerivedData that `sim up` builds the app in.
+  public static let derivedDataDirectoryName = "sim-up"
+
+  /// The `xcodebuild build` `sim up` runs for `target`'s app in `worktree` into `derivedDataPath`,
+  /// as a warm-up runs it to leave that DerivedData warm for the first `sim up` there.
+  public static func appBuild(
+    _ target: SimTarget, in worktree: URL, derivedDataPath: String, resultBundlePath: String
+  ) throws(SimUpFailure) -> AppBuild.Request {
+    AppBuild.Request(
+      container: try container(target.container, in: worktree), scheme: target.scheme,
+      derivedDataPath: derivedDataPath, resultBundlePath: resultBundlePath)
   }
 
   private static func container(_ named: SimTarget.Container, in worktree: URL)

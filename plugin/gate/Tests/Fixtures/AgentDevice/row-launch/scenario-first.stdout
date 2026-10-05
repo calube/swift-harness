@@ -1,0 +1,124 @@
+{
+  "success": true,
+  "data": {
+    "total": 4,
+    "executed": 4,
+    "totalDurationMs": 4089,
+    "results": [
+      {
+        "step": 1,
+        "command": "record",
+        "ok": true,
+        "data": {
+          "recording": "started",
+          "outPath": "/SCRATCH/scenario-first.mp4",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first",
+          "recordingBackend": "simctl recordVideo",
+          "recordingScope": "app",
+          "recordOnlySession": false,
+          "activeSessionApp": {
+            "bundleId": "com.example.LaunchProbe",
+            "name": "com.example.LaunchProbe"
+          },
+          "showTouches": true
+        },
+        "durationMs": 1418
+      },
+      {
+        "step": 2,
+        "command": "open",
+        "ok": true,
+        "data": {
+          "session": "swiftgate-capture-scenario-first",
+          "surface": "app",
+          "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first",
+          "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/runner.log",
+          "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/requests/fce9e53a406136a0.ndjson",
+          "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-scenario-first/events.ndjson",
+          "sessionReused": true,
+          "selection": {
+            "reason": "existing-session",
+            "source": "session",
+            "candidateCount": 1,
+            "bootOccurred": false
+          },
+          "appName": "com.example.LaunchProbe",
+          "appBundleId": "com.example.LaunchProbe",
+          "startup": {
+            "durationMs": 1303,
+            "measuredAt": "2026-10-05T12:30:22.957Z",
+            "method": "open-command-roundtrip",
+            "appTarget": "com.example.LaunchProbe",
+            "appBundleId": "com.example.LaunchProbe"
+          },
+          "timing": {
+            "runnerDemand": "required",
+            "runnerPrewarmKind": "session",
+            "runnerPrewarmScheduled": true,
+            "openDispatchDurationMs": 405,
+            "launchUrlDurationMs": 0,
+            "runnerPrewarmWaited": false,
+            "postOpenObservation": "observable",
+            "postOpenSettleDurationMs": 868,
+            "totalDurationMs": 1303
+          },
+          "platform": "ios",
+          "target": "mobile",
+          "device": "agent-device-capture-19979",
+          "id": "UDID",
+          "kind": "simulator",
+          "device_udid": "UDID",
+          "ios_simulator_device_set": null,
+          "message": "Opened: com.example.LaunchProbe"
+        },
+        "durationMs": 1534
+      },
+      {
+        "step": 3,
+        "command": "wait",
+        "ok": true,
+        "data": {
+          "waitedMs": 537,
+          "selector": "id=\"probe.arguments\""
+        },
+        "durationMs": 537
+      },
+      {
+        "step": 4,
+        "command": "record",
+        "ok": true,
+        "data": {
+          "recording": "stopped",
+          "outPath": "/SCRATCH/scenario-first.mp4",
+          "telemetryPath": "/SCRATCH/scenario-first.gesture-telemetry.json",
+          "artifacts": [
+            {
+              "field": "outPath",
+              "artifactType": "screen-recording",
+              "path": "/SCRATCH/scenario-first.mp4",
+              "fileName": "scenario-first.mp4"
+            },
+            {
+              "field": "telemetryPath",
+              "artifactType": "screen-recording-telemetry",
+              "path": "/SCRATCH/scenario-first.gesture-telemetry.json",
+              "fileName": "scenario-first.gesture-telemetry.json"
+            }
+          ],
+          "recordingBackend": "simctl recordVideo",
+          "recordingScope": "app",
+          "recordOnlySession": false,
+          "activeSessionApp": {
+            "bundleId": "com.example.LaunchProbe",
+            "name": "com.example.LaunchProbe"
+          },
+          "durationMs": 2675,
+          "recorder": "confirmed",
+          "nativePathDisposition": "retired",
+          "showTouches": true
+        },
+        "durationMs": 600
+      }
+    ]
+  }
+}

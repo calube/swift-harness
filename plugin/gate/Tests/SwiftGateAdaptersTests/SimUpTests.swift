@@ -150,7 +150,7 @@ struct SimUpTests {
   func run(
     _ rig: Rig, scenario: String? = "fixed-fact", leaseTimeout: Duration = .seconds(60),
     runID: String = SimUpTests.runID, git: FakeGit = FakeGit(revisions: ["HEAD": SimUpTests.head]),
-    derivedDataPath: String = "/dd", device: SimUpDevice = .own
+    derivedDataPath: String = "/dd", device: SimUpDevice = .own, launchArguments: [String]? = nil
   ) async throws -> Result<SimUpStarted, SimUpFailure> {
     let alive = rig.alive
     let dead = rig.dead
@@ -166,9 +166,11 @@ struct SimUpTests {
       simDirectory: worktree.appending(
         path: ".harness/runs/\(runID)/sim", directoryHint: .isDirectory),
       derivedDataPath: derivedDataPath, swiftgateExecutable: "/plugin/bin/sg", device: device)
+    var withArguments = request
+    withArguments.launchArguments = launchArguments
     return await SimUp(
       dependencies: dependencies, leaseTimeout: leaseTimeout, pollInterval: .seconds(1)
-    ).run(request)
+    ).run(withArguments)
   }
 
   static func failure(_ result: Result<SimUpStarted, SimUpFailure>) -> SimUpFailure? {
@@ -314,6 +316,22 @@ struct SimUpTests {
       return
     }
     #expect(arguments == [])
+  }
+
+  @Test(
+    "a row's launch arguments open the app in place of the scenario's, and the session records no scenario — catches a qa row's app opened live before its flow relaunches it in a scenario"
+  )
+  func rowLaunchArguments() async throws {
+    let rig = rig()
+    let started = try await run(
+      rig, scenario: nil, launchArguments: ["-harness-scenario", "success"]
+    ).get()
+    #expect(started.scenario == nil)
+    let opens = rig.agent.calls.compactMap { call -> [String]? in
+      guard case .open(_, let arguments, _) = call else { return nil }
+      return arguments
+    }
+    #expect(opens == [["-harness-scenario", "success"]])
   }
 
   @Test(

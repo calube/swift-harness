@@ -131,3 +131,50 @@ struct GateReuseTests {
     #expect(GateReuse.reusable([newer, red], command: gate.command, key: key) == nil)
   }
 }
+
+extension GateReuseTests {
+  /// send-money-7's views merge gate and its final, which proved the same launch UI test at the
+  /// same plan base on 2 different head trees.
+  static func sendMoneySevenProve(
+    tier: CheckTier, treeHash: String,
+    mergeBase: String = "d76c39011de3e418ac27a539657a6a16ed17e6db",
+    test: String? = "d8de14109185aca75684423b12867faf37761852",
+    renames: [String: String] = [:], command: String = "xcodebuild test"
+  ) throws -> String {
+    let config = GateReuse.digest(try Fixture.data("BrownfieldTrial/send-money-7-config.toml"))
+    return GateReuse.proveKey(
+      GateReuse.Inputs(
+        tier: tier, treeHash: treeHash, mergeBase: mergeBase, sourceHash: "436cadb577503dd6",
+        stateFiles: ["config": config, "baseline": GateReuse.digest(Data(tier.rawValue.utf8))]),
+      mergeBase: mergeBase, area: "InterviewStarter", command: command,
+      tests: ["UITests/LaunchFlowUITests.swift"],
+      copied: ["UITests/LaunchFlowUITests.swift": test], renames: renames)
+  }
+
+  @Test(
+    "send-money-7's views merge gate and final key their prove of the unchanged launch UI test alike though their head trees, tiers and baselines differ, and a changed or deleted test, a rename since the merge base, another merge base or command each key apart — catches final re-proving a test the merge proved on the same reverted tree, 85 s in that trial, and a reuse across a tree prove would build differently"
+  )
+  func proveKeyNamesOnlyTheRevertedTree() throws {
+    let merge = try Self.sendMoneySevenProve(
+      tier: .merge, treeHash: "d5c8f4945a5de699cb98caa6e0915584c569b5b6")
+    let final = try Self.sendMoneySevenProve(
+      tier: .final, treeHash: "ea69da61fd4b27c4219718edf8286793605fe11c")
+    #expect(!merge.isEmpty)
+    #expect(merge == final)
+
+    let others = try [
+      Self.sendMoneySevenProve(tier: .final, treeHash: "t", test: "e27767e9"),
+      Self.sendMoneySevenProve(tier: .final, treeHash: "t", test: nil),
+      Self.sendMoneySevenProve(
+        tier: .final, treeHash: "t",
+        renames: [
+          "Packages/AppFeature/Sources/AppUI/HomeView.swift":
+            "Packages/AppFeature/Sources/AppUI/AppView.swift"
+        ]),
+      Self.sendMoneySevenProve(
+        tier: .final, treeHash: "t", mergeBase: "62369f0bbce89124e5aabb414a7b13aceb9d6dc8"),
+      Self.sendMoneySevenProve(tier: .final, treeHash: "t", command: "xcodebuild test -quiet"),
+    ]
+    #expect(Set(others + [merge]).count == others.count + 1, "\(others)")
+  }
+}

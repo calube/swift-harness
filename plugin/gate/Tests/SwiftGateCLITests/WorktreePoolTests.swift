@@ -217,6 +217,36 @@ struct WorktreePoolTests {
   }
 
   @Test(
+    "a task never takes the free slot holding only the app sim up builds, which the warm-up keeps for qa run's trees: a build task and the validation task each add a slot instead, and a qa tree still takes it — catches send-money-7's and price-tracker-6's at-base qa runs building the app cold for 94 s and 117 s because no free slot held its build"
+  )
+  func qaAppSlotIsKeptForQATrees() async throws {
+    let scenario = try await poolScenario(tasks: ["t1", "t2"])
+    defer { scenario.remove() }
+    let base = try await scenario.git("rev-parse", "HEAD", in: scenario.checkout)
+    _ = try await scenario.pool.prepare(count: 1, revision: base, workspace: scenario.workspace)
+    let qa = try scenario.slot(1)
+    let app = try await scenario.stateRoot(of: qa)
+      .appending(path: "derived-data/\(SimUp.derivedDataDirectoryName)/Build/Products")
+    try FileManager.default.createDirectory(at: app, withIntermediateDirectories: true)
+    try scenario.setWriteSet("t2", [LedgerTask.validationChecksPrefix + "spec/"])
+
+    let build = await scenario.create("t1")
+    #expect(build.worktree == (try scenario.slot(2)), "\(build.message)")
+    let validation = await scenario.create("t2")
+    #expect(validation.worktree == (try scenario.slot(3)), "\(validation.message)")
+
+    let tree = try await scenario.pool.checkOutDetached(
+      revision: base, holder: WorktreePool.scratchHolder(pid: getpid(), token: "qa"),
+      prefer: { slot in
+        FileManager.default.fileExists(
+          atPath: SimUpCommand.derivedDataDirectory(
+            root: URL(filePath: slot, directoryHint: .isDirectory)
+          ).path)
+      }, isAlive: { _ in true }, workspace: scenario.workspace)
+    #expect(tree.path == qa)
+  }
+
+  @Test(
     "two tasks running at once get 2 slots, each with its own branch checked out — catches 2 workers committing in 1 worktree"
   )
   func concurrentTasksGetTheirOwnSlots() async throws {

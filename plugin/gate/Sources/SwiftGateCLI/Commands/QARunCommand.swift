@@ -1564,7 +1564,8 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
         simDirectory: request.simDirectory,
         derivedDataPath: SimUpCommand.derivedDataDirectory(root: root).path,
         swiftgateExecutable: Bundle.main.executablePath ?? CommandLine.arguments[0],
-        device: device, slotDeadline: request.hold?.slotDeadline))
+        device: device, slotDeadline: request.hold?.slotDeadline,
+        launchArguments: request.launchArguments))
   }
 
   func verify(_ request: QAFlowSimulatorRequest) async -> Result<SimVerified, SimVerifyFailure> {

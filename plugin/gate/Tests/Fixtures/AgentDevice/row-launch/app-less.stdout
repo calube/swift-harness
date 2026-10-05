@@ -1,0 +1,25 @@
+{
+  "success": false,
+  "error": {
+    "code": "UNKNOWN",
+    "message": "Batch failed at step 1 (record): App-scoped recording requires an active app session; open the app under test before recording.",
+    "hint": "Unexpected internal error. Retry with --debug and report the diagnostics log if it persists.",
+    "diagnosticId": "muv89szw-cad312c2",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-app-less/requests/d0bd65b043ec2ed3.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-app-less",
+      "requestId": "d0bd65b043ec2ed3"
+    },
+    "details": {
+      "step": 1,
+      "command": "record",
+      "positionals": [
+        "start",
+        "/SCRATCH/app-less.mp4"
+      ],
+      "executed": 0,
+      "total": 4,
+      "partialResults": []
+    }
+  }
+}

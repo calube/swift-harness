@@ -62,7 +62,7 @@ struct SimUpCommand: AsyncParsableCommand {
   static func derivedDataDirectory(root: URL) -> URL {
     StateRootResolver.resolve(worktree: root)
       .url(RunLayout.derivedDataDirectory, directoryHint: .isDirectory)
-      .appending(path: "sim-up", directoryHint: .isDirectory)
+      .appending(path: SimUp.derivedDataDirectoryName, directoryHint: .isDirectory)
   }
 
   /// What `sim up` prints for `result`.
