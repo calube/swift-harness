@@ -16,6 +16,7 @@ Contents:
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Before each merge](#before-each-merge): the validation rows a merge makes ready
 - [Flow repair](#flow-repair): a flow row its own flow file keeps red, rewritten once
+- [No repair](#no-repair): `build no-repair` amends the contract or merges with the row unverified
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -382,7 +383,8 @@ read the output file the notice names, which is the fixer's whole transcript:
   `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
 - `outcome` `gate-red` with a `flow row:` line in its notes, whatever `build check-return`
   said: [flow repair](#flow-repair) first. It halts as below only when `qa adopt --repair`
-  refuses the repair, the row's 1 repair already ran, or the worker answers `no repair:`.
+  refuses the repair or the row's 1 repair already ran. A `no repair:` answer goes to
+  [no repair](#no-repair).
 - `outcome` `gate-red` with commits but no gate verdict is an unconfirmed fix: `haltAdvice.answer`
   `verify`, a `gate` that is `null` or BLOCKED, or notes saying the fixer ran out of time to
   confirm it. Nothing proved it red, so it gets no halt, and it is never set `blocked` on time
@@ -399,8 +401,9 @@ read the output file the notice names, which is the fixer's whole transcript:
   Verifying starts no task, so no new starts doesn't stop it. When the cutoff comes first,
   `build cutoff` decides the task as it decides any other.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
-  set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
-  leave it blocked and go on with the rest.
+  set the task `blocked`. Options: leave it blocked and go on with the rest (Recommended),
+  abandon this task and go on, or stop the build. Before `cutoffAt`, stop is never recommended:
+  1 task's halt leaves the rest of the plan's work to merge.
 
 ## Before each merge
 
@@ -508,8 +511,38 @@ another in the same fix worktree, starting with the row whose step failed first.
      for that requirement, its prompt quoting each finding's message as written, since each says
      what would pass, and adopt again. A refused adopt records no repair, so this retry isn't
      capped; `build cutoff` decides the task when the cutoff comes first.
-   - A `no repair:` return, or a RED adopt after `cutoffAt`: halt as the fixer's `Anything else`
-     bullet says, quoting the worker's reason or the findings.
+   - A `no repair:` return: [no repair](#no-repair) decides it.
+   - A RED adopt after `cutoffAt`: halt as the fixer's `Anything else` bullet says, quoting the
+     findings.
+
+## No repair
+
+A repair worker's `no repair: <requirement>: <why>` says no flow can pass the row: the fix needs
+a contract name the app doesn't have (`contract gap: <name>:` opens its reason), or the app is at
+fault. Write its reply to `.harness/build/<run>/no-repair-<task>.txt` and decide it, from the
+main checkout:
+
+```
+"$SG" build no-repair <slug> <task> --reply .harness/build/<run>/no-repair-<task>.txt --qa-run <red run id> --fix-return .harness/build/<run>/fix-<task>.json --session <session> --json
+```
+
+`<red run id>` is the fixer's newest red before-merge run. Quote its `why`. It never answers stop
+the build. Its `action`:
+
+- `amend-contract`: a contract gap with time before `noNewStartsAt` for the repair's proof and
+  the fixer's run. No halt. In the fix worktree, add the name to the contract, a `held` scenario
+  for an in-flight state, as the contract step shapes it, and commit it on the fix branch. Then
+  take the requirement's [flow repair](#flow-repair) round again from step 1, its prompt naming
+  the new name, and launch the fixer again once it adopts; its brief says to name each file that
+  commit changed in its notes, since `check-return --fix` passes a fixer's edit outside its write
+  set only when its notes name it.
+- `merge-unverified`: the fixer's gate is GREEN and every other row of the run passed. The
+  command recorded `rows` as left unverified: `build merge --fix` takes a run red on those rows
+  alone, and the final `qa run` reports them `unverified` with the reason, unrun.
+  `build halt --reason gate-red`, `build resume --answer merge`, then
+  `"$SG" build merge <slug> <task> --fix --session <session> --json` and its merge gate, as a
+  fixer's `ready-to-merge` merges. A `flows-unchecked` refusal names the run to make first.
+- `continue`: halt with `gate-red`, set the task `blocked`, and resume with `continue`.
 
 ## Recording halts
 
@@ -524,7 +557,7 @@ the findings or the answer's words.
 | Halt | `--task` | `--reason` |
 |---|---|---|
 | a stall watch fires | the task | `stall`, or `permission` when the last tool call waits on a permission prompt |
-| a `gate-red` return, or the fix merge's gate still red | the task | `gate-red` |
+| a `gate-red` return, a `build no-repair` decision that merges or goes on, or the fix merge's gate still red | the task | `gate-red` |
 | a RED `qa run --before-merge`, resumed with `retry` before its fixer | the task | `gate-red` |
 | the fixer's merge still conflicted | the task | `merge-conflict` |
 | a `design-conflict` return | the reporting task | `amend` |
@@ -540,7 +573,7 @@ the findings or the answer's words.
 | abandon, drop, stop the build, stop them now, stop | `abandon` |
 | an amend through the design skill | `amend` |
 | go on, go on without it, leave it blocked, let them finish, finish anyway | `continue` |
-| merge as is | `merge` |
+| merge as is, merge with rows unverified | `merge` |
 
 ## Recording usage
 
