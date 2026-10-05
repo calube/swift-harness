@@ -916,4 +916,14 @@ public enum TaskReturnCommitRefill {
       notes: [taskReturn.notes, note].filter { !$0.isEmpty }.joined(separator: "\n"),
       designConflict: taskReturn.designConflict, surfaceCommit: taskReturn.surfaceCommit)
   }
+
+  /// `taskReturn` with its commits put in `branchCommits`' order, oldest first, and a `notes`
+  /// line naming the `range` read; `nil` when they're already in that order, or when a listed
+  /// commit isn't exactly 1 of `branchCommits`. An agent writes the list, and the check reads
+  /// its last entry as the commit the gate must have run at.
+  public static func reorder(
+    _ taskReturn: TaskReturn, branchCommits: [String], range: String
+  ) -> TaskReturn? {
+    nil
+  }
 }
