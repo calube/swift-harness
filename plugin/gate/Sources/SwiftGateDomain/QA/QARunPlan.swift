@@ -67,6 +67,15 @@ public struct QARunPlan: Sendable, Equatable {
     return QARunPlan(entries: statesAfterTheirFlows(layered), ended: ended)
   }
 
+  /// Whether running the plan drives a device: a ready flow row whose outcome `reused` doesn't
+  /// already hold. A state row only reads the device its flow row brought up, so a run with no
+  /// such flow row never waits for a device.
+  public func drivesDevice(reused: Set<Int>) -> Bool {
+    entries.contains { entry in
+      entry.validation.layer == .flow && entry.waitingOn.isEmpty && !reused.contains(entry.row)
+    }
+  }
+
   /// Moves each requirement's state rows to just after its last flow row: a state check reads
   /// what the flow left on its device, which goes back before the next flow starts. A state row
   /// whose requirement has no flow row stays at the end.

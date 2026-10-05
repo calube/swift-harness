@@ -436,6 +436,46 @@ struct BuildPlanBranchTests {
   }
 
   @Test(
+    "check-return measures a brownfield task's write set against the plan branch whether it runs from the plan checkout or the user's checkout on main, so the contract commit on the plan branch is never the task's edit — catches the price-tracker trial's return RED outside-write-set from the user's checkout and GREEN from the plan checkout"
+  )
+  func checkReturnDiffsAgainstThePlanBranchFromAnyCheckout() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    try FileManager.default.createDirectory(
+      atPath: scenario.taskWorktree + "/Core", withIntermediateDirectories: true)
+    try Data("VALUE = 2\n".utf8).write(to: URL(filePath: scenario.taskWorktree + "/Core/value.py"))
+    try await scenario.git("add", "-A", in: scenario.taskWorktree)
+    try await scenario.git("commit", "-q", "-m", "feat: value", in: scenario.taskWorktree)
+    let commit = try await scenario.git("rev-parse", "HEAD", in: scenario.taskWorktree)
+    let file = scenario.base.appending(path: "return.json")
+    try TaskReturnJSON.encode(
+      TaskReturn(
+        task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
+        gate: .init(tier: .slice, verdict: .green, runID: RunID.make(startedAt: .now, suffix: 7)),
+        review: .init(mode: .classified, findings: []), testsAdded: [], notes: "value",
+        designConflict: nil)
+    ).write(to: file)
+
+    var rules: [String: [TaskReturnFinding.Rule]] = [:]
+    for (name, cwd) in [("plan checkout", scenario.checkout), ("user's checkout", scenario.userTree)]
+    {
+      let report = await BuildCheckReturnRun.run(
+        file: file.path, plan: PlanBranchScenario.slug,
+        git: LiveGit(runner: scenario.runner, repositoryRoot: cwd),
+        profile: BuildPresetCatalog.profile(root: scenario.user))
+      #expect(report.verdict != .blocked, "\(name): \(report.message)")
+      #expect(
+        !report.findings.map(\.rule).contains(.outsideWriteSet),
+        "\(name): \(report.findings)")
+      rules[name] = report.findings.map(\.rule)
+    }
+    #expect(rules["plan checkout"] == rules["user's checkout"], "\(rules)")
+    try await scenario.expectUserUntouched()
+  }
+
+  @Test(
     "check-return refuses a brownfield return whose slice ran no test of the area its new test file sits in, and accepts it once a gate ran that area's tests — catches a ready-to-merge task whose new tests first run at the merge gate"
   )
   func checkReturnRefusesUntestedAreaTests() async throws {

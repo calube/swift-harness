@@ -1,0 +1,167 @@
+[
+  {
+    "command": "open",
+    "input": {
+      "app": "com.example.InterviewStarter",
+      "relaunch": true,
+      "launchArgs": [
+        "-harness-scenario",
+        "success"
+      ]
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.list\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.row.bitcoin\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"watchlist.row.bitcoin.name\"",
+      "value": "Bitcoin"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.bitcoin.price\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.bitcoin.change\""
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.row.ethereum\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"watchlist.row.ethereum.name\"",
+      "value": "Ethereum"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.ethereum.price\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.ethereum.change\""
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "selector",
+      "selector": "id=\"watchlist.row.solana\"",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "text",
+      "selector": "id=\"watchlist.row.solana.name\"",
+      "value": "Solana"
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.solana.price\""
+    }
+  },
+  {
+    "command": "is",
+    "input": {
+      "predicate": "visible",
+      "selector": "id=\"watchlist.row.solana.change\""
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "64,000.12",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "3,100.5",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "145.3",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "2.5%",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "1.25%",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "text",
+      "text": "4.1%",
+      "timeoutMs": 15000
+    }
+  },
+  {
+    "command": "wait",
+    "input": {
+      "kind": "absent",
+      "selector": "id=\"watchlist.loading\"",
+      "timeoutMs": 15000
+    }
+  }
+]

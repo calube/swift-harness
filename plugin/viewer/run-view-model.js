@@ -177,7 +177,7 @@
       }
     });
     (view.halts || []).filter((h) => h.task === id).forEach((h) => {
-      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason + (h.gateRun ? " · gate run " + shortRun(h.gateRun) : ""), c: "--bad" });
+      events.push({ at: ms(h.at), kind: "halt", text: "Halted", sub: h.reason + (h.gateRun ? " · run " + shortRun(h.gateRun) : ""), c: "--bad" });
     });
     if (t.mergedAt) {
       const g = gateBy[t.mergeGateRun];

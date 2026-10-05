@@ -203,6 +203,43 @@ struct QARunFinalTests {
   }
 
   @Test(
+    "a qa run --after whose sim-record slot another run holds, as the price-tracker fixer's passing run met another trial's recording, runs the flow at once and its passing row says it has no video and why, with no finding — catches a passing fix run read as recorded when it left no video"
+  )
+  func afterRunSaysWhyItHasNoVideo() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try QARunFlowTests.plan(repo)
+    let runner = try CapturedFinalPass.runner(
+      batch: "batch/pass", home: repo.root.appending(path: ".harness/home"))
+    let device = LiveAgentDevice(runner: runner)
+    let simulator = try FakeFlowSimulator(
+      batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: QARunFlowTests.marker(repo), agentDevice: device)
+    let held = try await FileCountingLock(
+      directory: repo.root.appending(path: ".harness/locks", directoryHint: .isDirectory),
+      name: FinalPassRecorder.lockName, capacity: 1
+    ).acquire(timeout: .seconds(5))
+    defer { held.release() }
+    let clock = VirtualRecordClock()
+    let events = MemoryEventLog()
+
+    let report = await Self.run(
+      repo, simulator,
+      finalPass: Self.finalPass(repo, device: device, runner: runner, clock: clock.clock),
+      options: QARunRun.Options(after: "count-ui"), events: events)
+
+    #expect(report.verdict == .green, "\(report.message) \(report.rows.map(\.message))")
+    #expect(report.findings.isEmpty, "\(report.findings.map(\.message))")
+    #expect(clock.now == .zero)
+    let flow = try #require(report.rows.first { $0.layer == .flow })
+    #expect(flow.result == .pass)
+    #expect(flow.message.contains("no video"), "\(flow.message)")
+    #expect(flow.message.contains(FinalPassRecorder.lockName), "\(flow.message)")
+    #expect(try #require(Self.flowEvents(events).first).video == nil)
+  }
+
+  @Test(
     "--final with --at-base or --after is BLOCKED before any row runs — catches a final pass that records the merge base or a single merge's rows"
   )
   func finalStandsAlone() async throws {

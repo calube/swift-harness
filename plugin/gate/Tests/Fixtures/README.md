@@ -496,6 +496,28 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/wait-kinds
+
+Each `wait` kind in the input key `agent-device` reads it from, and a `kind: absent` wait whose
+target sits under `selector`, captured on 2026-10-05 with `agent-device` 0.21.18, Xcode 26.2 and
+the iOS 26.2 runtime. The fifth price-tracker trial left 3 flow rows red on that last shape: the
+tool drops `kind` and runs whichever target key is present, so the step waited for the element to
+appear. The app is `WaitProbe.swift` with `Info.plist`: `Loading` with the id `probe.loading` for
+4 s, then `Done` with the id `probe.done`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/wait-kinds/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app first.
+
+| Files | Batch |
+|---|---|
+| `kinds.{steps.json,stdout,stderr,status}` | a `kind: absent` wait with its target under `absent` (waited 2114 ms for `probe.loading` to go), then `selector`, `text`, `duration` and `stable` waits, then `is absent`. Exits 0 |
+| `absent-in-selector.{steps.json,stdout,stderr,status}` | waits for `probe.done`, then a `kind: absent` wait with its target under `selector`: exits 1, `details.step` 3, `wait_deadline_exceeded`, "wait timed out for selector", the trial's message |
+| `absent-in-selector-while-loading.{steps.json,stdout,stderr,status}` | the same wait while `Loading` shows: it returns in 399 ms, and the `is absent` after it fails, `details.step` 3, `predicate_failed`, "1 match found" |
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -4045,6 +4067,32 @@ jq '.rows[] | select(.requirement == "req-refresh")' $S2/runs/20261005T042513Z-f
 
 `grep -rniE '/Users|/private|/var/folders|caleb'` on the folder and the file matched nothing.
 
+## Brownfield trial: price-tracker-5's `wait absent` rows and the repair refused
+
+`BrownfieldTrial/price-tracker-5-repair/` holds what the fifth price-tracker trial (2026-10-05) left
+for its 3 rows whose `wait` put a `kind: absent` target under `selector`: plan state's
+`watchlist-launch.flow.json` (step 21), `watchlist-retry.flow.json` (step 7) and
+`detail-chart.flow.json` (step 6), with `detail-chart-failure.flow.json`, whose `is absent` passed,
+plan state's `at-base-run.json` and `validation.json`, the `qa/report.json` of the 2 runs that read
+the launch row red (`20261005T094133Z-a656b868`, `20261005T094737Z-871120b2`), and the at-base proof
+of the repair `qa adopt --repair` refused (`20261005T095338Z-888ef8b3`): its `qa/report.json`, its
+`events/qa.jsonl` and its row's driven `steps.json`, from which the tests read back the candidate
+flow by dropping the `snapshot` and `screenshot` steps `qa run` adds. The candidate swapped step 21
+for an `is absent`. `S` is the run's copied state directory under the practice-trial runs folder,
+and `T` the trial's folder that holds its checkouts, whose paths are cut to `/trial`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-5-repair; mkdir -p $F
+for f in watchlist-launch watchlist-retry detail-chart detail-chart-failure; do cp $S/plans/spec/qa/$f.flow.json $F/; done
+cp $S/plans/spec/qa/at-base-run.json $S/plans/spec/validation.json $F/
+cut="s#$T#/trial#g"
+for r in 20261005T094133Z-a656b868 20261005T094737Z-871120b2 20261005T095338Z-888ef8b3; do sed -e "$cut" $S/runs/$r/qa/report.json > $F/report-$r.json; done
+sed -e "$cut" $S/runs/20261005T095338Z-888ef8b3/qa/01-req-watchlist.flow/steps.json > $F/steps-20261005T095338Z-888ef8b3.json
+sed -e "$cut" $S/runs/20261005T095338Z-888ef8b3/events/qa.jsonl > $F/qa-20261005T095338Z-888ef8b3.jsonl
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
 ## Brownfield trial: a changed test that spins, and the warm-up its bounds read
 
 `BrownfieldTrial/price-tracker-3-DetailFeatureTests-spin.swift` is the detail test file a
@@ -4363,3 +4411,125 @@ PY
 ```
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` matched none of the 4 files.
+
+## Brownfield trial: price-tracker-5's refresh marker, user-checkout writes and halts
+
+The fifth price-tracker trial (2026-10-05) declared its refresh drag's bottom marker in the
+contract without placing it; the watchlist worker added it as the last `List` row, and the fixer
+moved it into `.safeAreaInset(edge: .bottom)`. `BrownfieldTrial/price-tracker-5-PLAN.md` is the
+run's `PLAN.md`, and `BrownfieldTrial/price-tracker-5-watchlist/{contract,worker,fixer}/` holds
+`WatchlistView.swift` at the contract commit, the worker's commit and the fixer's commit.
+`RunView/price-tracker-5/` holds the run's `build`, `gate`, `span` and `qa` event streams, the
+`qa/report.json` of the combined `qa run --before-merge` and of the fixer's `qa run --fix`, and the
+plan's `validation.json`. `Hooks/price-tracker-5-user-checkout-bash.json` is the orchestrator's Bash
+call that moved a return it had written into the user's checkout over to the plan checkout, with
+the session's `cwd`, the clone replaced with `/CLONE` and the harness checkout with `/HARNESS`.
+With `T` the trial folder, `S=$T/state` and `R` the trial's repository:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial; V=Packages/AppFeature/Sources/AppUI/WatchlistView.swift
+cp $T/PLAN.md $F/price-tracker-5-PLAN.md
+for pair in contract:c414b67 worker:f14b834 fixer:e500035; do d=${pair%%:*}; c=${pair##*:}
+  mkdir -p $F/price-tracker-5-watchlist/$d/$(dirname $V)
+  git -C $R show $c:$V > $F/price-tracker-5-watchlist/$d/$V; done
+G=plugin/gate/Tests/Fixtures/RunView/price-tracker-5; mkdir -p $G/events
+for e in build gate span qa; do cp $S/events/$e.jsonl $G/events/$e.jsonl; done
+for r in 20261005T094133Z-a656b868 20261005T094737Z-871120b2; do
+  mkdir -p $G/runs/$r/qa; cp $S/runs/$r/qa/report.json $G/runs/$r/qa/report.json; done
+cp $S/plans/spec/validation.json $G/validation.json
+python3 - $T/transcripts/8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9.jsonl \
+  > plugin/gate/Tests/Fixtures/Hooks/price-tracker-5-user-checkout-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/price-tracker-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-price-tracker-5','/HARNESS',c)
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    c=d.get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')!='tool_use': continue
+        cmd=b.get('input',{}).get('command','')
+        if 'rm -rf ../repo/.harness/build' in cmd:
+            json.dump({"cwd":scrub(d.get('cwd','')),"command":scrub(cmd)},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
+## Brownfield trial: price-tracker-5's device wait, prove runs and raw swift builds
+
+The fifth price-tracker trial (2026-10-05) ran a `qa run --after spec-client-live --before-merge`
+that no row runs after: it waited 190 s for the build run's device, then reported no validation row
+to run. Its watchlist slice's prove took 92 s, and its detail slice's 154 s. Its orchestrator ran a
+raw `swift build` in 2 packages during the contract, cold in each package's own `.build`. `T` is the
+trial's folder under the practice-trial runs, with the clone's state copied to `$T/state` and the
+orchestrator's transcript in `$T/transcripts`:
+
+```sh
+T=<price-tracker-5 run folder> S=$T/state F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/plans/spec/validation.json $F/price-tracker-5-validation.json
+cp $S/runs/20261005T093520Z-51af3e9a/qa/report.json $F/price-tracker-5-qa-no-rows.json
+cp $S/config.toml $F/price-tracker-5-config.toml
+python3 - $T/transcripts/8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9.jsonl \
+  > plugin/gate/Tests/Fixtures/Hooks/price-tracker-5-raw-swift-build-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/price-tracker-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-price-tracker-5','/HARNESS',c)
+calls=[]
+for l in open(sys.argv[1]):
+    c=json.loads(l).get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')=='tool_use' and b.get('name')=='Bash':
+            cmd=b['input'].get('command','')
+            if re.search(r'\bswift (build|test)\b', cmd): calls.append({'command':scrub(cmd)})
+print(json.dumps(calls,indent=2,ensure_ascii=False))
+PY
+```
+
+`BrownfieldTrial/price-tracker-5-prove-reverted/` is the watchlist slice's prove run again by hand
+on a clone of the trial's repository: its 2 changed test files at the watchlist tip `f14b834`, the
+output of `swift build --build-tests` once the tip's 4 source files were reverted to the merge base
+`e2868a9` (the build fails: the tests call API the contract never stubbed), and the output of the
+`test_files` run of the 10 changed tests on that tree, which fails the same build. With `R` a clone
+of the trial's repository:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-5-prove-reverted; O=<scratch folder>
+git -C $R checkout -q f14b834; mkdir -p $F
+for t in AppFeatureTests WatchlistFeatureTests; do
+  git -C $R show f14b834:Packages/AppFeature/Tests/AppCoreTests/$t.swift > $F/$t.swift; done
+(cd $R/Packages/AppFeature && swift build --build-tests)
+git -C $R checkout -q e2868a9 -- Packages/AppFeature/Sources/AppCore/AppFeature.swift \
+  Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift \
+  Packages/AppFeature/Sources/AppUI/AppView.swift Packages/AppFeature/Sources/AppUI/WatchlistView.swift
+cd $R/Packages/AppFeature
+swift build --build-tests > $O/build.stdout 2> $O/build.stderr; echo $? > $O/build.status
+swift test --parallel --xunit-output $O/together.xml --filter "<the 10 ids' --filter, as prove joins them>" \
+  > $O/together.stdout 2> $O/together.stderr; echo $? > $O/together.status
+for f in build together; do for x in stdout stderr status; do
+  sed "s#$R#/CLONE#g; s#$O#/OUT#g" $O/$f.$x > $F/$f.$x; done; done
+```
+
+The reverted build took 9.1 s and the failing test run 3.8 s at a load average near 100; the trial
+ran that failing build once per test, 11 times.
+
+`SwiftTest/prove-together.{xml,-swift-testing.xml,stdout,stderr,status}` is 1 `swift test` run of 3
+Swift Testing tests, 2 of which fail, as a prove run of several changed tests with the source
+reverted reads. `SwiftTest/prove-together-DoubleTests.swift` is its test file. The package is a
+`Lib` target whose `double(_:)` returns its argument and a `LibTests` target holding that file; with
+`P` the package:
+
+```sh
+cd $P && swift test --parallel --xunit-output $P/together.xml \
+  --filter '(LibTests.DoubleTests/doublesThree\(\)|LibTests.DoubleTests/doublesFour\(\)|LibTests.DoubleTests/keepsZero\(\))' \
+  > together.stdout 2> together.stderr; echo $? > together.status
+F=plugin/gate/Tests/Fixtures/SwiftTest
+cp together.xml $F/prove-together.xml; cp together-swift-testing.xml $F/prove-together-swift-testing.xml
+cp together.status $F/prove-together.status; cp Tests/LibTests/DoubleTests.swift $F/prove-together-DoubleTests.swift
+for x in stdout stderr; do sed "s#$P#/FIXTURE#g" together.$x > $F/prove-together.$x; done
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

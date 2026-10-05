@@ -123,6 +123,35 @@ struct QAAdoptRepairTests {
   }
 
   @Test(
+    "a --prepared-by --requirement run tags its qa.check events as a repair proof, and a --prepared-by run of every row doesn't — catches a refused candidate's red read as the adopted check's at-base run"
+  )
+  func repairProofIsTagged() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [validationRow("req-total", .state, "qa/total.sh", after: ["total-ui"])],
+      tasks: ["total-ui": .pending])
+    let prepared = Self.prepared(repo)
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+    try Data("exit 3\n".utf8).write(to: prepared.appending(path: "total.sh"))
+    func checks(_ events: MemoryEventLog) -> [QACheckEvent] {
+      events.events.compactMap {
+        guard case .qaCheck(let check) = $0.payload else { return nil }
+        return check
+      }
+    }
+    let whole = MemoryEventLog()
+    _ = await repo.run(
+      QARunRun.Options(atBase: true, preparedBy: "validation"), events: whole, suffix: 1)
+    let proof = MemoryEventLog()
+    _ = await repo.run(
+      QARunRun.Options(atBase: true, preparedBy: "validation", requirement: "req-total"),
+      events: proof, suffix: 2)
+    #expect(checks(whole).map(\.repairProof) == [nil])
+    #expect(checks(proof).map(\.repairProof) == [true])
+  }
+
+  @Test(
     "--requirement needs --prepared-by, and names a requirement the writer has a row for — catches a repair run that silently runs every row"
   )
   func requirementNeedsPreparedBy() async throws {

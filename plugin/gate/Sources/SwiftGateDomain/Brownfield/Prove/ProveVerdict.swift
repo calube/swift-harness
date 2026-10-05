@@ -17,6 +17,48 @@ public enum ProveVerdict {
     }
   }
 
+  /// What a failed run of several changed tests says about each, from its report.
+  public struct Attribution: Sendable, Equatable {
+    /// The ids the report names a pass or a failure for, with that outcome.
+    public let outcomes: [AreaTestID: AreaCommandOutcome]
+    /// The ids the report doesn't settle, in their order, which still run alone.
+    public let rerun: [AreaTestID]
+
+    public init(outcomes: [AreaTestID: AreaCommandOutcome], rerun: [AreaTestID]) {
+      self.outcomes = outcomes
+      self.rerun = rerun
+    }
+  }
+
+  /// Splits `ids` by what `outcome`'s report says about each: a case named `<class>/<name>` for
+  /// an id names its pass or failure, so only the ids it doesn't name run again alone. A crash
+  /// may have cut the report short, so every id of a crashed run runs again.
+  public static func attributed(_ outcome: AreaCommandOutcome, ids: [AreaTestID]) -> Attribution {
+    guard case .failed(let exit, let tail, let junit?) = outcome,
+      let cases = JUnitReports.cases(junit)
+    else { return Attribution(outcomes: [:], rerun: ids) }
+    var outcomes: [AreaTestID: AreaCommandOutcome] = [:]
+    var rerun: [AreaTestID] = []
+    for id in ids {
+      // `Target.Suite/Inner/name()` is reported as class `Target.Suite.Inner` and name `name()`.
+      let named = id.name.replacingOccurrences(of: "/", with: ".")
+      let reported = cases.filter { "\($0.className).\($0.name)" == named }
+      let failures = reported.compactMap { testCase -> String? in
+        if case .failed(let message) = testCase.outcome { return message }
+        return nil
+      }
+      if !failures.isEmpty {
+        outcomes[id] = .failed(
+          exit: exit, tail: (failures + [tail]).joined(separator: "\n"), junit: junit)
+      } else if !reported.isEmpty, reported.allSatisfy({ $0.outcome == .passed }) {
+        outcomes[id] = .passed
+      } else {
+        rerun.append(id)
+      }
+    }
+    return Attribution(outcomes: outcomes, rerun: rerun)
+  }
+
   /// What a reverted run that selected some changed tests says about them, once its report says
   /// how many tests ran: a pass that ran none of them never found them, because the revert took
   /// away what holds them (a new target, a new module), which proves them as a build failure

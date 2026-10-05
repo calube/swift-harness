@@ -56,6 +56,22 @@ public struct BuildRunRecord: Sendable, Equatable {
     self.timeBox = timeBox
     self.endsAtFinish = endsAtFinish
   }
+
+  /// After it, no new work starts: the box's, or the preset's budget less its stop margin from
+  /// ``startedAt``; `nil` for a run with neither.
+  public var noNewStartsAt: Date? {
+    if let timeBox { return timeBox.deadlines.noNewStartsAt }
+    guard preset.timeBudgetMin > 0 else { return nil }
+    return startedAt.addingTimeInterval(
+      TimeInterval((preset.timeBudgetMin - preset.stopStartsBeforeMin) * 60))
+  }
+
+  /// The box's cutoff, or the preset's budget from ``startedAt``; `nil` for a run with neither.
+  public var cutoffAt: Date? {
+    if let timeBox { return timeBox.deadlines.cutoffAt }
+    guard preset.timeBudgetMin > 0 else { return nil }
+    return startedAt.addingTimeInterval(TimeInterval(preset.timeBudgetMin * 60))
+  }
 }
 
 extension BuildRunRecord: Codable {

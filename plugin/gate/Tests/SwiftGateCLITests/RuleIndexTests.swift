@@ -78,7 +78,8 @@ struct RuleIndexTests {
       CalibrationFreshness.summaryRuleID, "plugin-validate.failed", "plugin-validate.not-run",
       "plugin-validate.summary", "plugin-validate.accepted-warning",
       PlanLintGraph.writeSetUnresolvedRuleID, ContractLanding.unlandedWriteRuleID,
-      ContractLanding.scenarioSeamRuleID, PluginVersionRule.pinnedRuleID,
+      ContractLanding.scenarioSeamRuleID, ContractLanding.refreshMarkerRuleID,
+      PluginVersionRule.pinnedRuleID,
       PluginVersionRule.malformedRuleID,
       PluginVersionRule.summaryRuleID,
     ]
@@ -99,7 +100,7 @@ struct RuleIndexTests {
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
       SubagentScopeGuard.protectedPathRuleID,
       EditGuard.xcresultRuleID, EditGuard.planStateRuleID, DirtyFileGuard.ruleID,
-      ReviewerBashGuard.ruleID, GateOutputGuard.ruleID,
+      ReviewerBashGuard.ruleID, GateOutputGuard.ruleID, UserCheckoutGuard.ruleID,
     ]
     let buildReturn = TaskReturnFinding.Rule.allCases.map(\.rawValue)
     let brownfield = BrownfieldRuleID.allCases.map(\.rawValue)
@@ -179,7 +180,7 @@ extension RuleIndexTests {
       QAReport.checkPassesAtBaseRuleID, QAReport.noVerifiableRowRuleID, FlowRules.unparsedRuleID,
       FlowRules.refTargetRuleID,
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
-      FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
+      FlowRules.idsUnknownRuleID, FlowRules.kindKeyRuleID, SimAuditScope.untargetedRuleID,
       QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,
       QAFlowRepair.capRuleID, QAFlowRepair.outsideRowRuleID, QAFlowRepair.weakensRuleID,
       QAFlowRepair.unchangedRuleID, QAFlowRepair.notRedRuleID, QAFlowRepair.wrongRedRuleID,

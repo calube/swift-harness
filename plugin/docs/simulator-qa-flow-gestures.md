@@ -33,6 +33,9 @@ bottom of the refreshable screen's safe area, and the drag ends there:
 
 `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top row>\"", "destination": "id=\"<bottom id>\""}}`
 
+- The contract places the inset in the screen's stub, so no task has to: declared alone, the id
+  ended up as the last `List` row in a trial, where it scrolls with the rows and the drag pulled
+  nothing. `plan import` keeps such a contract pending as `plan-import.refresh-marker-unplaced`.
 - The id goes on the list after any identifier the list itself carries: an identifier applied
   later to the whole view replaces it.
 - On the captured 3-row list, under `gate/Tests/Fixtures/AgentDevice/pull-to-refresh-short/`, the
@@ -54,6 +57,5 @@ coordinates to clear". So the flow selects the field by its role, whatever its p
   selectors, so the step needs no `AccessibilityID` case. A screen with 2 search fields picks 1 by
   `label="<prompt>"`, the field's label before and after typing.
 - The flow checks what the search changes by ids: a count, a row that stays, a row that goes.
-- A wait for a row to go is `{"command": "wait", "input": {"kind": "absent", "absent":
-  "id=\"<row>\"", "timeoutMs": 5000}}`. Written with a `selector` key, the same wait waits for
-  the row to appear.
+- A wait for a row to go puts the row under `absent`, as
+  [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) says.

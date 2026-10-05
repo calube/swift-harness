@@ -280,7 +280,11 @@ extension BrownfieldProveTests {
     #expect(path.hasSuffix("/.git/worktrees/slot-2/swift-harness/derived-data/prove/Feature"))
     let ran = requests.withLock { $0 }
     #expect(!ran.isEmpty)
-    #expect(ran.allSatisfy { $0.command.hasPrefix("swift test --scratch-path '\(path)' ") })
+    #expect(
+      ran.allSatisfy {
+        $0.command.hasPrefix("swift build --scratch-path '\(path)' ")
+          || $0.command.hasPrefix("swift test --scratch-path '\(path)' ")
+      }, "\(ran.map(\.command))")
     #expect(ran.allSatisfy { $0.buildLock?.directory == path })
     #expect(outcome.lockWaitMilliseconds == 1200 * ran.count)
   }
@@ -382,7 +386,7 @@ extension BrownfieldProveTests {
     #expect(
       Self.gating(judgement).isEmpty == (outcome == .proven), "\(judgement.findings)")
     #expect(
-      runner.requests.withLock { $0.count } == 1,
+      runner.requests.withLock { $0.filter { $0.step == .testFiles }.count } == 1,
       "a run that found none of its tests isn't rerun test by test")
   }
 

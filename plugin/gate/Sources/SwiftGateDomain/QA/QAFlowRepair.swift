@@ -17,6 +17,10 @@ public enum QAFlowRepair {
   public static let wrongRedRuleID = "qa.repair-wrong-red"
   public static let redRunsRuleID = "qa.repair-red-runs"
 
+  /// The repairs 1 requirement may take in 1 build run. The second is taken only while the run's
+  /// box still starts new work, before its `noNewStartsAt`.
+  public static let repairsPerRun = 2
+
   /// Why the orchestrator sent the row to repair.
   public enum Cause: String, Sendable, Equatable, Codable, CaseIterable {
     /// The fixer judged the failing step the flow's fault.
@@ -55,12 +59,17 @@ public enum QAFlowRepair {
     public let redRuns: [RedRun]
     public let earlier: [QAFlowRepairRecord]
     public let buildRun: String
+    /// When the adopt runs; `nil` when it isn't known, which allows no second repair.
+    public let now: Date?
+    /// The build run's `noNewStartsAt`; `nil` for a run with no box, which allows no second
+    /// repair.
+    public let noNewStartsAt: Date?
 
     public init(
       requirement: String, rows: [(row: Int, validation: ValidationRow)], adopted: [String: Data],
       repaired: [String: Data], preparedFiles: [String], adoptedRecord: QAAtBaseRun?,
       preparedRecord: QAAtBaseRun?, redRuns: [RedRun], earlier: [QAFlowRepairRecord],
-      buildRun: String
+      buildRun: String, now: Date? = nil, noNewStartsAt: Date? = nil
     ) {
       self.requirement = requirement
       self.rows = rows
@@ -72,6 +81,8 @@ public enum QAFlowRepair {
       self.redRuns = redRuns
       self.earlier = earlier
       self.buildRun = buildRun
+      self.now = now
+      self.noNewStartsAt = noNewStartsAt
     }
 
     public static func == (lhs: Input, rhs: Input) -> Bool {
@@ -81,7 +92,8 @@ public enum QAFlowRepair {
         && lhs.adopted == rhs.adopted && lhs.repaired == rhs.repaired
         && lhs.preparedFiles == rhs.preparedFiles && lhs.adoptedRecord == rhs.adoptedRecord
         && lhs.preparedRecord == rhs.preparedRecord && lhs.redRuns == rhs.redRuns
-        && lhs.earlier == rhs.earlier && lhs.buildRun == rhs.buildRun
+        && lhs.earlier == rhs.earlier && lhs.buildRun == rhs.buildRun && lhs.now == rhs.now
+        && lhs.noNewStartsAt == rhs.noNewStartsAt
     }
   }
 
@@ -98,22 +110,42 @@ public enum QAFlowRepair {
     }
     let checks = input.rows.map(\.validation.check)
 
-    if input.earlier.contains(where: {
+    let taken = input.earlier.filter {
       $0.requirement == requirement && $0.buildRun == input.buildRun
-    }) {
+    }.count
+    if taken >= repairsPerRun {
       add(
         capRuleID,
-        "\(requirement) was already repaired in build run \(input.buildRun); a row gets 1 "
-          + "repair per run, so a row still red goes to the user")
+        "\(requirement) was already repaired \(taken) times in build run \(input.buildRun); a "
+          + "row gets \(repairsPerRun) repairs per run, so a row still red goes to the user")
+    } else if taken > 0 {
+      if let now = input.now, let noNewStartsAt = input.noNewStartsAt {
+        if now >= noNewStartsAt {
+          add(
+            capRuleID,
+            "\(requirement) was already repaired in build run \(input.buildRun), and a second "
+              + "repair is taken only before the run's no-new-starts time, "
+              + "\(noNewStartsAt.formatted(.iso8601)), which has passed")
+        }
+      } else {
+        add(
+          capRuleID,
+          "\(requirement) was already repaired in build run \(input.buildRun), and a second "
+            + "repair is taken only in a run whose time box still starts new work; this run has "
+            + "no box")
+      }
     }
 
-    let allowed = Set(checks.compactMap(preparedName) + [QAAtBaseRun.fileName])
+    let own = checks.compactMap(preparedName).sorted()
+    let allowed = Set(own + [QAAtBaseRun.fileName])
     let outside = input.preparedFiles.filter { !allowed.contains($0) }.sorted()
     if !outside.isEmpty {
       add(
         outsideRowRuleID,
         "the prepared folder holds " + outside.joined(separator: ", ")
-          + ", which no row of \(requirement) checks; a repair changes only its own row's files")
+          + ", which no row of \(requirement) checks; a repair's folder holds only "
+          + Self.listed(own + [QAAtBaseRun.fileName])
+          + ", so prepare 1 folder per requirement and repair any other row in its own round")
     }
 
     if input.redRuns.isEmpty {
@@ -197,8 +229,8 @@ public enum QAFlowRepair {
         add(
           weakensRuleID,
           "row \(number)'s \(check) no longer checks step \(old.number) of the adopted flow, "
-            + "\(rendered(old)), in its place or later with at least its timeout; a repair keeps "
-            + "every `wait` and `is` step")
+            + "\(rendered(old)), in its place or later with at least its timeout. A repair keeps "
+            + "every `wait` and `is` step: \(kept(old))")
         continue
       }
       remaining = newSteps[newSteps.index(after: at)...]
@@ -231,11 +263,13 @@ public enum QAFlowRepair {
     }
   }
 
-  /// Whether `new` keeps what `old` checks: the same step, with a timeout no shorter.
+  /// Whether `new` keeps what `old` checks: the same step, with a timeout no shorter. A `wait`
+  /// keeps another of the same kind and target when its target sits under the key its kind
+  /// reads, so a repair can move a mis-shaped `wait`'s target to that key.
   static func keeps(_ old: FlowStep, in new: FlowStep) -> Bool {
     guard old.command == new.command else { return false }
-    var oldInput = old.input
-    var newInput = new.input
+    var oldInput = old.command == "wait" ? waitShape(old.input) : old.input
+    var newInput = new.command == "wait" ? waitShape(new.input) : new.input
     let oldTimeout = oldInput.removeValue(forKey: "timeoutMs")?.numeric
     let newTimeout = newInput.removeValue(forKey: "timeoutMs")?.numeric
     guard FlowJSON.object(oldInput).sameValue(as: .object(newInput)) else { return false }
@@ -247,7 +281,45 @@ public enum QAFlowRepair {
   }
 
   private static func rendered(_ step: FlowStep) -> String {
-    "`\(step.command)` \(FlowJSON.object(step.input).rendered)"
+    "`\(step.command)` \(FlowJSON.object(step.input).jsonText)"
+  }
+
+  /// A `wait`'s input as what it waits for: its target under the key its `kind` reads, and the
+  /// `kind` that key implies when the step names none.
+  static func waitShape(_ input: [String: FlowJSON]) -> [String: FlowJSON] {
+    var shaped = FlowRules.correctedWait(input) ?? input
+    let targets = FlowRules.waitTargets(in: shaped)
+    if shaped["kind"] == nil, targets.count == 1, let key = targets.first,
+      let kind = FlowRules.waitTargetKeys.first(where: { $0.value == key })?.key
+    {
+      shaped["kind"] = .string(kind)
+    }
+    return shaped
+  }
+
+  /// The step that would keep `old`'s check, for a refusal to quote.
+  private static func kept(_ old: FlowStep) -> String {
+    let timeout = old.input["timeoutMs"].map { " and a `timeoutMs` of at least \($0.rendered)" }
+    guard old.command == "wait" else {
+      return "this one passes as `\(old.command)` \(FlowJSON.object(old.input).jsonText)"
+        + (timeout ?? "")
+    }
+    let shaped = FlowRules.correctedWait(old.input)
+    var text =
+      "this one passes as `wait` \(FlowJSON.object(shaped ?? old.input).jsonText)"
+    if shaped != nil, case .string(let kind)? = old.input["kind"],
+      let key = FlowRules.waitTargetKeys[kind]
+    {
+      text += ", its target under `\(key)`, the key its `kind` reads"
+    }
+    return text + (timeout ?? "")
+      + "; an `is` step in its place checks once without waiting, so it doesn't keep a `wait`"
+  }
+
+  /// `a`, `a and b`, or `a, b and c`.
+  private static func listed(_ names: [String]) -> String {
+    guard names.count > 1, let last = names.last else { return names.first ?? "" }
+    return names.dropLast().joined(separator: ", ") + " and " + last
   }
 
   /// The name a `qa/<name>` check has in the prepared folder; `nil` for a check that names none.

@@ -5,7 +5,8 @@ the layer order are in [`simulator-qa.md`](simulator-qa.md#qa-run), and the sess
 [`simulator-qa-sim.md`](simulator-qa-sim.md). Rule ids are in
 [`standards.md` § Rule id index](standards.md#rule-id-index). Steps for gestures a selector alone
 doesn't drive, such as pull to refresh, are in
-[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md).
+[`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md), and the key each `wait` kind
+reads in [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md).
 
 ## Running a flow row
 
@@ -71,5 +72,6 @@ a failed sheet names `sheetFailed`. Each missing video is a `qa.video-unverified
 missing log a `qa.evidence-unsaved` nit. The row still passes or fails on its assertions.
 
 An `--after` run records each flow the same way when the lock is free at once, saving no logs. A
-busy lock or recorder runs the flow unrecorded at once, with no nit. The report shows each row's
+busy lock or recorder runs the flow unrecorded at once, with no nit, and the row's message
+says `no video:` and why. The report shows each row's
 newest passing run with its video, labelled with that run, when the row's newest run didn't pass.

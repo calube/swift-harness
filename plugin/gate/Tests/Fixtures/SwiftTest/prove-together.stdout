@@ -1,0 +1,14 @@
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite DoubleTests started.
+◇ Test keepsZero() started.
+◇ Test doublesFour() started.
+◇ Test doublesThree() started.
+✔ Test keepsZero() passed after 0.001 seconds.
+✘ Test doublesThree() recorded an issue at DoubleTests.swift:5:31: Expectation failed: (double(3) → 3) == 6
+✘ Test doublesFour() recorded an issue at DoubleTests.swift:6:30: Expectation failed: (double(4) → 4) == 8
+✘ Test doublesThree() failed after 0.001 seconds with 1 issue.
+✘ Test doublesFour() failed after 0.001 seconds with 1 issue.
+✘ Suite DoubleTests failed after 0.001 seconds with 2 issues.
+✘ Test run with 3 tests in 1 suite failed after 0.001 seconds with 2 issues.

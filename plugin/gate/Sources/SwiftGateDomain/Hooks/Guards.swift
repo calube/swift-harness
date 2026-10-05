@@ -702,6 +702,38 @@ public enum PlanStateGuard {
   }
 }
 
+/// PreToolUse guard on a brownfield clone's Bash commands: a `swift build` or `swift test` left to
+/// its own `.build` starts cold beside the scratch path every gate, checkout and warm-up of the
+/// clone shares, which already holds the build.
+public enum BrownfieldBuildGuard {
+  public static let rawSwiftBuildRuleID = "guard.raw-swift-build"
+
+  public static func evaluate(_ command: String, layout: BrownfieldStateLayout) -> GuardViolation? {
+    for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
+      let simple = parsed.command
+      guard simple.name == "swift", let subcommand = simple.arguments.first,
+        ["build", "test"].contains(subcommand),
+        !simple.arguments.contains(where: namesBuildPath)
+      else { continue }
+      let scratch = ScratchTreeBuild.swiftPMScratchPath(area: "<area>", layout: layout)
+      return GuardViolation(
+        ruleID: rawSwiftBuildRuleID,
+        reason:
+          "`swift \(subcommand)` here builds cold in the package's own `.build`, while the warm-up "
+          + "and every gate build each swiftpm area in 1 scratch path the clone shares, which "
+          + "already holds its build. Gate the change with `\"$SG\" check --tier slice --base "
+          + "<base>`, which builds every area it touches warm, or run a test with `\"$SG\" "
+          + "test-only <Target>/<Class>`. To only build, add `--scratch-path \(scratch)`, with "
+          + "`<area>` the area's name in the run's config.")
+    }
+    return nil
+  }
+
+  private static func namesBuildPath(_ argument: String) -> Bool {
+    ["--scratch-path", "--build-path"].contains { argument == $0 || argument.hasPrefix($0 + "=") }
+  }
+}
+
 /// A background subagent can't answer a permission prompt: a tool call that raises one never runs,
 /// and the agent waits until someone stops it. So the PreToolUse hook decides every call a
 /// subagent makes, and never leaves one to the prompt. A write outside this repository's
@@ -769,6 +801,37 @@ public enum SubagentScopeGuard {
 
   private static func contains(_ root: String, _ path: String) -> Bool {
     path == root || path.hasPrefix(root + "/")
+  }
+}
+
+/// A brownfield run never writes the user's checkout: it commits in the plan checkout beside
+/// it, keeps returns and scratch files there, and keeps state under the git dir. So while a
+/// session holds a plan's lock in a brownfield clone, a write it or its agents make inside the
+/// user's tree, outside its `.git`, is denied.
+public enum UserCheckoutGuard {
+  public static let ruleID = "guard.run-user-checkout"
+
+  /// The first write inside `userCheckout` and outside its `.git`, or `nil`.
+  /// - Parameters:
+  ///   - writes: canonical absolute paths the call writes.
+  ///   - userCheckout: the user's checkout, canonical: the git common dir's parent.
+  ///   - planCheckout: the plan checkout a run commits in, named in the reason.
+  public static func evaluate(writes: [String], userCheckout: String, planCheckout: String?)
+    -> GuardViolation?
+  {
+    let root = userCheckout.hasSuffix("/") ? String(userCheckout.dropLast()) : userCheckout
+    for path in writes where path.hasPrefix(root + "/") {
+      let inside = path.dropFirst(root.count + 1)
+      guard inside != ".git", !inside.hasPrefix(".git/") else { continue }
+      let checkout = planCheckout.map { "the plan checkout `\($0)`" } ?? "the plan checkout"
+      return GuardViolation(
+        ruleID: ruleID,
+        reason:
+          "`\(path)` is in the user's checkout, which a run never writes. Commit, keep task "
+          + "returns under `.harness/build/`, and put scratch files in \(checkout); a gate's or "
+          + "`qa run`'s JSON goes in the plan's `out/` folder.")
+    }
+    return nil
   }
 }
 
