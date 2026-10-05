@@ -3440,10 +3440,10 @@ the cutoff. `BrownfieldTrial/send-money-2-validation.json` is that plan's table,
 `send-money-2-build-events.jsonl` its build run's `events.jsonl`, and
 `send-money-2-qa-after-send-ui.json` the JSON `qa run --plan spec --after send-ui --json` printed
 after the screens task's fix merge, which the orchestrator kept in the plan's `out/`. From the
-repository root, with `S` the trial's kept state:
+repository root, with `S` the plan state the trial's run folder kept:
 
 ```sh
-S=~/Developer/block-prep/_harness-runs/send-money-2/state/plans/spec
+S=<send-money-2 run folder>/state/plans/spec
 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
 cp $S/validation.json $F/send-money-2-validation.json
 cp $S/build/20261005T025212Z-65cdde10/events.jsonl $F/send-money-2-build-events.jsonl
