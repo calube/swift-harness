@@ -55,6 +55,11 @@ enum BuildFinishRun {
         return .blocked(command, slug, "invalid plan name `\(slug)`: \(error)")
       }
       let ledger = try BuildLoop.ledger(plan)
+      let validation: BuildFinishReport.Validation?
+      switch newestValidation(plan: plan, slug: slug, root: root, qaRun: qaRun) {
+      case .success(let read): validation = read
+      case .failure(let refusal): return .refused(command, slug, .red, refusal.message)
+      }
       var counts: [String: Int] = [:]
       for task in ledger.tasks { counts[task.status.rawValue, default: 0] += 1 }
       let unfinished = ledger.tasks.filter { $0.status != .done }
@@ -74,7 +79,10 @@ enum BuildFinishRun {
       let run: BuildRunStore?
       do {
         run = try await BuildRunStore.latest(plan: slug, git: git)
-        try await run?.append(.finish(BuildEvent.Finish(at: clock.now())))
+        try await run?.append(
+          .finish(
+            BuildEvent.Finish(
+              at: clock.now(), qaRun: validation?.runID, validation: validation?.verdict)))
       } catch {
         return .blocked(command, slug, "recording the build run's end: \(error)")
       }
@@ -82,16 +90,67 @@ enum BuildFinishRun {
       var report = BuildFinishReport(
         command: command, plan: slug, indexStatus: status, counts: counts,
         unfinished: unfinished, resume: resume)
+      report.validation = validation
+      let message =
+        resume
+        + (validation.map {
+          "; validation \($0.verdict.rawValue) in qa run \($0.runID): \($0.message)"
+        } ?? "")
       if let root {
         (report.runReport, report.runReportNote) = await writeRunReport(
           run: run?.layout.runID, root: root, pluginRoot: pluginRoot, git: git, now: clock.now())
       }
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
-        message: resume)
+        message: message)
     } catch {
       return .blocked(command, slug, error.message)
     }
+  }
+
+  struct ValidationRefusal: Error {
+    let message: String
+  }
+
+  /// The newest `qa run --final` of a brownfield plan with a validation table, once `qaRun` names
+  /// it; `nil` for any other plan. A missing, older or non-final run refuses the finish, so the
+  /// caller reads the verdict it ends on.
+  static func newestValidation(
+    plan: PlanStateLayout.Plan, slug: String, root: URL?, qaRun: String?
+  ) -> Result<BuildFinishReport.Validation?, ValidationRefusal> {
+    let files = FileManager.default
+    guard files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName),
+      (try? PlanStateStore(plan: plan).planFile())?.livePlanSource != nil
+    else { return .success(nil) }
+    let rerun =
+      "run `swiftgate qa run --plan \(slug) --final` in the checkout, read its verdict, then "
+      + "finish with `--qa-run <its run id>`"
+    guard let root else {
+      return .failure(ValidationRefusal(message: "no checkout to read the qa runs of; \(rerun)"))
+    }
+    let runs = RunStore(worktreeRoot: root).state.url(
+      RunLayout.runsDirectory, directoryHint: .isDirectory)
+    guard case .read(let newest) = QAFiles.newestWholeRun(plan: slug, runsDirectory: runs),
+      let runID = newest.runID
+    else {
+      return .failure(
+        ValidationRefusal(
+          message: "\(slug) has a validation table but no qa run over every row; \(rerun)"))
+    }
+    let read = "the newest qa run, \(runID), is \(newest.verdict.rawValue): \(newest.message)"
+    guard newest.final else {
+      return .failure(
+        ValidationRefusal(message: "\(read); it isn't --final, so no flow was recorded; \(rerun)"))
+    }
+    guard qaRun == runID else {
+      let named = qaRun.map { "--qa-run names \($0), not it" } ?? "no --qa-run names it"
+      return .failure(
+        ValidationRefusal(
+          message: "\(read); \(named). Read it, then finish with `--qa-run \(runID)`"))
+    }
+    return .success(
+      BuildFinishReport.Validation(
+        runID: runID, verdict: newest.verdict, message: newest.message))
   }
 
   /// The run's final report page, or why there is none. A page that can't be written never
@@ -138,8 +197,10 @@ struct BuildFinishCommand: AsyncParsableCommand {
     discussion:
       "Records the build run's end, sets the index to done when every ledger task is done, or "
       + "leaves it building with a resume note naming the unfinished tasks, and writes the run's "
-      + "final report page. Exits 0 either way, 1 when --session doesn't "
-      + "hold the plan's lock, and 2 for a missing --session or unreadable plan state.")
+      + "final report page. A brownfield plan with a validation table records the verdict of "
+      + "the newest `qa run --final`, which --qa-run must name. Exits 0 either way, 1 when "
+      + "--session doesn't hold the plan's lock or --qa-run doesn't name that run, and 2 for a "
+      + "missing --session or unreadable plan state.")
 
   @Argument(help: "The plan's slug.")
   var plan: String

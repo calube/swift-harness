@@ -307,7 +307,7 @@ public enum BuildEvent: Sendable, Equatable {
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
-    case fix, commit, rules
+    case fix, commit, rules, qaRun, validation
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -356,7 +356,10 @@ extension BuildEvent: Codable {
           checkID: try container.decode(String.self, forKey: .checkID),
           rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at))
     case .finish:
-      self = .finish(Finish(at: at))
+      self = .finish(
+        Finish(
+          at: at, qaRun: try container.decodeIfPresent(String.self, forKey: .qaRun),
+          validation: try container.decodeIfPresent(Verdict.self, forKey: .validation)))
     }
   }
 
@@ -400,6 +403,8 @@ extension BuildEvent: Codable {
       try container.encode(check.rules, forKey: .rules)
       try container.encode(check.at, forKey: .at)
     case .finish(let finish):
+      try container.encodeIfPresent(finish.qaRun, forKey: .qaRun)
+      try container.encodeIfPresent(finish.validation, forKey: .validation)
       try container.encode(finish.at, forKey: .at)
     }
   }
