@@ -8,6 +8,18 @@ public enum FixerWriteSet {
   public static func credited(task: String, tasks: [LedgerTask], reports: [QAReport])
     -> [LedgerTask]
   {
-    []
+    var taken: Set<String> = []
+    var owners: Set<String> = []
+    for report in reports {
+      let red = report.rows.filter { $0.result == .red && $0.runsAfter.contains(task) }
+      guard !red.isEmpty else { continue }
+      taken.formUnion(
+        (report.after.map { [$0] } ?? []) + (report.trialMerge?.alongside.map(\.task) ?? []))
+      owners.formUnion(red.flatMap(\.runsAfter))
+    }
+    return tasks.filter { other in
+      other.id != task
+        && (taken.contains(other.id) || (other.status == .done && owners.contains(other.id)))
+    }
   }
 }
