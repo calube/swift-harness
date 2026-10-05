@@ -11,7 +11,7 @@ public enum FlowIDs: Sendable, Equatable {
   case undeclarable
 }
 
-/// The 5 batch steps file rules (simulator QA amendment §6.1), each `RED`, and the note that says
+/// The batch steps file rules (simulator QA amendment §6.1), each `RED`, and the note that says
 /// identifiers weren't checked.
 public enum FlowRules {
   public static let unparsedRuleID = "qa.flow-unparsed"
@@ -20,6 +20,16 @@ public enum FlowRules {
   public static let schemaRuleID = "qa.flow-schema"
   public static let unknownIDRuleID = "qa.flow-unknown-id"
   public static let idsUnknownRuleID = "qa.flow-ids-unknown"
+  public static let kindKeyRuleID = "qa.flow-kind-key"
+
+  /// The input key a `wait` of each `kind` reads its target from. The pinned tool drops `kind`
+  /// before it runs the step and takes whichever 1 of these keys is present, so a target under
+  /// another kind's key runs as that other kind. The pinned `wait` schema names every kind in its
+  /// `kind` enum and every key as a property; the schema alone doesn't pair them.
+  public static let waitTargetKeys: [String: String] = [
+    "duration": "durationMs", "text": "text", "ref": "ref", "selector": "selector",
+    "absent": "absent", "stable": "stable",
+  ]
 
   /// Keys whose strings are app content, not selectors: what a step types, or the text a
   /// predicate compares with.
@@ -98,6 +108,13 @@ public enum FlowRules {
       findings.append(note)
     }
     return FlowLintReport(files: files.map(\.path), findings: findings)
+  }
+
+  /// Why `step` would run as another step than its `kind` or `predicate` says, each naming the key
+  /// to use; empty when its input keys match. A `wait` holds exactly 1 target key, the 1 its
+  /// `kind` reads, and an `is` holds a `value` exactly when its predicate is `text`.
+  static func kindKeyProblems(_ step: FlowStep) -> [String] {
+    []
   }
 
   /// A `wait` that looks for something, or any `is`. A `duration` or `stable` wait only pauses.

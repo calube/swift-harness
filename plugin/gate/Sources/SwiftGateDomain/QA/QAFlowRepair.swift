@@ -17,6 +17,10 @@ public enum QAFlowRepair {
   public static let wrongRedRuleID = "qa.repair-wrong-red"
   public static let redRunsRuleID = "qa.repair-red-runs"
 
+  /// The repairs 1 requirement may take in 1 build run. The second is taken only while the run's
+  /// box still starts new work, before its `noNewStartsAt`.
+  public static let repairsPerRun = 2
+
   /// Why the orchestrator sent the row to repair.
   public enum Cause: String, Sendable, Equatable, Codable, CaseIterable {
     /// The fixer judged the failing step the flow's fault.
@@ -55,12 +59,17 @@ public enum QAFlowRepair {
     public let redRuns: [RedRun]
     public let earlier: [QAFlowRepairRecord]
     public let buildRun: String
+    /// When the adopt runs; `nil` when it isn't known, which allows no second repair.
+    public let now: Date?
+    /// The build run's `noNewStartsAt`; `nil` for a run with no box, which allows no second
+    /// repair.
+    public let noNewStartsAt: Date?
 
     public init(
       requirement: String, rows: [(row: Int, validation: ValidationRow)], adopted: [String: Data],
       repaired: [String: Data], preparedFiles: [String], adoptedRecord: QAAtBaseRun?,
       preparedRecord: QAAtBaseRun?, redRuns: [RedRun], earlier: [QAFlowRepairRecord],
-      buildRun: String
+      buildRun: String, now: Date? = nil, noNewStartsAt: Date? = nil
     ) {
       self.requirement = requirement
       self.rows = rows
@@ -72,6 +81,8 @@ public enum QAFlowRepair {
       self.redRuns = redRuns
       self.earlier = earlier
       self.buildRun = buildRun
+      self.now = now
+      self.noNewStartsAt = noNewStartsAt
     }
 
     public static func == (lhs: Input, rhs: Input) -> Bool {
@@ -81,7 +92,8 @@ public enum QAFlowRepair {
         && lhs.adopted == rhs.adopted && lhs.repaired == rhs.repaired
         && lhs.preparedFiles == rhs.preparedFiles && lhs.adoptedRecord == rhs.adoptedRecord
         && lhs.preparedRecord == rhs.preparedRecord && lhs.redRuns == rhs.redRuns
-        && lhs.earlier == rhs.earlier && lhs.buildRun == rhs.buildRun
+        && lhs.earlier == rhs.earlier && lhs.buildRun == rhs.buildRun && lhs.now == rhs.now
+        && lhs.noNewStartsAt == rhs.noNewStartsAt
     }
   }
 
