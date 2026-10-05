@@ -112,6 +112,12 @@ public struct BuildRunStore: Sendable {
     return runs.max { $0.runID < $1.runID }.map { BuildRunStore(layout: $0) }
   }
 
+  /// The record of build run `runID` in whichever plan under `commonDirectory` holds it, or `nil`
+  /// when none does or its `run.json` can't be read.
+  public static func record(runID: String, commonDirectory: String) -> BuildRunRecord? {
+    nil
+  }
+
   private static func locate(plan: String, runID: String, git: any Git)
     async throws(BuildRunStoreError) -> BuildRunLayout
   {

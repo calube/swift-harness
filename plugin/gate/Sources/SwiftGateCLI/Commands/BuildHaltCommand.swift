@@ -17,9 +17,11 @@ enum BuildHaltRun {
 
   /// - Parameters:
   ///   - enabled: `.swiftgate.toml`'s `[telemetry] enabled`; `false` records nothing.
+  ///   - cutoffAt: the build run's time-box cutoff, `nil` for a build with no box; a `budget`
+  ///     halt before it exits 1 and records nothing.
   static func halt(
     log: BuildHaltLog, enabled: Bool, buildRun: String, task: String?, reason: BuildHaltReason,
-    json: Bool
+    json: Bool, cutoffAt: Date? = nil
   ) -> Output {
     let command = "build halt"
     if let refusal = refusal(command, buildRun: buildRun, task: task, enabled: enabled) {

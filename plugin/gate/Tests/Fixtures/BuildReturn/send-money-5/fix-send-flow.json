@@ -1,0 +1,17 @@
+{
+  "task": "send-flow",
+  "outcome": "gate-red",
+  "commits": [
+    "e46da8c"
+  ],
+  "gate": {
+    "tier": "slice",
+    "verdict": "BLOCKED",
+    "runId": null
+  },
+  "review": null,
+  "testsAdded": [],
+  "notes": "The fix is committed, but I couldn't confirm it before the cutoff, so this return is gate-red. No gate has run on it.\n\nThe fix: in /TRIAL/repo-spec.slot-3/Packages/AppFeature/Sources/AppUI/AppView.swift, `ContactsView` no longer uses `.searchable(text:)`. The system search field it made has no accessibility identifier, so the flow's `contacts.search` selector timed out at step 4. The contact list now starts with a visible `TextField(\"Search\", text: $store.searchText.sending(\\.searchTextChanged))` that has `.accessibilityIdentifier(AccessibilityID.contactsSearch)`, with a `ForEach(store.filtered)` of the contact rows below it. The rows keep `AccessibilityID.contactRow(contact.id)`. ContactsFeature's state, actions and filtering are unchanged. No contract from send-flow's or amount-input's notes changed shape. The change touches only AppUI, inside send-flow's write set.\n\nWhy it isn't confirmed: I committed at 08:0x and started `swiftgate qa run --plan spec --after send-flow --before-merge --fix --json`. It ran past the 600 s foreground timeout and the tool moved it to the background (task bqqy66z60). At 08:13Z it had printed no output and no run id. With the cutoff at 08:17:07Z, there was no time to finish a `check --tier slice --base swift-harness/spec` run, so I used none of the 3 full-gate runs. When relaunched, the next step is to read that qa run's result. Once it is GREEN, run the slice gate on e46da8c, where the tree is clean.\n\nThat qa run is the first red-row run of req-contact-search on this fix. Its result is unknown, so no `flow row:` line applies yet.",
+  "designConflict": null,
+  "surfaceCommit": null
+}

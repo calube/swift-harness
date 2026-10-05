@@ -132,6 +132,14 @@ public enum BuildHalts {
     return newest.flatMap { answers[$0.element.eventID] }
   }
 
+  /// Why `build halt` won't record `reason` at `now`, or `nil` when it may. A `budget` halt is
+  /// `build cutoff`'s alone, so in a run with a time box one before `cutoffAt` is refused: time
+  /// left in the box is priced by the cutoff, never judged by hand.
+  /// - Parameter cutoffAt: the run's time-box cutoff; `nil` for a build with no box.
+  public static func refusal(reason: BuildHaltReason, now: Date, cutoffAt: Date?) -> String? {
+    nil
+  }
+
   /// Whole milliseconds from `halt` to `resume`; `0` when the clock ran backwards.
   public static func waitMilliseconds(from halt: Date, to resume: Date) -> Int {
     let milliseconds = (resume.timeIntervalSince(halt) * 1000).rounded()

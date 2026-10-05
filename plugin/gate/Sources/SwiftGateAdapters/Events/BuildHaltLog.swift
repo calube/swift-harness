@@ -47,6 +47,9 @@ public struct BuildHaltLog: Sendable {
     self.newEventID = newEventID
   }
 
+  /// The time a halt written now would carry.
+  public func time() -> Date { now() }
+
   /// Records that `buildRun` (and `task`, when given) stopped for `reason`.
   public func halt(buildRun: String, task: String?, reason: BuildHaltReason)
     throws(BuildHaltLogError) -> HarnessEvent
