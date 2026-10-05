@@ -6,10 +6,14 @@ public struct AreaStepPass: Sendable, Equatable, Codable {
   /// The gate run that ran it.
   public let runID: String
   public let tier: String
+  /// What a test or e2e step's reports counted when it passed; `nil` for other steps, or when
+  /// they left no report that reads.
+  public let tests: AreaTestCounts?
 
-  public init(runID: String, tier: String) {
+  public init(runID: String, tier: String, tests: AreaTestCounts? = nil) {
     self.runID = runID
     self.tier = tier
+    self.tests = tests
   }
 }
 

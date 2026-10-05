@@ -116,6 +116,10 @@
   const sum = (t) => t.input + t.output + t.cacheRead + t.cacheWrite;
   const fmtTok = (n) => (n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : Math.round(n / 1e3) + "k");
   const fmtTokens = (t) => (t == null ? "pending" : fmtTok(sum(t)));
+  // US dollars to 2 places; `null` when no cost is known, which a page shows as no figure.
+  const fmtUSD = (usd) => null;
+  // The header's cost stat: the run's dollars and what they leave out.
+  const costStat = (cost) => null;
   const fmtMin = (m) => {
     const s = Math.round(m * 60);
     return s >= 60 ? Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s" : s + "s";
@@ -445,6 +449,6 @@
   root.RunViewModel = {
     validationGroups, validationBadges, evidenceHref, carries, gapText, keptFlowGroups,
     latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText, snapshotText,
-    lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
+    lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtUSD, costStat, fmtMin, fmtMs, shortRun
   };
 })(globalThis);

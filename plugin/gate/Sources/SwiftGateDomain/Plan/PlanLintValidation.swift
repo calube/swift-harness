@@ -26,6 +26,25 @@ public enum PlanLintValidation {
     return kind
   }
 
+  /// The tag of a reason-only row whose requirement the gates' own suites prove, such as
+  /// `gate: final runs every area's whole suite`. It excuses a requirement about the
+  /// repository's existing tests from a flow row, and nothing else.
+  public static let gateReasonKind = "gate"
+
+  /// The gate tiers a ``gateReasonKind`` reason names as running the whole suites.
+  public static let suiteTiers = ["merge", "final"]
+
+  /// Whether `reason` opens with `gate:` and names a tier of ``suiteTiers`` after it.
+  public static func isGateReason(_ reason: String) -> Bool {
+    false
+  }
+
+  /// Whether a requirement's title is about the repository's tests, such as "the existing tests
+  /// keep passing".
+  public static func namesTests(_ title: String) -> Bool {
+    false
+  }
+
   /// Obstacle kinds a dependency client's fake removes: with a client module in the app's area, a
   /// fake chosen at launch serves the failure, the retry or the slow response the flow needs.
   public static let fakeableObstacleKinds = ["network"]
@@ -85,10 +104,13 @@ public enum PlanLintValidation {
   ///   - contractTask: the contract task, whose stub screens carry no behaviour a flow can check.
   ///   - clientModules: the repository's dependency-client modules, from ``clientModules(in:)``;
   ///     1 inside an app's area stops a ``fakeableObstacleKinds`` reason excusing its screens.
+  ///   - requirementTitles: each requirement's title by id, which says whether a
+  ///     ``gateReasonKind`` reason may excuse it.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
     file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
-    appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = []
+    appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = [],
+    requirementTitles: [String: String] = [:]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))

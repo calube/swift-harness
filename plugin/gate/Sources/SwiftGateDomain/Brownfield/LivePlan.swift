@@ -126,6 +126,8 @@ public enum LivePlanError: Error, Sendable, Equatable {
   case uncoveredRequirement(String)
   /// A `## Validation` line that isn't a row of the table's shape.
   case invalidValidation(line: Int, reason: String)
+  /// A re-import that changes the `- Covers:` of a task the ledger holds as done.
+  case doneTaskCoverage(task: String, added: [String], removed: [String])
 
   /// One sentence naming the task and what to fix in `PLAN.md`.
   public var message: String {
@@ -166,6 +168,8 @@ public enum LivePlanError: Error, Sendable, Equatable {
       "requirement `\(id)` is in `## Requirements` but no task's `- Covers:` names it"
     case .invalidValidation(let line, let reason):
       "`## Validation` line \(line): \(reason)"
+    case .doneTaskCoverage(let task, _, _):
+      "task `\(task)` is done"
     }
   }
 }
