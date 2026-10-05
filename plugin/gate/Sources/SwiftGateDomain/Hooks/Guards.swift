@@ -22,11 +22,14 @@ public enum BashGuard {
   public static let bareStdinReaderRuleID = "guard.bare-stdin-reader"
   public static let processMatchWaitRuleID = "guard.process-match-wait"
 
-  public static func evaluate(_ command: String) -> GuardViolation? {
+  /// - Parameter inSubagent: whether a subagent runs the command. Waiting on `pgrep` is denied
+  ///   only there: a background agent improvises the wait, while a main session's documented
+  ///   waits use a pattern that excludes its own shell.
+  public static func evaluate(_ command: String, inSubagent: Bool = false) -> GuardViolation? {
     for simple in ShellSyntax.simpleCommands(in: command) {
       if let violation = evaluate(simple) { return violation }
     }
-    return bareListing(command)
+    return processMatchWait(command, inSubagent: inSubagent) ?? bareListing(command)
   }
 
   /// Whether the command line runs `git commit` (in any simple command of it).
@@ -100,6 +103,61 @@ public enum BashGuard {
           + "folder: `ls .` or `ls <dir>`.")
     }
     return nil
+  }
+
+  /// Reserved words that may stand before a command inside a compound command.
+  private static let compoundPrefixes: Set<String> = [
+    "while", "until", "if", "elif", "then", "else", "do", "!", "{", "time",
+  ]
+
+  /// A `pkill` or `killall`, and in a subagent a `pgrep -f` or any `pgrep` on a line holding a
+  /// `while` or `until` loop. Each matches processes by name across every session on the Mac, and
+  /// `pgrep -f` also matches the shell running it, so a loop waiting for it to come up empty
+  /// never ends.
+  private static func processMatchWait(_ command: String, inSubagent: Bool) -> GuardViolation? {
+    let parsed = ShellSyntax.parse(command)
+    let loops = parsed.contains { ["while", "until"].contains($0.words.first) }
+    for entry in parsed {
+      let words = Array(entry.words.drop(while: compoundPrefixes.contains))
+      let simple = ShellSyntax.normalize(words)
+      switch simple.name {
+      case "pkill"?, "killall"?:
+        return processMatchViolation(
+          "`\(simple.name ?? "")` stops every process whose name matches, in every session on "
+            + "this Mac")
+      case "pgrep"? where inSubagent && loops:
+        return processMatchViolation(
+          "a loop on `pgrep` waits on every process whose name matches, in every session on "
+            + "this Mac")
+      case "pgrep"? where inSubagent && matchesCommandLines(simple.arguments):
+        return processMatchViolation(
+          "`pgrep -f` matches the shell running it, so a loop waiting on it never ends")
+      default:
+        continue
+      }
+    }
+    return nil
+  }
+
+  /// Whether `pgrep`'s options include `-f`, alone or grouped with other flags.
+  private static func matchesCommandLines(_ arguments: [String]) -> Bool {
+    for argument in arguments {
+      if argument == "--" || !argument.hasPrefix("-") { return false }
+      if !argument.hasPrefix("--"), argument.dropFirst().contains("f") { return true }
+    }
+    return false
+  }
+
+  private static func processMatchViolation(_ what: String) -> GuardViolation {
+    GuardViolation(
+      ruleID: processMatchWaitRuleID,
+      reason:
+        "\(what). Run each `swiftgate check` and "
+        + "`swiftgate test-only` in the foreground with the Bash tool's `timeout` at 600000, its "
+        + "longest. A gate that may outlast that runs with `run_in_background: true` and its "
+        + "`--json` output redirected to a file, then `swiftgate build gate-wait <plan> --tier "
+        + "<tier> --output <file> --json` waits on that file. Stop a process you started by its "
+        + "pid with `kill <pid>`.")
   }
 
   private static func namesOperand(_ arguments: ArraySlice<String>) -> Bool {

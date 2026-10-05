@@ -981,7 +981,14 @@ const tests = {
       'Cited gate: the run you return as "gate" must start at your last commit on a clean tree, so commit everything first and then run the task gate. ' +
       '`build check-return` rejects a run started at an earlier commit or on uncommitted changes (build-return.stale-gate).\n' +
       'Tests to turn green: test-catalog-list-loads-first-page.\n' +
-      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n\nRun-viewer span: '
+      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n' +
+      `Gate runs: run every \`${SG} check\` and \`${SG} test-only\` in the foreground with the Bash tool's \`timeout\` at 600000, its longest. ` +
+      'At the default 120 s the tool moves the gate to the background.\n' +
+      'A gate that may outlast 600 s runs with `run_in_background: true` and `--json > /work/app-catalog-catalog-list-reducer/.harness/tmp/gate.json`; then run ' +
+      `\`${SG} build gate-wait catalog --tier fast --output /work/app-catalog-catalog-list-reducer/.harness/tmp/gate.json --json\` with the same timeout, again while its action is \`wait\`, ` +
+      'and read that file once it is `read`. On `overrun` or `cutoff`, return gate-red with redReason `environment`.\n' +
+      'Never wait on or stop a process by name: the hook denies `pgrep -f`, `pkill`, `killall` and a `while` or `until` loop on `pgrep`. ' +
+      '`pgrep -f` matches the shell running it, so such a loop never ends.\n\nRun-viewer span: '
     const expected = {
       'per-task':
         head + 'Task proof: per-task.\n' + shim +

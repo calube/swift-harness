@@ -14,7 +14,7 @@ private struct CapturedCall: Decodable {
 @Suite("Bash guard on waiting for or killing a process by name")
 struct ProcessMatchWaitGuardTests {
   @Test(
-    "the practice trial's 2 pgrep -f wait loops that ran to the 600 s timeout and its 2 pkill -f calls are denied as guard.process-match-wait, naming the 600000 timeout and build gate-wait — catches a worker stuck on a loop that matches its own shell"
+    "the practice trial's 2 pgrep -f wait loops that ran to the 600 s timeout and its 2 pkill -f calls are denied to a subagent as guard.process-match-wait, naming the 600000 timeout and build gate-wait — catches a worker stuck on a loop that matches its own shell"
   )
   func capturedCallsDenied() throws {
     let calls = try JSONDecoder().decode(
@@ -24,7 +24,8 @@ struct ProcessMatchWaitGuardTests {
       calls.compactMap(\.result).filter { $0.contains("did not complete within its 600s timeout") }
         .count == 2)
     for call in calls {
-      let violation = try #require(BashGuard.evaluate(call.command), "\(call.command)")
+      let violation = try #require(
+        BashGuard.evaluate(call.command, inSubagent: true), "\(call.command)")
       #expect(violation.ruleID == BashGuard.processMatchWaitRuleID)
       #expect(violation.reason.contains("600000"), "\(violation.reason)")
       #expect(violation.reason.contains("build gate-wait"), "\(violation.reason)")
@@ -32,28 +33,46 @@ struct ProcessMatchWaitGuardTests {
   }
 
   @Test(
-    "pgrep -f, pkill in any form, killall and a while or until loop on pgrep are denied, after cd, inside sh -c and in a loop body — catches a spelling of a by-name wait or kill the guard misses",
+    "pkill in any form and killall are denied in every session, after cd and by an absolute path — catches a machine-wide kill by name passing in the main session",
+    arguments: [
+      "pkill swift-build",
+      "pkill -9 -f xcodebuild",
+      "killall xcodebuild",
+      "killall -9 swift-frontend",
+      "cd sub && pkill -f swift-test",
+      "/usr/bin/pkill -f simctl",
+      "sh -c 'pkill -f gate'",
+    ])
+  func killByNameDenied(_ command: String) {
+    for inSubagent in [false, true] {
+      #expect(
+        BashGuard.evaluate(command, inSubagent: inSubagent)?.ruleID
+          == BashGuard.processMatchWaitRuleID, "\(command) in a subagent: \(inSubagent)")
+    }
+  }
+
+  @Test(
+    "in a subagent pgrep -f and a while or until loop on pgrep are denied, after cd, inside sh -c and in a loop body, while the main session may run them — catches a by-name wait spelling the guard misses, or the build skill's own wait denied",
     arguments: [
       "pgrep -f swiftgate",
       "pgrep -fl 'swiftgate check'",
       "pgrep -af xcodebuild",
       "cd sub && pgrep -f swift-build",
-      "pkill swift-build",
-      "pkill -9 -f xcodebuild",
-      "killall xcodebuild",
-      "killall -9 swift-frontend",
       "while pgrep swiftgate >/dev/null; do sleep 5; done",
       "until ! pgrep -x swift-build; do sleep 2; done",
       "while true; do pgrep swiftgate || break; sleep 5; done",
       "sh -c 'while pgrep -f gate; do sleep 1; done'",
-      "/usr/bin/pkill -f simctl",
+      "until ! pgrep -f 'swiftgate-mutate-sel[f]-' >/dev/null; do /bin/sleep 30; done",
     ])
-  func byNameDenied(_ command: String) {
-    #expect(BashGuard.evaluate(command)?.ruleID == BashGuard.processMatchWaitRuleID, "\(command)")
+  func pgrepWaitDeniedInSubagent(_ command: String) {
+    #expect(
+      BashGuard.evaluate(command, inSubagent: true)?.ruleID == BashGuard.processMatchWaitRuleID,
+      "\(command)")
+    #expect(BashGuard.evaluate(command) == nil, "\(command)")
   }
 
   @Test(
-    "a single pgrep by exact name, kill by pid, ps, and pgrep text in a heredoc or a grep pattern pass — catches the guard denying a call that never waits on or kills by a pattern",
+    "a single pgrep by name, kill by pid, ps, and pgrep text in a heredoc or a grep pattern pass in a subagent — catches the guard denying a call that never waits on or kills by a pattern",
     arguments: [
       "pgrep -x Simulator",
       "pgrep swiftgate",
@@ -65,6 +84,6 @@ struct ProcessMatchWaitGuardTests {
       "while read line; do echo \"$line\"; done < list.txt",
     ])
   func otherCallsPass(_ command: String) {
-    #expect(BashGuard.evaluate(command) == nil, "\(command)")
+    #expect(BashGuard.evaluate(command, inSubagent: true) == nil, "\(command)")
   }
 }
