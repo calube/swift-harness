@@ -12,6 +12,9 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let endsAt: Date
   /// Tasks whose merge gate still fits: merge them, in this order, then run `final`.
   let finish: [String]
+  /// The tasks in `finish` whose merge and GREEN merge gate are already recorded: only the steps
+  /// after a merge gate are left for them.
+  let landed: [String]
   /// Tasks set `abandoned`, each with why it didn't fit the box.
   let abandoned: [CutoffDecision]
   /// Tasks that never started and stay as they are.
@@ -114,6 +117,7 @@ enum BuildCutoffRun {
           command: command, plan: slug, runId: record.runID, at: now,
           endsAt: box.deadlines.endsAt,
           finish: decisions.filter { $0.action == .finishMerge }.map(\.task),
+          landed: [],
           abandoned: abandoned,
           notStarted: decisions.filter { $0.action == .notStarted }.map(\.task), path: path,
           notes: notes),

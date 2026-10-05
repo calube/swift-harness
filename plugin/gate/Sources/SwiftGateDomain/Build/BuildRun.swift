@@ -428,6 +428,12 @@ public struct BuildEventLog: Sendable, Equatable {
     return tasks
   }
 
+  /// How far `task`'s merge got: `nil` when it isn't on `main`, ``CutoffTaskStage/landed`` once a
+  /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
+  public func mergeStage(task: String) -> CutoffTaskStage? {
+    nil
+  }
+
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;
   /// `nil` when none was recorded.
   public func latestReturnCheck(task: String, fix: Bool) -> BuildEvent.ReturnCheck? {

@@ -154,8 +154,13 @@ public struct RunTimeBox: Sendable, Equatable, Codable {
 public enum CutoffTaskStage: String, Sendable, Equatable, Codable, CaseIterable {
   /// Its worker hasn't returned a checked `ready-to-merge`.
   case working
-  /// Its checked return is `ready-to-merge`, or it has merged and its merge gate is running.
+  /// Its checked return is `ready-to-merge` and it hasn't merged.
   case gating
+  /// Its merge is on `main` and no GREEN merge gate is recorded after it.
+  case merged
+  /// Its merge is on `main` with a GREEN merge gate recorded after it: only the steps after a
+  /// merge gate are left.
+  case landed
   /// Never started: `pending`, or `blocked` before it ran.
   case notStarted = "not-started"
 }
@@ -220,7 +225,7 @@ public enum CutoffRule {
           task: task.id, action: .abandon,
           reason: "still working at the cutoff, \(left) s before the box ends at \(ends); its "
             + "merge wouldn't fit beside final and the report")
-      case .gating:
+      case .gating, .merged, .landed:
         let available = left - merging
         guard mergeGateSeconds + finalAndReportSeconds <= available else {
           return CutoffDecision(
