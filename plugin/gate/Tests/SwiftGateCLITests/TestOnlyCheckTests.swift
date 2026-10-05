@@ -230,7 +230,7 @@ struct TestOnlyCheckTests {
   }
 
   @Test(
-    "a test that hangs is killed at AppFeature's bound from the warm-up and is RED naming the hang and the bound: 161.4 s cold plus 5 warm runs with no build of the package yet, the 120 s floor once its .build exists — catches the 3600 s deadline the trial's hung test ran under"
+    "a test that hangs is killed at AppFeature's bound from the warm-up and is RED naming the hang and the bound: 161.4 s cold plus 5 warm runs with no build of the package yet, the 120 s floor once its shared scratch path exists — catches the 3600 s deadline the trial's hung test ran under"
   )
   func hungTestIsRedAtItsBound() async throws {
     let clone = try Clone()
@@ -242,7 +242,7 @@ struct TestOnlyCheckTests {
     let cold = GateRun.Context(runID: "cold", directory: clone.run)
     let unbuilt = try await Self.priceTracker(clone, runner: runner, context: cold)
     try FileManager.default.createDirectory(
-      at: clone.root.appending(path: "Packages/AppFeature/.build"),
+      atPath: ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout),
       withIntermediateDirectories: true)
     let warm = GateRun.Context(runID: "warm", directory: clone.run)
     let built = try await Self.priceTracker(clone, runner: runner, context: warm)

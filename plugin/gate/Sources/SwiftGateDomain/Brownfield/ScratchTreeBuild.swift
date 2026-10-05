@@ -5,9 +5,10 @@ import Foundation
 /// `xcodebuild` in Xcode's global DerivedData keyed by that path, which nothing reuses, and a
 /// `swift` build in a new `.build`. An `xcodebuild` builds in the worktree's prove DerivedData,
 /// seeded from the area's seed. A `swift build` or `swift test` builds in 1 scratch path per area
-/// that every worktree of the clone shares: its fetched and built dependencies keep their paths
-/// from 1 scratch tree to the next, so only the area's own modules compile again. SwiftPM locks a
-/// scratch path while it builds, so 2 gates proving the same area take turns.
+/// that every tree of the clone shares, checkouts and the warm-up included: its fetched and built
+/// dependencies keep their paths from 1 tree to the next, so only the area's own modules compile
+/// again. SwiftPM locks a scratch path while it builds, so 2 gates building the same area take
+/// turns.
 public enum ScratchTreeBuild {
   public static let swiftPMOption = "--scratch-path"
 
@@ -54,17 +55,25 @@ public enum ScratchTreeBuild {
     case .xcode:
       return XcodeDerivedData.proveRequest(request, layout: layout)
     case .swiftpm:
-      let command = swiftPMCommand(
-        request.command, scratchPath: swiftPMScratchPath(area: request.area, layout: layout))
-      guard command != request.command else { return request }
-      return AreaCommandRequest(
-        area: request.area, step: request.step, command: command,
-        workingDirectory: request.workingDirectory, deadline: request.deadline,
-        environment: request.environment, junitPath: request.junitPath,
-        resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
+      return swiftPMRequest(request, layout: layout)
     default:
       return request
     }
+  }
+
+  /// `request` with each `swift build` and `swift test` building in the area's shared scratch
+  /// path; unchanged when ``swiftPMCommand(_:scratchPath:)`` leaves its command as is.
+  public static func swiftPMRequest(_ request: AreaCommandRequest, layout: BrownfieldStateLayout)
+    -> AreaCommandRequest
+  {
+    let command = swiftPMCommand(
+      request.command, scratchPath: swiftPMScratchPath(area: request.area, layout: layout))
+    guard command != request.command else { return request }
+    return AreaCommandRequest(
+      area: request.area, step: request.step, command: command,
+      workingDirectory: request.workingDirectory, deadline: request.deadline,
+      environment: request.environment, junitPath: request.junitPath,
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
   }
 
   /// The build directories a scratch tree's command for `area` builds into, for a step to label

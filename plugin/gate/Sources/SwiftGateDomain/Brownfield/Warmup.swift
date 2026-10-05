@@ -362,7 +362,12 @@ public enum Warmup {
             detail: "no \(areaStep.rawValue) command in the config"))
         continue
       }
-      let request = prepared.request
+      // A swift build fills the area's shared scratch path, which every checkout and scratch tree
+      // builds in.
+      let request =
+        area.kind == .swiftpm
+        ? ScratchTreeBuild.swiftPMRequest(prepared.request, layout: dependencies.layout)
+        : prepared.request
       let started = ContinuousClock.now
       let outcome = await dependencies.run(
         AreaCommandRequest(

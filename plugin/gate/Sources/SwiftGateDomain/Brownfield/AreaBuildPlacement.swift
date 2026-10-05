@@ -13,6 +13,9 @@ public enum AreaBuildPlacement {
   public static func checkout(
     _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout
   ) -> AreaCommandRequest {
-    XcodeDerivedData.request(request, layout: layout)
+    switch kind {
+    case .swiftpm: ScratchTreeBuild.swiftPMRequest(request, layout: layout)
+    default: XcodeDerivedData.request(request, layout: layout)
+    }
   }
 }

@@ -818,7 +818,7 @@ extension BrownfieldSliceCheckTests {
   }
 
   @Test(
-    "with AppFeature's .build in the worktree, the head run gets the 120 s floor and each prove run in the scratch tree the cold cost plus 5 warm runs — catches the flat 600 s every slice command, prove's included, ran under"
+    "with AppFeature's shared scratch path built, the head run gets the 120 s floor and each prove run in the scratch tree the cold cost plus 5 warm runs — catches the flat 600 s every slice command, prove's included, ran under"
   )
   func headAndProveRunsGetTheirBounds() async throws {
     let clone = try Clone()
@@ -826,7 +826,7 @@ extension BrownfieldSliceCheckTests {
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
     try FileManager.default.createDirectory(
-      at: clone.root.appending(path: "Packages/AppFeature/.build"),
+      atPath: ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout),
       withIntermediateDirectories: true)
     let runner = Self.failsReverted(clone)
 
