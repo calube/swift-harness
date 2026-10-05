@@ -124,9 +124,9 @@ public enum BuildScheduler {
   /// - A task in `idle`, a running task whose worker already handed back and that only waits on
   ///   its merge, holds no slot; its write set stays reserved until it merges. The validation
   ///   task, which writes only validation checks, starts ahead of every other ready task, since
-  ///   tasks its checks run after can't merge until its at-base run is done. It runs beside
-  ///   `preset.maxParallel` rather than in it: a light agent that mostly waits on a simulator
-  ///   never holds a slot a build task could use.
+  ///   a merge that makes 1 of its rows ready can't land until its at-base run is done. It runs
+  ///   beside `preset.maxParallel` rather than in it: a light agent that mostly waits on a
+  ///   simulator never holds a slot a build task could use.
   public static func next(
     ledger: Ledger, running: Set<String>, preset: BuildPreset, startedAt: Date, now: Date,
     required: RequiredTasks, timeBox: RunTimeBox? = nil, idle: Set<String> = []

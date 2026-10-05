@@ -22,7 +22,10 @@ and `trialMerge.conflicts` names the files. `build merge` refuses `build-merge.f
 while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s commit, and
 `build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does. After another
 merge moves `main`, a run whose trial merge made the very tree this merge lands counts as if it ran
-on `main`'s commit, going by its `merged-tree-run.json`.
+on `main`'s commit, going by its `merged-tree-run.json`. A pass counts only once a `--at-base` run
+without `--prepared-by` took that row with the same requirement, layer and check:
+`build-merge.at-base-unchecked` until then. A task whose rows all wait on other tasks needs neither
+run, so it never waits for the at-base run.
 
 `--after <task>,<other>,… --before-merge` merges each named branch in turn and runs every row that
 names any of them, each counting as merged; `trialMerge.alongside` names the others' branches and

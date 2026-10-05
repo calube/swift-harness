@@ -160,7 +160,8 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
    `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
    its own command: `build merge` refuses unless the build run's newest check of this return is
    GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`), and unless
-   that run is GREEN at the tip (`flows-unchecked`, `flows-red`). Then the merge
+   that run is GREEN at the tip (`flows-unchecked`, `flows-red`) and the `--at-base` run took
+   each row it passed (`at-base-unchecked`). Then the merge
    gate on main, `"$SG" check --tier <mergeGate> --json > <plans>/<slug>/out/merge-<task>.json`
    (with a plan surface,
    `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json > <plans>/<slug>/out/merge-<task>.json`),
