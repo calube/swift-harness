@@ -36,9 +36,9 @@ public struct AreaCommandBound: Sendable, Equatable {
   }
 }
 
-/// The bound a `merge` or `final` tier gives each area command: a multiple of the area's warm
-/// test time as the warm-up measured it at the merge base, never under ``floor``, and never past
-/// the run's time box when one is running.
+/// The bound `slice`, `merge`, `final` and `test-only` give each area command: a multiple of the
+/// area's warm test time as the warm-up measured it, never under ``floor``, and never past the
+/// run's time box when one is running.
 ///
 /// The multiple and the floor come from the price-tracker trial, where a test spinning on a flag
 /// a no-op reducer never set held a merge gate's prove step for 1033 s against a 31.7 s warm test.
@@ -64,10 +64,10 @@ public struct AreaCommandBounds: Sendable {
   }
 
   /// A test step in the checkout runs on the build its `build` step just made, so it gets
-  /// ``warmMultiple`` warm runs. Anything in a scratch tree, and a build, starts cold: it gets the
-  /// area's cold cost on top. `e2e`, which no warm-up times, and an unmeasured area get
-  /// ``fallback``. Then the box caps it: a `merge` step at the run's cutoff, and a `final` step or
-  /// one already inside the final reserve at the box's end.
+  /// ``warmMultiple`` warm runs. Anything in a scratch tree or an unbuilt checkout, and a build,
+  /// starts cold: it gets the area's cold cost on top. `e2e`, which no warm-up times, and an unmeasured area get
+  /// ``fallback``. Then the box caps it: any other tier's step at the run's cutoff, and a `final`
+  /// step or one already inside the final reserve at the box's end.
   public func bound(area: String, step: AreaStep, tree: AreaCommandTree, now: Date)
     -> AreaCommandBound
   {
@@ -90,17 +90,20 @@ public struct AreaCommandBounds: Sendable {
     switch (tree, step) {
     case (.scratch, _), (.checkout, .build), (.checkout, .generate), (.checkout, .lint): cold = true
     case (.checkout, .test), (.checkout, .testFiles), (.checkout, .e2e): cold = false
-    case (.unbuiltCheckout, _): cold = false
+    case (.unbuiltCheckout, _): cold = true
     }
     let milliseconds = cold ? record.coldMilliseconds + warmRuns : warmRuns
     let reason =
       cold
       ? "\(area)'s \(Self.seconds(record.coldMilliseconds)) s cold build and test plus \(warmText)"
       : warmText
-    // A build needs no test run, so only test steps and scratch runs can be measured against.
+    // A build needs no test run, so only test steps and scratch runs can be measured against. A
+    // test in an unbuilt checkout is held to its warm run: its build may be incremental.
     let expected: Duration? =
       switch (tree, step) {
-      case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, _): .milliseconds(warm)
+      case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, .test),
+        (.unbuiltCheckout, .testFiles):
+        .milliseconds(warm)
       case (.scratch, _): .milliseconds(record.coldMilliseconds)
       default: nil
       }

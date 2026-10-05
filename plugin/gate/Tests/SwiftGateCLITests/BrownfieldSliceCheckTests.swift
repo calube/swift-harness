@@ -847,7 +847,7 @@ extension BrownfieldSliceCheckTests {
   }
 
   @Test(
-    "at 06:26:43, 87 s before price-tracker-3's cutoff, the head run is held to those 87 s on the gate's clock and its hang is RED naming the cutoff — catches a slice running past the box's cutoff"
+    "at 06:26:43, 87.3 s before price-tracker-3's cutoff at 06:28:10.303, the head run is held to those 87.3 s on the gate's clock and its hang is RED naming the cutoff — catches a slice running past the box's cutoff"
   )
   func headRunIsCappedAtTheCutoff() async throws {
     let clone = try Clone()
@@ -867,10 +867,10 @@ extension BrownfieldSliceCheckTests {
       runner: runner, records: try Self.priceTrackerRecords(), box: box, now: now)
 
     let head = runner.requests.filter { $0.area == "AppFeature" && $0.step == .testFiles }
-    #expect(head.map(\.deadline) == [.seconds(87)])
+    #expect(head.map(\.deadline) == [.milliseconds(87_303)])
     let finding = try #require(
       parts.findings.first { $0.ruleID == BrownfieldRuleID.testFailed.rawValue })
-    #expect(finding.message.contains("87 s left before the run's cutoff"), "\(finding.message)")
+    #expect(finding.message.contains("88 s left before the run's cutoff"), "\(finding.message)")
   }
 
   @Test(

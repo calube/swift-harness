@@ -1,6 +1,7 @@
 import Foundation
 import SwiftGateAdapters
 import SwiftGateDomain
+import SwiftGateRules
 
 /// The `slice` tier: each task's gate and the Stop hook.
 enum BrownfieldSliceCheck {
@@ -20,7 +21,7 @@ enum BrownfieldSliceCheck {
     let runner: any AreaCommandRunning
     let baseline: BaselineStore
     /// Also reads the changed files the neutral rules and the Xcode check look at.
-    let prove: BrownfieldProve.Dependencies
+    var prove: BrownfieldProve.Dependencies
     /// The tracked files, for each area's shared cache variables.
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline and warm-up files' name.
@@ -43,15 +44,27 @@ enum BrownfieldSliceCheck {
     var box: RunTimeBox? = nil
     /// The clock each bound is taken on as its command starts.
     var now: @Sendable () -> Date = { Date() }
+    /// Each command's bound, set from the warm-up times the run resolves; `nil` gives the flat
+    /// ``deadline``.
+    var bound:
+      (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
+        nil
+
+    /// `area`'s bound for `step` in `tree` now.
+    func bound(_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound {
+      bound?(area, step, tree)
+        ?? AreaCommandBound(
+          duration: deadline, reason: "the flat \(deadline.components.seconds) s")
+    }
 
     /// A selected test run that fits the budget warm still gets room on a cold store.
     static let liveDeadline: Duration = .seconds(600)
 
-    /// The clone's config and state, live git, scratch trees under the worktree's git dir and
-    /// `/bin/sh` commands.
+    /// The clone's config and state, live git, scratch trees under the worktree's git dir,
+    /// `/bin/sh` commands, and the box of the `swiftgate run` going on.
     static func live(root: URL) async throws(BrownfieldCheckSetupError) -> Dependencies {
       let merge = try await BrownfieldMergeCheck.Dependencies.live(root: root)
-      return Dependencies(
+      var dependencies = Dependencies(
         config: merge.config, layout: merge.layout, git: merge.git, runner: merge.runner,
         baseline: merge.baseline,
         prove: BrownfieldProve.Dependencies.live(
@@ -67,11 +80,15 @@ enum BrownfieldSliceCheck {
         judgeAssertion: BrownfieldJudge.assertionJudge(
           BrownfieldJudge.live(merge.config.judge, root: root)),
         deadline: liveDeadline)
+      dependencies.box = ActiveRunTimeBox.find(
+        layout: merge.layout, now: Date(),
+        finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
+      return dependencies
     }
   }
 
   /// `git log --first-parent` from `commit`, each line `<commit> <tree>`.
-  private static func firstParentHistory(of commit: String, root: URL) async throws
+  static func firstParentHistory(of commit: String, root: URL) async throws
     -> [CommitTree]
   {
     let output = try await LiveProcessRunner().run(
@@ -135,6 +152,8 @@ enum BrownfieldSliceCheck {
     let template: String
     let selection: [String]
     let outcome: AreaCommandOutcome
+    /// What the command was given before the gate would kill it.
+    let bound: AreaCommandBound
     /// The same command at the merge base, in the scratch tree at `scratch`; `nil` when the
     /// merge base can't answer for it, so its failure gates as it stands.
     let rerun: (@Sendable (_ scratch: URL) -> AreaCommandRequest)?
@@ -155,11 +174,14 @@ enum BrownfieldSliceCheck {
     var findings: [Finding] = []
     var runs: [StepRun] = []
     var blocked = false
+    /// A changed test can only hang, so the area runs nothing more.
+    var refused = false
 
     mutating func add(_ other: AreaResult) {
       findings += other.findings
       runs += other.runs
       blocked = blocked || other.blocked
+      refused = refused || other.refused
     }
   }
 
@@ -219,6 +241,7 @@ enum BrownfieldSliceCheck {
 
     let (warm, warmNotes) = await warmTimes(touched, change: change, dependencies: dependencies)
     outcome.findings += warmNotes
+    let dependencies = await bounded(dependencies, warm: warm)
     let results = await withTaskGroup(of: AreaResult.self) { group in
       for area in touched {
         group.addTask {
@@ -308,6 +331,34 @@ enum BrownfieldSliceCheck {
     return (resolution.times, notes + resolution.notes.flatMap { note($0) })
   }
 
+  /// `dependencies` with each command held to the bound the touched areas' warm-ups give, read on
+  /// the dependencies' clock as the command starts, and prove's scratch-tree runs held to theirs.
+  private static func bounded(_ dependencies: Dependencies, warm: [String: WarmTestTime]) async
+    -> Dependencies
+  {
+    var records: [String: WarmupAreaRecord] = [:]
+    for area in dependencies.config.areas {
+      let at: CommitTree
+      switch warm[area.name] {
+      case .current(_, let found)?, .stale(_, let found, _)?: at = found
+      case .unmeasured?, nil: continue
+      }
+      records[area.name] = await dependencies.warmup(area, at.tree)
+    }
+    let bounds = AreaCommandBounds(
+      times: WarmupTimesFile(tree: "", areas: records), box: dependencies.box, tier: .slice,
+      fallback: dependencies.deadline)
+    let now = dependencies.now
+    let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
+      area, step, tree in
+      bounds.bound(area: area, step: step, tree: tree, now: now())
+    }
+    var copy = dependencies
+    copy.bound = bound
+    copy.prove = dependencies.prove.bounded { area, step in bound(area, step, .scratch) }
+    return copy
+  }
+
   /// 1 touched area: the neutral rules, Xcode membership and lint on its changed files, then its
   /// changed tests and their prove when a warm test run fits the budget, else its build. An area
   /// changed since the warm-up that measured it builds first, so its tests never run on caches
@@ -366,7 +417,7 @@ enum BrownfieldSliceCheck {
         area, change: change, root: root, base: base, context: context,
         dependencies: dependencies)
       result.add(tested)
-      guard tested.runs.isEmpty else { return result }
+      guard tested.runs.isEmpty, !tested.refused else { return result }
       if let build = await build(area, root: root, context: context, dependencies: dependencies) {
         result.runs.append(build.run)
       } else {
@@ -426,7 +477,7 @@ enum BrownfieldSliceCheck {
         area, change: change, root: root, base: base, context: context,
         dependencies: dependencies)
       result.add(tested)
-      guard tested.runs.isEmpty else { return result }
+      guard tested.runs.isEmpty, !tested.refused else { return result }
       if let build = await build(area, root: root, context: context, dependencies: dependencies) {
         result.runs.append(build.run)
       } else {
@@ -543,7 +594,7 @@ enum BrownfieldSliceCheck {
     guard let template = area.lint, !files.isEmpty,
       let prepared = prepare(
         area, step: .lint, repositoryRoot: root.path(percentEncoded: false), files: files,
-        dependencies: dependencies)
+        tree: .checkout, dependencies: dependencies)
     else { return nil }
     let (outcome, milliseconds) = await GateRun.timed {
       await dependencies.runner.run(atHead(prepared.request, dependencies))
@@ -565,6 +616,7 @@ enum BrownfieldSliceCheck {
     result.runs = [
       StepRun(
         area: area, step: .lint, template: template, selection: files, outcome: outcome,
+        bound: dependencies.bound(area.name, .lint, .checkout),
         rerun: { scratch in
           rerunRequest(
             area, step: .lint, scratch: scratch, files: files, dependencies: dependencies)
@@ -580,7 +632,7 @@ enum BrownfieldSliceCheck {
     guard let template = area.build,
       let prepared = prepare(
         area, step: .build, repositoryRoot: root.path(percentEncoded: false), files: [],
-        dependencies: dependencies)
+        tree: .checkout, dependencies: dependencies)
     else { return nil }
     let request = atHead(prepared.request, dependencies)
     let derivedData = Self.derivedData(request, kind: area.kind, dependencies)
@@ -590,6 +642,7 @@ enum BrownfieldSliceCheck {
       verdict: outcome == .passed ? .green : .red, derivedData: derivedData, area: area.name)
     let run = StepRun(
       area: area, step: .build, template: template, selection: [], outcome: outcome,
+      bound: dependencies.bound(area.name, .build, .checkout),
       rerun: { scratch in
         rerunRequest(area, step: .build, scratch: scratch, files: [], dependencies: dependencies)
       }, lintUnread: false)
@@ -612,6 +665,16 @@ enum BrownfieldSliceCheck {
       files.append(ChangedTestFile(path: added.path, content: content, added: added))
     }
     guard !files.isEmpty else { return result }
+    let (waits, lintMilliseconds) = await GateRun.timed { ChangedTestWaits.findings(files) }
+    context.steps.record(
+      .testlint, tier: nil, milliseconds: lintMilliseconds,
+      verdict: waits.isEmpty ? .green : .red, area: area.name)
+    // A loop with no bound can only spin until the command's bound kills it.
+    guard waits.isEmpty else {
+      result.findings += waits
+      result.refused = true
+      return result
+    }
     let plan: BrownfieldProve.AreaPlan
     switch BrownfieldProve.plan(area, files: files) {
     case .run(let found): plan = found
@@ -627,13 +690,21 @@ enum BrownfieldSliceCheck {
       case .selected(let template): (template, .testFiles)
       case .whole(let template): (template, .test)
       }
-    let request = { @Sendable (repositoryRoot: URL) in
+    let request = { @Sendable (repositoryRoot: URL, bound: AreaCommandBound) in
       testRequest(
         plan, template: template, step: step, repositoryRoot: repositoryRoot,
-        dependencies: dependencies)
+        deadline: bound.duration, dependencies: dependencies)
     }
-    let head = atHead(request(root), dependencies)
-    let derivedData = Self.derivedData(head, kind: area.kind, dependencies)
+    let rerun: @Sendable (URL) -> AreaCommandRequest = { scratch in
+      request(scratch, dependencies.bound(area.name, step, .scratch))
+    }
+    let derivedData = Self.derivedData(
+      atHead(request(root, dependencies.bound(area.name, step, .checkout)), dependencies),
+      kind: area.kind, dependencies)
+    // The command builds what it runs, so with no build the harness can see it starts cold.
+    let bound = dependencies.bound(
+      area.name, step, derivedData == .warm ? .checkout : .unbuiltCheckout)
+    let head = atHead(request(root, bound), dependencies)
     let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(head) }
     if let counts = await dependencies.testCounts.counts(of: head) {
       context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
@@ -647,7 +718,9 @@ enum BrownfieldSliceCheck {
     result.runs.append(
       StepRun(
         area: area, step: step, template: template, selection: plan.ids.map(\.selector),
-        outcome: outcome, rerun: rerunnable ? request : nil, lintUnread: false))
+        outcome: outcome, bound: bound, rerun: rerunnable ? rerun : nil, lintUnread: false))
+    // A test that hung at the head would only hang again with the source reverted.
+    if case .timedOut = outcome { return result }
 
     let config = BrownfieldConfig(
       brownfield: dependencies.config.brownfield, areas: [area],
@@ -671,7 +744,7 @@ enum BrownfieldSliceCheck {
 
   private static func testRequest(
     _ plan: BrownfieldProve.AreaPlan, template: String, step: AreaStep, repositoryRoot: URL,
-    dependencies: Dependencies
+    deadline: Duration, dependencies: Dependencies
   ) -> AreaCommandRequest {
     let area = plan.area
     let junit =
@@ -685,19 +758,20 @@ enum BrownfieldSliceCheck {
     let directory = area.root == "." ? repositoryRoot : repositoryRoot.appending(path: area.root)
     return AreaCommandRequest(
       area: area.name, step: step, command: command,
-      workingDirectory: directory.path(percentEncoded: false), deadline: dependencies.deadline,
+      workingDirectory: directory.path(percentEncoded: false), deadline: deadline,
       environment: environment(area, dependencies), junitPath: junit)
   }
 
   private static func prepare(
     _ area: BrownfieldArea, step: AreaStep, repositoryRoot: String, files: [String],
-    dependencies: Dependencies
+    tree: AreaCommandTree, dependencies: Dependencies
   ) -> PreparedAreaCommand? {
     AreaCommandExpansion.prepare(
       area: area, step: step, repositoryRoot: repositoryRoot, files: files, tests: [],
       junitPath: AreaCommandExpansion.junitPath(
         layout: dependencies.layout, area: area.name, step: step),
-      deadline: dependencies.deadline, environment: environment(area, dependencies))
+      deadline: dependencies.bound(area.name, step, tree).duration,
+      environment: environment(area, dependencies))
   }
 
   /// The step prepared again in the merge base's scratch tree. It was prepared once at the head
@@ -708,7 +782,8 @@ enum BrownfieldSliceCheck {
   ) -> AreaCommandRequest {
     let directory = scratch.path(percentEncoded: false)
     return prepare(
-      area, step: step, repositoryRoot: directory, files: files, dependencies: dependencies)?
+      area, step: step, repositoryRoot: directory, files: files, tree: .scratch,
+      dependencies: dependencies)?
       .request
       ?? AreaCommandRequest(
         area: area.name, step: step, command: "false", workingDirectory: directory,
@@ -744,6 +819,8 @@ enum BrownfieldSliceCheck {
   private static func finding(_ run: StepRun, what: String, because reason: String) throws
     -> Finding
   {
+    var what = what
+    if case .timedOut = run.outcome { what = "\(run.step.rawValue) hung" }
     let rule: BrownfieldRuleID =
       switch run.step {
       case .build, .generate: .buildFailed
@@ -756,7 +833,9 @@ enum BrownfieldSliceCheck {
       case .failed(let exit, let tail, _): "exit \(exit):\n\(tail)"
       case .crashed(let signal, let tail):
         "crashed\(signal.map { " with signal \($0)" } ?? ""):\n\(tail)"
-      case .timedOut(let tail): "timed out:\n\(tail)"
+      case .timedOut(let tail):
+        "hit its \(run.bound.seconds) s bound (\(run.bound.reason)), so the gate killed its "
+          + "process tree:\n\(tail)"
       }
     return try Finding(
       ruleID: rule.rawValue, severity: .major, file: run.area.root, line: nil,
