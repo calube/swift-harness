@@ -205,6 +205,8 @@ on these `plan-lint` rules:
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind, or with `gate:` on an existing-tests requirement's reason-only row naming `merge` or `final` |
 | `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
+| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract reads no `-harness-scenario` with a `held` scenario |
+| `plan-lint.validation-obstacle-seedable` | a requirement with no `flow` row whose Reason names a moving or random entity while a brief gives the app a seed or a scenario |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
 

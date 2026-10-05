@@ -96,20 +96,43 @@ public enum PlanLintValidation {
     ([brief.title] + brief.scope + brief.acceptance).joined(separator: "\n")
   }
 
+  /// The launch argument whose value names the scenario a flow opens the app in.
+  public static let scenarioArgument = "-harness-scenario"
+
+  private static let clockWords: Set<String> = [
+    "timer", "timers", "clock", "clocks", "tick", "ticks", "timelineview", "displaylink",
+    "cadisplaylink",
+  ]
+
   /// Whether a task's brief says a clock drives its screen's state: a timer, a clock, a tick, a
   /// `TimelineView` or a display link.
-  public static func drivesClock(_ text: String) -> Bool { false }
+  public static func drivesClock(_ text: String) -> Bool {
+    words(text).contains { clockWords.contains($0) }
+  }
 
   /// Whether a brief gives the app a seam that holds the clock: it reads `-harness-scenario` and
   /// names a scenario with the word `held`.
-  public static func holdsClock(_ text: String) -> Bool { false }
+  public static func holdsClock(_ text: String) -> Bool {
+    text.contains(scenarioArgument) && words(text).contains("held")
+  }
 
   /// Whether a plan's briefs give its engine a seed or a launch scenario, so a scenario can place
   /// an entity at a known spot.
-  public static func takesSeedOrScenario(_ text: String) -> Bool { false }
+  public static func takesSeedOrScenario(_ text: String) -> Bool {
+    text.lowercased().contains("seed") || text.contains(scenarioArgument)
+  }
 
-  /// Whether a reason's detail excuses a flow by a target that moves or is placed at random.
-  public static func namesMovingTarget(_ reason: String) -> Bool { false }
+  private static let movingWords: Set<String> = [
+    "random", "randomly", "randomised", "randomized", "moving", "moves",
+  ]
+
+  /// Whether a reason's detail, after the obstacle kind it opens with, excuses a flow by a target
+  /// that moves or is placed at random.
+  public static func namesMovingTarget(_ reason: String) -> Bool {
+    let text = reason.trimmingCharacters(in: .whitespaces)
+    guard obstacle(of: text) != nil, let colon = text.firstIndex(of: ":") else { return false }
+    return words(text[text.index(after: colon)...]).contains { movingWords.contains($0) }
+  }
 
   /// An `xcode` area: an app whose screens a flow row can drive.
   public struct AppArea: Sendable, Equatable {
@@ -220,9 +243,99 @@ public enum PlanLintValidation {
       table: table, requirements: requirements, tasks: screenTasks, appAreas: appAreas,
       clientModules: clientModules, file: file, rowLines: rowLines, sectionLine: sectionLine,
       titles: requirementTitles)
+    findings += try clockFindings(
+      table: table, tasks: tasks, screenTasks: screenTasks, appAreas: appAreas,
+      contractTask: contractTask, file: file, rowLines: rowLines)
+    let flagged = Set(findings.map { String($0.message.prefix { $0 != " " }) })
+    findings += try seedableFindings(
+      table: table, requirements: requirements.filter { !flagged.contains($0) }, tasks: tasks,
+      screenTasks: screenTasks, appAreas: appAreas, file: file, rowLines: rowLines,
+      sectionLine: sectionLine)
     findings += try appFindings(
       table: table, screenTasks: screenTasks, allTasks: tasks, appAreas: appAreas, file: file,
       sectionLine: sectionLine)
+    return findings
+  }
+
+  /// 1 finding per task, in task order, whose brief says a clock drives a screen or feature it
+  /// writes in an `xcode` area while a `flow` row checks its work, when the contract's brief, or
+  /// with no contract every brief, gives no ``holdsClock(_:)`` seam. The finding sits on the
+  /// first such row.
+  private static func clockFindings(
+    table: ValidationTable, tasks: [TaskWrites], screenTasks: [TaskWrites], appAreas: [AppArea],
+    contractTask: String?, file: String, rowLines: [Int]
+  ) throws(ReportContractViolation) -> [Finding] {
+    let contract = contractTask.flatMap { id in tasks.first { $0.id == id } }
+    let seamTasks = contract.map { [$0] } ?? tasks
+    guard !appAreas.isEmpty, !seamTasks.contains(where: { holdsClock($0.text) }) else {
+      return []
+    }
+    var findings: [Finding] = []
+    for task in screenTasks where drivesClock(task.text) {
+      guard let (path, area) = onScreenPath(task, appAreas),
+        let (index, row) = table.rows.enumerated().first(where: { _, row in
+          row.layer == .flow
+            && (task.covers.contains(row.requirement) || row.runsAfter.contains(task.id))
+        })
+      else { continue }
+      let seam =
+        contract.map { "the contract `\($0.id)` reads" } ?? "no task's brief reads"
+      findings.append(
+        try Finding(
+          ruleID: clockUnheldRuleID, severity: .major, file: file,
+          line: index < rowLines.count ? rowLines[index] : nil,
+          message:
+            "`\(task.id)` drives `\(path)` in the xcode area `\(area.name)` on a clock, and "
+            + "\(row.requirement)'s flow row checks it, but \(seam) no `\(scenarioArgument)` "
+            + "with a scenario named `held`: the clock starts when the screen appears, so a check "
+            + "of the starting state reads what the clock already moved. Add to the contract a "
+            + "composition root that reads `\(scenarioArgument)`, a `held` scenario whose clock "
+            + "starts at the first input, and seeded scenarios that place each entity a flow "
+            + "acts on at a known spot",
+          failureScenario:
+            "the flow reads the starting state after the clock moved it, so the row reads red on "
+            + "a correct app, and a fixer retunes the product's pacing to win the race"))
+    }
+    return findings
+  }
+
+  /// 1 finding per requirement of `requirements`, in plan order, with no `flow` row and a reason
+  /// naming an obstacle whose detail ``namesMovingTarget(_:)``, while a task writes a screen in an
+  /// `xcode` area and a brief ``takesSeedOrScenario(_:)``: a seeded scenario places the entity, so
+  /// a flow can act on it.
+  private static func seedableFindings(
+    table: ValidationTable, requirements: [String], tasks: [TaskWrites],
+    screenTasks: [TaskWrites], appAreas: [AppArea], file: String, rowLines: [Int],
+    sectionLine: Int?
+  ) throws(ReportContractViolation) -> [Finding] {
+    guard screenTasks.contains(where: { onScreenPath($0, appAreas) != nil }),
+      let seeded = tasks.first(where: { takesSeedOrScenario($0.text) })
+    else { return [] }
+    var findings: [Finding] = []
+    for requirement in requirements {
+      let rows = table.rows.enumerated().filter { $0.element.requirement == requirement }
+      guard !rows.contains(where: { $0.element.layer == .flow }) else { continue }
+      let reasons =
+        table.unitOnly.filter { $0.requirement == requirement }.map(\.reason)
+        + rows.compactMap(\.element.reason)
+      guard let reason = reasons.first(where: namesMovingTarget),
+        let kind = obstacle(of: reason)
+      else { continue }
+      let line = rows.first.flatMap { $0.offset < rowLines.count ? rowLines[$0.offset] : nil }
+      findings.append(
+        try Finding(
+          ruleID: obstacleSeedableRuleID, severity: .major, file: file,
+          line: line ?? sectionLine,
+          message:
+            "\(requirement) is excused with `\(kind):` for an entity that moves or is placed at "
+            + "random, but `\(seeded.id)`'s brief gives the app a seed or a launch scenario: a "
+            + "seeded scenario places an identified entity at a known spot with the clock held, "
+            + "so a flow performs the gesture on it. Add a flow row under that scenario, and the "
+            + "scenario to the contract",
+          failureScenario:
+            "the interaction merges with no flow, so no check performs its gesture in the app "
+            + "and only unit tests cover it"))
+    }
     return findings
   }
 
