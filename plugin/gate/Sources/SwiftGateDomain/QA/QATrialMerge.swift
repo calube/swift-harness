@@ -92,6 +92,8 @@ public enum QAMergeReadiness: Sendable, Equatable {
   ///   - landing: the tree merging `branch` at `tip` into `base` makes; `nil` when it conflicts
   ///     or wasn't read.
   ///   - trees: the tree each report's trial merge made, by run id.
+  ///   - unverified: rows a `build no-repair` decision left unverified: red or unverified there,
+  ///     they hold no merge back.
   ///
   /// A report covers a row when its trial merge, on `base`, took `branch` at `tip` and each task
   /// the row still waits on at the tip in `waiting` or `carried`, in any order and whatever else
@@ -101,7 +103,7 @@ public enum QAMergeReadiness: Sendable, Equatable {
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String,
     waiting: [QATrialMerge.Branch] = [], carried: [QATrialMerge.Branch] = [],
-    landing: String? = nil, trees: [String: String] = [:]
+    landing: String? = nil, trees: [String: String] = [:], unverified: Set<Int> = []
   ) -> QAMergeReadiness {
     let others = (carried + waiting).filter { $0.task != task }
     let held = Set(alongside(table: table, merged: merged, task: task, waiting: others))
@@ -142,11 +144,16 @@ public enum QAMergeReadiness: Sendable, Equatable {
     var red: [(report: QAReport, row: QARow)] = []
     var unchecked: [Int] = []
     var passed: [QAReport] = []
+    var left: [QAReport] = []
     for entry in entries {
       guard let report = ran.first(where: { $0.verdict != .blocked && covers($0, entry) }),
         let row = report.rows.first(where: { $0.row == entry.row })
       else {
-        if required(entry) { unchecked.append(entry.row) }
+        if required(entry), !unverified.contains(entry.row) { unchecked.append(entry.row) }
+        continue
+      }
+      if row.result != .pass, unverified.contains(entry.row) {
+        left.append(report)
         continue
       }
       switch row.result {
@@ -162,7 +169,9 @@ public enum QAMergeReadiness: Sendable, Equatable {
       return .red(runID: runID, rows: red.map(\.row))
     }
     guard unchecked.isEmpty else { return .unchecked(rows: unchecked) }
-    guard let runID = passed.compactMap(\.runID).max() else { return .notNeeded }
+    guard let runID = passed.compactMap(\.runID).max() ?? left.compactMap(\.runID).max() else {
+      return .notNeeded
+    }
     return .checked(runID: runID)
   }
 

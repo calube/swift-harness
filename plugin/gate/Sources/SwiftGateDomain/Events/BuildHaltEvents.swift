@@ -27,6 +27,7 @@ public enum BuildResumeAnswer: String, Sendable, Codable, CaseIterable {
   /// Go on as the recommended option says.
   case `continue`
   /// Merge a `review-blocked` return as it is: only the person's word, never a recommendation.
+  /// Also the answer to a `build no-repair` decision that merges a task with rows unverified.
   case merge
 }
 

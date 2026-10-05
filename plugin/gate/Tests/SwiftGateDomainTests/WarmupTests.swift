@@ -21,19 +21,44 @@ private let xcodegenConfig = XcodeAreaConfig(
   workspace: nil, project: "App/App.xcodeproj", inclusion: .xcodegen, manifest: "App/project.yml",
   schemes: ["App"])
 
-/// Counts arrivals; each waits, yielding, until `count` have arrived or a deadline passes, so a
-/// serial caller's first arrival gives up alone instead of hanging.
-private actor StartCounter {
-  private(set) var arrived = 0
+/// Counts arrivals, and lets a caller wait for a number of them with no bound of its own: a
+/// deadline here would lose to a loaded machine that starts the last arrival late. A wait that
+/// never ends is a regression the suite's time limit ends by cancelling it.
+private final class Arrivals: Sendable {
+  private struct State {
+    var arrived = 0
+    var waiting: [UUID: (count: Int, continuation: CheckedContinuation<Void, Never>)] = [:]
+  }
 
-  func arrive() { arrived += 1 }
-}
+  private let state = Mutex(State())
 
-private func arriveTogether(_ counter: StartCounter, count: Int) async -> Bool {
-  await counter.arrive()
-  let deadline = ContinuousClock.now + .seconds(10)
-  while await counter.arrived < count, ContinuousClock.now < deadline { await Task.yield() }
-  return await counter.arrived >= count
+  func arrive() {
+    let released = state.withLock { state in
+      state.arrived += 1
+      let ready = state.waiting.filter { $0.value.count <= state.arrived }
+      for id in ready.keys { state.waiting[id] = nil }
+      return ready.values.map(\.continuation)
+    }
+    for continuation in released { continuation.resume() }
+  }
+
+  /// Whether `count` have arrived, once they have or the wait is cancelled.
+  func reached(_ count: Int) async -> Bool {
+    let id = UUID()
+    await withTaskCancellationHandler {
+      await withCheckedContinuation { continuation in
+        let done = state.withLock { state in
+          if state.arrived >= count || Task.isCancelled { return true }
+          state.waiting[id] = (count, continuation)
+          return false
+        }
+        if done { continuation.resume() }
+      }
+    } onCancel: {
+      state.withLock { $0.waiting.removeValue(forKey: id) }?.continuation.resume()
+    }
+    return state.withLock { $0.arrived >= count }
+  }
 }
 
 /// Takes `duration` of wall time without a real sleep: a fake command's own run time.
@@ -75,18 +100,19 @@ private func outcomes(_ result: WarmupAreaResult) -> [WarmupStep: WarmupOutcome]
   Dictionary(uniqueKeysWithValues: result.steps.map { ($0.step, $0.outcome) })
 }
 
-@Suite("Warm-up")
+@Suite("Warm-up", .timeLimit(.minutes(5)))
 struct WarmupTests {
   @Test("3 areas' builds start together — catches a serial warm-up")
   func areasStartTogether() async {
-    let counter = StartCounter()
+    let counter = Arrivals()
     let met = Mutex<[Bool]>([])
 
     let results = await Warmup.run(
       areas: [area("web"), area("api"), area("docs")],
       dependencies: dependencies { request in
         if request.step == .build {
-          let together = await arriveTogether(counter, count: 3)
+          counter.arrive()
+          let together = await counter.reached(3)
           met.withLock { $0.append(together) }
         }
         return .passed

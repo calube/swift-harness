@@ -56,7 +56,7 @@ extension BuildEventLog {
       case .undo: return false
       case .gate(let gate):
         if case .merge = gate.stage { return true }
-      case .transition, .finish: continue
+      case .transition, .finish, .rowsUnverified: continue
       }
     }
     return false
@@ -82,7 +82,7 @@ extension BuildEventLog {
         guard case .merge(let task) = gate.stage, let current = merging, current.task == task
         else { continue }
         merging = MergeQueue.Merging(task: task, mergedAt: current.mergedAt, gated: true)
-      case .transition, .finish: continue
+      case .transition, .finish, .rowsUnverified: continue
       }
     }
     let waitingRunning = waiting.filter { running.contains($0.key) }.sorted {

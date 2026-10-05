@@ -6,12 +6,19 @@ import SwiftGateDomain
 public struct LiveAreaCommandRunner: AreaCommandRunning {
   private let processRunner: any ProcessRunner
   private let seeding: DerivedDataSeeding
+  private let now: @Sendable () -> ContinuousClock.Instant
 
-  /// - Parameter processRunner: leads each command's own process group, so a timeout kills
-  ///   every process the command started.
-  public init(processRunner: any ProcessRunner = LiveProcessRunner()) {
+  /// - Parameters:
+  ///   - processRunner: leads each command's own process group, so a timeout kills every
+  ///     process the command started.
+  ///   - now: the clock a wait for another build is measured on.
+  public init(
+    processRunner: any ProcessRunner = LiveProcessRunner(),
+    now: @escaping @Sendable () -> ContinuousClock.Instant = { ContinuousClock.now }
+  ) {
     self.processRunner = processRunner
     seeding = DerivedDataSeeding(processRunner: processRunner)
+    self.now = now
   }
 
   /// A seed that fails leaves the command to build cold, as it would with no seed. A command that
@@ -26,21 +33,20 @@ public struct LiveAreaCommandRunner: AreaCommandRunning {
     let lock = FileCountingLock(
       directory: destination.deletingLastPathComponent(),
       name: "\(destination.lastPathComponent).build-lock", capacity: 1)
-    let clock = ContinuousClock()
-    let started = clock.now
+    let started = now()
     let lease: LockLease
     do {
       lease = try await lock.acquire(timeout: request.deadline)
     } catch {
-      request.buildLock?.waits.add(milliseconds: Self.milliseconds(clock.now - started))
+      request.buildLock?.waits.add(milliseconds: Self.milliseconds(now() - started))
       return .timedOut(
         tail: "waited \(request.deadline.components.seconds) s for another build in "
           + "\(directory) to end: \(error)")
     }
     defer { lease.release() }
-    request.buildLock?.waits.add(milliseconds: Self.milliseconds(clock.now - started))
+    request.buildLock?.waits.add(milliseconds: Self.milliseconds(now() - started))
     if let copy = request.derivedDataSeed { _ = await seeding.seed(copy) }
-    let left = request.deadline - (clock.now - started)
+    let left = request.deadline - (now() - started)
     return await launch(
       AreaCommandRequest(
         area: request.area, step: request.step, command: request.command,

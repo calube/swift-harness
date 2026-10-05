@@ -124,6 +124,8 @@ public enum BuildMetrics {
         lastEventAt = later(lastEventAt, check.at)
       case .finish(let finish):
         lastEventAt = later(lastEventAt, finish.at)
+      case .rowsUnverified(let left):
+        lastEventAt = later(lastEventAt, left.at)
       }
     }
 

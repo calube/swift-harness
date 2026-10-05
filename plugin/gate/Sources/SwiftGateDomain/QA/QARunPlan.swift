@@ -27,10 +27,16 @@ public struct QARunPlan: Sendable, Equatable {
   /// Each task's ledger status once the build has ended, when no later merge can make a row
   /// ready; `nil` while tasks can still merge, so a row with an unmerged task reads `waiting`.
   public let ended: [String: TaskStatus]?
+  /// Rows a `build no-repair` decision left unverified once the build has ended, each with the
+  /// message its row reports; they don't run.
+  public let leftUnverified: [Int: String]
 
-  public init(entries: [Entry], ended: [String: TaskStatus]? = nil) {
+  public init(
+    entries: [Entry], ended: [String: TaskStatus]? = nil, leftUnverified: [Int: String] = [:]
+  ) {
     self.entries = entries
     self.ended = ended
+    self.leftUnverified = leftUnverified
   }
 
   /// - Parameters:
@@ -41,9 +47,11 @@ public struct QARunPlan: Sendable, Equatable {
   ///   - ended: each task's ledger status when the build has ended; see ``ended``.
   ///   - alongside: with `after`, more tasks that count as merged with it, whose rows are taken
   ///     too.
+  ///   - leftUnverified: see ``leftUnverified``; only a plan with `ended` takes it.
   public static func make(
     table: ValidationTable, merged: Set<String>?, after: String?,
-    ended: [String: TaskStatus]? = nil, alongside: [String] = []
+    ended: [String: TaskStatus]? = nil, alongside: [String] = [],
+    leftUnverified: [Int: String] = [:]
   ) -> QARunPlan {
     let numbered = table.rows.enumerated().map { (row: $0.offset + 1, validation: $0.element) }
     let layered = layerOrder.flatMap { layer in
@@ -64,7 +72,8 @@ public struct QARunPlan: Sendable, Equatable {
           return Entry(row: candidate.row, validation: candidate.validation, waitingOn: unmerged)
         }
     }
-    return QARunPlan(entries: statesAfterTheirFlows(layered), ended: ended)
+    return QARunPlan(
+      entries: statesAfterTheirFlows(layered), ended: ended, leftUnverified: leftUnverified)
   }
 
   /// Whether running the plan drives a device: a ready flow row whose outcome `reused` doesn't
@@ -122,7 +131,9 @@ public struct QARunPlan: Sendable, Equatable {
     for entry in entries {
       let validation = entry.validation
       let row: QARow
-      if !entry.waitingOn.isEmpty, let ended {
+      if ended != nil, let message = leftUnverified[entry.row] {
+        row = Self.row(entry, result: .unverified, message: message)
+      } else if !entry.waitingOn.isEmpty, let ended {
         row = Self.neverReady(entry, ended: ended)
       } else if !entry.waitingOn.isEmpty {
         row = Self.row(

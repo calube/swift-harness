@@ -45,7 +45,6 @@ struct KilledRunChildrenTests {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
 
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
-    let start = ContinuousClock.now
     let run = Task {
       try await LiveProcessRunner().run(
         ProcessInvocation(
@@ -62,6 +61,8 @@ struct KilledRunChildrenTests {
     let (swiftgate, child) = (pids[0], pids[1])
     defer { kill(child, SIGKILL) }
 
+    // Timed from the kill: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     kill(swiftgate, signal)
     let output = try await run.value
     #expect(output.status == .signaled(signal))
@@ -114,7 +115,6 @@ struct KilledRunChildrenTests {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
 
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
-    let start = ContinuousClock.now
     let run = Task {
       try await LiveProcessRunner().run(
         ProcessInvocation(
@@ -132,6 +132,8 @@ struct KilledRunChildrenTests {
     #expect(getpgid(grandchild) == grandchild, "the grandchild should lead its own process group")
     defer { kill(grandchild, SIGKILL) }
 
+    // Timed from the kill: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     kill(swiftgate, SIGTERM)
     let output = try await run.value
     #expect(output.status == .signaled(SIGTERM))
@@ -166,7 +168,6 @@ struct KilledRunChildrenTests {
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
 
     let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
-    let start = ContinuousClock.now
     let run = Task {
       try await LiveProcessRunner().run(
         ProcessInvocation(
@@ -183,6 +184,8 @@ struct KilledRunChildrenTests {
     let (swiftgate, child) = (pids[0], pids[1])
     defer { kill(child, SIGKILL) }
 
+    // Timed from the kill: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     kill(swiftgate, signal)
     let output = try await run.value
     #expect(output.status == .signaled(signal))

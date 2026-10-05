@@ -194,7 +194,8 @@ struct MutationRunnerTests {
         if started == workers {
           for _ in 0..<workers { allBuilding.signal() }
         }
-        if started <= workers { Self.hold(allBuilding, seconds: 60) }
+        // Every worker comes: the bound only ends a hold a runner that never sends one leaves.
+        if started <= workers { Self.hold(allBuilding, seconds: 600) }
         if (2...workers).contains(started) { Self.hold(baselineStarted, seconds: 2) }
         return .built
       },

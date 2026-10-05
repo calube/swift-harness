@@ -1,0 +1,72 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-launch-list",
+      "runsAfter" : [
+        "chat-list",
+        "chat-app"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/list-failure-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-list-failure-retry",
+      "runsAfter" : [
+        "chat-list",
+        "chat-app"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-sent.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-sending-sent",
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure-retry",
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-preview-update",
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the contract's `ChatClientTests` prove the fake's latency, failure controls and upsert; it has no screen",
+      "requirement" : "req-fake-client"
+    },
+    {
+      "reason" : "gate: merge runs AppFeature's whole suite, which holds the list and thread tests over the fake client",
+      "requirement" : "req-unit-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite, including the untouched APIClient and LogClient tests",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

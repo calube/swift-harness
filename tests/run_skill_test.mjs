@@ -464,11 +464,25 @@ export function flowRepairProblems(loop, run) {
   if (!/launch the fixer again/.test(part)) problems.push('never launches the fixer again after the repair')
   if (!/RED, before `cutoffAt`: no halt, and never stop the build/.test(part)) problems.push('a refused repair halts or stops the build before the cutoff')
   if (!/quoting each finding's message/.test(part)) problems.push('a retried repair never quotes the refusal')
-  if (!/`no repair:` return[^.]*halt/.test(part)) problems.push('a `no repair:` return never halts')
+  if (!/`no repair:` return[^.]*\[no repair\]\(#no-repair\)/.test(part)) problems.push('a `no repair:` return never goes to `build no-repair`')
+  const noRepair = (loop.split('\n## ').find(p => p.startsWith('No repair')) ?? '').replace(/\s+/g, ' ')
+  if (!noRepair.includes('"$SG" build no-repair <slug> <task> --reply .harness/build/<run>/no-repair-<task>.txt --qa-run <red run id> --fix-return .harness/build/<run>/fix-<task>.json --session <session> --json')) {
+    problems.push('a `no repair:` return is never decided by `build no-repair`')
+  }
+  for (const action of ['amend-contract', 'merge-unverified', 'continue']) {
+    if (!noRepair.includes(`\`${action}\`:`)) problems.push(`\`build no-repair\`'s \`${action}\` has no step`)
+  }
+  if (!/`build resume --answer merge`/.test(noRepair)) problems.push('a task merged with rows unverified never answers its halt `merge`')
+  const anything = (loop.replace(/\s+/g, ' ').split(' - Anything else')[1] ?? '').split(' ## ')[0]
+  if (/stop the build \(Recommended\)/.test(anything) || !/stop is never recommended/.test(anything)) {
+    problems.push('the `Anything else` halt recommends stopping the build before the cutoff')
+  }
   const step7 = (run.split('\n## ').find(p => p.startsWith('7. ')) ?? '').replace(/\s+/g, ' ')
   if (!step7.includes('(../build/references/event-loop.md#flow-repair)')) problems.push('run step 7 never takes the flow repair path')
   if (!/1 assumption naming the repaired row/.test(step7)) problems.push('run step 7 never records the repair as an assumption')
   if (!/never a reason to stop the build while time remains/.test(step7)) problems.push('run step 7 lets a refused repair stop the build')
+  if (!/`no repair:` return goes to `build no-repair`/.test(step7)) problems.push('run step 7 never takes `build no-repair`\'s action for a `no repair:` return')
+  if (!/never stop the build before `cutoffAt` over 1 task/.test(step7)) problems.push('run step 7 lets 1 task\'s halt stop the build before the cutoff')
   return problems
 }
 

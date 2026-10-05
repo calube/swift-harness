@@ -201,6 +201,7 @@ enum QARunRun {
     var notes: [String] = []
     var merged: Set<String>?
     var ended: [String: TaskStatus]?
+    var leftUnverified: [Int: String] = [:]
     if !options.atBase || options.after != nil {
       let progress: LedgerProgress
       do throws(PlanStateStoreError) {
@@ -218,6 +219,7 @@ enum QARunRun {
         var mergedTasks = progress.merged(per: build)
         if options.after == nil, options.final || build?.finalGated == true {
           ended = progress.statuses
+          leftUnverified = (build?.unverifiedRows() ?? [:]).mapValues(Self.leftMessage)
           let landed = await landedUnmerged(
             progress: progress, merged: mergedTasks, log: build, slug: slug, git: git)
           mergedTasks.formUnion(landed.map(\.task))
@@ -241,7 +243,8 @@ enum QARunRun {
       }
     }
     var runPlan = QARunPlan.make(
-      table: table, merged: merged, after: options.after, ended: ended, alongside: alongsideTasks)
+      table: table, merged: merged, after: options.after, ended: ended, alongside: alongsideTasks,
+      leftUnverified: leftUnverified)
     var prepared: String?
     if let writer = options.preparedBy {
       let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
@@ -254,7 +257,8 @@ enum QARunRun {
           plan: slug)
       }
       runPlan = QARunPlan(
-        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended)
+        entries: runPlan.entries.filter { $0.validation.writer == writer }, ended: runPlan.ended,
+        leftUnverified: runPlan.leftUnverified)
       guard !runPlan.entries.isEmpty else {
         return blocked(
           "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
@@ -262,7 +266,7 @@ enum QARunRun {
       if let requirement = options.requirement {
         runPlan = QARunPlan(
           entries: runPlan.entries.filter { $0.validation.requirement == requirement },
-          ended: runPlan.ended)
+          ended: runPlan.ended, leftUnverified: runPlan.leftUnverified)
         guard !runPlan.entries.isEmpty else {
           return blocked(
             "no row of \(tablePath) that `\(writer)` writes checks `\(requirement)`; no row ran",
@@ -821,6 +825,19 @@ enum QARunRun {
   /// The tasks outside `merged` whose branch tip is in `HEAD` and is no commit the plan branch
   /// itself stood at in `log`: a branch with no commits of its own points at one of those, and
   /// landed nothing. With no build events, none.
+  /// What a row a `build no-repair` decision left unverified reports in the final pass.
+  static func leftMessage(_ left: BuildEvent.RowsUnverified) -> String {
+    let cause: String =
+      switch left.cause {
+      case .contractGap:
+        "it needs a contract name the app doesn't have"
+          + (left.contractName.map { " (`\($0)`)" } ?? "")
+      case .appAtFault: "the repair worker found the app at fault"
+      }
+    return "not run: left unverified when `\(left.task)` merged, since its flow repair found no "
+      + "repair in qa run \(left.qaRun): \(cause)"
+  }
+
   private static func landedUnmerged(
     progress: LedgerProgress, merged: Set<String>, log: BuildEventLog?, slug: String,
     git: any Git
@@ -831,7 +848,7 @@ enum QARunRun {
       switch event {
       case .merge(let merge): planCommits.formUnion([merge.preCommit, merge.postCommit])
       case .undo(let undo): planCommits.formUnion([undo.fromCommit, undo.toCommit])
-      case .transition, .gate, .returnCheck, .finish: continue
+      case .transition, .gate, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     var landed: [Landing] = []
