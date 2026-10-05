@@ -136,7 +136,7 @@ ISO 8601 UTC time. The worker and its fix pass get it as their deadline. Leave i
   as its `id` and `writeSet`; `[]` when there is none, never left out. Their code is only the
   plan's stubs on this task's branch, so the reviewers and the verifier get the list. A verified
   defect whose test could pass only once a sibling merges comes back deferred to it, not
-  blocking. Leaving it out throws `build-task: siblings is required`.
+  blocking, unless git shows that sibling merged into the base since the branch was cut. Leaving it out throws `build-task: siblings is required`.
 - `taskProof`: the preset's `taskProof`. Under `per-task` every task proves and mutates its own
   change, and `build check-return` fails a worker's green gate that skipped either. Under `final`
   no task gate does, and the [final gate](#final-gate) proves and mutates every merged task once.
@@ -211,8 +211,11 @@ reads red until a task adds the name.
 
 A return's `notes` line `deferred to <sibling>: <severity> <file>: <title>` is a verified review
 finding whose test can pass only once that sibling merges. It never blocks: the return merges as
-usual. Keep each line, and quote it in the report under deferred findings, naming whether the
-sibling merged. A retry of either task quotes it in its brief.
+usual. A sibling that merged during the task's review takes no deferral: the workflow merges the
+base into the task branch and its fix pass writes the test. `context-pack --build-run` quotes each
+stored deferral in the pack of the sibling, and of any task depending on both, under "Review
+findings deferred to this task". The run view's `deferred` lists each with the sibling's status:
+quote it in the report under deferred findings, naming whether the sibling merged.
 
 `check-return` stores no return that fails the check, and no fixer's return, so no dependent
 pack quotes its notes.

@@ -916,4 +916,27 @@ public enum TaskReturnCommitRefill {
       notes: [taskReturn.notes, note].filter { !$0.isEmpty }.joined(separator: "\n"),
       designConflict: taskReturn.designConflict, surfaceCommit: taskReturn.surfaceCommit)
   }
+
+  /// `taskReturn` with its commits put in `branchCommits`' order, oldest first, and a `notes`
+  /// line naming the `range` read; `nil` when they're already in that order, or when a listed
+  /// commit isn't exactly 1 of `branchCommits`. An agent writes the list, and the check reads
+  /// its last entry as the commit the gate must have run at.
+  public static func reorder(
+    _ taskReturn: TaskReturn, branchCommits: [String], range: String
+  ) -> TaskReturn? {
+    var positions: [String: Int] = [:]
+    for commit in taskReturn.commits {
+      let matches = branchCommits.indices.filter { branchCommits[$0].hasPrefix(commit) }
+      guard matches.count == 1, let position = matches.first else { return nil }
+      positions[commit] = position
+    }
+    let ordered = taskReturn.commits.sorted { (positions[$0] ?? 0) < (positions[$1] ?? 0) }
+    guard ordered != taskReturn.commits else { return nil }
+    let note = "commits: listed out of order; put oldest first as git log \(range) gives them"
+    return TaskReturn(
+      task: taskReturn.task, outcome: taskReturn.outcome, commits: ordered,
+      gate: taskReturn.gate, review: taskReturn.review, testsAdded: taskReturn.testsAdded,
+      notes: [taskReturn.notes, note].filter { !$0.isEmpty }.joined(separator: "\n"),
+      designConflict: taskReturn.designConflict, surfaceCommit: taskReturn.surfaceCommit)
+  }
 }

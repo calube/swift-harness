@@ -392,6 +392,34 @@ public struct RunView: Sendable, Equatable, Encodable {
     }
   }
 
+  /// A verified review finding a task's review deferred to a sibling, with that sibling's ledger
+  /// status, so one nobody picked up shows in the report.
+  public struct Deferral: Sendable, Equatable, Encodable {
+    public var task: String
+    public var sibling: String
+    /// `nil` when the sibling isn't a ledger task.
+    public var siblingStatus: TaskStatus?
+    /// `<severity> <file>: <title>`, cut to ``RunView/maxBriefBytes``.
+    public var finding: String
+
+    public init(task: String, sibling: String, siblingStatus: TaskStatus?, finding: String) {
+      self.task = task
+      self.sibling = sibling
+      self.siblingStatus = siblingStatus
+      self.finding = finding
+    }
+
+    private enum CodingKeys: String, CodingKey { case task, sibling, siblingStatus, finding }
+
+    public func encode(to encoder: any Encoder) throws {
+      var c = encoder.container(keyedBy: CodingKeys.self)
+      try c.encode(task, forKey: .task)
+      try c.encode(sibling, forKey: .sibling)
+      try c.encode(siblingStatus, forKey: .siblingStatus)
+      try c.encode(finding, forKey: .finding)
+    }
+  }
+
   public struct Halt: Sendable, Equatable, Encodable {
     public var task: String?
     public var reason: BuildHaltReason
@@ -446,6 +474,8 @@ public struct RunView: Sendable, Equatable, Encodable {
   public var gates: [Gate]
   public var proofs: [Proof]
   public var halts: [Halt]
+  /// Each finding a stored return deferred to a sibling, in ledger order of the deferring task.
+  public var deferred: [Deferral]
   /// What the run's validation rows showed; `nil` when no `qa run` checked a row of the plan
   /// during the run.
   public var validation: RunViewValidation?
@@ -468,8 +498,8 @@ public struct RunView: Sendable, Equatable, Encodable {
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
     cost: Cost? = nil, spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [],
-    halts: [Halt] = [], validation: RunViewValidation? = nil, damage: [Damage] = [],
-    unwritten: [Damage] = [], evidenceBase: String? = nil
+    halts: [Halt] = [], deferred: [Deferral] = [], validation: RunViewValidation? = nil,
+    damage: [Damage] = [], unwritten: [Damage] = [], evidenceBase: String? = nil
   ) {
     self.cursor = cursor
     self.run = run
@@ -481,6 +511,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     self.gates = gates
     self.proofs = proofs
     self.halts = halts
+    self.deferred = deferred
     self.validation = validation
     self.damage = damage
     self.unwritten = unwritten
@@ -489,7 +520,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, cursor, run, spec, tasks, roles, cost, spans, gates, proofs, halts
-    case validation, damage, unwritten, evidenceBase, evidenceFiles, finalReport
+    case deferred, validation, damage, unwritten, evidenceBase, evidenceFiles, finalReport
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -505,6 +536,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(gates, forKey: .gates)
     try c.encode(proofs, forKey: .proofs)
     try c.encode(halts, forKey: .halts)
+    try c.encode(deferred, forKey: .deferred)
     try c.encode(validation, forKey: .validation)
     try c.encode(damage, forKey: .damage)
     try c.encode(unwritten, forKey: .unwritten)

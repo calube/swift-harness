@@ -45,6 +45,19 @@ const CLASSIFIER_LABEL = /^diff-risk:/
 const COMMIT_LISTER_LABEL = /^commits:/
 // The commit lister's default answer: the command never ran.
 const noLister = new Error('no commit lister scripted for this test')
+// The agent that asks git whether a sibling a finding was deferred to has merged into the base
+// since the task branched, and the one that merges the base into the task branch for a fix pass.
+const MERGED_CHECK_LABEL = /^merged:/
+const BASE_MERGE_LABEL = /^base-merge:/
+const mergedCommands = prompt => {
+  const marker = 'Commands:\n'
+  assert.ok(prompt.includes(marker), 'the merged check lists no commands')
+  return prompt.slice(prompt.indexOf(marker) + marker.length).split('\n').filter(line => /^\d+\. /.test(line)).map(line => line.replace(/^\d+\. /, ''))
+}
+// The merged check's default answer: no sibling has merged, `git diff --quiet` exits 0 for each.
+const noneMerged = prompt => ({ results: mergedCommands(prompt).map(() => ({ exitStatus: 0 })) })
+const allMerged = prompt => ({ results: mergedCommands(prompt).map(() => ({ exitStatus: 1 })) })
+const noBaseMerge = new Error('no base merge scripted for this test')
 // The fifth send-money trial's amount-input worker return: ready-to-merge on a GREEN slice gate,
 // with no commits and the notes "placeholder", though its branch held commit 0b486ef.
 const placeholderReturn = () => {
@@ -182,7 +195,7 @@ const confirmAll = findings => ({ findings: findings.map(f => ({ ...f, verified:
 const noJudge = { level: null, by: null, path: null, glob: null, reason: "the clone's config has no [judge] section", exitStatus: 1 }
 // What the diff-risk agent returns for a level the judge rated.
 const judged = level => ({ level, by: 'judge', path: null, glob: null, reason: null, exitStatus: 0 })
-async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge, commitLister = noLister, spanAgent = null } = {}) {
+async function run(args, { workers = [workerReturn()], reviews = {}, verifies = {}, swiftgate = fakeSwiftgate(), diffRisk = noJudge, commitLister = noLister, spanAgent = null, mergedCheck = noneMerged, baseMerge = noBaseMerge } = {}) {
   const calls = []
   // Each agent's start and answer, as `call:<label>` and `done:<label>`, in the order they happen.
   const order = []
@@ -242,6 +255,15 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
       if (commitLister instanceof Error) throw commitLister
       return typeof commitLister === 'function' ? commitLister(prompt) : structuredClone(commitLister)
     }
+    if (opts.agentType === CLASSIFIER && MERGED_CHECK_LABEL.test(opts.label ?? '')) {
+      assert.ok(!prompt.includes('events span'), 'the merged check was handed a span call')
+      return typeof mergedCheck === 'function' ? mergedCheck(prompt) : structuredClone(mergedCheck)
+    }
+    if (opts.agentType === CLASSIFIER && BASE_MERGE_LABEL.test(opts.label ?? '')) {
+      assert.ok(!prompt.includes('events span'), 'the base merge was handed a span call')
+      if (baseMerge instanceof Error) throw baseMerge
+      return typeof baseMerge === 'function' ? baseMerge(prompt) : structuredClone(baseMerge)
+    }
     if (opts.agentType === CLASSIFIER) {
       assert.match(opts.label ?? '', CLASSIFIER_LABEL, `a plain agent ran that is not the diff-risk classifier: ${opts.label}`)
       assert.ok(!prompt.includes('events span'), 'the diff-risk classifier was handed a span call')
@@ -264,7 +286,9 @@ async function run(args, { workers = [workerReturn()], reviews = {}, verifies = 
   const classifierCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && CLASSIFIER_LABEL.test(c.opts.label ?? ''))
   const listerCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && COMMIT_LISTER_LABEL.test(c.opts.label ?? ''))
   const spanCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && SPAN_AGENT_LABEL.test(c.opts.label ?? ''))
-  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, listerCalls, spanCalls, maxReviewersInFlight, logs, order }
+  const mergedCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && MERGED_CHECK_LABEL.test(c.opts.label ?? ''))
+  const baseMergeCalls = calls.filter(c => c.opts.agentType === CLASSIFIER && BASE_MERGE_LABEL.test(c.opts.label ?? ''))
+  return { result, calls, workerCalls, reviewerCalls, verifyCalls, classifierCalls, listerCalls, spanCalls, mergedCalls, baseMergeCalls, maxReviewersInFlight, logs, order }
 }
 
 // A stage prompt's 2 span lines: the start it runs first and the end it runs last, with
@@ -1531,6 +1555,81 @@ const tests = {
     assert.deepEqual(fixFindings.map(f => f.title), [own.title], 'the fix pass was handed the deferred finding')
     assert.equal(result.outcome, 'ready-to-merge')
     assert.ok(result.notes.includes(`deferred to ${engine.id}: major`), result.notes)
+  },
+
+  async "the captured sibling-stub review deferred to a sibling that has merged into the base since the task branched isn't deferred: the base is merged into the branch, the fix pass is told its code is there and writes the test, and the return lists the merge commit and no deferral — catches a deferred test nobody owns once its sibling is in"() {
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
+    const fixed = brownfieldReturn({ task: args.task, commits: ['5d1e0a7'], notes: 'wrote the test against the merged code' })
+    const { result, workerCalls, mergedCalls, baseMergeCalls, order } = await run(
+      { ...args, siblings },
+      {
+        workers: [worker, fixed],
+        diffRisk: judged('medium'),
+        reviews: { 'test-quality': [captured.review, { findings: [] }] },
+        verifies: { 'test-quality': [deferredTo(captured, engine.id)] },
+        mergedCheck: allMerged,
+        baseMerge: { exitStatus: 0, commit: '7c3b2e1', reason: null },
+      },
+    )
+    assert.equal(mergedCalls.length, 1)
+    assert.deepEqual(mergedCommands(mergedCalls[0].prompt), [
+      `git -C ${args.worktree} diff --quiet HEAD...${args.base} -- ${engine.writeSet.map(p => `'${p}'`).join(' ')}`,
+    ])
+    assert.equal(baseMergeCalls.length, 1, 'the base was not merged before the fix pass')
+    assert.ok(baseMergeCalls[0].prompt.includes(`git -C ${args.worktree} merge --no-edit -m 'Merge the base for the code a review finding tests' ${args.base}`), baseMergeCalls[0].prompt)
+    assert.ok(order.indexOf(`done:${baseMergeCalls[0].opts.label}`) < order.indexOf(`call:fix:${args.task}`), 'the fix pass started before the merge')
+    assert.equal(workerCalls.length, 2, 'no fix pass for the finding its merged sibling now lets it test')
+    const fixPrompt = workerCalls[1].prompt
+    assert.ok(fixPrompt.includes(`${args.base} is merged into this branch as 7c3b2e1`), fixPrompt)
+    assert.ok(fixPrompt.includes(engine.id), fixPrompt)
+    const fixFindings = JSON.parse(fixPrompt.slice(fixPrompt.indexOf('{', fixPrompt.indexOf('Earlier return and findings')))).findings
+    assert.deepEqual(fixFindings.map(f => f.title), captured.review.findings.map(f => f.title))
+    assertTaskReturn(result, 'classified')
+    assert.equal(result.outcome, 'ready-to-merge')
+    assert.deepEqual(result.commits, [...worker.commits, '7c3b2e1', '5d1e0a7'])
+    assert.ok(!/deferred to/.test(result.notes), result.notes)
+  },
+
+  async "a deferral to a sibling git shows unmerged, or whose check fails, stays deferred with no merge — catches every deferral turned into a blocking fix pass, or a failed check read as a merge"() {
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
+    const failedCheck = prompt => ({ results: mergedCommands(prompt).map(() => ({ exitStatus: 128 })) })
+    for (const mergedCheck of [noneMerged, failedCheck, new Error('the merged check died')]) {
+      const { result, workerCalls, mergedCalls, baseMergeCalls } = await run(
+        { ...args, siblings },
+        {
+          workers: [worker],
+          diffRisk: judged('medium'),
+          reviews: { 'test-quality': [captured.review] },
+          verifies: { 'test-quality': [deferredTo(captured, engine.id)] },
+          mergedCheck: mergedCheck instanceof Error ? () => { throw mergedCheck } : mergedCheck,
+        },
+      )
+      assert.equal(mergedCalls.length, 1)
+      assert.equal(baseMergeCalls.length, 0)
+      assert.equal(workerCalls.length, 1)
+      assert.equal(result.outcome, 'ready-to-merge')
+      assert.ok(result.notes.includes(`deferred to ${engine.id}: major`), result.notes)
+    }
+  },
+
+  async "a base merge that fails leaves the branch as it was: the fix pass is told the sibling's code isn't there, and no merge commit is listed — catches a fix pass sent to test code its branch lacks"() {
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
+    const { result, workerCalls } = await run(
+      { ...args, siblings },
+      {
+        workers: [worker, brownfieldReturn({ task: args.task, commits: ['9a8b7c6'] })],
+        diffRisk: judged('medium'),
+        reviews: { 'test-quality': [captured.review, captured.review] },
+        verifies: { 'test-quality': [deferredTo(captured, engine.id), deferredTo(captured, engine.id)] },
+        mergedCheck: allMerged,
+        baseMerge: { exitStatus: 1, commit: null, reason: 'CONFLICT (content): Merge conflict in a.swift' },
+      },
+    )
+    assert.equal(workerCalls.length, 2)
+    assert.ok(workerCalls[1].prompt.includes(`merging ${args.base} into this branch failed`), workerCalls[1].prompt)
+    assert.deepEqual(result.commits, [...worker.commits, '9a8b7c6'])
+    assert.equal(result.outcome, 'review-blocked', 'the finding no merge let the fix pass test stopped blocking')
+    assert.ok(!/deferred to/.test(result.notes), result.notes)
   },
 
   async 'invalid args fail before any agent runs — catches a worker launched into the wrong branch or mode'() {

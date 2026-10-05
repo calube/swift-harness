@@ -705,21 +705,28 @@ enum BuildCheckReturnRun {
   }
 
   /// ``TaskReturnCommitRefill`` over the branch's commits past its merge base with the branch it
-  /// was cut from; `nil` when nothing needs refilling or the base doesn't resolve.
+  /// was cut from, or its listed commits put in that order; `nil` when nothing needs either or
+  /// the base doesn't resolve.
   private static func refill(
     _ taskReturn: TaskReturn, states: [String: TaskReturnEvidence.CommitState], tip: String,
     names: TaskWorktree, git: any Git
   ) async throws(Blocked) -> TaskReturn? {
     let unresolved = taskReturn.commits.contains { (states[$0] ?? .missing) == .missing }
-    guard unresolved || (taskReturn.commits.isEmpty && taskReturn.outcome == .readyToMerge)
-    else { return nil }
+    let refills = unresolved || (taskReturn.commits.isEmpty && taskReturn.outcome == .readyToMerge)
+    let orderable = taskReturn.commits.count > 1 && taskReturn.commits.allSatisfy {
+      states[$0] == .onBranch
+    }
+    guard refills || orderable else { return nil }
     do {
       guard let head = try await git.revision("refs/heads/\(names.baseBranch)"),
         let base = try await git.mergeBase(tip, head)
       else { return nil }
-      return TaskReturnCommitRefill.refill(
-        taskReturn, states: states, branchCommits: try await git.commits(from: base, to: tip),
-        range: "\(names.baseBranch)..\(names.branch)")
+      let branchCommits = try await git.commits(from: base, to: tip)
+      let range = "\(names.baseBranch)..\(names.branch)"
+      return refills
+        ? TaskReturnCommitRefill.refill(
+          taskReturn, states: states, branchCommits: branchCommits, range: range)
+        : TaskReturnCommitRefill.reorder(taskReturn, branchCommits: branchCommits, range: range)
     } catch {
       throw Blocked("listing \(names.branch)'s commits: \(error)")
     }

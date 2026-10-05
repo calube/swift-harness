@@ -1,0 +1,41 @@
+{
+  "task": "engine-core",
+  "notes": "review: classified at medium by swiftgate judge diff-risk\ndeferred to engine-launches: major Packages/AppFeature/Tests/EngineTests/SimulationTests.swift: Spawning branch of step() has no test with spawns on",
+  "tasks": [
+    {
+      "id": "spec-contract",
+      "deps": [],
+      "status": "done"
+    },
+    {
+      "id": "engine-core",
+      "deps": [
+        "spec-contract"
+      ],
+      "status": "done"
+    },
+    {
+      "id": "engine-launches",
+      "deps": [
+        "spec-contract"
+      ],
+      "status": "done"
+    },
+    {
+      "id": "screen-ui",
+      "deps": [
+        "spec-contract",
+        "engine-core",
+        "engine-launches"
+      ],
+      "status": "blocked"
+    },
+    {
+      "id": "spec-validation",
+      "deps": [
+        "spec-contract"
+      ],
+      "status": "done"
+    }
+  ]
+}

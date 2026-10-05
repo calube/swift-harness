@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Builds one ledger task: a build-worker in the task worktree, then (full review) architecture and test-quality in parallel, each pipelined into an independent verifier, then at most one fix pass by a fresh worker; returns one TaskReturn for swiftgate build check-return',
   whenToUse:
-    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>", cutoffAt?: "<ISO 8601 UTC time of a swiftgate run\'s cutoff>", siblings: [{task, writeSet}]}. siblings lists the plan\'s other tasks not yet done or abandoned at launch: a verified finding whose test could pass only once one of them merges is deferred to it, recorded in the return\'s notes, and never blocks. The worker and fix pass open and close their own run-viewer span in that build run; reviewers and verifiers hold no Bash, so the workflow records their spans through a plain agent started beside each. Every swiftgate command runs through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
+    'Launched by /swift-harness:build once per started task, after `swiftgate worktree create`. Requires args {task, plan, worktree, branch, writeSet, taskGate, tests, contextPack, model, review: "full"|"gate"|"classified", taskProof: "per-task"|"final"|"prove", planSurface: <sha>|null, reviewers?, pluginRoot: "<absolute plugin root>", stateRoot?: "<absolute state root>", base?: "<branch the task branched from>", buildRun: "<build run id>", cutoffAt?: "<ISO 8601 UTC time of a swiftgate run\'s cutoff>", siblings: [{task, writeSet}]}. siblings lists the plan\'s other tasks not yet done or abandoned at launch: a verified finding whose test could pass only once one of them merges is deferred to it, recorded in the return\'s notes, and never blocks; one deferred to a sibling git shows merged into base since the branch was cut blocks instead, and the base is merged into the branch before the fix pass. The worker and fix pass open and close their own run-viewer span in that build run; reviewers and verifiers hold no Bash, so the workflow records their spans through a plain agent started beside each. Every swiftgate command runs through <pluginRoot>/bin/swiftgate. A slice, merge or final taskGate is the brownfield profile: it takes only pinned model ids, review "classified" and taskProof "prove", and requires stateRoot (<worktree git dir>/swift-harness) and base (the plan branch). Write the return to a file and pass it to `swiftgate build check-return`. Any outcome other than ready-to-merge is a decision for the calling skill.',
   phases: [
     { title: 'Build', detail: 'one build-worker, test-first, until the task gate is GREEN' },
     { title: 'Review', detail: 'full review: architecture and test-quality in parallel; classified: the depth swiftgate judge diff-risk rates' },
@@ -342,6 +342,114 @@ const VERIFY_SCHEMA = {
 // about this task's own code, which no sibling's merge changes.
 const deferralOf = (finding, entry) =>
   (finding.kind ?? 'defect') === 'defect' && entry && SIBLING_IDS.includes(entry.deferred_to) ? entry.deferred_to : null
+
+// A sibling can merge into the base while this task is in review, and a deferral to it then has no
+// owner: its worker has returned. Git shows the merge as the base changing the sibling's write set
+// since this branch was cut, which only that sibling's merge does. 1 agent runs 1 `git diff
+// --quiet` per sibling; exit 1 is merged, and any other answer leaves the deferral standing.
+const MERGED_CHECK_LABEL = 'merged:'
+const MERGED_CHECK_SCHEMA = {
+  type: 'object',
+  required: ['results'],
+  additionalProperties: false,
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        required: ['exitStatus'],
+        additionalProperties: false,
+        properties: { exitStatus: { type: 'integer', description: "the command's exit status" } },
+      },
+      description: 'one entry per numbered command, in order',
+    },
+  },
+}
+const mergedSiblings = new Set()
+const siblingMergedCommand = sibling =>
+  `git -C ${A.worktree} diff --quiet HEAD...${A.base} -- ${A.siblings.find(s => s.task === sibling).writeSet.map(shellWord).join(' ')}`
+async function checkMerged(siblings) {
+  const unknown = siblings.filter(s => !mergedSiblings.has(s))
+  if (unknown.length === 0) return
+  let answer
+  try {
+    answer = await agent(
+      'Run each numbered command once, in order, and report its exit status; change nothing, run nothing else. ' +
+        'Each exits 0 or 1 and prints nothing.\nCommands:\n' +
+        unknown.map((s, i) => `${i + 1}. ${siblingMergedCommand(s)}`).join('\n'),
+      { agentType: CLASSIFIER_AGENT, model: CLASSIFIED_REVIEWER_MODEL, effort: 'low', label: `${MERGED_CHECK_LABEL}${A.task}`, phase: 'Review', schema: MERGED_CHECK_SCHEMA },
+    )
+  } catch (error) {
+    log(`review: checking whether ${unknown.join(', ')} merged failed (${failure(error)}); each deferral stands`)
+    return
+  }
+  const results = answer && Array.isArray(answer.results) ? answer.results : []
+  unknown.forEach((sibling, i) => {
+    const status = results[i] && results[i].exitStatus
+    if (status === 1) mergedSiblings.add(sibling)
+    else if (status !== 0) log(`review: \`${siblingMergedCommand(sibling)}\` gave ${JSON.stringify(status)}; the deferral to ${sibling} stands`)
+  })
+}
+// Each finding deferred to a sibling that has merged loses its deferral and blocks, so this task's
+// fix pass writes the test once the base is merged in. Returns the siblings it found merged.
+const ownedAfterMerge = new Map()
+async function ownMergedDeferrals(findings) {
+  const deferred = findings.filter(f => f.deferredTo)
+  if (deferred.length === 0) return []
+  await checkMerged([...new Set(deferred.map(f => f.deferredTo))])
+  for (const f of deferred) {
+    if (!mergedSiblings.has(f.deferredTo)) continue
+    const why = `not deferred: ${f.deferredTo} merged into ${A.base} after this branch was cut, so its code is there and this task writes the test`
+    f.verification_note = [f.verification_note, why].filter(Boolean).join(' | ')
+    ownedAfterMerge.set(f, f.deferredTo)
+    delete f.deferredTo
+  }
+  return [...new Set(deferred.filter(f => ownedAfterMerge.has(f)).map(f => ownedAfterMerge.get(f)))]
+}
+
+// The fix pass for a finding its merged sibling's code now lets it test starts from the branch with
+// the base merged in. A worker never merges, so 1 agent runs the merge and aborts one that fails.
+const BASE_MERGE_LABEL = 'base-merge:'
+const BASE_MERGE_SCHEMA = {
+  type: 'object',
+  required: ['exitStatus', 'commit', 'reason'],
+  additionalProperties: false,
+  properties: {
+    exitStatus: { type: 'integer', description: "the merge command's exit status" },
+    commit: { type: ['string', 'null'], description: 'the sha the log command printed after a merge that exited 0; else null' },
+    reason: { type: ['string', 'null'], description: 'what the failed merge printed; null when it exited 0' },
+  },
+}
+async function mergeBase(siblings) {
+  // The message names no task or plan, as a worker's never does.
+  const merge = `git -C ${A.worktree} merge --no-edit -m ${shellWord('Merge the base for the code a review finding tests')} ${A.base}`
+  let answer
+  try {
+    answer = await agent(
+      'Run exactly this command once; change nothing else:\n' +
+        `${merge}\n` +
+        `If it exits 0, run \`git -C ${A.worktree} log -1 --format=%h\` and return the sha it printed as commit. ` +
+        `If it exits non-zero, run \`git -C ${A.worktree} merge --abort\`, and return commit null and what the merge printed as reason.`,
+      { agentType: CLASSIFIER_AGENT, model: CLASSIFIED_REVIEWER_MODEL, effort: 'low', label: `${BASE_MERGE_LABEL}${A.task}`, phase: 'Fix', schema: BASE_MERGE_SCHEMA },
+    )
+  } catch (error) {
+    answer = { exitStatus: -1, commit: null, reason: failure(error) }
+  }
+  const named = siblings.join(', ')
+  if (answer && answer.exitStatus === 0 && typeof answer.commit === 'string' && SHA.test(answer.commit)) {
+    log(`${A.task}: merged ${A.base} as ${answer.commit} for the fix pass`)
+    return {
+      commit: answer.commit,
+      line: `${A.base} is merged into this branch as ${answer.commit}, so the code of ${named} is on it now: write the test each finding marked "not deferred" asks for, against that code.`,
+    }
+  }
+  const why = (answer && answer.reason) || `exit ${answer ? answer.exitStatus : 'unknown'}`
+  log(`${A.task}: merging ${A.base} failed (${why})`)
+  return {
+    commit: null,
+    line: `merging ${A.base} into this branch failed (${why}), so the code of ${named} isn't on it: fix the other findings and say so in your notes.`,
+  }
+}
 
 // The runtime enforces the schema, but a stubbed, skipped or misbehaving agent can still hand back
 // anything. Returns why a worker return is off-contract, or null when it is usable.
@@ -933,16 +1041,18 @@ async function reviewAndVerify(reviewer, commits, opening) {
 // the round follows, which parents every review span; 1 span agent opens them beside the
 // reviewers. `span` is the stage span a fix pass follows: the one of the first focus in reviewer
 // order that blocks, else the last, else `prior`. `open` holds the round's spans still to end.
-async function runReview(commits, prior) {
+async function runReview(commits, prior, carried = []) {
   const opening = runSpans(reviewers.map(() => ({ start: { phase: 'review', parent: prior } })), 'review', 'Review')
   const results = await Promise.all(reviewers.map((reviewer, i) => reviewAndVerify(reviewer, commits, opening.then(ids => ids[i]))))
-  const findings = results.flatMap(r => r.findings ?? [])
+  const own = results.flatMap(r => r.findings ?? [])
+  const findings = [...own, ...carried.filter(d => !own.some(f => f.file === d.file && f.title === d.title))]
+  const owned = await ownMergedDeferrals(findings)
   const failed = results.filter(r => r.failed).map(r => r.failed)
   for (const reason of failed) log(`review: ${reason}`)
   const blocking = findings.filter(f => f.verified === true && BLOCKING.includes(f.severity) && !f.deferredTo)
   const blocked = results.find(r => r.span && (r.failed || (r.findings ?? []).some(f => blocking.includes(f))))
   const span = blocked ? blocked.span : results.map(r => r.span).filter(Boolean).at(-1) ?? prior
-  return { findings, failed, blocking, span, open: results.flatMap(r => r.open) }
+  return { findings, failed, blocking, span, owned, open: results.flatMap(r => r.open) }
 }
 
 const union = (a, b) => [...a, ...b.filter(x => !a.includes(x))]
@@ -959,10 +1069,6 @@ const deferralNote = f => `deferred to ${f.deferredTo}: ${f.severity} ${f.file}:
 // A deferral from the first review still stands after the fix pass, though the second review may not
 // raise the finding again.
 let earlierDeferrals = []
-const withEarlierDeferrals = findings => [
-  ...findings,
-  ...earlierDeferrals.filter(d => !findings.some(f => f.file === d.file && f.title === d.title)),
-]
 
 function taskReturn(outcome, worker, earlierCommits, earlierTests, findings, extraNote) {
   const deferrals = findings.filter(f => f.deferredTo).map(deferralNote)
@@ -1065,6 +1171,8 @@ let lastFindings = []
 // The stage span the fix pass follows, and the review round's span its start is left to end.
 let fixParent = first.span
 let reviewSpanForFix = null
+// The commit that merged the base into the branch before the fix pass, or null.
+let baseMergeCommit = null
 if (first.defect) {
   log(`build-worker for ${A.task} was unusable: ${first.defect}`)
   fix = { reason: `the earlier worker's return was unusable: ${first.defect}`, earlier: first.salvage ?? null, findings: [] }
@@ -1092,8 +1200,10 @@ if (first.defect) {
     // The fix pass's own span start ends the span it follows.
     endSpans(review.open, fixParent)
     reviewSpanForFix = fixParent
+    const merged = review.owned.length ? await mergeBase(review.owned) : null
+    if (merged && merged.commit) baseMergeCommit = merged.commit
     fix = {
-      reason: `the review found ${review.blocking.length} blocking finding(s) (blocker or major)`,
+      reason: `the review found ${review.blocking.length} blocking finding(s) (blocker or major)` + (merged ? `. ${merged.line}` : ''),
       earlier: w,
       findings: review.blocking,
     }
@@ -1106,7 +1216,7 @@ const second = await runWorker(fix, fixParent)
 if (reviewSpanForFix && !second.span) endSpans([{ id: reviewSpanForFix, outcome: spanOutcomes.get(reviewSpanForFix) ?? 'ok' }])
 await Promise.all(pendingSpanEnds)
 if (second.defect) throw new Error(`build-task: the fix-pass build-worker for ${A.task} was unusable: ${second.defect}`)
-const earlierCommits = firstAttempt ? firstAttempt.commits : []
+const earlierCommits = union(firstAttempt ? firstAttempt.commits : [], baseMergeCommit ? [baseMergeCommit] : [])
 const earlierTests = firstAttempt ? firstAttempt.testsAdded : []
 const w2 = second.value
 if (w2.outcome === 'design-conflict') return taskReturn('design-conflict', w2, earlierCommits, earlierTests, lastFindings)
@@ -1118,9 +1228,9 @@ await decideDepth()
 if (!reviewed) return taskReturn('ready-to-merge', w2, earlierCommits, earlierTests, earlierDeferrals, reviewNote())
 
 const commits = union(earlierCommits, w2.commits)
-const review = await runReview(commits, second.span)
+const review = await runReview(commits, second.span, earlierDeferrals)
 endSpans(review.open)
-const secondFindings = withEarlierDeferrals(review.findings)
+const secondFindings = review.findings
 if (review.failed.length) {
   return finish(taskReturn('review-blocked', w2, earlierCommits, earlierTests, secondFindings, reviewNote(`review not complete: ${review.failed.join('; ')}`)))
 }

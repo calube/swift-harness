@@ -530,11 +530,13 @@ public struct SpecPageWorkerInputs: Sendable {
   /// counts them.
   public let touchedModules: Set<String>
   public let dependencyNotes: [DependencyReturnNotes]
+  /// The review findings other tasks deferred that this task's worker writes the test for.
+  public let deferred: [DeferredFinding]
 
   public init(
     task: LedgerTask, specPage: SpecPageSource, claims: ContextSource, citedClaimIDs: [String],
     standards: ContextSource, moduleKindAnchors: [String], touchedModules: Set<String>,
-    dependencyNotes: [DependencyReturnNotes] = []
+    dependencyNotes: [DependencyReturnNotes] = [], deferred: [DeferredFinding] = []
   ) {
     self.task = task
     self.specPage = specPage
@@ -544,6 +546,7 @@ public struct SpecPageWorkerInputs: Sendable {
     self.moduleKindAnchors = moduleKindAnchors
     self.touchedModules = touchedModules
     self.dependencyNotes = dependencyNotes
+    self.deferred = deferred
   }
 }
 
@@ -575,11 +578,13 @@ public struct WorkerInputs: Sendable {
   /// Empty when the pack was built without `--build-run`, or the task has no `deps` — the pack
   /// then carries no dependency-notes section, byte-identical to before this field existed.
   public let dependencyNotes: [DependencyReturnNotes]
+  /// The review findings other tasks deferred that this task's worker writes the test for.
+  public let deferred: [DeferredFinding]
 
   public init(
     task: LedgerTask, design: DesignDocument, designSource: ContextSource, claims: ContextSource,
     citedClaimIDs: [String], standards: ContextSource, moduleKindAnchors: [String],
-    dependencyNotes: [DependencyReturnNotes] = []
+    dependencyNotes: [DependencyReturnNotes] = [], deferred: [DeferredFinding] = []
   ) {
     self.task = task
     self.design = design
@@ -589,6 +594,7 @@ public struct WorkerInputs: Sendable {
     self.standards = standards
     self.moduleKindAnchors = moduleKindAnchors
     self.dependencyNotes = dependencyNotes
+    self.deferred = deferred
   }
 }
 
@@ -695,6 +701,7 @@ extension ContextPack {
       contentsOf: try workerTail(
         claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
         moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    if let deferred = deferredSlice(inputs.deferred) { slices.append(deferred) }
     return ContextPack(role: .worker, slices: slices)
   }
 
@@ -961,6 +968,7 @@ extension ContextPack {
       contentsOf: try workerTail(
         claims: inputs.claims, citedClaimIDs: inputs.citedClaimIDs, standards: inputs.standards,
         moduleKindAnchors: inputs.moduleKindAnchors, dependencyNotes: inputs.dependencyNotes))
+    if let deferred = deferredSlice(inputs.deferred) { slices.append(deferred) }
     return ContextPack(role: .worker, slices: slices)
   }
 
