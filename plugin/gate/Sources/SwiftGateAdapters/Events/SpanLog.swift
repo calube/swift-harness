@@ -204,10 +204,29 @@ public struct SpanStoreIndex: Sendable {
   /// Records that `spanID` started in the store of the checkout at `root`, and drops entries
   /// older than ``retainedSeconds``. An entry that can't be written leaves the span to the
   /// directory its end runs from.
-  public func record(spanID: String, root: URL) {}
+  public func record(spanID: String, root: URL) {
+    guard SpanStartEvent.isValidID(spanID) else { return }
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try? Data(root.standardizedFileURL.path.utf8).write(
+      to: directory.appending(path: spanID), options: .atomic)
+    let names = (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []
+    let oldest = Date(timeIntervalSinceNow: -Self.retainedSeconds)
+    for name in names where name != spanID {
+      let file = directory.appending(path: name)
+      let modified =
+        (try? FileManager.default.attributesOfItem(atPath: file.path))?[.modificationDate]
+        as? Date
+      if let modified, modified < oldest { try? FileManager.default.removeItem(at: file) }
+    }
+  }
 
   /// The checkout whose store holds `spanID`'s start; `nil` when no entry names it.
   public func root(spanID: String) -> URL? {
-    nil
+    guard SpanStartEvent.isValidID(spanID),
+      let data = try? Data(contentsOf: directory.appending(path: spanID))
+    else { return nil }
+    let path = String(decoding: data, as: UTF8.self)
+    guard path.hasPrefix("/") else { return nil }
+    return URL(filePath: path, directoryHint: .isDirectory)
   }
 }

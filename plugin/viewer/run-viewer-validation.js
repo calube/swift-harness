@@ -6,7 +6,8 @@
 // unverified". A flow
 // lists its steps, each linked to the video at its offset, and links its contact sheet. A row
 // whose newest run isn't the pass to show also shows its last passing run's flow, labelled, and a
-// row whose flow a repair rewrote shows the repair's note. Each
+// row whose flow a repair rewrote shows the repair's note. The plan's reason-only requirements
+// list after the rows, each with its reason. Each
 // row lists its evidence; a report links only the files its folder holds and names the rest by
 // path. Nothing is embedded. Loaded after the core page as a classic script; it
 // adds its tab, gives the task popover each task's rows, and registers with the page.
@@ -24,7 +25,7 @@
   const panel = runViewer.addTab("validation", {
     label: "Validation",
     badges: (view) => M.validationBadges(view),
-    available: () => !!(current && current.validation && (current.validation.rows.length || (current.validation.keptFlows || []).length))
+    available: () => !!(current && current.validation && (current.validation.rows.length || (current.validation.keptFlows || []).length || (current.validation.reasonOnly || []).length))
   });
   mount = document.createElement("section");
   mount.className = "panel";
@@ -151,8 +152,11 @@
       return `<div class="qa-kept-group" data-flow="${esc(g.name == null ? "" : g.name)}"><h4 class="mono">${esc(title)}</h4><ul class="qa-rows">${flows.join("")}</ul></div>`;
     }).join("");
     const keptSection = kept ? `<section class="qa-group qa-kept" aria-label="Kept flows"><h3>Kept flows</h3>${kept}</section>` : "";
+    const reasons = (v.reasonOnly || []).map((r) => `<li class="qa-reason-only-row" data-requirement="${esc(r.requirement)}"><span class="chip plain">reason only</span>
+      <span class="qa-req mono">${esc(r.requirement)}</span><span class="sub">${r.reason != null ? esc(r.reason) : "reason not shown"}</span></li>`).join("");
+    const reasonSection = reasons ? `<section class="qa-group qa-reason-only" aria-label="Reason only"><h3>Reason only</h3><ul class="qa-rows">${reasons}</ul></section>` : "";
     mount.innerHTML = `<div class="head" style="justify-content:space-between"><h2>Validation</h2><span class="sub">plan <span class="mono">${esc(v.plan)}</span></span></div>
-      <div class="stats qa-strip" aria-label="Validation counts">${strip}</div>${groups}${keptSection}`;
+      <div class="stats qa-strip" aria-label="Validation counts">${strip}</div>${groups}${reasonSection}${keptSection}`;
   }
 
   // The rows a task's popover lists: each row that runs after it, with its Why button.

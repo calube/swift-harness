@@ -78,11 +78,15 @@ enum SpanRun {
     parent: String?, index: SpanStoreIndex = SpanStoreIndex()
   ) async -> Output {
     switch await BuildHaltRun.store(command: "events span start", directory: directory) {
-    case .refused(let output): output
+    case .refused(let output): return output
     case .found(let root, let enabled):
-      start(
+      let output = start(
         log: SpanLog(root: root), enabled: enabled, phase: phase, buildRun: buildRun, task: task,
         role: role, parent: parent)
+      if output.status == 0, !output.stdout.isEmpty {
+        index.record(spanID: output.stdout, root: root)
+      }
+      return output
     }
   }
 
@@ -92,7 +96,10 @@ enum SpanRun {
     in directory: String, spanID: String, outcome: String,
     index: SpanStoreIndex = SpanStoreIndex()
   ) async -> Output {
-    switch await BuildHaltRun.store(command: "events span end", directory: directory) {
+    let indexed = index.root(spanID: spanID).map(\.path)
+    let started =
+      indexed.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil } ?? directory
+    return switch await BuildHaltRun.store(command: "events span end", directory: started) {
     case .refused(let output): output
     case .found(let root, let enabled):
       end(log: SpanLog(root: root), enabled: enabled, spanID: spanID, outcome: outcome)
@@ -178,7 +185,9 @@ struct EventsSpanEndCommand: AsyncParsableCommand {
     commandName: "end",
     abstract: "Record a span's end.",
     discussion:
-      "Reads the span's span.start from the main checkout's span stream and writes span.end "
+      "Reads the span's span.start from the span stream of the main checkout `events span "
+      + "start` recorded it in, whichever directory this runs from, else of this repository's, "
+      + "and writes span.end "
       + "with that start as its parent and ms from its time to now. Exit 0 recorded, or nothing "
       + "to record with [telemetry] enabled = false; 1 when no start has the id or the span "
       + "already ended, writing nothing; 2 for an id that isn't a span id, an outcome outside "
