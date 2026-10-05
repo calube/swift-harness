@@ -4383,6 +4383,56 @@ for f in "$P"/906f7d75-4c8b-4434-bedd-0e8173d509ba/workflows/wf_*.json; do
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` matched nothing in either folder.
 
+## Brownfield trial: send-money-6's final rows over a carried branch
+
+The sixth send-money trial's cutoff abandoned account-client, then merged amount-feature's fix
+branch, which had taken account-client's branch in for a RED run over both, so account-client's
+commit landed anyway. `qa run --final` still read every flow row `abandoned` and ran none, though the
+fixer's run `20261005T095459Z-322909d3` had passed 4 of the 5 on a trial merge whose tree is the
+final commit's tree. The fixers wrote `qa run --json … 2>&1` into a file that then didn't parse, and
+the flow-repair agent wrapped its `qa run` in `timeout 160`. `T` is the trial's folder under the
+practice-trial runs, holding the clone's state as `state/`, and the transcripts:
+
+```sh
+T=<send-money-6 run folder> S=$T/state F=BrownfieldTrial R=<the trial's practice folder>
+cp $S/plans/spec/validation.json $F/send-money-6-validation.json
+sed "s#$R#/REPO#g" $S/plans/spec/ledger.json > $F/send-money-6-ledger.json
+cp $S/plans/spec/build/20261005T093334Z-df9989d6/events.jsonl $F/send-money-6-build-events.jsonl
+mkdir -p $F/send-money-6-qa
+cp $S/plans/spec/qa/{keypad,continue-rule,send-success,send-failure,contact-search}.flow.json $F/send-money-6-qa/
+cp $S/runs/20261005T095459Z-322909d3/qa/merged-tree-run.json $F/send-money-6-merged-tree-run-fixer.json
+cp $S/runs/20261005T095459Z-322909d3/qa/report.json $F/send-money-6-qa-fixer-before-merge.json
+cp $S/runs/20261005T100135Z-b753ffc4/qa/report.json $F/send-money-6-qa-final.json
+cp $S/runs/20261005T094736Z-1149c44c/qa/report.json $F/send-money-6-qa-combined-before-merge.json
+(cd <the trial's repo> && git diff --name-only 879ea73^ 879ea73) > $F/send-money-6-fix-account-client-files.txt
+python3 - $T/transcripts/<session>/subagents/*.jsonl > Hooks/send-money-6-qa-run-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/send-money-6/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-send-money-6','/HARNESS',c)
+out=[]
+for path in sys.argv[1:]:
+    for l in open(path):
+        c=json.loads(l).get('message',{}).get('content')
+        if not isinstance(c,list): continue
+        for b in c:
+            if b.get('type')!='tool_use': continue
+            cmd=b.get('input',{}).get('command','')
+            if 'qa run' in cmd and ('timeout ' in cmd or '2>&1' in cmd) and 'swiftgate qa run' in cmd:
+                out.append({'command':scrub(cmd)})
+json.dump(out,sys.stdout,indent=2); print()
+PY
+```
+
+The plan's `qa/` flows are the ones adopted at the end: the contact-search flow was repaired after
+the fixer's run, so only its digest differs from the merged-tree record's. The tests rebuild the
+trial's branch shape in a throwaway repository and write the merged-tree record with its `tree` set
+to that repository's final tree, the one field a trial tree can't carry over.
+`send-money-6-fix-account-client-files.txt` is the file account-client's fixer changed, the
+contacts screen contacts-feature had merged, after the combined run over account-client and
+amount-feature was RED.
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
+
 ## Brownfield trial: send-money-6's set-aside config, combined red run and placeholder return
 
 The sixth send-money trial (2026-10-05) reported its committed `.swiftgate.toml` as unchanged,

@@ -192,10 +192,12 @@ public enum CutoffQA: Sendable, Equatable {
   ///   - reports: the plan's `qa run --before-merge` reports that merged `task`'s branch, first or
   ///     alongside another.
   ///   - latestCheck: the build run's newest `build check-return` of the task or its fixer.
+  ///   - carried: the other tasks' unmerged branches `branch` holds, each at its tip: a fixer's
+  ///     branch took them in, so they land with it.
   public static func of(
     table: ValidationTable, merged: Set<String>, plan: String, task: String,
     reports: [QAReport], branch: String, tip: String, base: String,
-    latestCheck: BuildEvent.ReturnCheck?
+    latestCheck: BuildEvent.ReturnCheck?, carried: [QATrialMerge.Branch] = []
   ) -> CutoffQA {
     let own = reports.filter { report in
       report.after == task || report.trialMerge?.alongside.contains { $0.task == task } == true
@@ -209,7 +211,7 @@ public enum CutoffQA: Sendable, Equatable {
     }
     switch QAMergeReadiness.of(
       table: table, merged: merged, plan: plan, task: task, reports: own, branch: branch,
-      tip: tip, base: base)
+      tip: tip, base: base, waiting: carried)
     {
     case .notNeeded: return .notNeeded
     case .checked(let runID): return .green(runID: runID)

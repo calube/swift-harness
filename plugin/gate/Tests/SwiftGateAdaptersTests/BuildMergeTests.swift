@@ -1214,7 +1214,7 @@ struct BuildMergeFlowsTests {
   }
 
   @Test(
-    "t1's merge waits flows-pending while t2's worker has a GREEN gate at t2's tip on a clean tree 56 s ago and no checked return, and once t2's return is checked it needs the run over both — catches a task merged alone a minute before its rows could run on 1 trial merge"
+    "t1's merge is deferred flows-pending, not refused, while t2's worker has a GREEN gate at t2's tip on a clean tree 56 s ago and no checked return: GREEN with a wait action until 300 s after that gate, and once t2's return is checked it needs the run over both — catches a task merged alone a minute before its rows could run on 1 trial merge, and a wait read as a red merge"
   )
   func mergeWaitsForAReturnOnItsWay() async throws {
     let scenario = try await MergeScenario()
@@ -1245,8 +1245,11 @@ struct BuildMergeFlowsTests {
     try await scenario.check("t2", verdict: .green, commit: t2)
     let checked = await scenario.merge("t1")
 
-    #expect(pending.status == .refused, "\(pending.message)")
+    #expect(pending.status == .deferred, "\(pending.message)")
+    #expect(pending.verdict == .green)
     #expect(pending.reason == .flowsPending)
+    #expect(pending.action == .wait)
+    #expect(pending.waitUntil == MergeScenario.at.addingTimeInterval(300 - 56).formatted(.iso8601))
     #expect(pending.message.contains("t2"), "\(pending.message)")
     #expect(pending.fixBranch == nil)
     #expect(checked.reason == .flowsUnchecked, "\(checked.message)")
@@ -1283,6 +1286,67 @@ struct BuildMergeFlowsTests {
     #expect(carried.message.contains("t2"), "\(carried.message)")
     #expect(other.status == .merged, "\(other.message)")
     #expect(again.reason != .fixCarriesUnmerged, "\(again.message)")
+  }
+
+  @Test(
+    "once t2 is abandoned, t1's fix that carries t2's branch needs a GREEN run over both before it merges, and its merge marks t2 merged in the event and done in the ledger — catches a carried task's code landing while its rows read abandoned and its merge goes unchecked"
+  )
+  func fixCarryingAnAbandonedTaskLandsIt() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    let t1 = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let t2 = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: t2)
+    let pre = try await scenario.main()
+    try Self.combinedReport(
+      scenario, runID: "20261005T080814Z-ffc2a55e", tips: (t1, t2), base: pre, red: true)
+    _ = await scenario.merge("t1")
+    let fixTip = try await scenario.commitFix("t1")
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    try await LedgerWriter(plan: plan).update(task: "t2", .status(.abandoned))
+
+    let unchecked = await scenario.merge("t1", fix: true)
+    try Self.fixReport(
+      scenario, runID: "20261005T095459Z-322909d3", fixTip: fixTip, t2: t2, base: pre)
+    let landed = await scenario.merge("t1", fix: true)
+
+    #expect(unchecked.reason == .flowsUnchecked, "\(unchecked.message)")
+    #expect(unchecked.message.contains("t2"), "\(unchecked.message)")
+    #expect(landed.status == .merged, "\(landed.message)")
+    #expect(landed.carried == ["t2"])
+    #expect(try scenario.merges().last?.carried == ["t2"])
+    #expect(try scenario.run.events().mergeStage(task: "t2") == .merged)
+    let ledger = try PlanStateStore(plan: plan).ledger()
+    #expect(ledger.tasks.first { $0.id == "t2" }?.status == .done)
+  }
+
+  /// Writes a GREEN `qa run --before-merge --fix` report of `search/fix-t1` at `fixTip` with
+  /// `search/t2` alongside at `t2`, on `base`.
+  fileprivate static func fixReport(
+    _ scenario: MergeScenario, runID: String, fixTip: String, t2: String, base: String
+  ) throws {
+    let captured = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-6-qa-fixer-before-merge.json"))
+    let row = try #require(captured.rows.first { $0.result == .pass })
+    let report = QAReport(
+      runID: runID, plan: MergeScenario.plan, after: "t1", atBase: false, commit: nil,
+      rows: [
+        QARow(
+          row: 1, requirement: row.requirement, layer: row.layer, check: row.check,
+          runsAfter: ["t1", "t2"], result: row.result, message: row.message,
+          evidence: row.evidence)
+      ],
+      trialMerge: QATrialMerge(
+        branch: "\(MergeScenario.plan)/fix-t1", tip: fixTip, base: base,
+        alongside: [
+          QATrialMerge.Branch(task: "t2", branch: "\(MergeScenario.plan)/t2", tip: t2)
+        ]))
+    let directory = try RunStore(worktreeRoot: scenario.checkout).runDirectory(for: runID)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
   }
 
   @Test(

@@ -550,10 +550,29 @@ enum BuildCheckReturnRun {
         else { continue }
         writeSet += other.writeSet
       }
+      writeSet += redRowOwners(task, ledger: ledger, slug: slug, common: common, profile: profile)
+        .flatMap(\.writeSet)
     } catch {
       throw Blocked("reading the task branches the fix branch holds: \(error)")
     }
     return writeSet
+  }
+
+  /// The tasks whose write sets `task`'s fixer may edit by the plan's recorded runs: those its
+  /// red before-merge runs took in and the merged owners of their red rows, whether or not
+  /// their branches still exist (``FixerWriteSet``).
+  private static func redRowOwners(
+    _ task: LedgerTask, ledger: Ledger, slug: String, common: String,
+    profile: RepositoryProfile
+  ) -> [LedgerTask] {
+    guard
+      let main = try? TaskWorktree(
+        commonDirectory: common, plan: slug, task: task.id, profile: profile
+      ).mainCheckout
+    else { return [] }
+    let reports = QARunHistory.beforeMergeReports(
+      worktree: URL(filePath: main, directoryHint: .isDirectory), plan: slug)
+    return FixerWriteSet.credited(task: task.id, tasks: ledger.tasks, reports: reports)
   }
 
   /// Files the task branch changed since it forked from `baseBranch`, the branch tasks merge into:

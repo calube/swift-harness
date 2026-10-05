@@ -1,0 +1,191 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 7 tasks in 4 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-account-fake"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 400,
+      "gate" : "slice",
+      "id" : "spec-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-spec-contract",
+      "writeSet" : [
+        ".swiftgate.toml",
+        "App/InterviewStarterApp.swift",
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/AccountClient/AccountClient.swift",
+        "Packages/AppFeature/Tests/AccountClientTests/AccountClientTests.swift",
+        "Packages/AppFeature/Sources/AppCore/HarnessScenario.swift"
+      ]
+    },
+    {
+      "branch" : "spec/account-client",
+      "covers" : [
+        "req-account-fake",
+        "req-decimal-money"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "account-client",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-account-client",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AccountClient/",
+        "Packages/AppFeature/Tests/AccountClientTests/"
+      ]
+    },
+    {
+      "branch" : "spec/amount-input",
+      "covers" : [
+        "req-keypad-input",
+        "req-continue-rule",
+        "req-amount-unit-tests",
+        "req-decimal-money"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 160,
+      "gate" : "slice",
+      "id" : "amount-input",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-amount-input",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/contacts-feature",
+      "covers" : [
+        "req-contact-search"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 140,
+      "gate" : "slice",
+      "id" : "contacts-feature",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-contacts-feature",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/ContactsFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/ContactsView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ContactsFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/amount-feature",
+      "covers" : [
+        "req-keypad-input",
+        "req-continue-rule"
+      ],
+      "deps" : [
+        "spec-contract",
+        "amount-input"
+      ],
+      "estLines" : 160,
+      "gate" : "slice",
+      "id" : "amount-feature",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-amount-feature",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/AmountView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AmountFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/send-flow",
+      "covers" : [
+        "req-send-success",
+        "req-send-failure",
+        "req-existing-tests"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "send-flow",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-send-flow",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/ConfirmFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/ConfirmView.swift",
+        "Packages/AppFeature/Sources/AppUI/AppView.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ConfirmFeatureTests.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/SendFlowTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-contact-search",
+        "req-keypad-input",
+        "req-continue-rule",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "spec-contract"
+      ],
+      "estLines" : 80,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/REPO/repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "spec-contract"
+    ],
+    [
+      "account-client",
+      "amount-input",
+      "contacts-feature"
+    ],
+    [
+      "send-flow",
+      "spec-validation"
+    ],
+    [
+      "amount-feature"
+    ]
+  ]
+}

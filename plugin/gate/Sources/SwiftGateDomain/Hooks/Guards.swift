@@ -35,6 +35,7 @@ public enum BashGuard {
   public static let bareStdinReaderRuleID = "guard.bare-stdin-reader"
   public static let processMatchWaitRuleID = "guard.process-match-wait"
   public static let qaRunTruncatedRuleID = "guard.qa-run-truncated"
+  public static let qaRunTimeoutRuleID = "guard.qa-run-timeout"
 
   /// - Parameter inSubagent: whether a subagent runs the command. Waiting on `pgrep` is denied
   ///   only there: a background agent improvises the wait, while a main session's documented
@@ -44,7 +45,42 @@ public enum BashGuard {
       if let violation = evaluate(simple) { return violation }
     }
     return processMatchWait(command, inSubagent: inSubagent) ?? bareListing(command)
-      ?? truncatedQARun(command)
+      ?? truncatedQARun(command) ?? timedQARun(command)
+  }
+
+  /// A `swiftgate qa run` started under `timeout` or `gtimeout`. A kill leaves no report, and
+  /// the device wait inside the run is what runs long, so the run's own `--deadline` bounds it
+  /// instead and still writes the rows it reached.
+  private static func timedQARun(_ command: String) -> GuardViolation? {
+    var programs: Set<String> = []
+    for parsed in ShellSyntax.parse(command) where !parsed.isHeredocBody {
+      let simple = parsed.command
+      programs.formUnion(GateOutputGuard.programVariables(simple))
+      guard let name = simple.name else { continue }
+      var words = [name] + simple.arguments
+      if ShellSyntax.basename(name) == "env" {
+        words = Array(words.dropFirst().drop { $0.hasPrefix("-") || $0.contains("=") })
+      }
+      guard let first = words.first, ["timeout", "gtimeout"].contains(ShellSyntax.basename(first))
+      else { continue }
+      let wrapped = words.indices.dropFirst().contains { index in
+        let word = words[index]
+        let isSwiftgate =
+          GateOutputGuard.isProgram(word, variables: programs)
+          || GateOutputGuard.isProgram(ShellSyntax.basename(word), variables: programs)
+        return isSwiftgate && Array(words[(index + 1)...]).starts(with: ["qa", "run"])
+      }
+      guard wrapped else { continue }
+      return GuardViolation(
+        ruleID: qaRunTimeoutRuleID,
+        reason:
+          "`\(first)` kills `swiftgate qa run` with no report: the rows it reached, and why the "
+          + "rest didn't run, are lost, and most of a run's wait is for the shared device. Give "
+          + "the run its own bound instead, `--deadline <seconds|ISO 8601 time>`, which ends the "
+          + "device wait and the rows by then and still writes the report, and send its JSON to "
+          + "a file with `--output <path>`.")
+    }
+    return nil
   }
 
   /// A `swiftgate qa run` whose output reaches `head` or `tail` through a pipe. The report's rows

@@ -200,12 +200,18 @@ public enum BuildEvent: Sendable, Equatable {
     public let preCommit: String
     public let postCommit: String
     public let at: Date
+    /// The other tasks whose unmerged branches this merge landed: a fixer's branch that took
+    /// them in for a RED run over them all. Each counts as merged by this merge.
+    public let carried: [String]
 
-    public init(task: String, preCommit: String, postCommit: String, at: Date) {
+    public init(
+      task: String, preCommit: String, postCommit: String, at: Date, carried: [String] = []
+    ) {
       self.task = task
       self.preCommit = preCommit
       self.postCommit = postCommit
       self.at = at
+      self.carried = carried
     }
   }
 
@@ -333,7 +339,7 @@ public enum BuildEvent: Sendable, Equatable {
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
-    case fix, commit, rules, qaRun, validation, outcome
+    case fix, commit, rules, qaRun, validation, outcome, carried
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -356,7 +362,8 @@ extension BuildEvent: Codable {
       self = .merge(
         Merge(
           task: try task(), preCommit: try container.decode(String.self, forKey: .preCommit),
-          postCommit: try container.decode(String.self, forKey: .postCommit), at: at))
+          postCommit: try container.decode(String.self, forKey: .postCommit), at: at,
+          carried: try container.decodeIfPresent([String].self, forKey: .carried) ?? []))
     case .undo:
       self = .undo(
         Undo(
@@ -404,6 +411,7 @@ extension BuildEvent: Codable {
       try container.encode(merge.preCommit, forKey: .preCommit)
       try container.encode(merge.postCommit, forKey: .postCommit)
       try container.encode(merge.at, forKey: .at)
+      if !merge.carried.isEmpty { try container.encode(merge.carried, forKey: .carried) }
     case .undo(let undo):
       try container.encode(undo.task, forKey: .task)
       try container.encode(undo.fromCommit, forKey: .fromCommit)
@@ -473,12 +481,17 @@ public struct BuildEventLog: Sendable, Equatable {
   /// later merge of the same task puts it back at the end.
   public var mergedTasks: [String] {
     var tasks: [String] = []
+    var carriedBy: [String: [String]] = [:]
     for event in events {
       switch event {
       case .merge(let merge):
-        tasks.removeAll { $0 == merge.task }
-        tasks.append(merge.task)
-      case .undo(let undo): tasks.removeAll { $0 == undo.task }
+        let landed = [merge.task] + merge.carried
+        tasks.removeAll { landed.contains($0) }
+        tasks += landed
+        carriedBy[merge.task] = merge.carried
+      case .undo(let undo):
+        let gone = [undo.task] + (carriedBy[undo.task] ?? [])
+        tasks.removeAll { gone.contains($0) }
       case .transition, .gate, .returnCheck, .finish: continue
       }
     }
@@ -503,12 +516,18 @@ public struct BuildEventLog: Sendable, Equatable {
   /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
   public func mergeStage(task: String) -> CutoffTaskStage? {
     var stage: CutoffTaskStage?
+    // The task whose merge put this one on `main`: itself, or the fix that carried it.
+    var landedBy = task
     for event in events {
       switch event {
-      case .merge(let merge) where merge.task == task: stage = .merged
-      case .undo(let undo) where undo.task == task: stage = nil
+      case .merge(let merge) where merge.task == task || merge.carried.contains(task):
+        stage = .merged
+        landedBy = merge.task
+      case .undo(let undo) where undo.task == landedBy: stage = nil
       case .gate(let gate):
-        guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
+        guard case .merge(let gated) = gate.stage, gated == landedBy, stage != nil else {
+          continue
+        }
         stage = gate.verdict == .green ? .landed : .merged
       case .merge, .undo, .transition, .returnCheck, .finish: continue
       }

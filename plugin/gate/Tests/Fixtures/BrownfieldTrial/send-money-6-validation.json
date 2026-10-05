@@ -1,0 +1,82 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-contact-search",
+      "runsAfter" : [
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/keypad.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-keypad-input",
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/continue-rule.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-continue-rule",
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-success",
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure",
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the fake's balance, contacts and failing send are unit-tested in AccountClientTests; no screen task covers it",
+      "requirement" : "req-account-fake"
+    },
+    {
+      "reason" : "a type property: AccountClient and AmountInput declare money as Decimal, which the compiler holds; no screen task covers it",
+      "requirement" : "req-decimal-money"
+    },
+    {
+      "reason" : "the requirement is the unit tests themselves, in amount-input's AmountInputTests",
+      "requirement" : "req-amount-unit-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

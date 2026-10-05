@@ -33,7 +33,8 @@ validation.json (simulator QA amendment §6, §6.2). Without `--plan` it takes t
 validation.json: none is GREEN with a note, several exit 2. A row runs once each `Runs after`
 task merged, per the ledger or build events, `--after` counting as merged and keeping only its
 rows. A row with an unmerged task reads `waiting`; once the build ended (`--final`, or a `final`
-gate after the last merge) `abandoned` if its task was, else `unverified`.
+gate after the last merge) `abandoned` if its task's commits never landed, else `unverified`
+([run bounds](simulator-qa-run-bounds.md)).
 
 Rows run in the checkout in layer order: acceptance, flow, state. A red row
 leaves only its own requirement's later-layer rows `unverified`. A requirement's state rows run straight after

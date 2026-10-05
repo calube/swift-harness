@@ -1,0 +1,11 @@
+[
+  {
+    "command": "cd /CLONE-spec.slot-3 && timeout 160 /HARNESS/plugin/bin/swiftgate qa run --plan spec --at-base --prepared-by spec-validation --requirement req-contact-search --json; echo EXIT $?; date -u +%T"
+  },
+  {
+    "command": "cd /CLONE-spec.slot-3 && /HARNESS/plugin/bin/swiftgate qa run --plan spec --after account-client --before-merge --fix --json > .harness/tmp/qa-account-client.json 2>&1; python3 -c \"\nimport json;d=json.load(open('.harness/tmp/qa-account-client.json'));print(d.get('runId') or d.get('runID'), json.dumps(d.get('summary')))\nfor r in d.get('rows',[]):\n  if r.get('status') not in ('pass','green','GREEN','PASS'): print(json.dumps(r)[:600])\"; date -u"
+  },
+  {
+    "command": "cd /CLONE-spec.slot-2 && mkdir -p .harness/tmp && /HARNESS/plugin/bin/swiftgate qa run --plan spec --after amount-feature,account-client --before-merge --fix --json > .harness/tmp/qa-amount-feature.json 2>&1; echo $?; date -u"
+  }
+]

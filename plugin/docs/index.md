@@ -15,6 +15,7 @@ into a committed file.
 | Reading what the harness records locally (`swiftgate events`, `build halt\|resume`), or opting out | [`telemetry.md`](telemetry.md) |
 | Checking flow files with `swiftgate qa lint`, or running a plan's validation rows with `qa run` and `qa adopt` | [`simulator-qa.md`](simulator-qa.md) |
 | How `qa run` runs a `test:` row, once per check on a leased clone, and reads a runner that never launched | [`simulator-qa-test-rows.md`](simulator-qa-test-rows.md) |
+| Bounding a `qa run` with `--deadline`, sending its JSON with `--output`, and which rows the final run takes after a fix carried another task | [`simulator-qa-run-bounds.md`](simulator-qa-run-bounds.md) |
 | Proving validation rows red with `qa run --at-base`, a validation worker's `--prepared-by` run, the rows a later run reuses, and a task's rows before it merges | [`simulator-qa-at-base.md`](simulator-qa-at-base.md) |
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
 | Writing a flow step for a gesture a selector alone doesn't drive, such as pull to refresh | [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md) |

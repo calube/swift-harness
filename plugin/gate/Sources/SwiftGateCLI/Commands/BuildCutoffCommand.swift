@@ -237,9 +237,20 @@ enum BuildCutoffRun {
     }
     let merged = LedgerProgress(tasks: ledger.tasks.map { .init(id: $0.id, status: $0.status) })
       .merged(per: log)
+    var carried: [QATrialMerge.Branch] = []
+    if fix, let tip, let base {
+      for other in ledger.tasks where other.id != task && !merged.contains(other.id) {
+        let branch = "\(slug)/\(other.id)"
+        guard let otherTip = try? await git.revision("refs/heads/\(branch)"),
+          (try? await git.isAncestor(otherTip, of: tip)) == true,
+          (try? await git.isAncestor(otherTip, of: base)) == false
+        else { continue }
+        carried.append(QATrialMerge.Branch(task: other.id, branch: branch, tip: otherTip))
+      }
+    }
     return CutoffQA.of(
       table: table, merged: merged, plan: slug, task: task, reports: reports, branch: branch,
-      tip: tip ?? "", base: base ?? "", latestCheck: latest)
+      tip: tip ?? "", base: base ?? "", latestCheck: latest, carried: carried)
   }
 
   /// Whether the run holds a checked `ready-to-merge` return for `task`.
