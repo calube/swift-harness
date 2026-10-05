@@ -3462,3 +3462,82 @@ git -C $TRIALS/send-money-2/repo show \
 `app-core-slice-gate.jsonl` is the slice run the return cites: its `gate.step`s build `AppFeature`
 and `InterviewStarter` and test neither, each labelled `derivedData: "none"`.
 `grep -rniE '/Users|/private|/var/folders|caleb'` over these files matched nothing.
+
+## Brownfield trial: an area test step's reports
+
+`BrownfieldTrial/send-money-2-junit/` holds the `{junit}` reports the second send-money trial's
+`APIClient` package area left in the clone's state, written by its test command `swift test
+--xunit-output {junit}` during the run's warm-up: `APIClient.test.xml` is XCTest's, with no case,
+and `APIClient.test-swift-testing.xml` is Swift Testing's companion, with 7 passing cases. Every
+gate `report.json` of that run had `testCounts: null`, so how many tests an area ran was lost once
+a later step overwrote these files. `S` is the clone's state under its git common dir. From the
+repository root:
+
+```sh
+S=<clone>/.git/swift-harness F=plugin/gate/Tests/Fixtures/BrownfieldTrial/send-money-2-junit
+mkdir -p $F
+cp $S/junit/APIClient.test.xml $S/junit/APIClient.test-swift-testing.xml $F/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the 2 files matched nothing.
+
+## Brownfield trial: a network-fed app excused from flows
+
+The first price-tracker trial ran `swiftgate run start spec.md` on the iOS app starter, whose 1
+`xcode` area is rooted at `.` and whose `Packages/APIClient` is a `@Dependency` client.
+`BrownfieldTrial/price-tracker-1-PLAN.md` is its `PLAN.md` at the run's end. Its 2 flow rows hit
+the live API, `req-load-states` and `req-chart-states` are excused with `network:`, and
+`req-refresh`, covered only by the reducer task `app-core`, imported with a reason naming no
+obstacle. `price-tracker-1-config.toml` is the clone's `config.toml`, and
+`price-tracker-1-plan.json` and `price-tracker-1-validation.json` are what `plan import` wrote from
+that plan. `price-tracker-1-base-files.txt` lists the files tracked at the run's base commit. `S`
+is the clone. From the repository root:
+
+```sh
+S=<clone> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/.git/swift-harness/plans/spec/PLAN.md $F/price-tracker-1-PLAN.md
+cp $S/.git/swift-harness/plans/spec/plan.json $F/price-tracker-1-plan.json
+cp $S/.git/swift-harness/plans/spec/validation.json $F/price-tracker-1-validation.json
+cp $S/.git/swift-harness/config.toml $F/price-tracker-1-config.toml
+git -C $S ls-tree -r --name-only fe7f9f7b7802d43ba8990d2582d5e50f96c6e1dd \
+  > $F/price-tracker-1-base-files.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
+
+## Brownfield trial: a re-import after the contract landed
+
+The second send-money trial imported its plan with `--contract send-money-contract`, then
+re-imported it without the flag to add an assumption. That re-import linted the done contract as a
+screen task, since it writes `UITests/LaunchFlowUITests.swift`.
+`BrownfieldTrial/send-money-2-reimport-PLAN.md` is the plan that re-import read: the plan the
+orchestrator's transcript wrote with a heredoc, with the assumption its next call inserted.
+`send-money-2-contract-return.json` is the return the first import wrote for the landed contract,
+and `send-money-2-config.toml` the clone's `config.toml`. `T` is the orchestrator's transcript and
+`S` the clone's state. From the repository root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+python3 - "$T" > $F/send-money-2-reimport-PLAN.md <<'PY'
+import json, sys
+calls = []
+for line in open(sys.argv[1]):
+    entry = json.loads(line)
+    content = entry.get('message', {}).get('content')
+    if isinstance(content, list):
+        calls += [(entry['timestamp'], c['input']['command']) for c in content
+                  if c.get('type') == 'tool_use' and c['name'] == 'Bash']
+first = dict(calls)['2026-10-05T02:52:02.253Z']
+start = first.index("PLAN.md <<'EOF'\n") + len("PLAN.md <<'EOF'\n")
+plan = first[start:first.index("\nEOF\n", start)] + "\n"
+added = ("- The 3 running tasks all appear in a validation row's Runs after, so none may merge "
+         "before the at-base qa run, and build next offered no slot for spec-validation while "
+         "they held all 3: spec-validation started outside build next, with worktree create and "
+         "ledger set, to break that wait.\n")
+sys.stdout.write(plan.replace("- Currency formatting uses", added + "- Currency formatting uses"))
+PY
+cp $S/config.toml $F/send-money-2-config.toml
+cp $S/plans/spec/returns/send-money-contract.json $F/send-money-2-contract-return.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.

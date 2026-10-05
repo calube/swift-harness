@@ -38,6 +38,8 @@ enum BrownfieldSliceCheck {
       @Sendable (_ candidate: AssertionCandidate, _ source: String) async -> AssertionJudgement
     /// Per command run.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
 
     /// A selected test run that fits the budget warm still gets room on a cold store.
     static let liveDeadline: Duration = .seconds(600)
@@ -623,6 +625,9 @@ enum BrownfieldSliceCheck {
     let head = atHead(request(root), dependencies)
     let derivedData = Self.derivedData(head, kind: area.kind, dependencies)
     let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(head) }
+    if let counts = await dependencies.testCounts.counts(of: head) {
+      context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
+    }
     context.steps.record(
       .areaTest, tier: nil, milliseconds: milliseconds,
       verdict: outcome == .passed ? .green : .red, derivedData: derivedData, area: area.name)

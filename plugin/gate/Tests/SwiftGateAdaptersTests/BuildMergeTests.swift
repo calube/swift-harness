@@ -537,6 +537,82 @@ struct BuildMergeTests {
   }
 
   @Test(
+    "undoing a merged fix while its fix worktree still stands removes that worktree itself, keeps the fixer's commit on search/fix-t1-1 and cuts a fresh fix worktree — catches an undo that refuses until the worktree goes, then loses the fixer's work"
+  )
+  func undoAfterFixMergeKeepsTheFixBranch() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    #expect(await scenario.merge("t1").status == .merged)
+    #expect(await scenario.undo("t1").status == .undone)
+    let fixTip = try await scenario.commitFix("t1")
+    #expect(await scenario.merge("t1", fix: true).status == .merged)
+
+    let report = await scenario.undo("t1")
+
+    #expect(report.status == .undone, "\(report.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(report.keptBranches == ["search/fix-t1-1"])
+    #expect(try await scenario.repo.git("rev-parse", "search/fix-t1-1") == fixTip)
+    #expect(report.message.contains("search/fix-t1-1"), "\(report.message)")
+    #expect(report.fixWorktree == scenario.fixPath("t1"))
+    #expect(
+      try await scenario.repo.git("rev-parse", "search/fix-t1^1", "search/fix-t1^2")
+        == "\(pre)\n\(tip)")
+    #expect(!FileManager.default.fileExists(atPath: scenario.fixPath("t1") + "/Fixed.swift"))
+  }
+
+  @Test(
+    "undoing a merged fix after its worktree and branch were removed, as worktree remove --fix does once the fix is merged, puts the fixer's commit back on search/fix-t1-1 — catches the trial's fixer commit left on no branch"
+  )
+  func undoAfterRemovedFixKeepsItsCommit() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    #expect(await scenario.merge("t1").status == .merged)
+    #expect(await scenario.undo("t1").status == .undone)
+    let fixTip = try await scenario.commitFix("t1")
+    #expect(await scenario.merge("t1", fix: true).status == .merged)
+    try await scenario.repo.git("worktree", "remove", scenario.fixPath("t1"))
+    try await scenario.repo.git("branch", "-D", "search/fix-t1")
+
+    let report = await scenario.undo("t1")
+
+    #expect(report.status == .undone, "\(report.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(report.keptBranches == ["search/fix-t1-1"])
+    #expect(try await scenario.repo.git("rev-parse", "search/fix-t1-1") == fixTip)
+    #expect(
+      try await scenario.repo.git("branch", "--list", "--contains", fixTip, "--format=%(refname)")
+        == "refs/heads/search/fix-t1-1")
+  }
+
+  @Test(
+    "undo with uncommitted changes in the standing fix worktree blocks before main moves and leaves the worktree and its changes — catches a fixer's unsaved edits deleted by the undo"
+  )
+  func undoWithADirtyFixWorktreeBlocks() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    #expect(await scenario.merge("t1").status == .merged)
+    #expect(await scenario.undo("t1").status == .undone)
+    _ = try await scenario.commitFix("t1")
+    let fixed = await scenario.merge("t1", fix: true)
+    #expect(fixed.status == .merged)
+    try Data("unsaved\n".utf8).write(to: URL(filePath: scenario.fixPath("t1") + "/Fixed.swift"))
+
+    let report = await scenario.undo("t1")
+
+    #expect(report.status == .blocked, "\(report.message)")
+    #expect(report.message.contains("uncommitted changes in Fixed.swift"), "\(report.message)")
+    #expect(try await scenario.main() == fixed.postCommit)
+    #expect(try await scenario.status(in: scenario.fixPath("t1")) == " M Fixed.swift\n")
+    #expect(try await scenario.repo.git("branch", "--list", "search/fix-t1-*") == "")
+  }
+
+  @Test(
     "after an undo, a merge without --fix checks main against the undo's toCommit: at it merges, moved past it refuses — catches the undo's reset read as another session's merge, or not checked at all"
   )
   func mergeAfterUndoChecksToCommit() async throws {

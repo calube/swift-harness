@@ -91,14 +91,18 @@ public struct RecordedRunReport: Sendable, Equatable {
   public let report: RunReport
   /// `nil` when the checkout had no commit to name, or the report predates the key.
   public let headCommit: String?
+  /// Each area test step's totals, by area then step; empty for a run that read none, and then
+  /// left out of the file.
+  public let areaTests: [AreaTestCounts]
 
-  public init(report: RunReport, headCommit: String?) {
+  public init(report: RunReport, headCommit: String?, areaTests: [AreaTestCounts] = []) {
     self.report = report
     self.headCommit = headCommit
+    self.areaTests = areaTests
   }
 
   private enum CodingKeys: String, CodingKey {
-    case headCommit
+    case headCommit, areaTests
   }
 
   /// The same byte-stable formatting as ``RunReportJSON``.
@@ -116,8 +120,9 @@ public struct RecordedRunReport: Sendable, Equatable {
 extension RecordedRunReport: Codable {
   public init(from decoder: any Decoder) throws {
     report = try RunReport(from: decoder)
-    headCommit = try decoder.container(keyedBy: CodingKeys.self)
-      .decodeIfPresent(String.self, forKey: .headCommit)
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    headCommit = try c.decodeIfPresent(String.self, forKey: .headCommit)
+    areaTests = try c.decodeIfPresent([AreaTestCounts].self, forKey: .areaTests) ?? []
   }
 
   /// Both write into the one top-level object, so the report's own keys stay where they were.
@@ -125,6 +130,7 @@ extension RecordedRunReport: Codable {
     try report.encode(to: encoder)
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encodeIfPresent(headCommit, forKey: .headCommit)
+    if !areaTests.isEmpty { try c.encode(areaTests, forKey: .areaTests) }
   }
 }
 

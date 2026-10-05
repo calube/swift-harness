@@ -1,0 +1,49 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist",
+      "runsAfter" : [
+        "launch-wiring"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail",
+      "runsAfter" : [
+        "launch-wiring"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "network: the simulator can't take its host's network down and bring it back mid-flow; WatchlistFeature unit tests prove the spinner, error and retry",
+      "requirement" : "req-load-states"
+    },
+    {
+      "reason" : "WatchlistFeature unit tests with a controlled date prove refresh and last updated",
+      "requirement" : "req-refresh"
+    },
+    {
+      "reason" : "network: a flow can't make only the chart request fail; AssetDetailFeature unit tests prove it",
+      "requirement" : "req-chart-states"
+    },
+    {
+      "reason" : "system: cancellation isn't visible in the running app; an AssetDetail/Watchlist unit test proves the effect is cancelled on dismiss",
+      "requirement" : "req-chart-cancel"
+    },
+    {
+      "reason" : "APIClientLive unit tests over recorded fixtures prove it",
+      "requirement" : "req-client"
+    },
+    {
+      "reason" : "the final gate runs every area's existing tests",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

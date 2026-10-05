@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+  <testsuite name="TestResults" errors="0" tests="7" failures="0" skipped="0" time="0.005353959">
+    <testcase classname="APIClientTests.APIClientTests" name="unstubbedCallFails()" time="0.0027745" />
+    <testcase classname="APIClientTests.APIClientTests" name="overrideReachesReaders()" time="0.002049834" />
+    <testcase classname="APIClientTests.APIClientTests" name="previewAnswersOffline()" time="0.001366958" />
+    <testcase classname="APIClientLiveTests.APIClientLiveTests" name="noConnectionIsOffline()" time="0.004962375" />
+    <testcase classname="APIClientLiveTests.APIClientLiveTests" name="malformedBodyIsUndecodable()" time="0.004906625" />
+    <testcase classname="APIClientLiveTests.APIClientLiveTests" name="decodesCapturedResponse()" time="0.004931167" />
+    <testcase classname="APIClientLiveTests.APIClientLiveTests" name="badStatusThrows()" time="0.0048885" />
+  </testsuite>
+</testsuites>

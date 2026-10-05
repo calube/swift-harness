@@ -76,6 +76,14 @@ private struct DeletingWorkspace: GitWorkspace {
     try await fake.deleteBranch(branch)
   }
 
+  func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+    try await fake.createBranch(branch, at: commit)
+  }
+
+  func branches(containing commit: String) async throws(GitWorkspaceError) -> [String] {
+    try await fake.branches(containing: commit)
+  }
+
   func cloneWarmBuild(_ relativePaths: [String], from source: String, into destination: String)
     async throws(GitWorkspaceError) -> [String]
   {
