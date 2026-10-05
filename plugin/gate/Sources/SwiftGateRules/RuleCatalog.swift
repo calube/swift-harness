@@ -9,6 +9,7 @@ public enum RuleCatalog {
   /// `swiftgate lint`.
   public static let lint: [any Rule] =
     DeterminismRules.all + BoundaryRules.all + SafetyRules.all + TCARules.all
+    + AccessibilityRules.all
 
   /// `swiftgate arch`'s source-level rules; its module-graph rules are `ArchitectureRules`.
   public static let arch: [any Rule] = ArchSourceRules.all

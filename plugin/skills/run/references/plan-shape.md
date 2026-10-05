@@ -170,6 +170,9 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
 - A search journey's flow types into a `.searchable` field by `role=searchfield`, since the field
   takes no identifier and an identifier after `.searchable` lands on the list. The contract names
   the field's prompt and gives ids to what the search changes: the result count and each row.
+- A text field's title is a placeholder, not an accessibility label. Each `TextField`,
+  `SecureField` or `TextEditor` a stub gives an id also gets `.accessibilityLabel`; without it
+  `sim.a11y-label` fails every row that reaches the screen, and slice fails `a11y.input-label`.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 

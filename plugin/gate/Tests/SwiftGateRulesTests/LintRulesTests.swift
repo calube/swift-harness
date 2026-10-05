@@ -67,6 +67,7 @@ struct LintRulesTests {
       "TCA2.swift": [3],
       "SnapshotGlobals.swift": [4, 5],
     ],
+    "a11y.input-label": ["DetailView.swift": [46]],
   ]
 
   @Test(

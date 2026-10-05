@@ -577,6 +577,39 @@ struct BrownfieldSliceCheckTests {
   }
 
   @Test(
+    "the captured view whose text field has an identifier and only a placeholder title is RED in slice, timed as the area's lint, and its labeled version is not — catches the field reaching the simulator audit at the last task's qa"
+  )
+  func unlabeledInputGatesSlice() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    let area = Self.area("app", kind: .swiftpm, language: .swift, testFiles: nil)
+    let path = "app/Sources/AppUI/DetailView.swift"
+    func slice(_ variant: String) async throws -> (GateRunParts, GateRun.Context) {
+      let text = try String(
+        contentsOf: URL(filePath: #filePath)
+          .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+          .appending(path: "Fixtures/rules/a11y.input-label/\(variant)/DetailView.swift"),
+        encoding: .utf8)
+      let lines = text.split(separator: "\n", omittingEmptySubsequences: false).count
+      let context = GateRun.Context(runID: "run-\(variant)", directory: clone.base)
+      let parts = try await Self.run(
+        clone, areas: [area],
+        changes: [Change(path: path, text: text, added: [1...lines], existed: false)],
+        runner: runner, context: context)
+      return (parts, context)
+    }
+
+    let (bad, context) = try await slice("bad")
+    #expect(Self.gating(bad) == ["a11y.input-label \(path)"])
+    #expect(bad.findings.first { $0.ruleID == "a11y.input-label" }?.line == 46)
+    #expect(context.steps.steps.contains { $0.step == .lint && $0.area == "app" })
+
+    let (good, _) = try await slice("good")
+    #expect(Self.gating(good).isEmpty)
+  }
+
+  @Test(
     "gate.run carries the run's baselineCount — catches the count the baseline absorbed never reaching telemetry"
   )
   func gateRunCarriesBaselineCount() async throws {
