@@ -41,6 +41,47 @@ struct ScratchWorktreesTests {
     }
   }
 
+  /// A linked checkout with a kept tree in its own git dir, as a run's slot or plan checkout has
+  /// after its first prove.
+  private struct LinkedCheckout {
+    let repository: TemporaryGitRepository
+    let checkout: URL
+    let kept: URL
+
+    static func make() async throws -> LinkedCheckout {
+      let repository = try await TemporaryGitRepository()
+      try repository.write("app/Sources/Lib/Lib.swift", "v1\n")
+      _ = try await repository.commitAll("base")
+      let checkout = repository.root.deletingLastPathComponent().appending(
+        path: "\(repository.root.lastPathComponent)-linked", directoryHint: .isDirectory)
+      try await repository.git("worktree", "add", "--quiet", "--detach", checkout.path, "HEAD")
+      let gitDir = try await repository.git("-C", checkout.path, "rev-parse", "--absolute-git-dir")
+      let scratch = URL(filePath: gitDir, directoryHint: .isDirectory)
+        .appending(path: "swift-harness/scratch", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+      let kept = try await LiveScratchWorktrees(
+        runner: repository.runner, repositoryRoot: checkout.path, directory: scratch,
+        keepsTree: true
+      ).withScratchTree(
+        ScratchTreeRequest(revision: "HEAD", revertTo: "HEAD", copiedPaths: [], revertedPaths: [])
+      ) { $0 }
+      return LinkedCheckout(repository: repository, checkout: checkout, kept: kept)
+    }
+
+    var adapter: LiveScratchWorktrees {
+      LiveScratchWorktrees(runner: repository.runner, repositoryRoot: repository.root.path)
+    }
+
+    func registered() async throws -> String {
+      try await repository.git("worktree", "list", "--porcelain")
+    }
+
+    func remove() {
+      repository.remove()
+      TestTemporaryDirectory.remove(checkout)
+    }
+  }
+
   private func read(_ root: URL, _ path: String) -> String? {
     try? String(contentsOf: root.appending(path: path), encoding: .utf8)
   }
@@ -314,7 +355,8 @@ struct ScratchWorktreesTests {
     let adapter = keeping(scratch)
     let first = try await adapter.withScratchTree(proveRequest(scratch)) { $0 }
     let checkout = first.appending(path: ".git")
-    try #require(FileManager.default.fileExists(atPath: checkout.path), "the first use keeps its tree")
+    try #require(
+      FileManager.default.fileExists(atPath: checkout.path), "the first use keeps its tree")
     try FileManager.default.removeItem(at: checkout)
 
     let (second, contents) = try await adapter.withScratchTree(proveRequest(scratch)) { root in
@@ -338,5 +380,64 @@ struct ScratchWorktreesTests {
 
     #expect(sweep.removed.isEmpty)
     #expect(read(kept, "app/Sources/Lib/Stable.swift") == "stable\n")
+  }
+
+  @Test(
+    "removing a linked checkout removes the tree kept in its git dir, and the main checkout's removal call keeps it — catches every slot leaving a prunable worktree entry behind"
+  )
+  func removingCheckoutRemovesItsKeptTree() async throws {
+    let linked = try await LinkedCheckout.make()
+    defer { linked.remove() }
+    let keptName = linked.kept.lastPathComponent
+    try #require(try await linked.registered().contains(keptName), "the prove kept its tree")
+
+    let fromMain = await linked.adapter.removeTrees(
+      inGitDirectoryOf: linked.repository.root.path)
+    #expect(fromMain.removed.isEmpty)
+    #expect(try await linked.registered().contains(keptName))
+
+    try await LiveGitWorkspace(
+      runner: linked.repository.runner, repositoryRoot: linked.repository.root.path
+    ).removeWorktree(at: linked.checkout.path, force: true)
+
+    let registered = try await linked.registered()
+    #expect(!registered.contains("prunable"))
+    #expect(!registered.contains(keptName))
+  }
+
+  @Test(
+    "the sweep removes a kept tree left registered after git removed its checkout — catches stale entries from a run that removed its checkouts without the harness"
+  )
+  func sweepRemovesKeptTreeOfRemovedCheckout() async throws {
+    let linked = try await LinkedCheckout.make()
+    defer { linked.remove() }
+    try await linked.repository.git("worktree", "remove", "--force", linked.checkout.path)
+    try #require(try await linked.registered().contains("prunable"))
+
+    let sweep = try await linked.adapter.sweepRegisteredOrphans()
+
+    #expect(
+      sweep.removed.map { URL(filePath: $0).lastPathComponent } == [linked.kept.lastPathComponent])
+    let registered = try await linked.registered()
+    #expect(!registered.contains("prunable"))
+    #expect(!registered.contains(linked.kept.lastPathComponent))
+  }
+
+  @Test(
+    "the sweep removes a kept tree whose checkout's folder was deleted — catches a whole checkout's build left on disk under a dead git dir"
+  )
+  func sweepRemovesKeptTreeOfDeletedCheckout() async throws {
+    let linked = try await LinkedCheckout.make()
+    defer { linked.remove() }
+    try FileManager.default.removeItem(at: linked.checkout)
+
+    let sweep = try await linked.adapter.sweepRegisteredOrphans()
+
+    #expect(
+      sweep.removed.map { URL(filePath: $0).lastPathComponent } == [linked.kept.lastPathComponent])
+    #expect(!FileManager.default.fileExists(atPath: linked.kept.path))
+    let registered = try await linked.registered()
+    #expect(!registered.contains("prunable"))
+    #expect(!registered.contains(linked.kept.lastPathComponent))
   }
 }
