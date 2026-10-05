@@ -21,6 +21,9 @@ public enum BrownfieldRuleID: String, Sendable, CaseIterable {
   case buildOnly = "area.build-only"
   /// The failures the baseline absorbed.
   case baselineSummary = "baseline.summary"
+  /// A test step `final` would excuse whole: it fails at the head and the merge base with no
+  /// test id to tell its failures apart.
+  case baselineWholeStep = "baseline.whole-step"
   /// A committed `.swiftgate.toml` and a common-dir `config.toml` in 1 clone.
   case doctorConfigConflict = "doctor.config-conflict"
 }

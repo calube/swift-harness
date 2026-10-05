@@ -259,7 +259,8 @@ struct WarmupTests {
     #expect(
       recorder.requests.withLock { $0 }.map(\.command) == [
         "xcodebuild -derivedDataPath '\(seed)' build -scheme App",
-        "xcodebuild -derivedDataPath '\(seed)' test -scheme App",
+        "xcodebuild -derivedDataPath '\(seed)' test -scheme App -resultBundlePath "
+          + "'/clone/.git/swift-harness/junit/app.test.xcresult'",
       ])
     #expect(recorder.requests.withLock { $0 }.allSatisfy { $0.derivedDataSeed == nil })
   }

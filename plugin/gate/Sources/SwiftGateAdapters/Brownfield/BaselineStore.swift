@@ -19,14 +19,17 @@ public struct BaselineQuery: Sendable {
   public let head: AreaCommandOutcome
   /// The same step's request with its paths under `scratchToplevel` instead of the worktree.
   public let request: @Sendable (_ scratchToplevel: URL) -> AreaCommandRequest
+  /// Where the gate kept the head run's output and report, absolute.
+  public let headEvidence: [String]
 
   public init(
-    key: BaselineStepKey, head: AreaCommandOutcome,
+    key: BaselineStepKey, head: AreaCommandOutcome, headEvidence: [String] = [],
     request: @escaping @Sendable (_ scratchToplevel: URL) -> AreaCommandRequest
   ) {
     self.key = key
     self.head = head
     self.request = request
+    self.headEvidence = headEvidence
   }
 }
 
@@ -37,11 +40,17 @@ public struct BaselineLookup: Sendable, Equatable {
   public let notes: [Finding]
   /// The steps rerun at the merge base because no answer was recorded.
   public let reran: [BaselineStepKey]
+  /// Gating `baseline.whole-step` findings for ``BaselineVerdict/unattributed``.
+  public let unattributed: [Finding]
 
-  public init(verdict: BaselineVerdict, notes: [Finding], reran: [BaselineStepKey]) {
+  public init(
+    verdict: BaselineVerdict, notes: [Finding], reran: [BaselineStepKey],
+    unattributed: [Finding] = []
+  ) {
     self.verdict = verdict
     self.notes = notes
     self.reran = reran
+    self.unattributed = unattributed
   }
 }
 
@@ -90,11 +99,12 @@ public struct BaselineStore: Sendable {
   }
 
   /// Compares the queries' head failures with the base tree's answers, rerunning at
-  /// `base.commit` each failing step that has none and recording what the rerun gives.
-  /// A step with no answer, because its rerun couldn't run, stays gating.
-  public func lookupOrRerun(_ queries: [BaselineQuery], base: BaselineBase) async
-    -> BaselineLookup
-  {
+  /// `base.commit` each failing step that has none and recording what the rerun gives, with
+  /// its output and report kept under the baseline directory. A step with no answer, because
+  /// its rerun couldn't run, stays gating. `attributingTests` is ``Baseline/compare(head:base:attributingTests:)``'s.
+  public func lookupOrRerun(
+    _ queries: [BaselineQuery], base: BaselineBase, attributingTests: Bool = false
+  ) async -> BaselineLookup {
     var head: [BaselineStepKey: BaselineStepResult] = [:]
     var failing: [BaselineQuery] = []
     for query in queries {
@@ -121,8 +131,16 @@ public struct BaselineStore: Sendable {
         fresh = try await scratch.withScratchTree(tree) { root in
           var records: [BaselineRecord] = []
           for query in missing {
-            let outcome = await runner.run(query.request(root))
-            records.append(BaselineRecord(key: query.key, result: BaselineStepResult.of(outcome)))
+            let request = query.request(root)
+            let outcome = await runner.run(request)
+            let folder = Self.evidenceFolder(tree: base.tree, key: query.key)
+            let kept = StepEvidence.keep(
+              outcome, of: request, named: "\(query.key.area).\(query.key.step.rawValue)",
+              in: layout.baselineDirectory.appending(path: folder))
+            records.append(
+              BaselineRecord(
+                key: query.key, result: BaselineStepResult.of(outcome),
+                evidence: kept.isEmpty ? nil : folder))
           }
           return records
         }
@@ -134,8 +152,13 @@ public struct BaselineStore: Sendable {
         )
       }
     }
+    var kept: [BaselineStepKey: String] = [:]
+    for record in loaded.records { kept[record.key] = record.evidence }
     if !fresh.isEmpty {
-      for record in fresh { known[record.key] = record.result }
+      for record in fresh {
+        known[record.key] = record.result
+        kept[record.key] = record.evidence
+      }
       do {
         // A file that didn't decode was already named when it was loaded.
         let recorded = try await record(fresh, tree: base.tree)
@@ -147,13 +170,21 @@ public struct BaselineStore: Sendable {
       }
     }
 
-    let verdict = Baseline.compare(head: head, base: known)
+    let verdict = Baseline.compare(head: head, base: known, attributingTests: attributingTests)
+    var evidence: [BaselineStepKey: BaselineEvidence] = [:]
+    for query in failing {
+      evidence[query.key] = BaselineEvidence(
+        head: query.headEvidence,
+        base: kept[query.key].map { [layout.baselineDirectory.appending(path: $0).path] } ?? [])
+    }
     let file = layout.baseline(tree: base.tree).path
-    if let summary = verdict.summary(file: file) {
+    if let summary = verdict.summary(file: file, evidence: evidence) {
       notes.append(summary)
     }
     notes += verdict.notInstalledFindings(file: file)
-    return BaselineLookup(verdict: verdict, notes: notes, reran: fresh.map(\.key))
+    return BaselineLookup(
+      verdict: verdict, notes: notes, reran: fresh.map(\.key),
+      unattributed: verdict.unattributedFindings(file: file, evidence: evidence))
   }
 
   /// Adds answers to `tree`'s file under the lock, by atomic rename. Returns a note when the
@@ -214,6 +245,17 @@ public struct BaselineStore: Sendable {
           "the baseline doesn't decode (\(error.detail)), so its failures are rerun and it is replaced"
         ))
     }
+  }
+
+  /// `<tree>/<area>.<step>.<hash>`, relative to the baseline directory: 1 folder per key, so
+  /// a step's commands and selections never share one.
+  static func evidenceFolder(tree: String, key: BaselineStepKey) -> String {
+    var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+    for byte in ([key.command] + key.selection).joined(separator: "\n").utf8 {
+      hash = (hash ^ UInt64(byte)) &* 0x100_0000_01b3
+    }
+    let digest = String(hash, radix: 16)
+    return "\(tree)/\(key.area).\(key.step.rawValue).\(digest.prefix(8))"
   }
 
   private func note(tree: String, _ message: String) -> [Finding] {

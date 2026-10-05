@@ -190,6 +190,48 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "a test step failing whole at the head and the merge base is excused at merge with both runs' evidence named, and gates final — catches final GREEN over a test step that proved nothing"
+  )
+  func wholeTestStepGatesFinal() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let runner = FakeAreaCommandRunner { request in
+      request.step == .test
+        ? .failed(exit: 65, tail: "Testing failed: runner encountered an error", junit: nil)
+        : .passed
+    }
+    let mergeContext = GateRun.Context(
+      runID: "merge", directory: clone.base.appending(path: "runs/merge"))
+    let merge = try await Self.run(
+      clone, tier: .merge, areas: [Self.area("web")], changed: ["web/src/lib.js"],
+      runner: runner, context: mergeContext)
+
+    #expect(Self.verdict(merge) == .green)
+    let summary = try #require(
+      merge.findings.first { $0.ruleID == BrownfieldRuleID.baselineSummary.rawValue })
+    let headTail = mergeContext.directory.appending(path: "baseline-evidence/web.test.txt")
+    #expect(
+      try String(contentsOf: headTail, encoding: .utf8).contains("runner encountered an error"))
+    #expect(summary.message.contains(headTail.path(percentEncoded: false)))
+    #expect(summary.message.contains(clone.layout.baselineDirectory.path(percentEncoded: false)))
+
+    let finalContext = GateRun.Context(
+      runID: "final", directory: clone.base.appending(path: "runs/final"))
+    let final = try await Self.run(
+      clone, tier: .final, areas: [Self.area("web")], changed: ["web/src/lib.js"],
+      runner: runner, context: finalContext)
+
+    #expect(Self.verdict(final) == .red)
+    #expect(Self.gating(final) == ["baseline.whole-step \(clone.layout.baseline(tree: "tree0").path)"])
+    let whole = try #require(
+      final.findings.first { $0.ruleID == BrownfieldRuleID.baselineWholeStep.rawValue })
+    #expect(
+      whole.message.contains(
+        finalContext.directory.appending(path: "baseline-evidence/web.test.txt")
+          .path(percentEncoded: false)))
+  }
+
+  @Test(
     "final reports a lint whose tool isn't on PATH at the head and the merge base as not installed, never absorbed — catches a final GREEN with lint absorbed as the whole step every gate"
   )
   func lintNotInstalledIsReported() async throws {

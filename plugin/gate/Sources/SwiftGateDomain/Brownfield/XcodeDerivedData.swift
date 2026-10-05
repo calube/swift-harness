@@ -54,6 +54,7 @@ public enum XcodeDerivedData {
       area: request.area, step: request.step, command: command,
       workingDirectory: request.workingDirectory, deadline: request.deadline,
       environment: request.environment, junitPath: request.junitPath,
+      resultBundlePath: request.resultBundlePath,
       derivedDataSeed: path == seed ? nil : DerivedDataSeedCopy(seed: seed, destination: path))
   }
 }
