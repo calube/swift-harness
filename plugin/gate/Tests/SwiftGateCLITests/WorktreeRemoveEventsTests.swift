@@ -78,6 +78,14 @@ private struct DeletingWorkspace: GitWorkspace {
     try await fake.switchWorktree(at: path, toNewBranch: branch, from: base)
   }
 
+  func addDetachedWorktree(at path: String, revision: String) async throws(GitWorkspaceError) {
+    try await fake.addDetachedWorktree(at: path, revision: revision)
+  }
+
+  func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError) {
+    try await fake.detachWorktree(at: path, revision: revision)
+  }
+
   func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError) -> [String] {
     try await fake.uncommittedPaths(inWorktree: path)
   }

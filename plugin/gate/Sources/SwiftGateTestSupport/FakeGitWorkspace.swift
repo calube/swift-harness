@@ -9,6 +9,8 @@ public final class FakeGitWorkspace: GitWorkspace {
     case removeWorktree(path: String, force: Bool)
     case switchWorktree(path: String, branch: String, base: String)
     case resetWorktree(path: String)
+    case addDetachedWorktree(path: String, revision: String)
+    case detachWorktree(path: String, revision: String)
     case deleteBranch(String)
     case createBranch(String, commit: String)
     case cloneWarmBuild(paths: [String], source: String, destination: String)
@@ -67,6 +69,16 @@ public final class FakeGitWorkspace: GitWorkspace {
       $0.calls.append(.switchWorktree(path: path, branch: branch, base: base))
       $0.branches.insert(branch)
     }
+  }
+
+  public func addDetachedWorktree(at path: String, revision: String)
+    async throws(GitWorkspaceError)
+  {
+    state.withLock { $0.calls.append(.addDetachedWorktree(path: path, revision: revision)) }
+  }
+
+  public func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError) {
+    state.withLock { $0.calls.append(.detachWorktree(path: path, revision: revision)) }
   }
 
   /// Holds no files, so every worktree is clean.

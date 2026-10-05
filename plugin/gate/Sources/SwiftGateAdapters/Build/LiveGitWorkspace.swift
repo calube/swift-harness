@@ -67,6 +67,18 @@ public struct LiveGitWorkspace: GitWorkspace {
     try await succeed(["-C", path, "switch", "--quiet", "--no-track", "-c", branch, base])
   }
 
+  public func addDetachedWorktree(at path: String, revision: String)
+    async throws(GitWorkspaceError)
+  {
+    try Self.checkRef(revision)
+    try await succeed(["worktree", "add", "--quiet", "--detach", "--", path, revision])
+  }
+
+  public func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(revision)
+    try await succeed(["-C", path, "switch", "--quiet", "--detach", revision])
+  }
+
   public func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError)
     -> [String]
   {

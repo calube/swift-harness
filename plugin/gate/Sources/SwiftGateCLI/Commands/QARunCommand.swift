@@ -53,6 +53,15 @@ enum QARunRun {
     var deadline: QARunDeadline?
     /// Merges the branch a `--before-merge` run checks into its scratch tree.
     var merger: any MergeRunner = LiveMergeRunner(runner: LiveProcessRunner())
+    /// The build run's device the flow rows borrow; `nil`, or a refused loan, holds the run's own.
+    var devices: (any QADeviceLending)?
+  }
+
+  /// The trees a trial merge and the merge-base rows run in: pooled slots in a brownfield clone,
+  /// where the app `sim up` builds stays warm from run to run, else throwaway trees beside the
+  /// repository, as `prove` makes.
+  static func scratchTrees(root: URL, common: String, plan: String) -> any ScratchWorktrees {
+    LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -286,8 +295,7 @@ enum QARunRun {
         return blocked("reading the branch to merge: \(error)", plan: slug)
       }
       let scratch =
-        dependencies.scratch
-        ?? LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
+        dependencies.scratch ?? scratchTrees(root: root, common: common, plan: slug)
       let merger = dependencies.merger
       let ran: TrialMergeRun
       do throws(ScratchWorktreeError) {
@@ -383,8 +391,7 @@ enum QARunRun {
         return blocked("finding the merge base of HEAD and \(main): \(error)", plan: slug)
       }
       let scratch =
-        dependencies.scratch
-        ?? LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
+        dependencies.scratch ?? scratchTrees(root: root, common: common, plan: slug)
       if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
         rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
       } else {

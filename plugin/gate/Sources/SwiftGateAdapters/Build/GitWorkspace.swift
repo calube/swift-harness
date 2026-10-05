@@ -42,6 +42,12 @@ public protocol GitWorkspace: Sendable {
   func switchWorktree(at path: String, toNewBranch branch: String, from base: String)
     async throws(GitWorkspaceError)
 
+  /// `git worktree add --detach <path> <revision>`.
+  func addDetachedWorktree(at path: String, revision: String) async throws(GitWorkspaceError)
+
+  /// In the existing worktree at `path`, `git switch --detach <revision>`.
+  func detachWorktree(at path: String, revision: String) async throws(GitWorkspaceError)
+
   /// The worktree's tracked changes and untracked files, ignored files left out.
   func uncommittedPaths(inWorktree path: String) async throws(GitWorkspaceError) -> [String]
 

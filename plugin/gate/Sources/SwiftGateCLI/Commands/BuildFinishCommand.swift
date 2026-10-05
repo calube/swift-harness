@@ -22,6 +22,9 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   var runReportNote: String? = nil
   /// The `qa run --final` the finish read; `nil` for a plan with no validation table.
   var validation: Validation? = nil
+  /// What became of the build run's shared device: released, or why it wasn't. `nil` when no
+  /// device was held for the run.
+  var device: String? = nil
 
   struct Validation: Sendable, Equatable, Encodable {
     let runID: String
@@ -35,9 +38,10 @@ enum BuildFinishRun {
   ///   - root: the checkout whose state root holds the report; `nil` writes no report.
   ///   - pluginRoot: where `viewer/` lives.
   ///   - qaRun: the `qa run --final` id the caller read, from `--qa-run`.
+  ///   - leases: where the build run's shared device's lease is; `nil` leaves it alone.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
-    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil
+    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil, leases: SimLeaseStore? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {

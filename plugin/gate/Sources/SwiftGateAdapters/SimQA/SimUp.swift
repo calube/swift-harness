@@ -14,15 +14,19 @@ public enum SimUpDevice: Sendable, Equatable {
 public struct SimSharedHold: Sendable, Equatable {
   /// The hold's own lease's run id.
   public var runID: String
-  /// The process the hold lasts no longer than.
-  public var ownerPID: Int32
+  /// The process the hold lasts no longer than; `nil` for a build run's hold, which lasts until
+  /// it is released or `timeoutMinutes` pass.
+  public var ownerPID: Int32?
   /// Where the holder logs, when this run starts it.
   public var logFile: URL
+  /// How long a hold with no owner lasts unreleased; `nil` for the config's session timeout.
+  public var timeoutMinutes: Int?
 
-  public init(runID: String, ownerPID: Int32, logFile: URL) {
+  public init(runID: String, ownerPID: Int32?, logFile: URL, timeoutMinutes: Int? = nil) {
     self.runID = runID
     self.ownerPID = ownerPID
     self.logFile = logFile
+    self.timeoutMinutes = timeoutMinutes
   }
 }
 
@@ -277,7 +281,8 @@ public struct SimUp: Sendable {
     }
     let holderPID = try launchHolder(
       request,
-      arguments: ["sim", "hold", "--run", hold.runID, "--owner-pid", String(hold.ownerPID)],
+      arguments: ["sim", "hold", "--run", hold.runID]
+        + (hold.ownerPID.map { ["--owner-pid", String($0)] } ?? []),
       log: hold.logFile)
     return try await waitForLease(runID: hold.runID, holderPID: holderPID, log: hold.logFile)
   }

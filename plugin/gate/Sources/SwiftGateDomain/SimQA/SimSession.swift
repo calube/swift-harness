@@ -144,12 +144,17 @@ public struct SimUpStarted: Sendable, Equatable {
   public var udid: String
   public var session: String
   public var scenario: String?
+  /// How long each part of getting the app up took, in the order they ended.
+  public var setup: [QASetupStep]
 
-  public init(runID: String, udid: String, session: String, scenario: String?) {
+  public init(
+    runID: String, udid: String, session: String, scenario: String?, setup: [QASetupStep] = []
+  ) {
     self.runID = runID
     self.udid = udid
     self.session = session
     self.scenario = scenario
+    self.setup = setup
   }
 
   /// `{schemaVersion, verdict, runID, udid, session, scenario}`, `scenario` `null` when unset.

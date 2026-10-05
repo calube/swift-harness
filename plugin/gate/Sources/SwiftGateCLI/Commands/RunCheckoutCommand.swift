@@ -76,9 +76,11 @@ enum RunCheckoutRun {
   /// Copies the checkout's gate and `qa run` directories into the clone's kept runs, where the run
   /// viewer reads them, and any events it kept itself into the user's checkout first, so they
   /// outlive it. The plan branch stays: it holds the run.
-  static func remove(slug: String, session: String?, root: URL, runner: any ProcessRunner)
-    async -> WorktreeReport
-  {
+  /// - Parameter leases: where the build run's shared device's lease is, which removing releases.
+  static func remove(
+    slug: String, session: String?, root: URL, runner: any ProcessRunner,
+    leases: SimLeaseStore = SimLeaseStore(directory: SimLeaseStore.defaultDirectory())
+  ) async -> WorktreeReport {
     let context: Context
     switch await Context.resolve(
       "run checkout remove", slug: slug, session: session, root: root, runner: runner)

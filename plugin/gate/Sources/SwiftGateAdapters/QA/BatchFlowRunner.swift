@@ -38,14 +38,24 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
 }
 
 /// The 1 device a `qa run` holds for all its flow rows: its hold's run id, and the folder its
-/// holder logs to.
+/// holder logs to. A hold kept after the run is a build run's, which every `qa run` of that build
+/// borrows in turn (``BuildRunDevice``).
 public struct QAFlowDeviceHold: Sendable, Equatable {
   public var runID: String
   public var directory: URL
+  /// `true` for a build run's hold: ``QAFlowRunner/finish()`` leaves it up, and its holder lasts
+  /// until it is released or `timeoutMinutes` pass, not as long as this process.
+  public var keptAfterRun: Bool
+  /// How long a hold kept after the run lasts unreleased; `nil` for the config's session timeout.
+  public var timeoutMinutes: Int?
 
-  public init(runID: String, directory: URL) {
+  public init(
+    runID: String, directory: URL, keptAfterRun: Bool = false, timeoutMinutes: Int? = nil
+  ) {
     self.runID = runID
     self.directory = directory
+    self.keptAfterRun = keptAfterRun
+    self.timeoutMinutes = timeoutMinutes
   }
 }
 
@@ -333,6 +343,9 @@ public actor QAFlowRunner {
       return ["the flow rows' shared device: sim down \(failure.rule.rawValue): \(failure.message)"]
     }
   }
+
+  /// The setup steps of each row whose `sim up` got the app up, by row.
+  public var setup: [Int: [QASetupStep]] { [:] }
 
   /// The flow records of the rows that reached a batch, by row.
   public var records: [Int: QAFlowRecord] { flowRecords }

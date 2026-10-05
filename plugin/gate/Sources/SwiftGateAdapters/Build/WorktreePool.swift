@@ -94,6 +94,24 @@ public struct WorktreePool: Sendable {
     }
   }
 
+  /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never
+  /// in a branch name, and the pid lets a later checkout free a slot whose process died.
+  public static func scratchHolder(pid: Int32, token: String) -> String {
+    "\(scratchPrefix)\(pid):\(token)"
+  }
+
+  static let scratchPrefix = "scratch:"
+
+  /// Checks `revision` out detached for `holder` in a free slot, the first `prefer` picks when
+  /// one does, else the first free one, else a new slot. A slot a dead scratch holder left is
+  /// reset and freed first. ``release(branch:discard:workspace:)`` with `holder` returns it.
+  public func checkOutDetached(
+    revision: String, holder: String, prefer: @Sendable (String) -> Bool = { _ in false },
+    isAlive: @Sendable (Int32) -> Bool, workspace: any GitWorkspace
+  ) async throws(GitWorkspaceError) -> Checkout {
+    throw .pool(path: file.path, detail: "not available")
+  }
+
   /// Returns the slot `branch` is checked out in: refuses one with uncommitted work unless
   /// `discard`, then detaches it, resets it, deletes its untracked files and empties its state root
   /// but for ``keptState``. The branch stays; its commits are untouched.
