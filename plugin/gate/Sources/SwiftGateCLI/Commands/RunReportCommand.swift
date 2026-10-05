@@ -11,8 +11,14 @@ struct RunReportOutcome: Sendable, Equatable, Encodable {
   var path: String?
   var report: BrownfieldRunReport?
   var message = ""
+  /// The run's report page, rewritten from the plan's newest build run; `nil` when none was.
+  var runReport: String?
+  /// Why no report page was written; `nil` when one was.
+  var runReportNote: String?
 
-  private enum CodingKeys: String, CodingKey { case command, plan, verdict, path, report, message }
+  private enum CodingKeys: String, CodingKey {
+    case command, plan, verdict, path, report, message, runReport, runReportNote
+  }
 
   /// Every key is always present; an absent value is `null`.
   func encode(to encoder: any Encoder) throws {
@@ -23,6 +29,8 @@ struct RunReportOutcome: Sendable, Equatable, Encodable {
     try c.encode(path, forKey: .path)
     try c.encode(report, forKey: .report)
     try c.encode(message, forKey: .message)
+    try c.encode(runReport, forKey: .runReport)
+    try c.encode(runReportNote, forKey: .runReportNote)
   }
 }
 
@@ -35,8 +43,10 @@ enum BrownfieldRunReportRun {
   /// newest `qa run` over every row, then writes `<plan-dir>/REPORT.md`. A source that can't be
   /// read is a line in its section; only a clone with no brownfield config or no such plan
   /// writes nothing.
+  /// - Parameter pluginRoot: where `viewer/` lives, for the run's report page.
   static func write(
-    slug: String, planBranch: String?, base: String?, root: URL, runner: any ProcessRunner
+    slug: String, planBranch: String?, base: String?, root: URL, runner: any ProcessRunner,
+    pluginRoot: URL? = nil, now: Date = Date()
   ) async -> RunReportOutcome {
     var outcome = RunReportOutcome(plan: slug)
     let git = LiveGit(runner: runner, repositoryRoot: root.path)
