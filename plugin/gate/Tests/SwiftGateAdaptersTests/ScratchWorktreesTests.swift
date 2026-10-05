@@ -23,6 +23,7 @@ struct ScratchWorktreesTests {
       try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
       try repository.write("app/Sources/Lib/Lib.swift", "v1\n")
       try repository.write("app/Tests/LibTests/T.swift", "t1\n")
+      try repository.write("app/Sources/Lib/Stable.swift", "stable\n")
       let base = try await repository.commitAll("base")
       try repository.write("app/Sources/Lib/Lib.swift", "v2\n")
       try repository.write("app/Sources/Lib/New.swift", "new\n")
@@ -43,6 +44,31 @@ struct ScratchWorktreesTests {
   private func read(_ root: URL, _ path: String) -> String? {
     try? String(contentsOf: root.appending(path: path), encoding: .utf8)
   }
+
+  private static let past = Date(timeIntervalSince1970: 1_000_000_000)
+
+  private func modified(_ root: URL, _ path: String) -> Date? {
+    (try? FileManager.default.attributesOfItem(atPath: root.appending(path: path).path))?[
+      .modificationDate] as? Date
+  }
+
+  private func keeping(_ scratch: Scratch) -> LiveScratchWorktrees {
+    LiveScratchWorktrees(
+      runner: scratch.repository.runner, repositoryRoot: scratch.repository.root.path,
+      directory: scratch.temporary, keepsTree: true)
+  }
+
+  private func proveRequest(_ scratch: Scratch) -> ScratchTreeRequest {
+    ScratchTreeRequest(
+      revision: "HEAD", revertTo: scratch.base,
+      copiedPaths: ["app/Tests/LibTests/T.swift", "app/Tests/LibTests/U.swift"],
+      revertedPaths: ["app/Sources/Lib/Lib.swift", "app/Sources/Lib/New.swift"])
+  }
+
+  private static let provePaths = [
+    "app/Sources/Lib/Lib.swift", "app/Sources/Lib/New.swift", "app/Tests/LibTests/T.swift",
+    "app/Tests/LibTests/U.swift",
+  ]
 
   @Test(
     "the scratch tree has the working tree's tests and the merge base's sources, and is removed afterwards — catches prove running against the unreverted change or leaking worktrees"
@@ -208,5 +234,109 @@ struct ScratchWorktreesTests {
 
     #expect(!FileManager.default.fileExists(atPath: orphan.path))
     #expect(FileManager.default.fileExists(atPath: live.path))
+  }
+
+  @Test(
+    "a kept tree is used again at the same path, and a file the next use doesn't change keeps its timestamp — catches prove building cold in a fresh path at every gate"
+  )
+  func keptTreeKeepsUnchangedFiles() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let adapter = keeping(scratch)
+
+    let first = try await adapter.withScratchTree(proveRequest(scratch)) { root in
+      try? FileManager.default.setAttributes(
+        [.modificationDate: Self.past],
+        ofItemAtPath: root.appending(path: "app/Sources/Lib/Stable.swift").path)
+      return root
+    }
+    let (second, contents, stamp) = try await adapter.withScratchTree(proveRequest(scratch)) {
+      root in
+      (root, Self.provePaths.map { read(root, $0) }, modified(root, "app/Sources/Lib/Stable.swift"))
+    }
+
+    #expect(second == first)
+    #expect(contents == ["v1\n", nil, "t3\n", "u\n"])
+    #expect(stamp == Self.past)
+    #expect(FileManager.default.fileExists(atPath: first.path))
+    #expect(read(scratch.repository.root, "app/Sources/Lib/Lib.swift") == "v2\n")
+  }
+
+  @Test(
+    "a kept tree takes each request as it comes, not what the last use left: a later commit, no copied test, nothing reverted — catches prove running a stale tree that hides a failing test"
+  )
+  func keptTreeTakesEachRequest() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let adapter = keeping(scratch)
+    let first = try await adapter.withScratchTree(proveRequest(scratch)) { $0 }
+    try scratch.repository.write("app/Sources/Lib/Lib.swift", "v3\n")
+    try await scratch.repository.git("add", "app/Sources/Lib/Lib.swift")
+    try await scratch.repository.git("commit", "-q", "-m", "later")
+
+    let (second, contents) = try await adapter.withScratchTree(
+      ScratchTreeRequest(revision: "HEAD", revertTo: "HEAD", copiedPaths: [], revertedPaths: [])
+    ) { root in (root, Self.provePaths.map { read(root, $0) }) }
+
+    #expect(second == first)
+    #expect(contents == ["v3\n", "new\n", "t2\n", nil])
+  }
+
+  @Test(
+    "a use while the kept tree is held gets a throwaway tree of its own, removed afterwards — catches 2 gates in 1 checkout building in 1 tree at once"
+  )
+  func heldKeptTreeFallsBack() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let adapter = keeping(scratch)
+
+    let (outer, inner, contents) = try await adapter.withScratchTree(proveRequest(scratch)) {
+      outer in
+      let inner = try? await adapter.withScratchTree(proveRequest(scratch)) { inner in
+        (inner, Self.provePaths.map { read(inner, $0) })
+      }
+      return (outer, inner?.0, inner?.1)
+    }
+
+    let innerRoot = try #require(inner)
+    #expect(innerRoot != outer)
+    #expect(contents == ["v1\n", nil, "t3\n", "u\n"])
+    #expect(!FileManager.default.fileExists(atPath: innerRoot.path))
+    #expect(FileManager.default.fileExists(atPath: outer.path))
+  }
+
+  @Test(
+    "a kept tree whose checkout is broken is made again — catches every later prove blocked by 1 killed one"
+  )
+  func brokenKeptTreeIsRemade() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let adapter = keeping(scratch)
+    let first = try await adapter.withScratchTree(proveRequest(scratch)) { $0 }
+    let checkout = first.appending(path: ".git")
+    try #require(FileManager.default.fileExists(atPath: checkout.path), "the first use keeps its tree")
+    try FileManager.default.removeItem(at: checkout)
+
+    let (second, contents) = try await adapter.withScratchTree(proveRequest(scratch)) { root in
+      (root, Self.provePaths.map { read(root, $0) })
+    }
+
+    #expect(second == first)
+    #expect(contents == ["v1\n", nil, "t3\n", "u\n"])
+  }
+
+  @Test(
+    "the orphan sweeps leave the kept tree alone — catches each gate deleting the tree the next one would build in"
+  )
+  func sweepsKeepTheKeptTree() async throws {
+    let scratch = try await Scratch.make()
+    defer { scratch.remove() }
+    let kept = try await keeping(scratch).withScratchTree(proveRequest(scratch)) { $0 }
+
+    _ = try await scratch.adapter.withScratchTree(proveRequest(scratch)) { _ in 0 }
+    let sweep = try await scratch.adapter.sweepRegisteredOrphans()
+
+    #expect(sweep.removed.isEmpty)
+    #expect(read(kept, "app/Sources/Lib/Stable.swift") == "stable\n")
   }
 }
