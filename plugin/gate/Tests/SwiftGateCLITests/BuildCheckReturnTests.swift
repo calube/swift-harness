@@ -863,26 +863,42 @@ struct BuildCheckReturnRecordTests {
   }
 
   @Test(
-    "a captured fixer return whose gate never ran, written with a null gate.runId, is BLOCKED naming that key and the null gate a return with no gate run writes, and is recorded under its task as the fixer's check — catches a refusal saying the check names no task and plan when both were given"
+    "the trial's hand-written fixer return, a BLOCKED gate with a null run id, reads as a fix no gate checked and passes --fix recorded under its task, while the same return claiming a GREEN gate with no run id is BLOCKED naming that key and the null gate to write, recorded too — catches a refusal saying the check names no task and plan when both were given"
   )
-  func undecodableReturnNamesItsTaskAndKey() async throws {
+  func unrunGateReadsAsAnUnconfirmedFix() async throws {
     let scenario = try await ReturnScenario()
     defer { scenario.remove() }
-    let file = try scenario.write(try Fixture.data("BuildReturn/send-money-5/fix-send-flow.json"))
+    let (_, commit) = try await scenario.cutFixWorktree()
+    var object = try #require(
+      try JSONSerialization.jsonObject(
+        with: Fixture.data("BuildReturn/send-money-5/fix-send-flow-orchestrator.json"))
+        as? [String: Any])
+    object["task"] = ReturnScenario.task
+    object["commits"] = [commit]
+    let unrun = try scenario.write(try JSONSerialization.data(withJSONObject: object))
+    var gate = try #require(object["gate"] as? [String: Any])
+    gate["verdict"] = "GREEN"
+    object["gate"] = gate
+    let claimed = try scenario.write(try JSONSerialization.data(withJSONObject: object))
 
-    let result = await BuildCheckReturnRun.check(
-      file: file, plan: ReturnScenario.plan, fix: true, git: scenario.git,
+    let unconfirmed = await BuildCheckReturnRun.check(
+      file: unrun, plan: ReturnScenario.plan, fix: true, git: scenario.git,
+      directory: scenario.main.path)
+    let lying = await BuildCheckReturnRun.check(
+      file: claimed, plan: ReturnScenario.plan, fix: true, git: scenario.git,
       directory: scenario.main.path)
 
-    #expect(result.report.verdict == .blocked)
-    #expect(result.report.task == "send-flow")
-    #expect(result.report.message.contains("`gate.runId`"), "\(result.report.message)")
-    #expect(result.report.message.contains("\"gate\": null"), "\(result.report.message)")
-    #expect(result.notRecorded == [], "\(result.notRecorded)")
-    let check = try #require(try await Self.returnChecks(scenario).last)
-    #expect(check.task == "send-flow")
-    #expect(check.fix)
-    #expect(check.verdict == .blocked)
+    #expect(unconfirmed.report.verdict == .green, "\(unconfirmed.report.findings)")
+    #expect(unconfirmed.report.outcome == .gateRed)
+    #expect(unconfirmed.notRecorded == [], "\(unconfirmed.notRecorded)")
+    #expect(lying.report.verdict == .blocked)
+    #expect(lying.report.task == ReturnScenario.task)
+    #expect(lying.report.message.contains("`gate.runId`"), "\(lying.report.message)")
+    #expect(lying.report.message.contains("\"gate\": null"), "\(lying.report.message)")
+    #expect(lying.notRecorded == [], "\(lying.notRecorded)")
+    let checks = try await Self.returnChecks(scenario)
+    #expect(checks.map(\.verdict) == [.green, .blocked])
+    #expect(checks.allSatisfy { $0.fix && $0.task == ReturnScenario.task })
   }
 
   @Test(
