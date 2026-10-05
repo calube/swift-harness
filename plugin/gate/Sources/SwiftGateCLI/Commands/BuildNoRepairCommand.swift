@@ -131,8 +131,9 @@ struct BuildNoRepairCommand: AsyncParsableCommand {
     abstract: "Decide a task whose flow row's repair worker returned `no repair:`.",
     discussion:
       "Reads the worker's reply, the fixer's return and the before-merge `qa run` the row was "
-      + "red in, and prints `amend-contract` (a contract gap with time for another round before "
-      + "no new starts), `merge-unverified` (the fixer's gate GREEN and every other row passed: "
+      + "red in, and prints `amend-contract` (a contract gap whose repair proof and 1 more "
+      + "measured fix round end before the cutoff: the row is repaired again and the fixer "
+      + "relaunched adds the name on the fix branch), `merge-unverified` (the fixer's gate GREEN and every other row passed: "
       + "recorded, so `build merge --fix` takes the run red on those rows alone and the final "
       + "`qa run` reports them unverified), `fix-again` (an `app defect:` the red run's frames "
       + "show, with 1 more measured fix round before the cutoff: relaunch the fixer) or "

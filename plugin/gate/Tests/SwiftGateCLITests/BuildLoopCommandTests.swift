@@ -665,7 +665,7 @@ struct BuildLoopCommandTests {
   }
 
   @Test(
-    "no-repair past no new starts records the captured red row left unverified once and answers merge — catches a no-repair halt that stops the build, or a decision build merge can't read"
+    "no-repair with no amendment round left before the cutoff records the captured red row left unverified once and answers merge — catches a no-repair halt that stops the build, or a decision build merge can't read"
   )
   func noRepairRecordsTheRowLeftUnverified() async throws {
     let scenario = BuildScenario()
@@ -675,7 +675,7 @@ struct BuildLoopCommandTests {
     defer { try? FileManager.default.removeItem(at: root) }
     let store = try #require(
       try await BuildRunStore.latest(plan: BuildScenario.plan, git: scenario.git))
-    let late = try #require(try store.record().noNewStartsAt).addingTimeInterval(60)
+    let late = try #require(try store.record().cutoffAt).addingTimeInterval(-60)
     let decide = {
       await BuildNoRepairRun.run(
         slug: BuildScenario.plan, task: "chat-thread", reply: reply,

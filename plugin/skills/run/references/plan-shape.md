@@ -198,6 +198,10 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   `plan-lint.validation-clock-unheld`. It reads the contract task's Title, Scope and Acceptance
   lines in this file, not the source, so a held scenario in code alone doesn't clear it: a Scope
   line names both `-harness-scenario` and the `held` scenario.
+  An action that starts that state over, such as a restart, a reset or `Start again`, starts a
+  live clock that a launch-only `held` scenario never holds, so a flow row whose requirement or
+  Reason presses one needs a Scope line naming that restart with `held` too, such as
+  "`launch-held` also holds the clock after a restart, until the next input".
 - When the engine takes a seed, the contract adds a seeded scenario per interaction a requirement
   names, such as `entity-center`: it places 1 entity at a known spot, motionless, with the clock
   held, and gives it an accessibility element and identifier at its frame. The flow launches
@@ -223,7 +227,7 @@ on these `plan-lint` rules:
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
 | `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind, or with `gate:` on an existing-tests requirement's reason-only row naming `merge` or `final` |
 | `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
-| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract's brief in `PLAN.md` names no `-harness-scenario` with a `held` scenario |
+| `plan-lint.validation-clock-unheld` | a task whose brief drives a screen on a timer or clock, checked by a `flow` row, while the contract's brief in `PLAN.md` names no `-harness-scenario` with a `held` scenario, or no line naming a restart the row presses with `held` |
 | `plan-lint.validation-obstacle-seedable` | a requirement with no `flow` row whose Reason names a moving or random entity while a brief gives the app a seed or a scenario |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |
