@@ -689,6 +689,8 @@ public struct RunViewReader: RunViewReading {
       return qaWindow?.holds(plan: flow.plan, qaRun: event.runID) ?? false
     case .qaFlow:
       return named(event.runID) || event.parentID.map(parents.gateRuns.contains) ?? false
+    case .qaRepair(let repair):
+      return qaWindow?.holds(plan: repair.plan, qaRun: event.runID) ?? false
     case .judgeDecision, .judgeCall, .hookDecision, .cacheLookup:
       return false
     }

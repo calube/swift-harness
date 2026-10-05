@@ -118,3 +118,37 @@ missing: <name> (<requirement>): <why the check needs it>
 
 A check you couldn't run, such as a flow `qa run` left `unverified` because its device didn't
 come up, returns `not run` with the reason, never a guessed failure.
+
+## Repair mode
+
+The orchestrator sends 1 flow row back to you when a fixer found it red twice and judged the flow,
+not the app, at fault. Your brief names the fix worktree, the row's requirement and rows, the
+fixer's `flow row:` line, both red run ids and their evidence paths. The worktree's
+`.harness/qa/<plan>/` already holds the requirement's adopted checks.
+
+- Read the evidence the brief names and `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-gestures.md`.
+  Decide whether the flow is at fault: a step the pinned tool can't drive as written, a selector
+  for the wrong element, or a step the app can't satisfy as written.
+- Change only the requirement's files in that folder, and add no other file. Keep every `wait` and
+  `is` step, in order, with a `timeoutMs` no shorter: change, add or drop only the steps that drive
+  the app. `qa adopt --repair` refuses a repair that weakens what the row checks, or changes
+  nothing.
+- Lint it, then prove it red at the merge base on a `wait` or `is` step the row already had, or
+  the step it failed at there before, in the foreground with the Bash `timeout` at 600000:
+
+  ```bash
+  "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json
+  ```
+
+  A red there on a step you added, or a flow file the tool refuses, isn't ready: fix it and run
+  again. Commit nothing; `qa adopt --repair` checks all of this before it takes the files.
+
+Return 1 line:
+
+```text
+repaired: <requirement> <path>: red: <message> (qa run <run id>)
+no repair: <requirement>: <why>
+```
+
+Return `no repair` when the flow already drives what the requirement needs and the app is at
+fault, or when the fix needs a contract name the app doesn't have.

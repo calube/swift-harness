@@ -20,6 +20,9 @@ enum QARunRun {
     /// With `atBase`, only the rows this task writes, read from the checkout's prepared
     /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
     var preparedBy: String?
+    /// With `preparedBy`, only this requirement's rows: a repair worker's red run of the checks
+    /// it rewrote.
+    var requirement: String?
     /// With `after`, run its rows in a scratch tree where the task's branch is merged into main's
     /// tip, before `build merge` lands it.
     var beforeMerge = false
@@ -111,6 +114,11 @@ enum QARunRun {
       return blocked(
         "--prepared-by runs a validation task's checks at the merge base before `qa adopt`, so "
           + "it needs --at-base and takes neither --after nor --final")
+    }
+    if options.requirement != nil, options.preparedBy == nil {
+      return blocked(
+        "--requirement runs 1 requirement's rows of a repair worker's prepared folder, so it "
+          + "needs --prepared-by")
     }
     if options.beforeMerge, options.after == nil || options.atBase || options.final {
       return blocked(
@@ -228,10 +236,21 @@ enum QARunRun {
         return blocked(
           "no row of \(tablePath) names `\(writer)` as its writer; no row ran", plan: slug)
       }
+      if let requirement = options.requirement {
+        runPlan = QARunPlan(
+          entries: runPlan.entries.filter { $0.validation.requirement == requirement },
+          ended: runPlan.ended)
+        guard !runPlan.entries.isEmpty else {
+          return blocked(
+            "no row of \(tablePath) that `\(writer)` writes checks `\(requirement)`; no row ran",
+            plan: slug)
+        }
+      }
       prepared = folder
       notes.append(
         "checks read from \(relative)/ before qa adopt: only the \(runPlan.entries.count) rows "
-          + "`\(writer)` writes ran")
+          + "`\(writer)` writes"
+          + (options.requirement.map { " for `\($0)`" } ?? "") + " ran")
     }
 
     let digests = Dictionary(
@@ -1013,7 +1032,7 @@ enum QARunRun {
 }
 
 /// `swiftgate qa run [--plan <slug>] [--after <task>[,<task>...] [--before-merge [--fix]]]
-/// [--at-base [--prepared-by <task>]] [--final] [--json]`.
+/// [--at-base [--prepared-by <task> [--requirement <id>]]] [--final] [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -1041,6 +1060,12 @@ struct QARunCommand: AsyncParsableCommand {
   )
   var preparedBy: String?
 
+  @Option(
+    help:
+      "With --prepared-by, run only this requirement's rows: a repaired flow's red run at the base."
+  )
+  var requirement: String?
+
   @Flag(
     help: ArgumentHelp(
       "With --after, run its rows where the task's branch is merged into main's tip in a scratch "
@@ -1066,7 +1091,8 @@ struct QARunCommand: AsyncParsableCommand {
       root: root,
       options: QARunRun.Options(
         plan: plan, after: tasks.first, atBase: atBase, final: final, preparedBy: preparedBy,
-        beforeMerge: beforeMerge, fix: fix, alongside: Array(tasks.dropFirst())),
+        requirement: requirement, beforeMerge: beforeMerge, fix: fix,
+        alongside: Array(tasks.dropFirst())),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,

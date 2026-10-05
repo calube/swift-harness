@@ -181,6 +181,9 @@ extension RuleIndexTests {
       FlowRules.noAssertRuleID, FlowRules.schemaRuleID, FlowRules.unknownIDRuleID,
       FlowRules.idsUnknownRuleID, SimAuditScope.untargetedRuleID,
       QAEvidenceGap.videoUnverifiedRuleID, QAEvidenceGap.evidenceUnsavedRuleID,
+      QAFlowRepair.capRuleID, QAFlowRepair.outsideRowRuleID, QAFlowRepair.weakensRuleID,
+      QAFlowRepair.unchangedRuleID, QAFlowRepair.notRedRuleID, QAFlowRepair.wrongRedRuleID,
+      QAFlowRepair.redRunsRuleID,
     ]
     return DesignLintRule.allCases.map(\.rawValue) + docsLint + planLint + build + other
       + enumeratedFamilies.values.flatMap { $0 }

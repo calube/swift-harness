@@ -14,6 +14,7 @@ Contents:
 - [Merge gate watch](#merge-gate-watch): a background merge gate and its deadline
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [Before each merge](#before-each-merge): the validation rows a merge makes ready
+- [Flow repair](#flow-repair): a flow row its own flow file keeps red, rewritten once
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
 - [Recording usage](#recording-usage): `events ingest` at each completion
 - [Task halts](#task-halts): a null workflow, a failed check, `gate-red`, `review-blocked`
@@ -293,7 +294,8 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
   passes there, plus, for red rows, `qa run --after <task> --before-merge --fix`. Its fix worktree gets at most 3 full-gate runs, and the hook denies the next
   (`guard.fixer-gate-cap`);
 - that after 2 red `qa run`s of the same flow row it stops and returns `gate-red` with that row's
-  evidence: its requirement, the failing step and its message, and both run ids. It never reads
+  evidence: its requirement, the failing step and its message, and both run ids. It writes them
+  as 1 `flow row:` line per row at the end of its notes, with `flow-side: yes` or `no`. It never reads
   `agent-device`'s source and never writes probe tests to learn why a step fails. Its `gate-red`
   return then takes the path below like any other, quoting the row's evidence;
 - in a `swiftgate run`, the `cutoffAt` time `run clock` reports, as its deadline: it starts no
@@ -318,7 +320,8 @@ read the output file the notice names, which is the fixer's whole transcript:
 - The check passes and `outcome` is `ready-to-merge`: wait until `build next` lists it in
   `readyToMerge` with `merging` absent. With a `validation.json`,
   `"$SG" qa run --plan <slug> --after <task> --before-merge --fix --json` first, as
-  [before each merge](#before-each-merge) says; a RED one halts as below. Then
+  [before each merge](#before-each-merge) says. A flow row RED there goes to
+  [flow repair](#flow-repair) with `--cause still-red`, and any other RED one halts as below. Then
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, as its own command after the
   check exits 0 (it refuses a fix whose newest `--fix` check isn't GREEN at the fix branch's tip),
   then the merge gate on
@@ -326,6 +329,9 @@ read the output file the notice names, which is the fixer's whole transcript:
   GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
   `worktree remove`, remove the fix worktree and branch too:
   `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
+- `outcome` `gate-red` with a `flow row:` line in its notes, whatever `build check-return`
+  said: [flow repair](#flow-repair) first. It halts as below only when `qa adopt --repair`
+  refuses the repair, the row's 1 repair already ran, or the worker answers `no repair:`.
 - Anything else, or a red gate after the fix merge (undo it first with `--undo`): halt, and
   set the task `blocked`. Options: stop the build (Recommended), abandon this task and go on, or
   leave it blocked and go on with the rest.
@@ -381,6 +387,38 @@ with a fixer's branch is no longer waiting: its rows run again before its fix me
   own judgement: a row red at the newest `--at-base` report too goes to the fixer like any other.
 - Exit 2 (BLOCKED): the table, the ledger or the scratch tree failed. Keep its `message` for the
   report; `build merge` keeps refusing until a run is GREEN, so a second BLOCKED halts the task.
+
+## Flow repair
+
+A fixer's `flow row:` line names a flow row 2 `qa run`s left red. Its flow file is plan state,
+which neither the fixer nor this skill edits, so a validation worker in repair mode rewrites it.
+The cause is `flow-side` when the line says `flow-side: yes`, and `still-red` for `flow-side: no`
+or a row red again after a fixer's `ready-to-merge`. Each row gets 1 repair per row per run:
+`qa adopt --repair` refuses a second with `qa.repair-cap`. A repair is no halt, so record none.
+
+1. Fill the fix worktree's prepared folder with the requirement's adopted checks, its flow and
+   state rows' files: `mkdir -p <fixWorktree>/.harness/qa/<slug>`, then
+   `/bin/cp -p <plans>/<slug>/qa/<file> <fixWorktree>/.harness/qa/<slug>/` for each.
+2. Launch 1 Agent tool call in the background, passing `run_in_background: true`, with
+   `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the fix worktree as its
+   worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from
+   `validation.json`. It quotes the `flow row:` line, both red run ids and the evidence paths their
+   `qa/report.json` rows name, and says to follow the repair mode of
+   `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. Record its usage as for the
+   validation task, under the task the row runs after.
+3. On a `repaired:` return, from the main checkout:
+
+   ```
+   "$SG" qa adopt <fixWorktree> --repair <requirement> --build-run <run> --cause <cause> --reason "<why>" --red-run <run id> --red-run <run id> --json
+   ```
+
+   `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
+   - GREEN: launch the fixer again, 1 more attempt with its own span, ingest and check, given its
+     last return and the adopt's `repaired` record. It runs the before-merge `qa run --fix` again
+     and returns `ready-to-merge` once its rows are GREEN, which merges as above. A `flow row:`
+     line for the same row in that return halts: its 1 repair already ran.
+   - A repair not GREEN, or a `no repair:` return: halt as the fixer's `Anything else` bullet says,
+     quoting the findings or the worker's reason.
 
 ## Recording halts
 
