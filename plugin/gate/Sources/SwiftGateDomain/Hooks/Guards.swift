@@ -9,6 +9,19 @@ public struct GuardViolation: Sendable, Equatable {
     self.ruleID = ruleID
     self.reason = reason
   }
+
+  /// Ends every Bash denial. A denied Bash call runs none of its parts, so a file the command
+  /// would have written before the refused step, through a heredoc, redirect or copy, was never
+  /// written: a model that reads only the refusal moves on as if it was.
+  public static let commandNotRunNote =
+    "Nothing in this command ran, not even the parts before the refused step: no file it writes "
+    + "(a `cat > … <<EOF` heredoc, a `>` redirect, a `cp`), no commit and no other step. Run "
+    + "those parts again in a new call without the refused step."
+
+  /// The reason shown for a denied `tool` call: a Bash call's ends with ``commandNotRunNote``.
+  public func denialReason(forTool tool: String?) -> String {
+    tool == "Bash" ? reason + " " + Self.commandNotRunNote : reason
+  }
 }
 
 /// PreToolUse guards on Bash commands (spec §8): actions that bypass swiftgate or damage state
@@ -156,8 +169,9 @@ public enum BashGuard {
         + "`swiftgate test-only` in the foreground with the Bash tool's `timeout` at 600000, its "
         + "longest. A gate that may outlast that runs with `run_in_background: true` and its "
         + "`--json` output redirected to a file, then `swiftgate build gate-wait <plan> --tier "
-        + "<tier> --output <file> --json` waits on that file. Stop a process you started by its "
-        + "pid with `kill <pid>`.")
+        + "<tier> --output <file> --json` waits on that file. A `swiftgate qa run` prints its run "
+        + "id and the report file it will write as it starts: wait for that file. Stop a process "
+        + "you started by its pid with `kill <pid>`.")
   }
 
   private static func namesOperand(_ arguments: ArraySlice<String>) -> Bool {

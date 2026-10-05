@@ -77,7 +77,8 @@ struct QARepo {
   func run(
     _ options: QARunRun.Options, events: MemoryEventLog = MemoryEventLog(),
     suffix: UInt32 = 0xabc, checks: (any QACheckRunning)? = nil,
-    xcresults: (any XcresultReader)? = nil, deadline: QARunDeadline? = nil
+    xcresults: (any XcresultReader)? = nil, deadline: QARunDeadline? = nil,
+    started: (@Sendable (_ runID: String, _ report: URL) -> Void)? = nil
   ) async -> QAReport {
     var dependencies = QARunRun.Dependencies(
       checks: checks ?? QACommandRunner(runner: runner), ports: LiveQAPorts(),
@@ -87,6 +88,7 @@ struct QARepo {
     dependencies.merger = LiveMergeRunner(runner: runner)
     if let xcresults { dependencies.xcresults = xcresults }
     dependencies.deadline = deadline
+    dependencies.started = started
     return await QARunRun.run(
       root: root, options: options, git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: dependencies)
@@ -127,6 +129,34 @@ private let toolsPresent = ["/usr/bin/python3", "/usr/bin/curl", "/usr/bin/jq"].
 
 @Suite("qa run")
 struct QARunCommandTests {
+  @Test(
+    "a run names its id and the report file it will write before any row runs, and that file then holds the run's report — catches an agent left to find a run it backgrounded by matching process names"
+  )
+  func namesItsReportBeforeRowsRun() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [validationRow("req-ok", .acceptance, "true", after: ["status-api"])],
+      tasks: ["status-api": .done])
+    let announced = Mutex<[(runID: String, report: URL, existed: Bool)]>([])
+
+    let report = await repo.run(QARunRun.Options()) { runID, path in
+      announced.withLock {
+        $0.append((runID, path, FileManager.default.fileExists(atPath: path.path)))
+      }
+    }
+
+    let calls = announced.withLock { $0 }
+    try #require(calls.count == 1, "\(calls.count) announcements")
+    #expect(calls[0].runID == report.runID)
+    #expect(!calls[0].existed, "announced before the report was written")
+    #expect(
+      calls[0].report.standardizedFileURL
+        == (try repo.runDirectory(report)).appending(path: "qa/report.json").standardizedFileURL)
+    let written = try QAReportJSON.decode(try Data(contentsOf: calls[0].report))
+    #expect(written.runID == report.runID)
+  }
+
   /// Starts a static server on `$QA_PORT` over the plan's `qa/` folder, waits for it, and asserts
   /// on its JSON with `jq -e`, as an API acceptance row does.
   static let serverCheck =

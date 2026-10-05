@@ -1,0 +1,8 @@
+{
+  "agentType": "swift-harness:verifier",
+  "description": "verify:test-quality",
+  "model": "claude-opus-5-5",
+  "requestShape": "foreground",
+  "spawnDepth": 1,
+  "workflowPhase": "Verify"
+}

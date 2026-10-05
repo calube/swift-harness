@@ -355,8 +355,8 @@ struct WarmupTimesFeedTheTiersTests {
 
     let api = try #require(areas["api"])
     let web = try #require(areas["web"])
-    #expect(await dependencies.warmTestMilliseconds(api, tree) == 10_000)
-    #expect(await dependencies.warmTestMilliseconds(web, tree) == 45_000)
-    #expect(await dependencies.warmTestMilliseconds(api, String(repeating: "0", count: 40)) == nil)
+    #expect(await dependencies.warmup(api, tree)?.warmTestMilliseconds == 10_000)
+    #expect(await dependencies.warmup(web, tree)?.warmTestMilliseconds == 45_000)
+    #expect(await dependencies.warmup(api, String(repeating: "0", count: 40)) == nil)
   }
 }

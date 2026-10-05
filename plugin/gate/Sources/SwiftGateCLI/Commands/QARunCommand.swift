@@ -23,8 +23,11 @@ enum QARunRun {
     /// With `after`, run its rows in a scratch tree where the task's branch is merged into main's
     /// tip, before `build merge` lands it.
     var beforeMerge = false
-    /// With `beforeMerge`, merge the task's fixer's branch in place of the task's.
+    /// With `beforeMerge`, merge `after`'s fixer's branch in place of the task's.
     var fix = false
+    /// With `beforeMerge`, more tasks whose branches merge after `after`'s, each counting as
+    /// merged: a run over every task a row waits on, before the first of them merges.
+    var alongside: [String] = []
   }
 
   struct Dependencies: Sendable {
@@ -53,6 +56,9 @@ enum QARunRun {
     var deadline: QARunDeadline?
     /// Merges the branch a `--before-merge` run checks into its scratch tree.
     var merger: any MergeRunner = LiveMergeRunner(runner: LiveProcessRunner())
+    /// Told the run's id and where its report will be written, once its run directory exists
+    /// and before any row runs, so a caller can wait on that file.
+    var started: (@Sendable (_ runID: String, _ report: URL) -> Void)? = nil
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -81,6 +87,11 @@ enum QARunRun {
     }
     if options.fix, !options.beforeMerge {
       return blocked("--fix names the branch --before-merge merges, so it needs --before-merge")
+    }
+    if !options.alongside.isEmpty, !options.beforeMerge {
+      return blocked(
+        "more than 1 --after task merges their branches together in a trial merge, so it needs "
+          + "--before-merge")
     }
     if options.final, dependencies.flows != nil, dependencies.finalPass == nil {
       return blocked("--final has no recorder to record its flows with")
@@ -152,7 +163,8 @@ enum QARunRun {
       } catch {
         return blocked("reading \(plan.ledgerFile): \(error)", plan: slug)
       }
-      if let after = options.after, !progress.contains(after) {
+      for after in (options.after.map { [$0] } ?? []) + options.alongside
+      where !progress.contains(after) {
         return blocked(
           "--after `\(after)` names no task in \(plan.ledgerFile); no row ran", plan: slug)
       }
@@ -165,7 +177,8 @@ enum QARunRun {
       }
     }
     var runPlan = QARunPlan.make(
-      table: table, merged: merged, after: options.after, ended: ended)
+      table: table, merged: merged, after: options.after, ended: ended,
+      alongside: options.alongside)
     var prepared: String?
     if let writer = options.preparedBy {
       let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
@@ -243,6 +256,7 @@ enum QARunRun {
     } catch {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
+    dependencies.started?(runID, qaDirectory.appending(path: QAReport.fileName))
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
@@ -269,15 +283,26 @@ enum QARunRun {
       let names: TaskWorktree
       let tip: String
       let base: String
+      var alongside: [QATrialMerge.Branch] = []
       do {
+        let profile = BuildPresetCatalog.profile(root: root)
         names = try TaskWorktree(
           commonDirectory: common, plan: slug, task: options.fix ? "fix-\(after)" : after,
-          profile: BuildPresetCatalog.profile(root: root))
+          profile: profile)
         guard let found = try await git.revision("refs/heads/\(names.branch)") else {
           return blocked(
             "branch \(names.branch) doesn't exist, so there is nothing to merge", plan: slug)
         }
         tip = found
+        for task in options.alongside {
+          let other = try TaskWorktree(
+            commonDirectory: common, plan: slug, task: task, profile: profile)
+          guard let found = try await git.revision("refs/heads/\(other.branch)") else {
+            return blocked(
+              "branch \(other.branch) doesn't exist, so there is nothing to merge", plan: slug)
+          }
+          alongside.append(QATrialMerge.Branch(task: task, branch: other.branch, tip: found))
+        }
         guard let main = try await git.revision("refs/heads/\(names.baseBranch)") else {
           return blocked("branch \(names.baseBranch) doesn't exist to merge into", plan: slug)
         }
@@ -295,48 +320,55 @@ enum QARunRun {
         ran = try await scratch.withScratchTree(
           ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
         ) { tree in
-          let outcome: MergeOutcome
-          do throws(GitWorkspaceError) {
-            outcome = try await merger.merge(
-              names.branch, message: "Merge: \(names.branch) before build merge", in: tree.path)
-          } catch {
-            return .failed("\(error)")
-          }
-          switch outcome {
-          case .conflicted(let files):
-            let rows = await runPlan.execute(atBase: false) { _ in
-              QACheckOutcome(
-                result: .unverified,
-                message: "not run: \(names.branch) conflicts with \(names.baseBranch) in "
-                  + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
-            }
-            return .conflicted(files: files, rows: rows)
-          case .merged(let commit):
-            // A run whose trial merge made this same tree already proved the rows it passed.
-            var onTree = checks
-            var treeNotes: [String] = []
-            let merged: String?
+          var commit = base
+          var into = names.baseBranch
+          // Each branch merges on top of the ones before it, so the rows see them all at once.
+          for merging in [names.branch] + alongside.map(\.branch) {
+            let outcome: MergeOutcome
             do throws(GitWorkspaceError) {
-              merged = try await merger.tree(of: commit, in: tree.path)
+              outcome = try await merger.merge(
+                merging, message: "Merge: \(merging) before build merge", in: tree.path)
             } catch {
-              merged = nil
-              treeNotes.append("no earlier run's rows reused: reading the merge's tree: \(error)")
+              return .failed("\(error)")
             }
-            if let merged,
-              let record = QAMergedTreeRun.newest(
-                on: merged, in: QARunHistory.mergedTreeRuns(worktree: root))
-            {
-              let reuse = record.run.reuse(in: runPlan, digests: digests, results: [.pass])
-              onTree.reused.merge(reuse.outcomes) { kept, _ in kept }
-              treeNotes.append(
-                "qa run \(record.run.runID) ran on the same merged tree \(merged.prefix(12))")
-              treeNotes += reuseNotes(record: record.run, reuse: reuse)
+            switch outcome {
+            case .merged(let made):
+              commit = made
+              into += " and \(merging)"
+            case .conflicted(let files):
+              let rows = await runPlan.execute(atBase: false) { _ in
+                QACheckOutcome(
+                  result: .unverified,
+                  message: "not run: \(merging) conflicts with \(into) in "
+                    + files.joined(separator: ", ") + "; build merge cuts the fix worktree")
+              }
+              return .conflicted(files: files, rows: rows)
             }
-            let rows = await runPlan.execute(atBase: false) { await onTree.run($0, in: tree.path) }
-            return .merged(
-              commit: commit, tree: merged, rows: rows, notes: treeNotes,
-              released: await onTree.finishFlows())
           }
+          // A run whose trial merge made this same tree already proved the rows it passed.
+          var onTree = checks
+          var treeNotes: [String] = []
+          let merged: String?
+          do throws(GitWorkspaceError) {
+            merged = try await merger.tree(of: commit, in: tree.path)
+          } catch {
+            merged = nil
+            treeNotes.append("no earlier run's rows reused: reading the merge's tree: \(error)")
+          }
+          if let merged,
+            let record = QAMergedTreeRun.newest(
+              on: merged, in: QARunHistory.mergedTreeRuns(worktree: root))
+          {
+            let reuse = record.run.reuse(in: runPlan, digests: digests, results: [.pass])
+            onTree.reused.merge(reuse.outcomes) { kept, _ in kept }
+            treeNotes.append(
+              "qa run \(record.run.runID) ran on the same merged tree \(merged.prefix(12))")
+            treeNotes += reuseNotes(record: record.run, reuse: reuse)
+          }
+          let rows = await runPlan.execute(atBase: false) { await onTree.run($0, in: tree.path) }
+          return .merged(
+            commit: commit, tree: merged, rows: rows, notes: treeNotes,
+            released: await onTree.finishFlows())
         }
       } catch {
         return blocked("making a scratch worktree at \(base): \(error)", plan: slug)
@@ -348,12 +380,14 @@ enum QARunRun {
       case .conflicted(let files, let ran):
         rows = ran
         commit = nil
-        trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base, conflicts: files)
+        trialMerge = QATrialMerge(
+          branch: names.branch, tip: tip, base: base, conflicts: files, alongside: alongside)
       case .merged(let merged, let tree, let ran, let treeNotes, let released):
         rows = ran
         commit = merged
         notes += treeNotes + released
-        trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base)
+        trialMerge = QATrialMerge(
+          branch: names.branch, tip: tip, base: base, alongside: alongside)
         if let tree {
           let record = QAMergedTreeRun(
             tree: tree,
@@ -880,9 +914,28 @@ enum QARunRun {
     return QARunDeadline.of(box, final: final)
   }
 
-  static func render(_ report: QAReport, json: Bool) -> String {
+  /// 1 line naming the verdict, the run and the report file, printed last so a cut output keeps
+  /// it; empty when `reportFile` is `nil`.
+  static func summary(_ report: QAReport, reportFile: String?) -> String {
+    guard let reportFile else { return "" }
+    return
+      "\(command): \(report.verdict.rawValue) \(report.message); run \(report.runID ?? "none"), "
+      + "report \(reportFile)"
+  }
+
+  /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
+  static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
+    let summary = summary(report, reportFile: reportFile)
     guard !json else {
-      return String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
+      let encoded = String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
+      // The summary goes in as the object's last member, so the JSON still reads.
+      let encoder = JSONEncoder()
+      encoder.outputFormatting = [.withoutEscapingSlashes]
+      guard !summary.isEmpty, encoded.hasSuffix("\n}\n"),
+        let quoted = try? encoder.encode(summary)
+      else { return encoded }
+      return encoded.dropLast("\n}\n".count) + ",\n  \"summary\" : "
+        + String(decoding: quoted, as: UTF8.self) + "\n}\n"
     }
     var lines = ["\(command): \(report.verdict.rawValue) \(report.message)"]
     for row in report.rows {
@@ -893,11 +946,12 @@ enum QARunRun {
     if let runID = report.runID { lines.append("  run: \(runID)") }
     if let record = report.atBaseRecord { lines.append("  at-base record: \(record)") }
     lines += report.notes.map { "  note: \($0)" }
+    if !summary.isEmpty { lines.append(summary) }
     return lines.joined(separator: "\n")
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task> [--before-merge [--fix]]]
+/// `swiftgate qa run [--plan <slug>] [--after <task>[,<task>...] [--before-merge [--fix]]]
 /// [--at-base [--prepared-by <task>]] [--final] [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
@@ -910,7 +964,8 @@ struct QARunCommand: AsyncParsableCommand {
   @Option(
     help: ArgumentHelp(
       "Run only the rows that name this task in Runs after, taking it as merged, recording each "
-        + "flow when the recorder is free."))
+        + "flow when the recorder is free. With --before-merge, a comma-separated list merges "
+        + "every task's branch, in order, and runs the rows that name any of them."))
   var after: String?
 
   @Flag(help: "Run every row at the merge base in a scratch worktree and record why each fails.")
@@ -941,11 +996,16 @@ struct QARunCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
+    let tasks =
+      after.map { list in
+        list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+          .filter { !$0.isEmpty }
+      } ?? []
     let report = await QARunRun.run(
       root: root,
       options: QARunRun.Options(
-        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy,
-        beforeMerge: beforeMerge, fix: fix),
+        plan: plan, after: tasks.first, atBase: atBase, final: final, preparedBy: preparedBy,
+        beforeMerge: beforeMerge, fix: fix, alongside: Array(tasks.dropFirst())),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,
@@ -967,8 +1027,19 @@ struct QARunCommand: AsyncParsableCommand {
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
         testDevices: LiveTestDeviceLeases(runner: runner),
-        deadline: await QARunRun.deadline(root: root, runner: runner, final: final)))
-    Console.write(QARunRun.render(report, json: json))
+        deadline: await QARunRun.deadline(root: root, runner: runner, final: final),
+        started: { runID, report in
+          // Before any row runs, so a caller that backgrounds the run waits on this file.
+          let line =
+            "\(QARunRun.command): run \(runID) started; its report will be written to "
+            + "\(report.path)\n"
+          FileHandle.standardError.write(Data(line.utf8))
+        }))
+    let reportFile = report.runID.flatMap { runID in
+      (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
+        .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
+    }.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
+    Console.write(QARunRun.render(report, json: json, reportFile: reportFile))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
 }

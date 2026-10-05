@@ -211,7 +211,7 @@ enum HookRunner {
     guard event == .preToolUse, payload.toolName == "Bash", let command = payload.command,
       let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType)
     else { return .silent }
-    return .output(PreToolUseHook.deny(violation))
+    return .output(PreToolUseHook.deny(violation, tool: payload.toolName))
   }
 
   /// The events a brownfield clone answers. PostToolUse formats Swift to this harness's style

@@ -1,0 +1,361 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 4 (wait): wait timed out for selector: id=\"probe.refreshes\" label=\"Refreshes 1\". Current surface: Probe, Refreshes 0, Row 0, Row 1.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muuw5c4b-21cae94c",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/requests/a3aa16b4d770ad17.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-refresh",
+      "requestId": "a3aa16b4d770ad17"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 5000,
+      "readableCaptures": 7,
+      "captures": 7,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 457,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 757,
+          "durationMs": 422,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1482,
+          "durationMs": 442,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2226,
+          "durationMs": 449,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2978,
+          "durationMs": 424,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3703,
+          "durationMs": 471,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4473,
+          "durationMs": 459,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 5001,
+      "currentSurface": {
+        "labels": [
+          "Probe",
+          "Refreshes 0",
+          "Row 0",
+          "Row 1",
+          "Row 2",
+          "Row 3"
+        ]
+      },
+      "step": 4,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.refreshes\" label=\"Refreshes 1\"",
+        "5000"
+      ],
+      "executed": 3,
+      "total": 5,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-refresh",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-refresh",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/requests/a3aa16b4d770ad17.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-refresh/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.RefreshProbe",
+            "appBundleId": "com.example.RefreshProbe",
+            "startup": {
+              "durationMs": 1071,
+              "measuredAt": "2026-10-05T06:50:55.547Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.RefreshProbe",
+              "appBundleId": "com.example.RefreshProbe"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 318,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 738,
+              "totalDurationMs": 1071
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-37357",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.RefreshProbe"
+          },
+          "durationMs": 1380
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 446,
+            "selector": "id=\"probe.refreshes\" label=\"Refreshes 0\""
+          },
+          "durationMs": 447
+        },
+        {
+          "step": 3,
+          "command": "scroll",
+          "ok": true,
+          "data": {
+            "direction": "up",
+            "amount": 0.8,
+            "durationMs": 400,
+            "x1": 201,
+            "y1": 87,
+            "x2": 201,
+            "y2": 787,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "pixels": 699,
+            "message": "Scrolled up by 0.8 of the viewport (699px)",
+            "settle": {
+              "settled": true,
+              "waitedMs": 5362,
+              "captures": 5,
+              "quietMs": 500,
+              "timeoutMs": 10000,
+              "diff": {
+                "summary": {
+                  "additions": 20,
+                  "removals": 22,
+                  "unchanged": 2
+                },
+                "lines": [
+                  {
+                    "kind": "removed",
+                    "text": "@e1 [other] \"RefreshProbe\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e1 [application] \"RefreshProbe\"",
+                    "ref": "e1"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e2 [other] \"Probe\"",
+                    "ref": "e2"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e3 [text] \"Probe\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e5 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e6 [text] \"Refreshes 0\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e7 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e8 [text] \"Row 0\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e9 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e10 [text] \"Row 1\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e11 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e12 [text] \"Row 2\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e13 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e14 [text] \"Row 3\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e15 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e16 [text] \"Row 4\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e17 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e18 [text] \"Row 5\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e19 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e20 [text] \"Row 6\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e21 [cell]"
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e22 [text] \"Row 7\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e23 [other] \"Vertical scroll bar, 1 page\""
+                  },
+                  {
+                    "kind": "removed",
+                    "text": "@e24 [other] \"Vertical scroll bar, 1 page\""
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e5 [cell] \"Refreshes 0\"",
+                    "ref": "e5"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e6 [other] \"Refreshes 0\"",
+                    "ref": "e6"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e7 [cell] \"Row 0\"",
+                    "ref": "e7"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e8 [other] \"Row 0\"",
+                    "ref": "e8"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e9 [cell] \"Row 1\"",
+                    "ref": "e9"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e10 [other] \"Row 1\"",
+                    "ref": "e10"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e11 [cell] \"Row 2\"",
+                    "ref": "e11"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e12 [other] \"Row 2\"",
+                    "ref": "e12"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e13 [cell] \"Row 3\"",
+                    "ref": "e13"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e14 [other] \"Row 3\"",
+                    "ref": "e14"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e15 [cell] \"Row 4\"",
+                    "ref": "e15"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e16 [other] \"Row 4\"",
+                    "ref": "e16"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e17 [cell] \"Row 5\"",
+                    "ref": "e17"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e18 [other] \"Row 5\"",
+                    "ref": "e18"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e19 [cell] \"Row 6\"",
+                    "ref": "e19"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e20 [other] \"Row 6\"",
+                    "ref": "e20"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e21 [cell] \"Row 7\"",
+                    "ref": "e21"
+                  },
+                  {
+                    "kind": "added",
+                    "text": "@e22 [other] \"Row 7\"",
+                    "ref": "e22"
+                  }
+                ]
+              },
+              "refsGeneration": 521485
+            }
+          },
+          "durationMs": 6177
+        }
+      ]
+    }
+  }
+}

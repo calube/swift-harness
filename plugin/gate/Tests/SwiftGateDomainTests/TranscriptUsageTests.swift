@@ -359,3 +359,29 @@ struct TranscriptUsageTests {
     }
   }
 }
+
+@Suite("a subagent's role from its agent type")
+struct AgentRoleFromTypeTests {
+  @Test(
+    "the third price-tracker trial's agent types name their roles: the fixer build-fixer, a build worker build-worker, and a general-purpose agent none — catches a fixer filed under the session that launched it"
+  )
+  func trialTypesNameRoles() throws {
+    let directory = Fixture.directory.appending(
+      path: "Transcripts/cb039a0d-04f4-428a-b575-e73a1e11d628/subagents")
+    func type(_ path: String) throws -> String {
+      let object = try JSONSerialization.jsonObject(
+        with: Data(contentsOf: directory.appending(path: path)))
+      return try #require((object as? [String: Any])?["agentType"] as? String)
+    }
+
+    #expect(AgentRole.of(agentType: try type("agent-ac257d99cb5b5a4ef.meta.json")) == .buildFixer)
+    #expect(
+      AgentRole.of(
+        agentType: try type("workflows/wf_b303df48-6fa/agent-a441498174c3ea0c9.meta.json"))
+        == .buildWorker)
+    #expect(AgentRole.of(agentType: try type("agent-a5db10195f7f6c10e.meta.json")) == nil)
+    #expect(AgentRole.of(agentType: "swift-harness:verifier") == .review)
+    #expect(AgentRole.of(agentType: "swift-harness:brownfield-explorer") == .explorer)
+    #expect(AgentRole.of(agentType: "swift-harness:design-drafter") == .design)
+  }
+}

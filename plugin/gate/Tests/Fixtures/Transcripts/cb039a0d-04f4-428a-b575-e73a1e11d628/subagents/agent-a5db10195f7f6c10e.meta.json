@@ -1,0 +1,8 @@
+{
+  "agentType": "general-purpose",
+  "description": "Write validation flow checks",
+  "model": "opus",
+  "requestShape": "background",
+  "spawnDepth": 1,
+  "workflowPhase": null
+}

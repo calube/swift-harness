@@ -39,19 +39,27 @@ public struct QARunPlan: Sendable, Equatable {
   ///   - after: when set, only the rows whose `runsAfter` names this task, which counts as
   ///     merged: the caller runs this straight after merging it.
   ///   - ended: each task's ledger status when the build has ended; see ``ended``.
+  ///   - alongside: with `after`, more tasks that count as merged with it, whose rows are taken
+  ///     too.
   public static func make(
     table: ValidationTable, merged: Set<String>?, after: String?,
-    ended: [String: TaskStatus]? = nil
+    ended: [String: TaskStatus]? = nil, alongside: [String] = []
   ) -> QARunPlan {
     let numbered = table.rows.enumerated().map { (row: $0.offset + 1, validation: $0.element) }
     let layered = layerOrder.flatMap { layer in
       numbered
         .filter { $0.validation.layer == layer }
-        .filter { candidate in after.map { candidate.validation.runsAfter.contains($0) } ?? true }
+        .filter { candidate in
+          after.map { after in
+            candidate.validation.runsAfter.contains { $0 == after || alongside.contains($0) }
+          } ?? true
+        }
         .map { candidate in
           let unmerged =
             merged.map { merged in
-              candidate.validation.runsAfter.filter { !merged.contains($0) && $0 != after }
+              candidate.validation.runsAfter.filter {
+                !merged.contains($0) && $0 != after && !alongside.contains($0)
+              }
             } ?? []
           return Entry(row: candidate.row, validation: candidate.validation, waitingOn: unmerged)
         }

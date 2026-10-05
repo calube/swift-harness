@@ -17,6 +17,7 @@ into a committed file.
 | How `qa run` runs a `test:` row, once per check on a leased clone, and reads a runner that never launched | [`simulator-qa-test-rows.md`](simulator-qa-test-rows.md) |
 | Proving validation rows red with `qa run --at-base`, a validation worker's `--prepared-by` run, the rows a later run reuses, and a task's rows before it merges | [`simulator-qa-at-base.md`](simulator-qa-at-base.md) |
 | How `qa run` drives a flow row as 1 `agent-device batch`, and the qa.flow record it leaves | [`simulator-qa-flows.md`](simulator-qa-flows.md) |
+| Writing a flow step for a gesture a selector alone doesn't drive, such as pull to refresh | [`simulator-qa-flow-gestures.md`](simulator-qa-flow-gestures.md) |
 | How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Which controls `sim verify`'s accessibility rules judge, in an owned repository or a brownfield clone | [`simulator-qa-audit.md`](simulator-qa-audit.md) |

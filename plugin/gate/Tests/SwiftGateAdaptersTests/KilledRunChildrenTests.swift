@@ -140,6 +140,58 @@ struct KilledRunChildrenTests {
     #expect(ContinuousClock.now - start < .seconds(Self.childLifetime / 2))
   }
 
+  @Test(
+    "a terminated swiftgate kills a child that ignores SIGTERM once the grace period passes — catches a test runner that shrugs off the forwarded SIGTERM outliving the gate a Bash timeout stopped",
+    arguments: [SIGTERM, SIGINT])
+  func terminatedRunKillsAChildIgnoringSIGTERM(signal: Int32) async throws {
+    let directory = FileManager.default.temporaryDirectory.appending(
+      path: "swiftgate-killed-run-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let bin = directory.appending(path: "bin", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let ready = directory.appending(path: "ready").path
+    try #require(mkfifo(ready, 0o600) == 0)
+    // An ignored signal stays ignored across `exec`, so the sleep that holds the pipe shrugs off
+    // every SIGTERM, as a runner that handles it and keeps going would.
+    let git = bin.appending(path: "git")
+    try Data(
+      """
+      #!/bin/sh
+      trap '' TERM
+      exec 3>"$READY"
+      echo "$PPID $$" >&3
+      exec sleep \(Self.childLifetime)
+
+      """.utf8
+    ).write(to: git)
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
+
+    let binary = Fixture.gateDirectory.appending(path: ".build/debug/swiftgate").path
+    let start = ContinuousClock.now
+    let run = Task {
+      try await LiveProcessRunner().run(
+        ProcessInvocation(
+          executable: binary, arguments: ["comments", "--staged"],
+          environmentOverlay: [
+            "PATH": "\(bin.path):/usr/bin:/bin", "READY": ready,
+            "LLVM_PROFILE_FILE": directory.appending(path: "swiftgate-%p.profraw").path,
+          ],
+          workingDirectory: directory.path, timeout: .seconds(3600)))
+    }
+    var lines = Self.lines(of: ready).makeAsyncIterator()
+    let pids = try #require(await lines.next()).split(separator: " ").compactMap { pid_t($0) }
+    try #require(pids.count == 2)
+    let (swiftgate, child) = (pids[0], pids[1])
+    defer { kill(child, SIGKILL) }
+
+    kill(swiftgate, signal)
+    let output = try await run.value
+    #expect(output.status == .signaled(signal))
+    // The pipe reaches end-of-file only once its last holder, the child, has exited.
+    #expect(await lines.next() == nil)
+    #expect(ContinuousClock.now - start < .seconds(Self.childLifetime / 2))
+  }
+
   /// The lines written to the named pipe at `path`, finishing once every writer has closed it:
   /// for a child that holds it open for life, once the child is gone. Reads on a dedicated
   /// thread, since opening the pipe blocks until a writer opens it.

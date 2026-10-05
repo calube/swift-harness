@@ -163,3 +163,127 @@ struct QAMergedTreeRunTests {
     #expect(QAMergedTreeRun.newest(on: "feedface", in: [fixer, orchestrator]) == nil)
   }
 }
+
+/// The third price-tracker trial's cutoff: with no `final` recorded it charged `final` as the
+/// slowest merge gate, 227 s, while the real `final` took 35 s, since 6 of its 8 area steps were
+/// the merge gate's passes on the same tree and only LogClient ran.
+@Suite("the cutoff in the third price-tracker trial")
+struct ReusedFinalCutoffCostsTests {
+  static let directory = "BrownfieldTrial"
+  static let baseTree = "f0bd7c247ed6a4afd220dfad6893cc719ca66bfa"
+
+  static func logBeforeCutoff() throws -> BuildEventLog {
+    let log = BuildEventJSON.decode(
+      try Fixture.data("\(directory)/price-tracker-3-build-events.jsonl"))
+    try #require(log.damage.isEmpty)
+    let abandon = try #require(
+      log.events.firstIndex {
+        guard case .transition(let transition) = $0 else { return false }
+        return transition.to == .abandoned
+      })
+    return BuildEventLog(events: Array(log.events[..<abandon]), damage: [])
+  }
+
+  static func gateMilliseconds(before date: Date) throws -> [String: Int] {
+    let events = try HarnessEventJSON.decode(
+      Fixture.data("\(directory)/price-tracker-3-gate-runs.jsonl")
+    ).events
+    return Dictionary(
+      uniqueKeysWithValues: events.compactMap { event -> (String, Int)? in
+        guard case .gateRun(let run) = event.payload, let id = event.runID, event.time < date
+        else { return nil }
+        return (id, run.milliseconds)
+      })
+  }
+
+  static func record() throws -> CutoffRecord {
+    try CutoffRecord.decode(Fixture.data("\(directory)/price-tracker-3-cutoff.json"))
+  }
+
+  /// The trial's `final`, as its own steps say what it reused and what it ran: each area with the
+  /// steps it ran rather than took from the merge gate's passes.
+  static func finalReuse() throws -> FinalGateReuse {
+    let steps = try HarnessEventJSON.decode(
+      Fixture.data("\(directory)/price-tracker-3-final-steps.jsonl")
+    ).events.compactMap { event -> GateStepEvent? in
+      guard case .gateStep(let step) = event.payload, step.area != nil else { return nil }
+      return step
+    }
+    var areas: [String: [AreaStep]] = [:]
+    for step in steps {
+      let area = try #require(step.area)
+      let ran: AreaStep? =
+        switch step.step {
+        case .areaBuild: .build
+        case .areaTest: .test
+        case .areaLint: .lint
+        default: nil
+        }
+      areas[area, default: []] += step.derivedData == .reused ? [] : ran.map { [$0] } ?? []
+    }
+    let times = try WarmupTimesFile.decode(
+      Fixture.data("\(directory)/price-tracker-3-warmup.json"), tree: baseTree)
+    return FinalGateReuse(
+      areas: areas.keys.sorted().map { FinalGateArea(name: $0, unreused: areas[$0] ?? []) },
+      times: times)
+  }
+
+  @Test(
+    "with no final recorded, final is priced by the steps it can't reuse: only LogClient's build and test, at its 21.3 s warm test, so the floor's 30 s, not the merge gate's 227 s — catches a cutoff charging a final that reuses 6 of 8 steps as a whole merge gate"
+  )
+  func pricesFinalByWhatItCantReuse() throws {
+    let record = try Self.record()
+    let reuse = try Self.finalReuse()
+    #expect(reuse.areas.filter { !$0.unreused.isEmpty }.map(\.name) == ["LogClient"])
+
+    let costs = CutoffCosts.measured(
+      log: try Self.logBeforeCutoff(), milliseconds: try Self.gateMilliseconds(before: record.at),
+      finalReuse: reuse)
+
+    #expect(
+      costs
+        == CutoffCosts(
+          mergeGateSeconds: 227, mergeGateSource: .measured, finalSeconds: CutoffCosts.floorSeconds,
+          finalSource: .areaSteps))
+    #expect(costs.finalAndReportSeconds == 90)
+  }
+
+  @Test(
+    "at the trial's cutoff the gating task is still abandoned, its 126 s qa and 227 s merge gate with a 90 s tail exceeding the 290 s left, and its reason names the 90 s tail, where the recorded one charged 287 s — catches the reuse price leaking into the merge cost, or never reaching the decision"
+  )
+  func decisionChargesTheReusedTail() throws {
+    let record = try Self.record()
+    let costs = CutoffCosts.measured(
+      log: try Self.logBeforeCutoff(), milliseconds: try Self.gateMilliseconds(before: record.at),
+      finalReuse: try Self.finalReuse())
+
+    let decisions = CutoffRule.decide(
+      tasks: [CutoffTask(id: "watchlist-screen", stage: .gating, beforeMergeQASeconds: 126)],
+      timeBox: record.timeBox, now: record.at, costs: costs)
+
+    #expect(decisions.map(\.action) == [.abandon])
+    let reason = try #require(decisions.first?.reason)
+    #expect(reason.contains("final and the report (90 s)"), "\(reason)")
+    #expect(record.decisions.first?.reason.contains("(287 s)") == true)
+  }
+
+  @Test(
+    "an area with steps left costs its warm test, else its cold cost, and an e2e step or an unmeasured area costs the fallback; reused areas cost nothing and the slowest area sets the price — catches summing areas that run side by side, or pricing a reused area"
+  )
+  func pricesEachAreaLeft() throws {
+    let times = try Self.finalReuse().times
+    func seconds(_ areas: [FinalGateArea]) -> Int {
+      FinalGateReuse(areas: areas, times: times).seconds(unmeasured: 227)
+    }
+
+    #expect(seconds([FinalGateArea(name: "APIClient", unreused: [])]) == 0)
+    #expect(seconds([FinalGateArea(name: "LogClient", unreused: [.build, .test])]) == 22)
+    #expect(
+      seconds([
+        FinalGateArea(name: "LogClient", unreused: [.build, .test]),
+        FinalGateArea(name: "InterviewStarter", unreused: [.test]),
+      ]) == 56)
+    #expect(seconds([FinalGateArea(name: "LogClient", unreused: [.e2e])]) == 227)
+    #expect(seconds([FinalGateArea(name: "Unmeasured", unreused: [.build])]) == 227)
+  }
+}

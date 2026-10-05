@@ -1,0 +1,14 @@
+{"at":"2026-10-05T05:57:32Z","from":"pending","kind":"transition","task":"spec-validation","to":"in-progress"}
+{"at":"2026-10-05T05:57:32Z","from":"pending","kind":"transition","task":"watchlist-screen","to":"in-progress"}
+{"at":"2026-10-05T05:57:32Z","from":"pending","kind":"transition","task":"detail-screen","to":"in-progress"}
+{"at":"2026-10-05T05:57:32Z","from":"pending","kind":"transition","task":"coingecko-client","to":"in-progress"}
+{"at":"2026-10-05T06:00:58Z","checkId":"6A967628-6705-4A57-87E6-E62DBDD908CA","commit":"e1ce057c1a087cb04cf45906993abe8c7968ee01","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"coingecko-client","verdict":"GREEN"}
+{"at":"2026-10-05T06:01:10Z","kind":"merge","postCommit":"bac6f58f96873fb4e6c870f6c847a5c4a83872b3","preCommit":"e54fcd5341014acd58b264d16991ce817d4421e0","task":"coingecko-client"}
+{"at":"2026-10-05T06:05:15Z","gate":"merge","kind":"gate","runId":"20261005T060114Z-00eb2a83","task":"coingecko-client","tier":"merge","verdict":"GREEN"}
+{"at":"2026-10-05T06:05:15Z","from":"in-progress","kind":"transition","task":"coingecko-client","to":"done"}
+{"at":"2026-10-05T06:05:20Z","checkId":"0406DB41-3C80-42B1-9478-93F3E5200B17","commit":"e886c217db20b8ae42eea1b2a55aba927c44b1b4","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"watchlist-screen","verdict":"GREEN"}
+{"at":"2026-10-05T06:07:36Z","from":"in-progress","kind":"transition","task":"spec-validation","to":"done"}
+{"at":"2026-10-05T06:28:19Z","from":"in-progress","kind":"transition","task":"watchlist-screen","to":"abandoned"}
+{"at":"2026-10-05T06:28:19Z","from":"in-progress","kind":"transition","task":"detail-screen","to":"abandoned"}
+{"at":"2026-10-05T06:29:36Z","gate":"final","kind":"gate","runId":"20261005T062852Z-66a265fc","tier":"final","verdict":"GREEN"}
+{"at":"2026-10-05T06:29:42Z","kind":"finish","qaRun":"20261005T062936Z-b1dc8de8","validation":"RED"}

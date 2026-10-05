@@ -101,6 +101,35 @@ public struct SpanLog: Sendable {
     }
   }
 
+  /// Ends, with `outcome`, every span of `buildRun` still open that `matching` picks, oldest
+  /// first, each timed from its start to now; returns the `span.end` events written. An agent
+  /// stopped, or one that never ran its own `span end`, leaves its span open until this.
+  public func endOpen(
+    buildRun: String, outcome: SpanOutcome, matching: (SpanStartEvent) -> Bool
+  ) throws(SpanLogError) -> [HarnessEvent] {
+    try locked { () throws(SpanLogError) -> [HarnessEvent] in
+      let events = try events()
+      let open = Set(OpenSpans.of(events, buildRun: buildRun).filter(matching).map(\.spanID))
+      let time = now()
+      var written: [HarnessEvent] = []
+      for start in events {
+        guard case .spanStart(let payload) = start.payload, open.contains(payload.spanID) else {
+          continue
+        }
+        let event = HarnessEvent(
+          eventID: newEventID(), parentID: start.eventID, time: time,
+          source: HarnessEventSource(route: nil),
+          payload: .spanEnd(
+            SpanEndEvent(
+              spanID: payload.spanID, outcome: outcome,
+              milliseconds: max(0, Int((time.timeIntervalSince(start.time) * 1000).rounded())))))
+        try write(event)
+        written.append(event)
+      }
+      return written
+    }
+  }
+
   /// Every span event in the store, sealed segments included, oldest first. An undecodable line
   /// or unreadable file fails the read, since it could hold the start or end being looked for. A
   /// torn last line is a write a crashed process never finished, and a segment whose index

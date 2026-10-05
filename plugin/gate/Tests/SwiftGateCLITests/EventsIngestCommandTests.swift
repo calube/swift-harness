@@ -13,6 +13,9 @@ struct EventsIngestCommandTests {
   static let buildRun = "20261001T040911Z-13708165"
   /// A brownfield run's orchestrator: 1 Agent-tool subagent and 2 Workflows' agents beside it.
   static let runSession = "b9ba71e8-b19d-4ef9-8629-bbce3c641242"
+  /// The third price-tracker trial's orchestrator: a fixer and a validation agent beside it, and 3
+  /// Workflows, 1 of them killed at the cutoff before its own ingest.
+  static let cutoffSession = "cb039a0d-04f4-428a-b575-e73a1e11d628"
 
   /// A captured envelope's `total_cost_usd` and its 1 model's `modelUsage` token counts.
   struct Envelope {
@@ -78,7 +81,7 @@ struct EventsIngestCommandTests {
       try FileManager.default.copyItem(
         at: Fixture.directory.appending(path: "Transcripts", directoryHint: .isDirectory),
         to: transcripts)
-      for session in [plainSession, subagentSession, runSession] {
+      for session in [plainSession, subagentSession, runSession, cutoffSession] {
         try SessionRecordStore(worktreeRoot: repo.root).write(
           try SessionRecord(
             sessionId: session, recordedAt: Date(timeIntervalSince1970: 1_790_000_000),
@@ -539,6 +542,41 @@ struct EventsIngestCommandTests {
     #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
     #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 50)
     #expect(metrics[["role", "no role"]]?["messages"]?.value == 46)
+  }
+
+  @Test(
+    "replaying the third price-tracker trial's ingests, the run-end ingest files the fixer it never ingested by its agent type as build-fixer, and the worker of the Workflow the cutoff killed under build-worker and its task, leaving no message without a role — catches a fixer's cost filed as the orchestrator's and a killed worker's with no role or task"
+  )
+  func runEndIngestTagsTheFixerAndKilledWorkers() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflows = scenario.transcripts.appending(
+      path: "\(Self.cutoffSession)/subagents/workflows", directoryHint: .isDirectory)
+    for (workflow, task) in [
+      ("wf_f9943c40-68e", "coingecko-client"), ("wf_c9484d68-757", "watchlist-screen"),
+    ] {
+      let output = scenario.buildIngest(
+        Self.cutoffSession, workflow: workflows.appending(path: workflow).path, task: task)
+      #expect(output.status == 0, "\(output.stderr)")
+    }
+    let validation = scenario.ingest(
+      Self.cutoffSession, role: .qa, task: "spec-validation", buildRun: Self.buildRun,
+      agentID: "a5db10195f7f6c10e")
+    #expect(validation.status == 0, "\(validation.stderr)")
+
+    #expect(scenario.shipIngest(Self.cutoffSession).status == 0)
+
+    let usages = scenario.usages
+    let fixer = usages.filter { $0.agentID == "ac257d99cb5b5a4ef" }
+    #expect(fixer.count == 68)
+    #expect(Set(fixer.map(\.role)) == [.buildFixer], "\(Set(fixer.map(\.role)))")
+    let killed = usages.filter { $0.agentID == "a441498174c3ea0c9" }
+    #expect(killed.count == 14)
+    #expect(Set(killed.map(\.role)) == [.buildWorker], "\(Set(killed.map(\.role)))")
+    #expect(Set(killed.map(\.task)) == ["detail-screen"], "\(Set(killed.map(\.task)))")
+    let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
+    #expect(metrics[["role", "orchestrator"]]?["messages"]?.value == 51)
+    #expect(metrics[["role", "no role"]] == nil)
   }
 
   @Test(
