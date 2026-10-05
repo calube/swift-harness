@@ -241,7 +241,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, in the foreground like every
         gate, though a flow row boots a leased device. This `--at-base` run is never skipped, and
         no task that a row's `Runs after` names merges before it has run: such a task that
-        finishes first keeps its checked return and merges once this run is done. A row that reads `pass` there fails it with
+        finishes first keeps its checked return and merges once this run is done. It takes each
+        row the worker's `--prepared-by` run proved from the `at-base-run.json` the adopt copied
+        while its check is byte-identical, naming that run in the row's `reusedFrom`, and runs
+        only the rest. A row that reads `pass` there fails it with
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its

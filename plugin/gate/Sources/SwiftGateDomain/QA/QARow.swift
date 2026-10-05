@@ -33,11 +33,14 @@ public struct QARow: Sendable, Equatable {
   public let evidence: [String]
   /// The unmerged tasks a `waiting` row waits on; empty for any other result.
   public let waitingOn: [String]
+  /// The prepared at-base run whose result an at-base row took, its check unchanged since; `nil`
+  /// for a row that ran here.
+  public let reusedFrom: String?
 
   public init(
     row: Int, requirement: String, layer: ValidationLayer, check: String, runsAfter: [String],
     result: QAResult, message: String, exitStatus: Int? = nil, milliseconds: Int = 0,
-    evidence: [String] = [], waitingOn: [String] = []
+    evidence: [String] = [], waitingOn: [String] = [], reusedFrom: String? = nil
   ) {
     self.row = row
     self.requirement = requirement
@@ -50,17 +53,19 @@ public struct QARow: Sendable, Equatable {
     self.milliseconds = milliseconds
     self.evidence = evidence
     self.waitingOn = waitingOn
+    self.reusedFrom = reusedFrom
   }
 }
 
 extension QARow: Codable {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence,
-      waitingOn
+      waitingOn, reusedFrom
     case milliseconds = "ms"
   }
 
-  /// Every key is always present; an absent exit status is `null`.
+  /// Every key is always present, an absent exit status `null`, except `reusedFrom`, which only a
+  /// reused row holds.
   public func encode(to encoder: any Encoder) throws {
     var c = encoder.container(keyedBy: CodingKeys.self)
     try c.encode(row, forKey: .row)
@@ -74,5 +79,6 @@ extension QARow: Codable {
     try c.encode(milliseconds, forKey: .milliseconds)
     try c.encode(evidence, forKey: .evidence)
     try c.encode(waitingOn, forKey: .waitingOn)
+    try c.encodeIfPresent(reusedFrom, forKey: .reusedFrom)
   }
 }
