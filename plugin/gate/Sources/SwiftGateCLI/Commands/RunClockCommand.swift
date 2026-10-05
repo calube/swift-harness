@@ -51,10 +51,15 @@ enum RunClockRun {
     } catch {
       return .refused(message: "\(path.path) doesn't decode: \(error)", status: 2)
     }
-    guard let box = clock.runTimeBox else {
+    guard let launched = clock.runTimeBox else {
       return .refused(
         message: "\(path.path) has no time box: its run started before runs had one", status: 2)
     }
+    // The clone's measured `final` grows the reserve, so the cutoff comes earlier.
+    let box = RunTimeBox(
+      startedAt: launched.startedAt,
+      limits: launched.limits.holding(finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
+    )
     let deadlines = box.deadlines
     let named: [(String, Date)] = [
       ("exploreBy", deadlines.exploreBy), ("planBy", deadlines.planBy),

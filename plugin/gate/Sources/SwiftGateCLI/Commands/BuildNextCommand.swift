@@ -138,9 +138,15 @@ enum BuildNextRun {
       }
       let running = Set(ledger.tasks.filter { $0.status == .inProgress }.map(\.id))
       let now = clock.now()
+      // The clone's measured `final` grows the reserve, so the cutoff it reports comes earlier.
+      let finalSeconds = MeasuredFinalGateReader.seconds(worktree: root)
+      let timeBox = record.timeBox.map { box in
+        RunTimeBox(
+          startedAt: box.startedAt, limits: box.limits.holding(finalSeconds: finalSeconds))
+      }
       let result = BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
-        now: now, required: required, timeBox: record.timeBox)
+        now: now, required: required, timeBox: timeBox)
       let notDone = Set(ledger.tasks.filter { $0.status != .done }.map(\.id))
       let report = BuildNextReport(
         runId: runID, phase: result.phase, toStart: result.toStart, running: result.running,
@@ -150,7 +156,7 @@ enum BuildNextRun {
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
         }, stallMin: record.preset.effectiveStallMin,
-        timeBox: record.timeBox.map { box in
+        timeBox: timeBox.map { box in
           let deadlines = box.deadlines
           return BuildNextReport.TimeBox(
             noNewStartsAt: deadlines.noNewStartsAt, cutoffAt: deadlines.cutoffAt,

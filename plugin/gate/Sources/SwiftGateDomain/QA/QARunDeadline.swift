@@ -35,6 +35,27 @@ public struct QARunDeadline: Sendable, Equatable {
   /// - Parameter expectedMilliseconds: what the row took when a run recorded it; a flow row with
   ///   none is expected to take ``flowFloor``, any other row nothing.
   public func admit(layer: ValidationLayer, expectedMilliseconds: Int?, now: Date) -> Admission {
-    .run(left: .seconds(3600))
+    let milliseconds = Int64((at.timeIntervalSince(now) * 1000).rounded())
+    let when = at.formatted(.iso8601)
+    guard milliseconds > 0 else {
+      return .refuse("not started: \(name) at \(when) has passed")
+    }
+    let left = Duration.milliseconds(milliseconds)
+    let expected =
+      expectedMilliseconds.map { Duration.milliseconds($0) }
+      ?? (layer == .flow ? Self.flowFloor : nil)
+    if let expected, expected >= left {
+      let measured = expectedMilliseconds != nil ? "its measured" : "a flow row's least"
+      return .refuse(
+        "not started: \(Self.seconds(left)) s left before \(name) at \(when), under "
+          + "\(measured) \(Self.seconds(expected)) s")
+    }
+    return .run(left: left)
+  }
+
+  /// Whole seconds, rounded up.
+  private static func seconds(_ duration: Duration) -> Int64 {
+    let (whole, fraction) = duration.components
+    return whole + (fraction > 0 ? 1 : 0)
   }
 }

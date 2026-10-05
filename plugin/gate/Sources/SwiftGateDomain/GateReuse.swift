@@ -50,7 +50,15 @@ public enum GateReuse {
   public static func areaStepKey(_ inputs: Inputs, area: String, step: AreaStep, command: String)
     -> String
   {
-    ""
+    var lines = [
+      "area-step schema 1", "tree \(inputs.treeHash)", "merge-base \(inputs.mergeBase)",
+      "binary \(inputs.sourceHash)",
+    ]
+    for name in inputs.stateFiles.keys.sorted() {
+      lines.append("file \(name) \((inputs.stateFiles[name] ?? nil) ?? "absent")")
+    }
+    lines += ["area \(area)", "step \(step.rawValue)", "command \(command)"]
+    return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.

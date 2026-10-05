@@ -97,9 +97,10 @@ enum BrownfieldMergeCheck {
       {
         times = WarmupTimesStore(layout: layout).load(tree: baseTree).file
       }
+      let box = ActiveRunTimeBox.find(
+        layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
       let bounds = AreaCommandBounds(
-        times: times, box: ActiveRunTimeBox.find(layout: layout, now: Date()), tier: tier,
-        fallback: liveDeadline)
+        times: times, box: box, tier: tier, fallback: liveDeadline)
       // Each bound is taken as its command starts, so the box's time left is current.
       let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
         area, step, tree in
@@ -121,11 +122,20 @@ enum BrownfieldMergeCheck {
   static func run(root: URL, tier: CheckTier, base: String, context: GateRun.Context)
     async throws -> GateRunParts
   {
-    let dependencies: Dependencies
+    var dependencies: Dependencies
     do {
       dependencies = try await .live(root: root, base: base, tier: tier)
     } catch {
       return try BrownfieldCheck.notRun(tier, because: error.reason)
+    }
+    // Only a clean tree with every input known has a key; anything else runs every command.
+    if let reader = await BrownfieldGateReuseReader.live(
+      root: root, runner: LiveProcessRunner(), sourceHash: GateBinaryScope.current?.sourceHash),
+      let inputs = await reader.inputs(tier: tier, base: base)
+    {
+      dependencies.reuse = AreaStepReuse(
+        inputs: inputs, store: AreaStepResults(layout: dependencies.layout),
+        runID: context.runID)
     }
     return try await run(
       root: root, tier: tier, base: base, context: context, dependencies: dependencies)
@@ -351,6 +361,16 @@ enum BrownfieldMergeCheck {
           area, step: step, repositoryRoot: root.path(percentEncoded: false), files: selection,
           deadline: bound.duration, dependencies: dependencies)
       else { continue }
+      let key = dependencies.reuse.map {
+        GateReuse.areaStepKey(
+          $0.inputs, area: area.name, step: step, command: prepared.request.command)
+      }
+      if let key, let pass = dependencies.reuse?.store.pass(key) {
+        context.steps.record(
+          gateStep(step), tier: nil, milliseconds: 0, verdict: .green, area: area.name)
+        if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
+        continue
+      }
       let (outcome, milliseconds) = await GateRun.timed {
         await dependencies.runner.run(
           XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
@@ -369,6 +389,9 @@ enum BrownfieldMergeCheck {
       context.steps.record(
         gateStep(step), tier: nil, milliseconds: milliseconds,
         verdict: outcome == .passed ? .green : .red, area: area.name)
+      if outcome == .passed, let key, let reuse = dependencies.reuse {
+        reuse.store.record(AreaStepPass(runID: reuse.runID, tier: tier.rawValue), key: key)
+      }
       result.runs.append(
         StepRun(
           area: area, step: step, template: template, selection: selection,
@@ -432,6 +455,18 @@ enum BrownfieldMergeCheck {
       message:
         "\(run.area.name) \(what) at the head and not at the merge base (`\(run.template)`), "
         + tail,
+      failureScenario: nil)
+  }
+
+  /// A step taken from an earlier pass, named so the run says what it didn't run.
+  private static func reused(_ area: BrownfieldArea, step: AreaStep, pass: AreaStepPass)
+    -> Finding?
+  {
+    try? Finding(
+      ruleID: GateReuse.ruleID, severity: .nit, file: area.root, line: nil,
+      message:
+        "\(area.name) \(step.rawValue) passed in \(pass.tier) gate run \(pass.runID) on the same "
+        + "tree, merge base, binary and state, so it didn't run again",
       failureScenario: nil)
   }
 

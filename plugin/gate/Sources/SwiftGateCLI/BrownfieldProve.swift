@@ -94,6 +94,19 @@ enum BrownfieldProve {
     guard !plans.isEmpty else {
       return judgement.merged(with: note("prove: no new or changed tests since \(base)"))
     }
+    // A plan whose run the box leaves too little time isn't started: it would only be killed.
+    plans = plans.filter { plan in
+      guard let bound = dependencies.bound?(plan.area.name, plan.step), bound.cannotFinish else {
+        return true
+      }
+      let expected = bound.expected.map { " its measured \($0.components.seconds) s" } ?? ""
+      judgement = judgement.merged(
+        with: blocked(
+          "\(plan.area.name)'s changed tests not run: \(bound.reason) can't hold\(expected)",
+          file: plan.ids.first?.file ?? "."))
+      return false
+    }
+    guard !plans.isEmpty else { return judgement }
     let reverted = changed.filter { !tests.contains($0) }
     guard !reverted.isEmpty else {
       return judgement.merged(
@@ -135,6 +148,13 @@ enum BrownfieldProve {
     let area: BrownfieldArea
     let ids: [AreaTestID]
     let command: Command
+    /// The step its first run is.
+    var step: AreaStep {
+      switch command {
+      case .selected: .testFiles
+      case .whole: .test
+      }
+    }
   }
 
   /// The outcome of running some areas' plans.

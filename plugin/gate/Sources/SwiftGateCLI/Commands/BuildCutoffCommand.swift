@@ -72,12 +72,14 @@ enum BuildCutoffRun {
       } catch {
         return .blocked(command, slug, "reading plan `\(slug)`'s build run: \(error)")
       }
-      guard let box = record.timeBox else {
+      guard let recorded = record.timeBox else {
         return .blocked(
           command, slug,
           "build run \(record.runID) has no time box: an owned build halts and asks at its "
             + "cutoff, and only a `swiftgate run` decides its own")
       }
+      let box = RunTimeBox(
+        startedAt: recorded.startedAt, limits: recorded.limits.holding(finalSeconds: finalSeconds))
       let ledger = try BuildLoop.ledger(plan)
       let now = clock.now()
       let running = ledger.tasks.filter { $0.status == .inProgress }
@@ -227,6 +229,8 @@ struct BuildCutoffCommand: AsyncParsableCommand {
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
+    let root = URL(
+      filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let telemetry: BuildCutoffTelemetry?
     switch await BuildHaltRun.store(command: BuildCutoffRun.command) {
     case .found(let root, let enabled):
@@ -239,8 +243,8 @@ struct BuildCutoffCommand: AsyncParsableCommand {
     let result = await BuildCutoffRun.run(
       slug: plan, session: session, git: BuildLoop.git(), clock: LiveBuildClock(),
       telemetry: telemetry,
-      leftovers: LiveRunLeftovers(
-        directory: URL(filePath: FileManager.default.currentDirectoryPath)))
+      leftovers: LiveRunLeftovers(directory: root),
+      finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
     Console.write(BuildCutoffRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

@@ -202,6 +202,23 @@ enum QARunRun {
       }
     }
 
+    // What each row took at the merge base, which a box's deadline measures it against.
+    var expected: [Int: Int] = [:]
+    if dependencies.deadline != nil,
+      let data = files.contents(
+        atPath: "\(plan.directory)/\(QAReport.directory)/\(QAAtBaseRun.fileName)"),
+      let record = try? QAAtBaseRunJSON.decode(data)
+    {
+      for entry in runPlan.entries {
+        let validation = entry.validation
+        expected[entry.row] =
+          record.rows.first {
+            $0.requirement == validation.requirement && $0.layer == validation.layer
+              && $0.check == validation.check
+          }?.milliseconds
+      }
+    }
+
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
     do {
@@ -214,7 +231,7 @@ enum QARunRun {
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
-      runID: runID, plan: runPlan, atBase: options.atBase, reused: reused,
+      runID: runID, plan: runPlan, atBase: options.atBase, reused: reused, expected: expected,
       areas: testAreas(root: root, common: common, table: table),
       testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
@@ -415,6 +432,8 @@ enum QARunRun {
     let atBase: Bool
     /// The recorded outcomes of the rows a prepared at-base run proved, by row.
     let reused: [Int: QACheckOutcome]
+    /// What each row took in the recorded at-base run, in milliseconds, by row.
+    let expected: [Int: Int]
     /// What a `test:` acceptance row resolves in.
     let areas: Result<[BrownfieldArea], AcceptanceTestUnresolved>
     /// The clones `test:` rows run on, held across the acceptance rows and given back before the
@@ -467,6 +486,12 @@ enum QARunRun {
       }
       if row.layer == .state, let ran = stateResults.take(row: entry.row) {
         return ran
+      }
+      if let deadline = dependencies.deadline,
+        case .refuse(let message) = deadline.admit(
+          layer: row.layer, expectedMilliseconds: expected[entry.row], now: dependencies.now())
+      {
+        return QACheckOutcome(result: .unverified, message: message)
       }
       // A state check reads what its flow left on the device; with none up, its exit means nothing.
       if row.layer == .state,
@@ -587,7 +612,7 @@ enum QARunRun {
       let request = QACheckRequest(
         program: program, workingDirectory: directory,
         environment: environment.merging(device, uniquingKeysWith: { own, _ in own }),
-        timeout: dependencies.timeout)
+        timeout: timeout())
       var output = await dependencies.checks.run(request)
       if case .exited(let code) = output.exit, code != 0,
         let launch = TestRunnerLaunchFailure.reason(in: output.stdout + "\n" + output.stderr)
@@ -669,6 +694,15 @@ enum QARunRun {
         milliseconds: Self.milliseconds(output.elapsed), evidence: evidence)
     }
 
+    /// The check timeout, cut to the time left before the box's deadline.
+    private func timeout() -> Duration {
+      guard let deadline = dependencies.deadline,
+        case .run(let left) = deadline.admit(
+          layer: .acceptance, expectedMilliseconds: nil, now: dependencies.now())
+      else { return dependencies.timeout }
+      return min(dependencies.timeout, left)
+    }
+
     /// `<NN>-<requirement>.<layer>.txt`, with any character a file name shouldn't hold as `-`.
     static func evidenceName(_ entry: QARunPlan.Entry) -> String {
       let number = entry.row < 10 ? "0\(entry.row)" : "\(entry.row)"
@@ -685,6 +719,16 @@ enum QARunRun {
       let parts = duration.components
       return Int(parts.seconds) * 1000 + Int(parts.attoseconds / 1_000_000_000_000_000)
     }
+  }
+
+  /// The deadline of the `swiftgate run` whose box is running in `root`'s clone, its cutoff
+  /// moved to leave the clone's measured `final` its time; `nil` outside a box.
+  static func deadline(root: URL, runner: any ProcessRunner, final: Bool) async -> QARunDeadline? {
+    guard let layout = try? await GitTrackedTree(runner: runner, directory: root).stateLayout(),
+      let box = ActiveRunTimeBox.find(
+        layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
+    else { return nil }
+    return QARunDeadline.of(box, final: final)
   }
 
   static func render(_ report: QAReport, json: Bool) -> String {
@@ -760,7 +804,8 @@ struct QARunCommand: AsyncParsableCommand {
               lock: FileCountingLock(name: FinalPassRecorder.lockName, capacity: 1),
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
-        testDevices: LiveTestDeviceLeases(runner: runner)))
+        testDevices: LiveTestDeviceLeases(runner: runner),
+        deadline: await QARunRun.deadline(root: root, runner: runner, final: final)))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }

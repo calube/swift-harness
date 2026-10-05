@@ -130,7 +130,8 @@ struct AreaCommandBoundsTests {
       area: "Unmeasured", step: .test, tree: .checkout,
       now: box.deadlines.cutoffAt.addingTimeInterval(-300))
 
-    #expect(early.duration == .seconds(Int64(box.limits.budgetMin - box.limits.finalReserveMin) * 60))
+    let toCutoff = Int64(box.limits.budgetMin - box.limits.finalReserveMin) * 60
+    #expect(early.duration == .seconds(toCutoff))
     #expect(early.expected == nil)
     #expect(late.duration == .seconds(300))
     #expect(!late.cannotFinish)

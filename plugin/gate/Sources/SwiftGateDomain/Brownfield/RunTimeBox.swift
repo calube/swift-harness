@@ -297,7 +297,10 @@ public enum MeasuredFinalGate {
   /// The longest `check final` in `runs`; with none, the longest `check merge`, since a `final`
   /// runs every step a merge does for every area. Whole seconds, rounded up; `nil` with neither.
   public static func seconds(in runs: [GateRunEvent]) -> Int? {
-    nil
+    let finals = runs.filter { $0.command == "check final" }.map(\.milliseconds)
+    let merges = runs.filter { $0.command == "check merge" }.map(\.milliseconds)
+    guard let longest = (finals.isEmpty ? merges : finals).max() else { return nil }
+    return (longest + 999) / 1000
   }
 }
 
@@ -305,6 +308,10 @@ extension TimeBoxLimits {
   /// These limits with the final reserve grown to hold `finalSeconds` of `final` and the report,
   /// never shrunk, and never past where starts stop.
   public func holding(finalSeconds: Int?) -> TimeBoxLimits {
-    self
+    guard let finalSeconds else { return self }
+    let needed = (finalSeconds + MeasuredFinalGate.reportSeconds + 59) / 60
+    return TimeBoxLimits(
+      budgetMin: budgetMin, stopStartsBeforeMin: stopStartsBeforeMin,
+      finalReserveMin: max(finalReserveMin, min(needed, stopStartsBeforeMin)), source: source)
   }
 }

@@ -35,7 +35,22 @@ public struct AreaStepResults: AreaStepReusing {
       directory: layout.cloneRoot.appending(path: Self.directoryName, directoryHint: .isDirectory))
   }
 
-  public func pass(_ key: String) -> AreaStepPass? { nil }
+  /// A file that can't be read is no pass: the command runs.
+  public func pass(_ key: String) -> AreaStepPass? {
+    guard let data = try? Data(contentsOf: file(key)) else { return nil }
+    return try? JSONDecoder().decode(AreaStepPass.self, from: data)
+  }
 
-  public func record(_ pass: AreaStepPass, key: String) {}
+  /// A pass that can't be written is only not reused.
+  public func record(_ pass: AreaStepPass, key: String) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(pass) else { return }
+    try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try? data.write(to: file(key), options: .atomic)
+  }
+
+  private func file(_ key: String) -> URL {
+    directory.appending(path: "\(key).json")
+  }
 }

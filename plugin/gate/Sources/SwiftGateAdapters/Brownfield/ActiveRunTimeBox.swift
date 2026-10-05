@@ -18,7 +18,10 @@ public enum ActiveRunTimeBox {
         guard let data = try? Data(contentsOf: plan.appending(path: RunClock.fileName)) else {
           return nil
         }
-        return try? RunClock.decode(data).runTimeBox
+        return try? RunClock.decode(data).runTimeBox.map { box in
+          RunTimeBox(
+            startedAt: box.startedAt, limits: box.limits.holding(finalSeconds: finalSeconds))
+        }
       }
       .filter { $0.startedAt <= now && now < $0.deadlines.endsAt }
       .max { $0.startedAt < $1.startedAt }
@@ -30,6 +33,13 @@ public enum MeasuredFinalGateReader {
   /// ``MeasuredFinalGate/seconds(in:)`` over the gate runs recorded where `worktree`'s events
   /// go; `nil` when none can be read.
   public static func seconds(worktree: URL) -> Int? {
-    nil
+    guard let data = try? HarnessEventFiles(root: worktree).read(.gate, runID: nil),
+      let read = try? HarnessEventJSON.decode(data)
+    else { return nil }
+    return MeasuredFinalGate.seconds(
+      in: read.events.compactMap { event in
+        guard case .gateRun(let run) = event.payload else { return nil }
+        return run
+      })
   }
 }
