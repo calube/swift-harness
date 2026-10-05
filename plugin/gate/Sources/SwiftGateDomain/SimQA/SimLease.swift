@@ -152,6 +152,7 @@ public enum SimHoldWatch {
     elapsed: Duration, timeout: Duration
   ) -> SimHoldEnd? {
     guard let lease else { return .released }
+    if let owner, !owner.alive { return .ownerGone(pid: owner.pid) }
     if let session = lease.session, let liveSessions, !liveSessions.contains(session) {
       return .sessionGone(session: session)
     }

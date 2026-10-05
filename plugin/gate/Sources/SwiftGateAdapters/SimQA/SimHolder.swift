@@ -134,7 +134,8 @@ public struct SimHolder: Sendable {
         liveSessions = await sessionNames(target: AgentDeviceTarget(udid: udid, session: session))
       }
       if let end = SimHoldWatch.end(
-        lease: lease, liveSessions: liveSessions, elapsed: now - start, timeout: timeout)
+        lease: lease, liveSessions: liveSessions, owner: owner.map { ($0, isAlive($0)) },
+        elapsed: now - start, timeout: timeout)
       {
         return end
       }

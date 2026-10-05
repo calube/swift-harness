@@ -283,7 +283,8 @@ public struct QAFlowRow: Sendable, Equatable {
 }
 
 /// Runs flow rows 1 at a time: lint, `sim up`, 1 batch, the requirement's state rows on the
-/// device, `sim down`, then `sim verify`. `sim down` runs on every path once `sim up` was asked,
+/// device, `sim down`, then `sim verify`. With a hold, every row borrows the 1 device it keeps
+/// until ``finish()``, and its `sim up` resets the app before installing it. `sim down` runs on every path once `sim up` was asked,
 /// and `sim verify` runs after it, since crash reports reach the run's `sim/` folder only during
 /// `sim down`.
 public actor QAFlowRunner {
@@ -296,6 +297,8 @@ public actor QAFlowRunner {
   private let simulator: any QAFlowSimulating
   private let finalPass: QAFinalPass?
   private let hold: QAFlowDeviceHold?
+  /// The tree whose rows have asked for the shared device, once 1 has.
+  private var heldIn: URL?
   private var flowRecords: [Int: QAFlowRecord] = [:]
   private var evidenceGaps: [QAEvidenceGap] = []
 
@@ -311,9 +314,19 @@ public actor QAFlowRunner {
     self.hold = hold
   }
 
-  /// Gives back the device the rows shared. Returns what went wrong, if anything.
+  /// Gives back the device the rows shared, in the tree they ran in. Returns what went wrong,
+  /// if anything; a run with no row that asked for the device gives nothing back.
   public func finish() async -> [String] {
-    []
+    guard let hold, let worktree = heldIn else { return [] }
+    heldIn = nil
+    let request = QAFlowSimulatorRequest(
+      worktree: worktree, runID: hold.runID, simDirectory: hold.directory, scenario: nil,
+      hold: hold)
+    switch await simulator.down(request) {
+    case .success: return []
+    case .failure(let failure):
+      return ["the flow rows' shared device: sim down \(failure.rule.rawValue): \(failure.message)"]
+    }
   }
 
   /// The flow records of the rows that reached a batch, by row.
@@ -354,7 +367,8 @@ public actor QAFlowRunner {
     let simDirectory = row.directory.appending(path: "sim", directoryHint: .isDirectory)
     let request = QAFlowSimulatorRequest(
       worktree: row.worktree, runID: row.runID, simDirectory: simDirectory, scenario: nil,
-      audit: Self.audit(row))
+      audit: Self.audit(row), hold: hold)
+    if hold != nil { heldIn = row.worktree }
     let started: SimUpStarted
     switch await simulator.up(request) {
     case .failure(let failure):

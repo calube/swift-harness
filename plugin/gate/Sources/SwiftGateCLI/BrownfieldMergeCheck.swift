@@ -281,14 +281,37 @@ enum BrownfieldMergeCheck {
   }
 
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
-  /// share a build directory at once.
+  /// share a build directory at once. The clone a test step runs on is leased as the area
+  /// starts, so it boots while the build runs, and goes back once the area is done.
   private static func run(
     _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
     context: GateRun.Context, dependencies: Dependencies
   ) async -> (findings: [Finding], runs: [StepRun]) {
+    let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
+    guard let warming = dependencies.runner as? any TestDeviceWarming else {
+      return await run(
+        area, steps: steps, files: files, added: added, root: root, context: context,
+        dependencies: dependencies, runner: dependencies.runner)
+    }
+    let tests = [AreaStep.test, .e2e].filter(steps.contains).compactMap { step in
+      prepare(
+        area, step: step, repositoryRoot: root.path(percentEncoded: false), files: [],
+        dependencies: dependencies)?.request.command
+    }
+    let warmed = await warming.warmed(for: tests)
+    let result = await run(
+      area, steps: steps, files: files, added: added, root: root, context: context,
+      dependencies: dependencies, runner: warmed)
+    await warmed.release()
+    return result
+  }
+
+  private static func run(
+    _ area: BrownfieldArea, steps: [AreaStep], files: [String], added: [AddedLines], root: URL,
+    context: GateRun.Context, dependencies: Dependencies, runner: any AreaCommandRunning
+  ) async -> (findings: [Finding], runs: [StepRun]) {
     var findings: [Finding] = []
     var runs: [StepRun] = []
-    let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
     for step in steps {
       guard let template = AreaCommandExpansion.template(for: step, in: area) else {
         // `e2e` is optional: discovery proposes it only where it found one.
@@ -305,8 +328,7 @@ enum BrownfieldMergeCheck {
           dependencies: dependencies)
       else { continue }
       let (outcome, milliseconds) = await GateRun.timed {
-        await dependencies.runner.run(
-          XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
+        await runner.run(XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
       }
       var lintFindings: [Finding] = []
       var lintUnread = false
