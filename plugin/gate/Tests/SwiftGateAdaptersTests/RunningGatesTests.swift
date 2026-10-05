@@ -124,3 +124,56 @@ struct ActiveRunTimeBoxTests {
         == nil)
   }
 }
+
+@Suite("measured final gate in a clone")
+struct MeasuredFinalGateReaderTests {
+  @Test(
+    "the gate runs a worktree's events hold measure its final, and a box found with that measure has its cutoff brought earlier — catches gates and qa runs reading the fixed 5 min reserve"
+  )
+  func readsTheGateHistory() throws {
+    let worktree = try TestTemporaryDirectory.make("final-gate")
+    defer { TestTemporaryDirectory.remove(worktree) }
+    let events = URL(filePath: HarnessEventFiles(root: worktree).path(.gate, runID: nil))
+    try FileManager.default.createDirectory(
+      at: events.deletingLastPathComponent(), withIntermediateDirectories: true)
+    let runs = try Fixture.data("BrownfieldTrial/send-money-2-gate-runs.jsonl")
+    let merges =
+      String(decoding: runs, as: UTF8.self).split(separator: "\n")
+      .filter { !$0.contains("\"check final\"") }.joined(separator: "\n") + "\n"
+    try Data(merges.utf8).write(to: events)
+
+    #expect(MeasuredFinalGateReader.seconds(worktree: worktree) == 290)
+
+    let layout = BrownfieldStateLayout(
+      commonDir: worktree.appending(path: "common", directoryHint: .isDirectory),
+      gitDir: worktree.appending(path: "gitdir", directoryHint: .isDirectory))
+    let plan = layout.plan(slug: "spec")
+    try FileManager.default.createDirectory(at: plan, withIntermediateDirectories: true)
+    let clock = try Fixture.data("BrownfieldTrial/send-money-2-clock.json")
+    try clock.write(to: plan.appending(path: RunClock.fileName))
+    let box = try #require(try RunClock.decode(clock).runTimeBox)
+
+    let sized = try #require(
+      ActiveRunTimeBox.find(layout: layout, now: box.startedAt, finalSeconds: 290))
+    #expect(sized.deadlines.cutoffAt == box.deadlines.cutoffAt.addingTimeInterval(-60))
+  }
+}
+
+@Suite("area step results")
+struct AreaStepResultsTests {
+  @Test(
+    "a recorded pass is found by its key, and another key finds none — catches a final that can't see what its merge passed"
+  )
+  func recordsAndFinds() throws {
+    let directory = try TestTemporaryDirectory.make("area-steps")
+    defer { TestTemporaryDirectory.remove(directory) }
+    let store = AreaStepResults(directory: directory)
+
+    store.record(AreaStepPass(runID: "20261005T030000Z-1", tier: "merge"), key: "abc")
+
+    #expect(
+      AreaStepResults(directory: directory).pass("abc")
+        == AreaStepPass(runID: "20261005T030000Z-1", tier: "merge"))
+    #expect(store.pass("def") == nil)
+  }
+}

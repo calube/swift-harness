@@ -77,7 +77,7 @@ struct QARepo {
   func run(
     _ options: QARunRun.Options, events: MemoryEventLog = MemoryEventLog(),
     suffix: UInt32 = 0xabc, checks: (any QACheckRunning)? = nil,
-    xcresults: (any XcresultReader)? = nil
+    xcresults: (any XcresultReader)? = nil, deadline: QARunDeadline? = nil
   ) async -> QAReport {
     var dependencies = QARunRun.Dependencies(
       checks: checks ?? QACommandRunner(runner: runner), ports: LiveQAPorts(),
@@ -85,6 +85,7 @@ struct QARepo {
       events: events, now: { Date(timeIntervalSince1970: 1_800_000_000) },
       runIDSuffix: { suffix }, newEventID: { UUID().uuidString }, timeout: .seconds(120))
     if let xcresults { dependencies.xcresults = xcresults }
+    dependencies.deadline = deadline
     return await QARunRun.run(
       root: root, options: options, git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: dependencies)

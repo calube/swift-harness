@@ -107,14 +107,14 @@ private struct BoxScenario {
       try TaskReturnJSON.encode(taskReturn))
   }
 
-  func cutoff(atMinute minute: Double, leftovers: (any RunLeftovers)? = nil) async
-    -> BuildLoopResult<BuildCutoffReport>
-  {
+  func cutoff(
+    atMinute minute: Double, leftovers: (any RunLeftovers)? = nil, finalSeconds: Int? = nil
+  ) async -> BuildLoopResult<BuildCutoffReport> {
     await BuildCutoffRun.run(
       slug: Self.plan, session: Self.session, git: git,
       clock: BoxClock(date: Self.launch.addingTimeInterval(minute * 60)),
       telemetry: BuildCutoffTelemetry(log: BuildHaltLog(root: telemetryRoot), enabled: true),
-      leftovers: leftovers)
+      leftovers: leftovers, finalSeconds: finalSeconds)
   }
 
   func ledger() throws -> [String: TaskStatus] {
@@ -156,6 +156,24 @@ final class RecordingLeftovers: RunLeftovers {
 
 @Suite("a brownfield build inside its time box")
 struct BuildTimeBoxTests {
+  @Test(
+    "a final measured at 400 s grows the reserve to 8 min, so the cutoff acts at minute 38 of a 45 min box where the fixed 5 min reserve would wait — catches a cutoff that leaves final less time than it takes"
+  )
+  func measuredFinalBringsTheCutoffEarlier() async throws {
+    let scenario = BoxScenario()
+    defer { scenario.remove() }
+    try scenario.claimPlanned([("web", .inProgress)])
+    try scenario.writeClock()
+    _ = try await scenario.start(.brownfield)
+
+    let fixed = await scenario.cutoff(atMinute: 38)
+    #expect(fixed.verdict == .red, "the fixed reserve's cutoff is at minute 40")
+
+    let measured = await scenario.cutoff(atMinute: 38, finalSeconds: 400)
+    #expect(measured.verdict == .green, "\(measured.message)")
+    #expect(measured.report?.abandoned.map(\.task) == ["web"])
+  }
+
   @Test(
     "the cutoff stops the gates still running in each task it abandons and prunes their scratch trees, leaving the finishing task's gates alone — catches a killed gate's scratch tree and a cut task's gate outliving the cutoff"
   )
