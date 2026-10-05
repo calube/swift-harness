@@ -119,6 +119,29 @@ public protocol AgentDevice: Sendable {
   func releaseStale(udid: String) async throws(AgentDeviceError)
 }
 
+extension AgentDevice {
+  /// Deletes the folder `agent-device` keeps for `session`, which `close` leaves behind. Only a
+  /// session `sim up` named is touched, by its exact name. Returns the problem, if any.
+  public func removeSessionFolder(_ session: String) async -> String? {
+    let state: String
+    do {
+      state = try await stateDirectory()
+    } catch {
+      return "session \(session)'s folder not removed: \(error.message)"
+    }
+    guard
+      let folder = SimSession.agentDeviceSessionFolder(stateDirectory: state, session: session)
+    else { return nil }
+    guard FileManager.default.fileExists(atPath: folder) else { return nil }
+    do {
+      try FileManager.default.removeItem(atPath: folder)
+    } catch {
+      return "session \(session)'s folder not removed: \(error.localizedDescription)"
+    }
+    return nil
+  }
+}
+
 public struct LiveAgentDevice: AgentDevice {
   public struct Timeouts: Sendable {
     public var quick: Duration
@@ -306,7 +329,11 @@ public struct LiveAgentDevice: AgentDevice {
   }
 
   public func stateDirectory() async throws(AgentDeviceError) -> String {
-    ""
+    struct State: Decodable { let stateDir: String }
+    let command = "session state-dir"
+    let json = try await checked(
+      command, ["session", "state-dir", "--json"], timeout: timeouts.quick)
+    return try Self.decodeData(State.self, json, command: command).stateDir
   }
 
   public func releaseStale(udid: String) async throws(AgentDeviceError) {

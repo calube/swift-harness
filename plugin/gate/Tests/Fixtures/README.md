@@ -602,6 +602,12 @@ with `UDID` and the session with `SESSION`.
 | `recorded-pass`, `record-stop`, `contact-sheet` | the recorded counter flow on a fresh launch, `record stop`, then `record contact-sheet /SCRATCH/video.mp4 --out /SCRATCH/sheet.png --json` |
 | `recorded-fail`, `record-stop-after-fail` | the recorded flow run next, expecting `5`: step 7, the `is`, fails; then `record stop` |
 | `record-start-beside-outside` | `record start` while `xcrun simctl io <udid> recordVideo` runs on the same device |
+
+`relaunched-pass.{steps.json,stdout,stderr,status}` and `relaunched-record-stop.*` come from
+`plugin/gate/Tests/Fixtures/AgentDevice/record/capture-relaunched.sh plugin/gate/.build/debug/swiftgate`,
+captured on 2026-10-05 the same way. After a `press` leaves the counter at 1, it runs the driven
+`relaunched-pass.flow.json`: its `open` with `relaunch: true` first, `record start` second, then the
+counter flow, which passes only because the relaunch reset the counter; then `record stop`.
 | `network-dump` | `network dump 25 --include headers` |
 | `app-container` | `xcrun simctl get_app_container <udid> com.example.SampleApp data` |
 | `log-show` | `xcrun simctl spawn <udid> log show --style compact --info --debug --predicate 'subsystem == "com.example.SampleApp"' --start <time before sim up>` |
@@ -611,6 +617,8 @@ Observed behavior the final pass relies on:
 - A batch whose first step is `record start` reports that step's `durationMs`; the steps after it
   sum to `totalDurationMs` less it. The passing video's sheet spans 4833 ms, the 4476 ms of steps
   after `record start` plus the `record stop` call, so the video starts when `record start` ends.
+- A `record start` after an `open` reports only its own `durationMs` (669 ms after a 1400 ms
+  relaunch), so the video starts when the steps up to and including it end.
 - A recording started inside a batch outlives the batch, failed or passed: `record stop` after it
   returns the video.
 - `network dump` parses the session app log, so the stream runs for the whole flow.

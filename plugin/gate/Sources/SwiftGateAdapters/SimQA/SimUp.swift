@@ -407,7 +407,9 @@ public struct SimUp: Sendable {
       }
     } catch {
       // The holder frees the device either way; closing first drops the session's claim now.
-      try? await dependencies.agentDevice.close(on: target)
+      if (try? await dependencies.agentDevice.close(on: target)) != nil {
+        _ = await dependencies.agentDevice.removeSessionFolder(session)
+      }
       throw error
     }
     return SimUpStarted(

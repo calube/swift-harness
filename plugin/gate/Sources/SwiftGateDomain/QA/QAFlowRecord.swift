@@ -132,7 +132,7 @@ public struct BatchFlowPlan: Sendable, Equatable {
     case step(n: Int, command: String)
     /// A capture `qa run` added after step `after` failed.
     case evidence(after: Int, command: String)
-    /// The `record start` a final pass puts first failed, so no step of the flow ran.
+    /// The `record start` a final pass adds failed, so no step after the flow's opening `open` ran.
     case recordStart
   }
 
@@ -168,26 +168,34 @@ public struct BatchFlowPlan: Sendable, Equatable {
   /// - Parameters:
   ///   - screenshots: 1 path per assertion, in order; an assertion past the last path gets no
   ///     evidence.
-  ///   - recordTo: set on a final pass: the batch starts with a `record start` to this path, so
-  ///     the video and the steps share the batch's clock.
+  ///   - recordTo: set on a final pass: the batch holds a `record start` to this path, so the
+  ///     video and the steps share the batch's clock. It comes first, or right after the flow's
+  ///     first step when that is an `open`, so the video opens on the launch the flow makes and
+  ///     not on the app as an earlier launch left it.
   public static func make(steps: [FlowStep], screenshots: [String], recordTo: String? = nil)
     -> BatchFlowPlan
   {
     var driven: [FlowJSON] = []
     var origin: [Int?] = []
     var evidence: [Evidence] = []
-    if let recordTo {
+    var recordIndex: Int?
+    let afterOpen = steps.first?.command == "open" ? steps.first?.number : nil
+    func startRecording() {
+      guard let recordTo else { return }
       driven.append(
         .object([
           "command": .string("record"),
           "input": .object(["action": .string("start"), "path": .string(recordTo)]),
         ]))
       origin.append(nil)
+      recordIndex = driven.count
     }
+    if afterOpen == nil { startRecording() }
     let snapshot = FlowJSON.object(["command": .string("snapshot"), "input": .object([:])])
     for step in steps {
       driven.append(.object(step.fields))
       origin.append(step.number)
+      if step.number == afterOpen { startRecording() }
       guard FlowRules.asserts(step), evidence.count < screenshots.count else { continue }
       let path = screenshots[evidence.count]
       let first = driven.count + 1
@@ -204,7 +212,8 @@ public struct BatchFlowPlan: Sendable, Equatable {
           screenshotPath: path, target: checkedTarget(step)))
     }
     return BatchFlowPlan(
-      steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo)
+      steps: steps, evidence: evidence, driven: driven, origin: origin, recordTo: recordTo,
+      recordIndex: recordIndex)
   }
 
   /// When the video's first frame came, on the batch's clock: the end of the `record start`.
@@ -213,7 +222,9 @@ public struct BatchFlowPlan: Sendable, Equatable {
     guard let recordIndex,
       let record = results.first(where: { $0.index == recordIndex }), record.ok
     else { return nil }
-    return record.durationMs
+    let byIndex = Dictionary(
+      results.map { ($0.index, $0.durationMs) }, uniquingKeysWith: { first, _ in first })
+    return (1...recordIndex).reduce(0) { $0 + (byIndex[$1] ?? 0) }
   }
 
   /// The driven steps file: a JSON array `agent-device batch --steps-file` reads.
@@ -226,7 +237,7 @@ public struct BatchFlowPlan: Sendable, Equatable {
 
   /// Where the batch stopped, from the failing driven step's index.
   public func stop(atDrivenIndex index: Int, command: String) -> Stop {
-    if recordTo != nil, index == 1 { return .recordStart }
+    if index == recordIndex { return .recordStart }
     if let n = origin(of: index) { return .step(n: n, command: command) }
     let after = origin.prefix(max(0, index - 1)).compactMap { $0 }.last ?? 0
     return .evidence(after: after, command: command)

@@ -46,7 +46,8 @@ history with the run id and verdict.
 
 1. A lease from another worktree is `sim.not-owner`: RED (exit 1), and `sim down` touches nothing.
 2. `agent-device close` on the lease's session and device, then `session list` must no longer name
-   the session. `SESSION_NOT_FOUND` or `DEVICE_NOT_FOUND` from `close` counts as closed.
+   the session. `SESSION_NOT_FOUND` or `DEVICE_NOT_FOUND` from `close` counts as closed. Then it
+   deletes `sessions/<session>` under `agent-device session state-dir`, that exact folder only.
 3. `sim down` removes the lease, so the `sim hold` process deletes the device and frees the `sim` slot.
    `sim down` waits up to 2 minutes for the holder to exit and the device to go. If the holder
    died holding it, `sim down` deletes that one device, whose name carries the dead PID.

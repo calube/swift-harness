@@ -57,8 +57,8 @@ one, with `ok` false. The last 4 keys appear only after a recording.
 `qa run --final` records each flow, 1 at a time under the 1-slot `sim-record` lock:
 
 1. It starts the app log stream and an `agent-device` trace.
-2. It runs the batch with `record start` as its first step, so the video and the steps share the
-   batch's clock. Each offset drops that step's time.
+2. It runs the batch with `record start` first, or after a leading `open` so the video opens on
+   that launch. Each offset drops the time before the video.
 3. It runs `record stop` on every path, then `record contact-sheet`, leaving `video.mp4` and
    `sheet.png` in the flow's folder.
 4. Under `qa/logs/<NN>-<requirement>/` it saves `app.log`, `network.json` (`network dump 25`),
