@@ -9,6 +9,9 @@ public enum RunLayout {
 
   public static let runsDirectory = "runs"
   public static let historyFile = "\(runsDirectory)/history.jsonl"
+  /// The history lines of removed checkouts whose runs were kept here, apart from this state
+  /// root's own history so that counts only its own runs.
+  public static let keptHistoryFile = "\(runsDirectory)/kept-history.jsonl"
   public static let reportFileName = "report.json"
   /// Every run's events, 1 append-only file per stream.
   public static let eventsDirectory = "events"

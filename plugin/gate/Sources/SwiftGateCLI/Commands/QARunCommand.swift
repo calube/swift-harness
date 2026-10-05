@@ -328,7 +328,7 @@ enum QARunRun {
     let runID = RunID.make(startedAt: dependencies.now(), suffix: dependencies.runIDSuffix())
     let qaDirectory: URL
     do {
-      qaDirectory = try RunStore(worktreeRoot: root).runDirectory(for: runID)
+      qaDirectory = try RunStore.qaRuns(worktree: root).runDirectory(for: runID)
         .appending(path: QAReport.directory, directoryHint: .isDirectory)
       try files.createDirectory(at: qaDirectory, withIntermediateDirectories: true)
     } catch {
@@ -1234,41 +1234,19 @@ enum QARunRun {
     return QARunDeadline.of(box, final: final)
   }
 
-  /// The line a run prints once its run directory exists, naming where its report is written
-  /// and, when that is a worktree's own state, where the clone keeps it once the checkout is
-  /// removed.
-  static func startedLine(runID: String, reportFile: String, keptReportFile: String?) -> String {
-    "\(command): run \(runID) started; its report will be written to \(reportFile)"
-      + kept(keptReportFile) + "\n"
-  }
-
-  /// Where the clone keeps run `runID`'s `qa/report.json` once the checkout at `root` is
-  /// removed; `nil` when that is where the run writes it.
-  static func keptReportFile(runID: String, root: URL) -> String? {
-    guard case .gitDir(let gitDir) = StateRootResolver.resolve(worktree: root),
-      case .gitDir(let common) = StateRootResolver.eventStore(worktree: root),
-      let kept = StateRootResolver.keptRuns(commonDir: common),
-      kept != .gitDir(gitDir.standardizedFileURL)
-    else { return nil }
-    return kept.url(RunLayout.runDirectory(for: runID), directoryHint: .isDirectory)
-      .appending(path: "\(QAReport.directory)/\(QAReport.fileName)", directoryHint: .notDirectory)
-      .path(percentEncoded: false)
-  }
-
-  private static func kept(_ file: String?) -> String {
-    file.map { ", and kept at \($0) once the checkout is removed" } ?? ""
+  /// The line a run prints once its run directory exists, naming where its report is written:
+  /// ``RunStore/qaRuns(worktree:)``, which in a clone's slot outlives the slot.
+  static func startedLine(runID: String, reportFile: String) -> String {
+    "\(command): run \(runID) started; its report will be written to \(reportFile)\n"
   }
 
   /// 1 line naming the verdict, the run and the report file, printed last so a cut output keeps
   /// it; empty when `reportFile` is `nil`.
-  static func summary(_ report: QAReport, reportFile: String?, keptReportFile: String? = nil)
-    -> String
-  {
+  static func summary(_ report: QAReport, reportFile: String?) -> String {
     guard let reportFile else { return "" }
     return
       "\(command): \(report.verdict.rawValue) \(report.message); run \(report.runID ?? "none"), "
       + "report \(reportFile)"
-      + (keptReportFile.map { ", kept at \($0) once the checkout is removed" } ?? "")
   }
 
   /// `path` relative to `root` unless absolute.
@@ -1289,14 +1267,13 @@ enum QARunRun {
   /// Writes `report`'s JSON, as `--json` prints it, to `path` alone, relative to `root` unless
   /// absolute, keeping the creation time ``startOutput(at:root:)`` gave it.
   static func writeOutput(
-    _ report: QAReport, reportFile: String?, keptReportFile: String? = nil, to path: String,
-    root: URL
+    _ report: QAReport, reportFile: String?, to path: String, root: URL
   ) throws(QAFilesError) {
     let file = outputFile(path, root: root)
     let created = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate]
     try QAFiles.write(
       Data(
-        render(report, json: true, reportFile: reportFile, keptReportFile: keptReportFile).utf8),
+        render(report, json: true, reportFile: reportFile).utf8),
       to: file)
     if let created {
       try? FileManager.default.setAttributes([.creationDate: created], ofItemAtPath: file.path)
@@ -1304,11 +1281,8 @@ enum QARunRun {
   }
 
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
-  /// - Parameter keptReportFile: where the clone keeps that report once the checkout is removed.
-  static func render(
-    _ report: QAReport, json: Bool, reportFile: String? = nil, keptReportFile: String? = nil
-  ) -> String {
-    let summary = summary(report, reportFile: reportFile, keptReportFile: keptReportFile)
+  static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
+    let summary = summary(report, reportFile: reportFile)
     guard !json else {
       let encoded = String(decoding: (try? QAReportJSON.encode(report)) ?? Data(), as: UTF8.self)
       // The summary goes in as the object's last member, so the JSON still reads.
@@ -1453,9 +1427,7 @@ struct QARunCommand: AsyncParsableCommand {
           await QARunRun.deadline(root: root, runner: runner, final: final), bound),
         started: { runID, report in
           // Before any row runs, so a caller that backgrounds the run waits on this file.
-          let line = QARunRun.startedLine(
-            runID: runID, reportFile: report.path,
-            keptReportFile: QARunRun.keptReportFile(runID: runID, root: root))
+          let line = QARunRun.startedLine(runID: runID, reportFile: report.path)
           FileHandle.standardError.write(Data(line.utf8))
         },
         devices: LiveQADeviceLender(
@@ -1463,24 +1435,19 @@ struct QARunCommand: AsyncParsableCommand {
         running: await (try? GitTrackedTree(runner: runner, directory: root).stateLayout())
           .map { RunningGateRegistry(layout: $0) }))
     let reportFile = report.runID.flatMap { runID in
-      (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
+      (try? RunStore.qaRuns(worktree: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
     }.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
-    let keptReportFile = report.runID.flatMap { QARunRun.keptReportFile(runID: $0, root: root) }
     if let output {
       do throws(QAFilesError) {
-        try QARunRun.writeOutput(
-          report, reportFile: reportFile, keptReportFile: keptReportFile, to: output, root: root)
+        try QARunRun.writeOutput(report, reportFile: reportFile, to: output, root: root)
       } catch {
         FileHandle.standardError.write(Data("\(QARunRun.command): --output: \(error)\n".utf8))
         throw ExitCode(Verdict.blocked.exitCode)
       }
-      Console.write(
-        QARunRun.summary(report, reportFile: reportFile, keptReportFile: keptReportFile))
+      Console.write(QARunRun.summary(report, reportFile: reportFile))
     } else {
-      Console.write(
-        QARunRun.render(
-          report, json: json, reportFile: reportFile, keptReportFile: keptReportFile))
+      Console.write(QARunRun.render(report, json: json, reportFile: reportFile))
     }
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
