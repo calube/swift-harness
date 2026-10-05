@@ -28,6 +28,12 @@ public enum ChangedTestDiscovery {
     }
   }
 
+  /// Whether `unit` declares at least 1 test: a file emptied to its imports holds none, so no run
+  /// can select anything from it.
+  public static func declaresTests(in unit: SourceUnit) -> Bool {
+    !TestFunction.all(in: unit).isEmpty
+  }
+
   /// `name(label:_:)`, the form Swift Testing ids use.
   static func signature(of decl: FunctionDeclSyntax) -> String {
     let labels = decl.signature.parameterClause.parameters.map { "\($0.firstName.text):" }

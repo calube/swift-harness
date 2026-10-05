@@ -211,6 +211,21 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case testNeedsStub = "build-return.test-needs-stub"
     case staleGate = "build-return.stale-gate"
     case testsNotRun = "build-return.tests-not-run"
+
+    /// A finding only a design or plan change resolves, which no retry of the task can fix.
+    public var needsDesign: Bool {
+      switch self {
+      case .outsideWriteSet, .targetOutsideSurface, .designConflictOutcome,
+        .designConflictUnrecorded, .designConflictUnreturned, .designConflictMismatch:
+        true
+      case .branchMissing, .noCommits, .commitMissing, .commitOffBranch, .gateMissing,
+        .gateRunMissing, .gateVerdictMismatch, .gateTierMismatch, .gateNotGreen, .gateBelowTaskGate,
+        .gateRedOutcomeIsGreen, .reviewMissing, .gateMissingProof, .surfaceCommitOffBranch,
+        .surfaceCommitNotProofBase, .outsideWriteSetUnexplained, .gateMissingStep, .testNeedsStub,
+        .staleGate, .testsNotRun:
+        false
+      }
+    }
   }
 
   public let rule: Rule

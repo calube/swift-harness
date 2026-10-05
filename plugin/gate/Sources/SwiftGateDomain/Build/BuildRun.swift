@@ -246,10 +246,12 @@ public enum BuildEvent: Sendable, Equatable {
     /// Every finding's rule, each once, in report order.
     public let rules: [TaskReturnFinding.Rule]
     public let at: Date
+    /// The checked return's outcome; `nil` when the recorded check names none.
+    public let outcome: TaskReturn.Outcome?
 
     public init(
       task: String, fix: Bool, verdict: Verdict, commit: String?, checkID: String,
-      rules: [TaskReturnFinding.Rule], at: Date
+      rules: [TaskReturnFinding.Rule], at: Date, outcome: TaskReturn.Outcome? = nil
     ) {
       self.task = task
       self.fix = fix
@@ -258,6 +260,7 @@ public enum BuildEvent: Sendable, Equatable {
       self.checkID = checkID
       self.rules = rules
       self.at = at
+      self.outcome = outcome
     }
   }
 
@@ -314,7 +317,7 @@ public enum BuildEvent: Sendable, Equatable {
 extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
-    case fix, commit, rules, qaRun, validation
+    case fix, commit, rules, qaRun, validation, outcome
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -361,7 +364,8 @@ extension BuildEvent: Codable {
           verdict: try container.decode(Verdict.self, forKey: .verdict),
           commit: try container.decodeIfPresent(String.self, forKey: .commit),
           checkID: try container.decode(String.self, forKey: .checkID),
-          rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at))
+          rules: try container.decode([TaskReturnFinding.Rule].self, forKey: .rules), at: at,
+          outcome: try container.decodeIfPresent(TaskReturn.Outcome.self, forKey: .outcome)))
     case .finish:
       self = .finish(
         Finish(
@@ -409,6 +413,7 @@ extension BuildEvent: Codable {
       try container.encode(check.checkID, forKey: .checkID)
       try container.encode(check.rules, forKey: .rules)
       try container.encode(check.at, forKey: .at)
+      try container.encodeIfPresent(check.outcome, forKey: .outcome)
     case .finish(let finish):
       try container.encodeIfPresent(finish.qaRun, forKey: .qaRun)
       try container.encodeIfPresent(finish.validation, forKey: .validation)

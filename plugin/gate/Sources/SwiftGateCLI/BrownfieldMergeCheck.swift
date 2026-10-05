@@ -249,13 +249,19 @@ enum BrownfieldMergeCheck {
           let deadline = dependencies.bound(run.area.name, run.step, .scratch).duration
           return prepare(
             run.area, step: run.step, repositoryRoot: scratch.path(percentEncoded: false),
-            files: run.selection, deadline: deadline, dependencies: dependencies)?.request
+            files: run.selection, deadline: deadline, dependencies: dependencies
+          ).map {
+            ScratchTreeBuild.request($0.request, kind: run.area.kind, layout: dependencies.layout)
+          }
             ?? AreaCommandRequest(
               area: run.area.name, step: run.step, command: "false",
               workingDirectory: scratch.path(percentEncoded: false),
               deadline: deadline, environment: [:], junitPath: nil)
         }
       }
+      // Read before the reruns: whether their scratch-tree builds start warm.
+      let derivedData = BrownfieldProve.derivedData(
+        failing.map(\.area), layout: dependencies.layout)
       let (lookup, milliseconds) = await GateRun.timed {
         await dependencies.baseline.lookupOrRerun(
           queries, base: BaselineBase(commit: mergeBase, tree: tree),
@@ -265,7 +271,8 @@ enum BrownfieldMergeCheck {
       outcome.baselineCount = lookup.verdict.baselineCount
       context.steps.record(
         .baseline, tier: nil, milliseconds: milliseconds,
-        verdict: remaining.isEmpty && lookup.unattributed.isEmpty ? .green : .red)
+        verdict: remaining.isEmpty && lookup.unattributed.isEmpty ? .green : .red,
+        derivedData: derivedData)
       outcome.findings += lookup.notes + lookup.unattributed
       for failure in remaining {
         guard
@@ -279,6 +286,17 @@ enum BrownfieldMergeCheck {
     outcome.findings += stepRuns.flatMap(\.lintFindings)
 
     let proved = touched.filter(dependencies.sliceBuildsOnly)
+    let provedAtSlice = touched.filter { area in
+      !dependencies.sliceBuildsOnly(area)
+        && changed.contains { ChangedTestIDs.isTestFile($0, of: area) }
+    }
+    if !provedAtSlice.isEmpty {
+      let names = provedAtSlice.map(\.name).joined(separator: ", ")
+      outcome.findings += summary(
+        "prove: \(names)'s new or changed tests aren't proven again here: slice runs and proves "
+          + "them in each task's own gate, and \(tier.rawValue) proves only the areas whose slice "
+          + "builds without running them")
+    }
     if !proved.isEmpty {
       let proofBase: String
       do throws(GitError) {
@@ -532,6 +550,14 @@ enum BrownfieldMergeCheck {
   }
 
   /// A BLOCKED outcome: the verdict says so even if the finding naming why can't be made.
+  /// A `prove.summary` nit, which never gates.
+  private static func summary(_ message: String) -> [Finding] {
+    let finding = try? Finding(
+      ruleID: ProofRules.summaryRuleID, severity: .nit, file: ".", line: nil, message: message,
+      failureScenario: nil)
+    return finding.map { [$0] } ?? []
+  }
+
   private static func blocked(_ reason: String) -> Outcome {
     let finding = try? Finding(
       ruleID: CheckRun.notRunRuleID, severity: .minor, file: ".", line: nil,

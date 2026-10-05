@@ -476,4 +476,117 @@ struct BuildPlanBranchTests {
     let tested = try await check(.areaTest, suffix: 2)
     #expect(tested.verdict == .green, "\(tested.message) \(tested.findings)")
   }
+
+  @Test(
+    "a brownfield fixer's return citing a GREEN slice in its fix worktree passes check-return --fix, leaving the merge tier to the gate on the plan branch after the merge — catches a fixer paying for a merge-tier gate on its branch tip, which never gates the tree that lands"
+  )
+  func fixReturnNeedsOnlyTheSlice() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let names = try TaskWorktree(
+      commonDirectory: scenario.common, plan: PlanBranchScenario.slug,
+      task: "fix-\(PlanBranchScenario.task)", profile: .brownfield)
+    try await scenario.git(
+      "worktree", "add", "-q", "-b", names.branch, names.path, scenario.planBranch)
+    try FileManager.default.createDirectory(
+      atPath: names.path + "/Core", withIntermediateDirectories: true)
+    try Data("VALUE = 3\n".utf8).write(to: URL(filePath: names.path + "/Core/value.py"))
+    try await scenario.git("add", "-A", in: names.path)
+    try await scenario.git("commit", "-q", "-m", "fix: value", in: names.path)
+    let commit = try await scenario.git("rev-parse", "HEAD", in: names.path)
+    let finished = Date(timeIntervalSince1970: 1_790_000_000)
+    let runID = RunID.make(startedAt: finished, suffix: 3)
+    try RunStore(worktreeRoot: URL(filePath: names.path, directoryHint: .isDirectory)).record(
+      try RunReport(
+        runID: runID, durationMilliseconds: 1200,
+        tiers: [
+          TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)
+        ], findings: []),
+      finishedAt: finished, command: "check slice", headCommit: commit, dirty: false)
+    let file = scenario.base.appending(path: "fix-return.json")
+    try TaskReturnJSON.encode(
+      TaskReturn(
+        task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
+        gate: .init(tier: .slice, verdict: .green, runID: runID), review: nil, testsAdded: [],
+        notes: "value", designConflict: nil)
+    ).write(to: file)
+
+    let report = await BuildCheckReturnRun.run(
+      file: file.path, plan: PlanBranchScenario.slug, fix: true,
+      git: LiveGit(runner: scenario.runner, repositoryRoot: scenario.checkout),
+      profile: BuildPresetCatalog.profile(root: scenario.user))
+
+    #expect(report.findings.map(\.rule) == [], "\(report.message) \(report.findings)")
+    #expect(report.verdict == .green, "\(report.message)")
+  }
+
+  @Test(
+    "check-return doesn't count a Swift test file the task emptied to its imports as an unrun test, and still refuses 1 that keeps a test no gate ran — catches the send-money trial's slice refused because its plan emptied AppFeatureTests.swift",
+    arguments: [
+      ("send-money-3-AppFeatureTests-emptied.swift", false),
+      ("send-money-3-AppFeatureTests-base.swift", true),
+    ])
+  func checkReturnSkipsTestFilesWithNoTests(tip fixture: String, refused: Bool) async throws {
+    let test = "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift"
+    let base = try Fixture.text("BrownfieldTrial/send-money-3-AppFeatureTests-base.swift")
+    let scenario = try await PlanBranchScenario(
+      config: PlanBranchScenario.config.replacingOccurrences(
+        of: "[build.presets.brownfield]",
+        with: """
+          [[areas]]
+          name = "AppFeature"
+          root = "Packages/AppFeature"
+          language = "swift"
+          kind = "swiftpm"
+          test = "swift test"
+          test_files = "swift test --filter {tests}"
+          test_globs = ["Packages/AppFeature/Tests/**/*.swift"]
+          packs = []
+
+          [build.presets.brownfield]
+          """),
+      files: ["app.py": Data("print('hi')\n".utf8), test: Data(base.utf8)])
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    let worktree = URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory)
+    var tip = try Fixture.text("BrownfieldTrial/\(fixture)")
+    // The base file kept whole still changes, so it's in the branch's diff.
+    if refused { tip += "// The posts screen keeps its tests.\n" }
+    try Data(tip.utf8).write(to: worktree.appending(path: test))
+    try await scenario.git("add", "-A", in: scenario.taskWorktree)
+    try await scenario.git("commit", "-q", "-m", "feat: send views", in: scenario.taskWorktree)
+    let commit = try await scenario.git("rev-parse", "HEAD", in: scenario.taskWorktree)
+    let finished = Date(timeIntervalSince1970: 1_790_000_000)
+    let runID = RunID.make(startedAt: finished, suffix: 1)
+    try RunStore(worktreeRoot: worktree).record(
+      try RunReport(
+        runID: runID, durationMilliseconds: 1200,
+        tiers: [
+          TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)
+        ], findings: []),
+      finishedAt: finished, command: "check slice", headCommit: commit, dirty: false,
+      gateSteps: [
+        GateStepTiming(
+          step: .areaBuild, tier: nil, milliseconds: 1, verdict: .green, derivedData: .none,
+          area: "AppFeature")
+      ])
+    let file = scenario.base.appending(path: "return.json")
+    try TaskReturnJSON.encode(
+      TaskReturn(
+        task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
+        gate: .init(tier: .slice, verdict: .green, runID: runID),
+        review: .init(mode: .classified, findings: []), testsAdded: [], notes: "send views",
+        designConflict: nil)
+    ).write(to: file)
+
+    let report = await BuildCheckReturnRun.run(
+      file: file.path, plan: PlanBranchScenario.slug,
+      git: LiveGit(runner: scenario.runner, repositoryRoot: scenario.checkout),
+      profile: BuildPresetCatalog.profile(root: scenario.user))
+
+    #expect(
+      report.findings.map(\.rule).filter { $0 == .testsNotRun } == (refused ? [.testsNotRun] : []),
+      "\(report.message) \(report.findings)")
+  }
 }

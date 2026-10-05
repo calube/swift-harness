@@ -19,6 +19,10 @@ struct BuildCheckReturnReport: Sendable, Equatable, Encodable {
   /// The full sha of the return's last commit, the branch tip `build merge` requires; `nil` when
   /// the check couldn't resolve one.
   var commit: String? = nil
+  /// The answer a halt of this return recommends; `nil` when the return doesn't halt its task.
+  var haltAdvice: TaskHaltAdvice? = nil
+  /// The checked return's outcome, which `build merge` reads off the recorded check.
+  var outcome: TaskReturn.Outcome? = nil
 }
 
 /// The testable core of `build check-return` (spec §5.3). Reads the return, the plan's ledger and
@@ -61,16 +65,60 @@ enum BuildCheckReturnRun {
       let evidence = try await gather(
         taskReturn, plan: plan, fix: fix, git: git, profile: profile, warnings: &warnings)
       let findings = TaskReturnCheck.findings(taskReturn, evidence: evidence)
+      let verdict: Verdict = findings.isEmpty ? .green : .red
+      var rules: [TaskReturnFinding.Rule] = []
+      for finding in findings where !rules.contains(finding.rule) { rules.append(finding.rule) }
       return BuildCheckReturnReport(
         command: command, plan: plan, task: taskReturn.task,
-        verdict: findings.isEmpty ? .green : .red, findings: findings, warnings: warnings,
+        verdict: verdict, findings: findings, warnings: warnings,
         message: findings.isEmpty
           ? "task `\(taskReturn.task)`: the return matches git and the run store"
           : "task `\(taskReturn.task)`: \(findings.count) claim(s) the evidence doesn't support",
-        commit: evidence.lastCommit)
+        commit: evidence.lastCommit,
+        haltAdvice: await haltAdvice(
+          taskReturn, verdict: verdict, rules: rules, plan: plan, fix: fix, git: git),
+        outcome: taskReturn.outcome)
     } catch {
       return blocked(taskReturn.task, error.message)
     }
+  }
+
+  /// The halt advice for `taskReturn` against the plan's newest build run: its time box, or its
+  /// preset's budget, and when the task last went `in-progress`. A plan with no readable build
+  /// run is advised as a build with no box.
+  private static func haltAdvice(
+    _ taskReturn: TaskReturn, verdict: Verdict, rules: [TaskReturnFinding.Rule], plan: String,
+    fix: Bool, git: any Git
+  ) async -> TaskHaltAdvice? {
+    let now = Date()  // swiftgate:allow det.date-init — measures the box left at the check
+    var startedAt: Date?
+    var noNewStartsAt: Date?
+    var cutoffAt: Date?
+    if let store = try? await BuildRunStore.latest(plan: plan, git: git),
+      let record = try? store.record()
+    {
+      if let box = record.timeBox {
+        noNewStartsAt = box.deadlines.noNewStartsAt
+        cutoffAt = box.deadlines.cutoffAt
+      } else if record.preset.timeBudgetMin > 0 {
+        let budget = TimeInterval(record.preset.timeBudgetMin * 60)
+        noNewStartsAt = record.startedAt.addingTimeInterval(
+          budget - TimeInterval(record.preset.stopStartsBeforeMin * 60))
+        cutoffAt = record.startedAt.addingTimeInterval(budget)
+      }
+      if !fix, let log = try? store.events() {
+        startedAt =
+          log.events.compactMap { event -> Date? in
+            guard case .transition(let move) = event, move.task == taskReturn.task,
+              move.to == .inProgress
+            else { return nil }
+            return move.at
+          }.last
+      }
+    }
+    return TaskHaltAdvice.advise(
+      outcome: taskReturn.outcome, verdict: verdict, rules: rules, startedAt: startedAt, now: now,
+      noNewStartsAt: noNewStartsAt, cutoffAt: cutoffAt)
   }
 
   /// What ``check(file:plan:fix:git:profile:directory:)`` found and recorded.
@@ -129,7 +177,7 @@ enum BuildCheckReturnRun {
         .returnCheck(
           .init(
             task: task, fix: fix, verdict: report.verdict, commit: report.commit,
-            checkID: eventID, rules: rules, at: now)))
+            checkID: eventID, rules: rules, at: now, outcome: report.outcome)))
     } catch {
       return [
         "\(notRecorded) in build run \(buildRun), so `build merge` will refuse this return: "
@@ -186,7 +234,7 @@ enum BuildCheckReturnRun {
       throw Blocked("plan `\(slug)` has no task `\(taskReturn.task)`")
     }
     let (taskGate, taskProof) = try await taskGate(
-      of: task, plan: store.plan, slug: slug, fix: fix, git: git)
+      of: task, plan: store.plan, slug: slug, fix: fix, profile: profile, git: git)
     let names: TaskWorktree
     do {
       names = try TaskWorktree(
@@ -263,8 +311,8 @@ enum BuildCheckReturnRun {
       addedTests: addedTests)
   }
 
-  /// The test files the task branch adds or changes and still holds, in the areas that own them,
-  /// for the areas whose `slice` runs changed tests alone. A test in any other area is a warning:
+  /// The test files the task branch adds or changes and that still declare a test at its tip, in
+  /// the areas that own them, for the areas whose `slice` runs changed tests alone. A test in any other area is a warning:
   /// a slice over the budget only builds it, so it first runs at `merge`.
   private static func brownfieldTests(
     _ changed: [String], tip: String, worktree: URL, git: any Git, warnings: inout [String]
@@ -293,7 +341,10 @@ enum BuildCheckReturnRun {
     guard !tests.isEmpty else { return [] }
     let held: Set<String>
     do {
-      held = Set(try await git.contents(of: tests, at: tip).keys)
+      held = Set(
+        try await git.contents(of: tests, at: tip).filter { path, text in
+          declaresTests(path: path, text: text)
+        }.keys)
     } catch {
       throw Blocked("reading the task branch's test files at \(tip): \(error)")
     }
@@ -313,6 +364,15 @@ enum BuildCheckReturnRun {
           + "tests alone, so a slice over the budget only builds them and they first run at merge")
     }
     return added
+  }
+
+  /// Whether a test file at the branch tip still declares a test. A Swift file emptied to its
+  /// imports holds none, so no gate could run it; any other language's file counts as holding
+  /// tests.
+  private static func declaresTests(path: String, text: String) -> Bool {
+    guard path.hasSuffix(".swift") else { return true }
+    return ChangedTestDiscovery.declaresTests(
+      in: SourceUnit(input: SourceInput(path: path, text: text), scope: nil))
   }
 
   /// Builds the host tests the task branch adds or changes, in scratch trees of its tip, with the
@@ -473,11 +533,14 @@ enum BuildCheckReturnRun {
     }
   }
 
-  /// The preset's fixed tier, or the ledger's own when the preset defers to it. A fix is merged
-  /// straight after, so it meets the preset's merge gate instead. Also the run preset's
-  /// `taskProof`, which says whether the task gate had to prove and mutate.
+  /// The preset's fixed tier, or the ledger's own when the preset defers to it. An owned fix is
+  /// merged straight after, so it meets the preset's merge gate instead. A brownfield fix meets
+  /// the task gate: its branch tip lacks whatever merged after it was cut, so a merge tier there
+  /// gates a tree that never lands, and the plan branch's merge gate runs on the merged tree.
+  /// Also the run preset's `taskProof`, which says whether the task gate had to prove and mutate.
   private static func taskGate(
-    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool, git: any Git
+    of task: LedgerTask, plan: PlanStateLayout.Plan, slug: String, fix: Bool,
+    profile: RepositoryProfile, git: any Git
   ) async throws(Blocked) -> (CheckTier, BuildPreset.TaskProof) {
     let store: BuildRunStore?
     do {
@@ -493,7 +556,7 @@ enum BuildCheckReturnRun {
       throw Blocked("reading build run \(store.runID): \(error)")
     }
     let proof = record.preset.taskProof
-    if fix { return (record.preset.mergeGate, proof) }
+    if fix, profile == .owned { return (record.preset.mergeGate, proof) }
     switch record.preset.taskGate {
     case .ledger: return (task.gate, proof)
     case .tier(let tier): return (tier, proof)

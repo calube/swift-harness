@@ -22,6 +22,12 @@ and `trialMerge.conflicts` names the files. `build merge` refuses `build-merge.f
 while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s commit, and
 `build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does.
 
+Each merged run leaves `merged-tree-run.json` beside its report: the merge's tree and each row's
+result with its check's digest. A later run whose trial merge makes the same tree takes, from the
+newest such record, each row that read `pass` with a byte-identical check, naming that run in
+`reusedFrom`, so a fixer's passing run isn't repeated before the merge. A row that read `red` there
+runs again.
+
 ## A validation worker's prepared run
 
 With `--prepared-by <task>`, only `<task>`'s rows run, their `qa/<name>` checks and `QA_DIR` read

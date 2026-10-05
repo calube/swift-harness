@@ -18,7 +18,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/TRIAL/repo-spec-send-money-contract",
+      "worktree" : "../repo-spec-send-money-contract",
       "writeSet" : [
         "Packages/APIClient/Package.swift",
         "Packages/APIClient/Sources/AccountClient/",
@@ -47,7 +47,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/TRIAL/repo-spec-amount-input",
+      "worktree" : "../repo-spec-amount-input",
       "writeSet" : [
         "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
         "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift"
@@ -72,7 +72,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/TRIAL/repo-spec-send-flow",
+      "worktree" : "../repo-spec-send-flow",
       "writeSet" : [
         "Packages/AppFeature/Sources/AppCore/SendMoneyFeature.swift",
         "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
@@ -101,7 +101,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/TRIAL/repo-spec-send-views",
+      "worktree" : "../repo-spec-send-views",
       "writeSet" : [
         "Packages/AppFeature/Sources/AppUI/SendMoneyView.swift",
         "Packages/AppFeature/Sources/AppUI/AmountView.swift",
@@ -137,7 +137,7 @@
       "tests" : [
 
       ],
-      "worktree" : "/TRIAL/repo-spec-spec-validation",
+      "worktree" : "../repo-spec-spec-validation",
       "writeSet" : [
         ".harness/qa/spec/"
       ]

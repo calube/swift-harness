@@ -1,0 +1,30 @@
+diff --git a/Packages/APIClient/Package.swift b/Packages/APIClient/Package.swift
+index d644bda..7cf81b3 100644
+--- a/Packages/APIClient/Package.swift
++++ b/Packages/APIClient/Package.swift
+@@ -7,6 +7,7 @@ let package = Package(
+   products: [
+     .library(name: "APIClient", targets: ["APIClient"]),
+     .library(name: "APIClientLive", targets: ["APIClientLive"]),
++    .library(name: "AccountClient", targets: ["AccountClient"]),
+   ],
+   dependencies: [
+     .package(url: "https://github.com/pointfreeco/swift-dependencies", exact: "1.17.1")
+@@ -26,6 +27,17 @@ let package = Package(
+         .product(name: "Dependencies", package: "swift-dependencies"),
+       ]
+     ),
++    .target(
++      name: "AccountClient",
++      dependencies: [
++        .product(name: "Dependencies", package: "swift-dependencies"),
++        .product(name: "DependenciesMacros", package: "swift-dependencies"),
++      ]
++    ),
++    .testTarget(
++      name: "AccountClientTests",
++      dependencies: ["AccountClient"]
++    ),
+     .testTarget(
+       name: "APIClientTests",
+       dependencies: [

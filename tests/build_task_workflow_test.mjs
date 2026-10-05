@@ -981,7 +981,14 @@ const tests = {
       'Cited gate: the run you return as "gate" must start at your last commit on a clean tree, so commit everything first and then run the task gate. ' +
       '`build check-return` rejects a run started at an earlier commit or on uncommitted changes (build-return.stale-gate).\n' +
       'Tests to turn green: test-catalog-list-loads-first-page.\n' +
-      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n\nRun-viewer span: '
+      'Context pack: /work/app/.harness/context-pack/worker-catalog-list-reducer.md. Read it first.\n' +
+      `Gate runs: run every \`${SG} check\` and \`${SG} test-only\` in the foreground with the Bash tool's \`timeout\` at 600000, its longest. ` +
+      'At the default 120 s the tool moves the gate to the background.\n' +
+      'A gate that may outlast 600 s runs with `run_in_background: true` and `--json > /work/app-catalog-catalog-list-reducer/.harness/tmp/gate.json`; then run ' +
+      `\`${SG} build gate-wait catalog --tier fast --output /work/app-catalog-catalog-list-reducer/.harness/tmp/gate.json --json\` with the same timeout, again while its action is \`wait\`, ` +
+      'and read that file once it is `read`. On `overrun` or `cutoff`, return gate-red with redReason `environment`.\n' +
+      'Never wait on or stop a process by name: the hook denies `pgrep -f`, `pkill`, `killall` and a `while` or `until` loop on `pgrep`. ' +
+      '`pgrep -f` matches the shell running it, so such a loop never ends.\n\nRun-viewer span: '
     const expected = {
       'per-task':
         head + 'Task proof: per-task.\n' + shim +
@@ -1039,6 +1046,31 @@ const tests = {
     }
     const owned = await run(baseArgs({ model: 'claude-sonnet-5-5', review: 'gate' }))
     assert.equal(owned.workerCalls[0].opts.model, 'claude-sonnet-5-5', 'an owned preset refused a pinned id')
+  },
+
+  async 'every worker and fix prompt, in either profile, runs gates at the 600000 timeout, waits on a longer one with build gate-wait on its JSON file, and forbids waiting on a process by name — catches a gate moved to the background at 120 s and watched by a pgrep -f loop that matches its own shell'() {
+    const behave = profile =>
+      profile === 'brownfield'
+        ? { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
+        : { workers: [red(), workerReturn()] }
+    const cases = [
+      { profile: 'brownfield', args: brownfieldArgs(), scratch: `${brownfieldArgs().stateRoot}/tmp` },
+      { profile: 'owned', args: baseArgs({ review: 'gate' }), scratch: `${baseArgs().worktree}/.harness/tmp` },
+    ]
+    for (const { profile, args, scratch } of cases) {
+      const { workerCalls } = await run(args, behave(profile))
+      assert.equal(workerCalls.length, 2, profile)
+      for (const { prompt } of workerCalls) {
+        assert.match(prompt, /in the foreground with the Bash tool's `timeout` at 600000/, `${profile}: no 600000 timeout:\n${prompt}`)
+        assert.ok(prompt.includes(`${SG} check`) && prompt.includes(`${SG} test-only`), `${profile}: the rule does not name both gate commands`)
+        assert.ok(prompt.includes(`--json > ${scratch}/gate.json`), `${profile}: no JSON redirect for a background gate:\n${prompt}`)
+        assert.ok(
+          prompt.includes(`${SG} build gate-wait ${args.plan} --tier ${args.taskGate} --output ${scratch}/gate.json --json`),
+          `${profile}: no gate-wait on the gate's file:\n${prompt}`,
+        )
+        for (const word of ['`pgrep -f`', '`pkill`', '`killall`']) assert.ok(prompt.includes(word), `${profile}: ${word} is not forbidden`)
+      }
+    }
   },
 
   async 'a prove task gate passes --prove and never --mutate, from the plan branch, in every worker prompt — catches prove-only proof still mutating, or a slice gated against main'() {

@@ -27,7 +27,9 @@ enum PreToolUseHook {
       if let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType) {
         return deny(violation)
       }
-      if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
+        return deny(violation)
+      }
       if let violation = await gateOutput(
         command, payload: payload, root: root, reads: reads, home: home)
       {

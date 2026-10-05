@@ -815,3 +815,66 @@ extension BrownfieldSliceCheckTests {
     #expect(labels.contains("AppFeature neutral none"), "\(labels)")
   }
 }
+
+extension BrownfieldSliceCheckTests {
+  @Test(
+    "the send-money trial's slice builds its scratch trees in the clone's caches: the baseline rerun's xcodebuild in the worktree's prove DerivedData, its swift build and prove's swift test in the area's shared scratch path, and each step says whether that was warm — catches a RED slice's baseline writing 1.3 GB into Xcode's global DerivedData and every swiftpm prove compiling cold while labelled none",
+    arguments: [false, true])
+  func scratchTreesBuildInTheClonesCaches(warm: Bool) async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+    let areas = config.areas.filter { ["InterviewStarter", "AppFeature"].contains($0.name) }
+    let shared = ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout)
+    let prove = XcodeDerivedData.provePath(area: "InterviewStarter", layout: clone.layout)
+    if warm {
+      for directory in [shared, prove + "/Build"] {
+        try FileManager.default.createDirectory(
+          atPath: directory, withIntermediateDirectories: true)
+      }
+    }
+    // Both areas fail at the head and at the base, so the baseline reruns each in a scratch tree.
+    let runner = FakeAreaCommandRunner { request in
+      switch request.step {
+      case .build: .failed(exit: 65, tail: "BUILD FAILED", junit: nil)
+      case .testFiles: .failed(exit: 1, tail: "1 failed", junit: nil)
+      default: .passed
+      }
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+    let tests = try Fixture.text("BrownfieldTrial/send-money-2-AmountInputTests.swift")
+
+    _ = try await Self.run(
+      clone, areas: areas,
+      changes: [
+        Change(path: "App/InterviewStarterApp.swift", text: "let root = 1\n", added: [1...1]),
+        Change(
+          path: "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
+          text: "let amount = 1\n", added: [1...1]),
+        Change(
+          path: "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift", text: tests,
+          added: [1...tests.split(separator: "\n", omittingEmptySubsequences: false).count - 1]),
+      ],
+      runner: runner, warm: ["InterviewStarter": 56_700, "AppFeature": 10_000], context: context)
+
+    let scratch = runner.requests.filter { Self.inScratchTree($0, clone) }
+    let starter = scratch.filter { $0.area == "InterviewStarter" }
+    let feature = scratch.filter { $0.area == "AppFeature" }
+    #expect(starter.map(\.step) == [.build], "the baseline reruns the failed build at the base")
+    #expect(
+      starter.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' ") },
+      "\(starter.map(\.command))")
+    #expect(
+      feature.count > 1 && feature.allSatisfy { $0.step == .testFiles },
+      "prove's reverted runs and the baseline's rerun at the base: \(feature.map(\.step))")
+    #expect(
+      feature.allSatisfy { $0.command.contains(" --scratch-path '\(shared)'") },
+      "\(feature.map(\.command))")
+
+    let label = warm ? "warm" : "cold"
+    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
+    #expect(labels.contains("AppFeature prove \(label)"), "\(labels)")
+    #expect(labels.contains("- baseline \(label)"), "\(labels)")
+  }
+}

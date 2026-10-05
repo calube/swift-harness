@@ -321,7 +321,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      `"$SG" build cutoff <slug> --session <session> --json` when `run clock` or any `build next`
      reports `phase` `cutoff`, or when a `build next` reports `no-new-starts` with nothing in
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
-     go on with the loop. Its JSON decides every task, and you follow it as written:
+     go on with the loop. It prices each task's landing from this run's recorded merge and
+     `final` gates, using fixed estimates only before any is recorded, and charges a task's
+     before-merge `qa run` unless a GREEN one covers its tip. It lands a task whenever that fits
+     before the box ends. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
         already set it `abandoned`, with the reason the report quotes. Then discard its
         worktrees: `"$SG" worktree remove <slug> <task> --abandoned --session <session> --json`
@@ -329,7 +332,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      2. Merge each task in `finish`, in order, as the build loop's completion step does, from
         where it stands: a task already merged skips `build merge`, and one in `landed` skips
         its merge gate too, going straight to `ledger set … done` and `worktree remove` (with
-        `--fix` after a fix merge). A task not yet merged runs its `qa run --before-merge` first.
+        `--fix` after a fix merge). A task not yet merged runs its `qa run --before-merge` first,
+        which takes the rows a run on the same merged tree already passed.
         A conflict, a `flows-red` refusal, a RED `merge` gate or one `build gate-wait` reads as
         `overrun` gets no fixer at the cutoff: `build merge --undo` when the merge landed, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json` and
