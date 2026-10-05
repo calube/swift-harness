@@ -20,15 +20,17 @@ move; `--fix` merges its fixer's branch `<plan>/fix-<task>`. The report's `trial
 branch, its tip and `main`'s commit. A branch that conflicts runs no row: each reads `unverified`
 and `trialMerge.conflicts` names the files. `build merge` refuses `build-merge.flows-unchecked`
 while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s commit, and
-`build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does.
+`build-merge.flows-red` for a RED one, cutting the fix worktree as a conflict does. After another
+merge moves `main`, a run whose trial merge made the very tree this merge lands counts as if it ran
+on `main`'s commit, going by its `merged-tree-run.json`.
 
 `--after <task>,<other>,… --before-merge` merges each named branch in turn and runs every row that
 names any of them, each counting as merged; `trialMerge.alongside` names the others' branches and
-tips. Once each unmerged task a row waits on has a checked return that still stands at its branch
-tip, and no fixer's branch, `build merge` of any of them refuses `flows-unchecked` until such a run
-took all their branches at those commits on `main`'s commit, so the row runs before the first of
-them lands. A check stands while it is GREEN for a `ready-to-merge` return with no ledger reset or
-halt answered `retry` since. With a build run, `qa run` takes each branch alongside at the commit
+tips. `build merge` never waits for one: a row over tasks that haven't all merged needs no run
+before the first of them lands, and runs on the last one's trial merge. A run that took every
+unmerged task the row waits on, at the commit its standing check names, still counts: RED in the
+row, it refuses each of them. A check stands while it is GREEN for a `ready-to-merge` return with
+no ledger reset or halt answered `retry` since. With a build run, `qa run` takes each branch alongside at the commit
 its standing check names, whatever its branch head is, and is BLOCKED for a task with none.
 
 Each merged run leaves `merged-tree-run.json` beside its report: the merge's tree and each row's

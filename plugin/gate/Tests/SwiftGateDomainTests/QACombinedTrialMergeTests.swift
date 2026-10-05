@@ -85,17 +85,16 @@ struct QACombinedTrialMergeTests {
   }
 
   @Test(
-    "with all 3 returns checked and none merged, the first task's merge is unchecked on every flow row, though its own captured before-merge run read them all waiting, and a run must take the other 2 branches along, while with the screens task set aside for its fixer the others need no run — catches screen bugs found only on the last task's trial merge"
+    "with all 3 returns checked and none merged, the first task's merge needs no run, its own captured before-merge run having read every flow row waiting on the other 2, and the same with the screens task set aside for its fixer — catches a ready task held for a run over every task its rows wait on"
   )
-  func firstMergeWaitsForTheCombinedRun() throws {
+  func firstMergeNeedsNoCombinedRun() throws {
     let waiting = try Self.waiting()
     let solo = try QAReportJSON.decode(
       try Fixture.data("\(Self.directory)/send-money-4-qa-before-account-client.json"))
 
     #expect(waiting.map(\.task) == [Self.account, Self.screens, Self.core])
     #expect(
-      try Self.readiness(task: Self.account, reports: [solo], waiting: waiting)
-        == .unchecked(rows: Array(1...8)))
+      try Self.readiness(task: Self.account, reports: [solo], waiting: waiting) == .notNeeded)
     #expect(
       QAMergeReadiness.alongside(
         table: try Self.table(), merged: [], task: Self.account,
@@ -132,7 +131,7 @@ struct QACombinedTrialMergeTests {
   }
 
   @Test(
-    "a run that left 1 waiting branch out, or took it at an older commit, vouches for nothing — catches rows checked without a task they wait on"
+    "a run that left 1 waiting branch out, or took it at an older commit, neither checks the first merge nor refuses it, GREEN or RED — catches rows checked, or blamed, without a task they wait on"
   )
   func partialOrStaleRunVouchesForNothing() throws {
     let waiting = try Self.waiting()
@@ -148,9 +147,14 @@ struct QACombinedTrialMergeTests {
           tip: "0000000000000000000000000000000000000001"),
       ], green: true, runID: "20261005T061500Z-00000004")
 
+    let partialRed = try Self.combined(alongside: [core], runID: "20261005T061500Z-00000005")
+
     #expect(
       try Self.readiness(task: Self.account, reports: [partial, stale], waiting: waiting)
-        == .unchecked(rows: Array(1...8)))
+        == .notNeeded)
+    #expect(
+      try Self.readiness(task: Self.account, reports: [partialRed], waiting: waiting)
+        == .notNeeded)
   }
 
   @Test(
