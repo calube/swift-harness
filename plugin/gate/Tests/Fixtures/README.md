@@ -2899,6 +2899,33 @@ PY
 The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
 both files matched nothing.
 
+## Brownfield trial: a UI plan with no flow row, finished on a RED qa run
+
+The first tic-tac-toe trial ran `swiftgate run spec.md` on an iOS app starter with 1 `xcode`
+area rooted at `.`. `BrownfieldTrial/tic-tac-toe-1-PLAN.md` is its `PLAN.md`: the
+`ttt-screen` task writes `Packages/AppFeature/Sources/AppUI/` and `UITests/` and covers 3
+requirements whose only rows are acceptance rows naming 1 XCUITest class, with no `flow` row
+(finding 4). `tic-tac-toe-1-config.toml` is the clone's `config.toml`, and
+`tic-tac-toe-1-plan.json` and `tic-tac-toe-1-validation.json` are what `plan import` wrote from
+that plan. `tic-tac-toe-1-qa/<run>/qa/report.json` holds the 2 `qa run --plan spec` reports of
+step 8, both RED and neither `--final`; the orchestrator ran `build finish` before it read the
+second (finding 10). `S` is the trial folder, which kept the clone's plan state and each run's
+`qa/` folder. From the repository root:
+
+```sh
+S=<trial folder> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+mkdir -p $F/tic-tac-toe-1-qa
+cp $S/PLAN.md $F/tic-tac-toe-1-PLAN.md
+cp $S/config.toml $F/tic-tac-toe-1-config.toml
+cp $S/plan.json $F/tic-tac-toe-1-plan.json
+cp $S/validation.json $F/tic-tac-toe-1-validation.json
+for r in 20261005T010144Z-9350394a 20261005T010428Z-75c783e4; do
+  mkdir -p $F/tic-tac-toe-1-qa/$r/qa && cp $S/qa-runs/$r/report.json $F/tic-tac-toe-1-qa/$r/qa/
+done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-*` matched nothing.
+
 ## Brownfield trial: a flow row's sim run on an iOS clone
 
 `BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
