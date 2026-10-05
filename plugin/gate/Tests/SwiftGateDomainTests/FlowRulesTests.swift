@@ -111,8 +111,9 @@ struct FlowRulesTests {
     let text = try Self.check(
       json: #"[{"command":"wait","input":{"kind":"text","text":"Saved","timeoutMs":2000}}]"#)
     let absent = try Self.check(
-      json: #"[{"command":"wait","input":{"kind":"absent","selector":"id=\"counter.fact\""}}]"#)
-    let stable = try Self.check(json: #"[{"command":"wait","input":{"kind":"stable"}}]"#)
+      json: #"[{"command":"wait","input":{"kind":"absent","absent":"id=\"counter.fact\""}}]"#)
+    let stable = try Self.check(
+      json: #"[{"command":"wait","input":{"kind":"stable","stable":true}}]"#)
 
     #expect(text == [])
     #expect(absent == [])

@@ -4,7 +4,16 @@ import SwiftGateAdapters
 import SwiftGateDomain
 
 extension BuildHaltReason: ExpressibleByArgument {}
-extension BuildResumeAnswer: ExpressibleByArgument {}
+extension BuildResumeAnswer: ExpressibleByArgument {
+  /// The raw values, and `stop`, the run skill's word for stopping the build, as `abandon`.
+  public init?(argument: String) {
+    if argument == "stop" {
+      self = .abandon
+    } else {
+      self.init(rawValue: argument)
+    }
+  }
+}
 
 /// `build halt` and `build resume` against 1 checkout's store, with the config already read.
 enum BuildHaltRun {
