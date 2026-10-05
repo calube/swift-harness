@@ -210,6 +210,11 @@ struct NewSubcommandRegistrationTests {
       "run"
     ),
     ("qa adopt", ["qa", "adopt", "../repo-validation", "--json"], "adopt"),
+    (
+      "qa stage",
+      ["qa", "stage", "../repo-fix", "--plan", "example-plan", "--requirement", "req-1", "--json"],
+      "stage"
+    ),
     ("warmup", ["warmup", "--areas", "api,web"], "warmup"),
     (
       "xcode add-file",
