@@ -5029,6 +5029,19 @@ PY
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a heredoc after `mkdir -p <dir> && cd <dir> && NAME=value`
+
+`Hooks/mkdir-cd-assignment-heredoc-bash.json` is the 1 Bash call `guard.run-user-checkout` denied
+in a later 2026-10-05 brownfield practice trial: from the clone's checkout it made a validation
+slot's `.harness/qa/spec` with `mkdir -p`, `cd`'d into it, assigned a variable, and on the next
+line wrote a flow file there with a heredoc. The directory didn't exist when the hook ran, so the
+guard kept the starting directory in play and named the write in the user's checkout. It was
+captured with the command of the relative-heredoc section above, unchanged, from that trial's
+`run.jsonl`: the same scrub makes the clone `/CLONE` and the bundle id `com.example.App`, and
+every heredoc body is dropped.
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## Brownfield trial: a `cd` to a variable the same command assigned
 
 `Hooks/assigned-variable-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
