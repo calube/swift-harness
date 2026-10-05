@@ -40,6 +40,9 @@ enum PreToolUseHook {
         return deny(violation, tool: payload.toolName)
       }
       if let brownfield {
+        if let violation = BrownfieldBuildGuard.evaluate(command, layout: brownfield) {
+          return deny(violation, tool: payload.toolName)
+        }
         switch DirtyFileRead.read(brownfield.discoverDirty) {
         case .absent: break
         case .listed(let dirty):

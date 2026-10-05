@@ -17,6 +17,26 @@ public enum ProveVerdict {
     }
   }
 
+  /// What a failed run of several changed tests says about each, from its report.
+  public struct Attribution: Sendable, Equatable {
+    /// The ids the report names a pass or a failure for, with that outcome.
+    public let outcomes: [AreaTestID: AreaCommandOutcome]
+    /// The ids the report doesn't settle, in their order, which still run alone.
+    public let rerun: [AreaTestID]
+
+    public init(outcomes: [AreaTestID: AreaCommandOutcome], rerun: [AreaTestID]) {
+      self.outcomes = outcomes
+      self.rerun = rerun
+    }
+  }
+
+  /// Splits `ids` by what `outcome`'s report says about each: a case named `<class>/<name>` for
+  /// an id names its pass or failure, so only the ids it doesn't name run again alone. A crash
+  /// may have cut the report short, so every id of a crashed run runs again.
+  public static func attributed(_ outcome: AreaCommandOutcome, ids: [AreaTestID]) -> Attribution {
+    Attribution(outcomes: [:], rerun: ids)
+  }
+
   /// What a reverted run that selected some changed tests says about them, once its report says
   /// how many tests ran: a pass that ran none of them never found them, because the revert took
   /// away what holds them (a new target, a new module), which proves them as a build failure

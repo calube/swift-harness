@@ -702,6 +702,17 @@ public enum PlanStateGuard {
   }
 }
 
+/// PreToolUse guard on a brownfield clone's Bash commands: a `swift build` or `swift test` left to
+/// its own `.build` starts cold beside the scratch path every gate, checkout and warm-up of the
+/// clone shares, which already holds the build.
+public enum BrownfieldBuildGuard {
+  public static let rawSwiftBuildRuleID = "guard.raw-swift-build"
+
+  public static func evaluate(_ command: String, layout: BrownfieldStateLayout) -> GuardViolation? {
+    nil
+  }
+}
+
 /// A background subagent can't answer a permission prompt: a tool call that raises one never runs,
 /// and the agent waits until someone stops it. So the PreToolUse hook decides every call a
 /// subagent makes, and never leaves one to the prompt. A write outside this repository's

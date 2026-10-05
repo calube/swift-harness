@@ -109,6 +109,16 @@ enum BrownfieldProve {
     case unproven
   }
 
+  /// 1 timed part of an area's prove, its build or its test runs, as it ends.
+  struct StepTime: Sendable, Equatable {
+    let area: String
+    let step: GateStep
+    let milliseconds: Int
+    let verdict: Verdict
+    /// Whether the area's scratch build directories held a build as the prove started.
+    let derivedData: GateDerivedData
+  }
+
   /// What a prove decided, and how its reverted runs built: `none` when it ran none.
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
@@ -122,10 +132,12 @@ enum BrownfieldProve {
   /// - Parameters:
   ///   - layout: the clone's state the label reads; `nil` reads `dependencies`'.
   ///   - outOfTime: what an area the box leaves too little time becomes.
+  ///   - timed: takes each area's prove build and test runs as each ends, so a slow prove says
+  ///     which of the 2 took its time.
   static func prove(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
     proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil,
-    outOfTime: OutOfTime = .blocks
+    outOfTime: OutOfTime = .blocks, timed: @escaping @Sendable (StepTime) -> Void = { _ in }
   ) async -> Outcome {
     func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
       Outcome(judgement: judgement, derivedData: .none)

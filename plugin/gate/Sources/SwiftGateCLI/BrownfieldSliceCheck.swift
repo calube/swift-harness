@@ -738,7 +738,12 @@ enum BrownfieldSliceCheck {
         root: root, base: base, config: config,
         junitDirectory: dependencies.layout.worktreeRoot.appending(
           path: "junit/\(area.name)", directoryHint: .isDirectory),
-        proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout)
+        proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout,
+        timed: { part in
+          context.steps.record(
+            part.step, tier: nil, milliseconds: part.milliseconds, verdict: part.verdict,
+            derivedData: part.derivedData, area: part.area)
+        })
     }
     let judgement = proved.judgement
     context.steps.record(
