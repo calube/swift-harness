@@ -144,11 +144,10 @@ struct KilledRunChildrenTests {
     "a terminated swiftgate kills a child that ignores SIGTERM once the grace period passes — catches a test runner that shrugs off the forwarded SIGTERM outliving the gate a Bash timeout stopped",
     arguments: [SIGTERM, SIGINT])
   func terminatedRunKillsAChildIgnoringSIGTERM(signal: Int32) async throws {
-    let directory = FileManager.default.temporaryDirectory.appending(
-      path: "swiftgate-killed-run-\(UUID().uuidString)", directoryHint: .isDirectory)
+    let directory = try TestTemporaryDirectory.make("swiftgate-killed-run")
     let bin = directory.appending(path: "bin", directoryHint: .isDirectory)
     try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: directory) }
+    defer { TestTemporaryDirectory.remove(directory) }
     let ready = directory.appending(path: "ready").path
     try #require(mkfifo(ready, 0o600) == 0)
     // An ignored signal stays ignored across `exec`, so the sleep that holds the pipe shrugs off
