@@ -404,6 +404,36 @@ with `--udid` and `--session` from its output, and on exit runs `sim down` and r
 |---|---|
 | `press-switch.{steps.json,stdout,stderr,status}` | wait for the counter, then press the toggle by its id: step 5, the `press`, exits 1 with `COMMAND_FAILED`, `details.reason` `covered_by_interactive_descendants`, `details.step` 5 and the 4 steps before it under `details.partialResults` |
 
+### AgentDevice/pull-to-refresh
+
+Which step pulls a SwiftUI `.refreshable` list far enough to run its refresh, captured on
+2026-10-05 with `agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. Two build trial
+runs left a refresh flow red on a `scroll up` step that never triggered the refresh. The
+app is `RefreshProbe.swift` with `Info.plist`: a `List` under a large navigation title whose
+`.refreshable` bumps the `probe.refreshes` text from `Refreshes 0` to `Refreshes 1`, over 8 rows
+`probe.row.0` to `probe.row.7`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/pull-to-refresh/capture.sh
+```
+
+The script compiles the app with `swiftc` for the simulator, creates its own
+`agent-device-capture-<pid>` iPhone 17 device, runs each batch with `--steps-file`, and deletes the
+device on exit. It scrubs the outputs as in `AgentDevice/batch`, and the UDID to `UDID`. Each batch
+relaunches the app, waits for `Refreshes 0`, runs step 3, then waits 5 s for `Refreshes 1`.
+
+| Files | Step 3 |
+|---|---|
+| `drag.{steps.json,stdout,stderr,status}` | `gesture` `kind: drag` from `id="probe.refreshes"` to `id="probe.row.6"`: (201, 194) to (201, 558), 364 pt over 1300 ms. Exits 0 and the list refreshed |
+| `drag-short.{steps.json,stdout,stderr,status}` | the same drag to `id="probe.row.3"`: 208 pt. Exits 1, `details.step` 4: no refresh |
+| `scroll-up.{steps.json,stdout,stderr,status}` | the trials' `scroll` `direction: up`, `amount: 0.8`, `settle: true`: (201, 87) to (201, 787) in 400 ms, starting in the navigation bar. Exits 1, `details.step` 4: no refresh |
+
+Probes on the same app and device, 3 to 6 runs each: drags of 312 pt and 364 pt refreshed every
+time, also from a `NavigationLink` row (no navigation followed) and under an inline title, and a
+355 pt drag did in a `ScrollView` with a `LazyVStack`. Drags of 156 pt, 208 pt and 266 pt never
+refreshed. A `scroll up` refreshed only sometimes: 3 of 4 with `pixels: 500`, 3 of 4 with
+`amount: 0.5`, 0 of 4 with `pixels: 600`, which starts at y 137, and never with `amount: 0.8`.
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -3895,3 +3925,31 @@ cp $S/plans/spec/out/qa-at-base.json $F/send-money-4-qa-at-base.json
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-4-*` matched nothing.
+
+## Brownfield trial: price-tracker-3's contract without its app seam
+
+The third price-tracker trial (2026-10-05) wrote its composition root, the file that reads
+`-harness-scenario`, in the same Bash call as a raw `xcodebuild`. The guard denied the whole call,
+the heredoc never ran, and the contract `e54fcd53` (base `c1388265`, gated GREEN at `slice` as
+`20261005T055628Z-0c95049d`) was committed and imported without the file its `Writes` named. The
+fixer's `44b36870` added the seam. `T` is the trial folder under the practice-trial runs folder,
+with its orchestrator transcript in `transcripts/`, and `G` the trial clone. From the repository
+root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial D=$F/price-tracker-3-contract
+for p in $(git -C $G diff --name-only c138826 e54fcd5) App/InterviewStarterApp.swift; do
+  if git -C $G cat-file -e c138826:$p 2>/dev/null; then
+    mkdir -p $D/base/$(dirname $p); git -C $G show c138826:$p > $D/base/$p; fi
+  mkdir -p $D/contract/$(dirname $p); git -C $G show e54fcd5:$p > $D/contract/$p
+done
+rm -r $D/contract/App   # the contract left it identical to the base
+mkdir -p $D/seam/App; git -C $G show 44b3687:App/InterviewStarterApp.swift > $D/seam/App/InterviewStarterApp.swift
+cp $T/PLAN.md $F/price-tracker-3-PLAN.md; cp $T/state/config.toml $F/price-tracker-3-config.toml
+```
+
+`Hooks/price-tracker-3-blocked-seam-bash.json` is that call's `tool_use` input and its denial
+text, written by a python script over the transcript that looked up tool use
+`toolu_01RENaH9WZdjTUSwczgVdKrs` and its `tool_result`, and replaced the plan checkout's path with
+`/REPO-spec`. `grep -rniE '/Users|/private|/var/folders|caleb'` on every file named here matched
+nothing.

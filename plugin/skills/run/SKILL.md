@@ -250,8 +250,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      run as its return, which `build start` hands to the dependents' packs. `build next` never
      offers it.
    - `contract.status` `pending` (exit 1): its `message` says why, such as a RED run or a run of an
-     older commit. Fix the contract, commit, gate it as in step 6 and import again with the new
-     run. Never move the contract through `ledger set` or write its return by hand.
+     older commit, a `Writes` file the commit left untouched, or a missing `-harness-scenario`
+     seam. Fix the contract, commit, gate it as in step 6 and import again with the new run. Never move the contract through `ledger set` or write its return by hand.
 2. Run the build loop of `/swift-harness:build` (its `SKILL.md` and `references/event-loop.md`) with
    these changes:
    - Start it with `"$SG" build start <slug> --preset brownfield --session <session> --json`.
