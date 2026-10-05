@@ -179,7 +179,21 @@ public struct BuildRunStore: Sendable {
   public func append(_ event: BuildEvent, unless held: @Sendable (BuildEvent) -> Bool)
     async throws(BuildRunStoreError) -> Bool
   {
-    try await append(event)
+    let line: Data
+    do {
+      line = try BuildEventJSON.encodeLine(event)
+    } catch {
+      throw .io(operation: "encode", path: layout.eventsFile, reason: String(describing: error))
+    }
+    let lease: LockLease
+    do {
+      lease = try await lock.acquire(timeout: timeout)
+    } catch {
+      throw .lock(error)
+    }
+    defer { lease.release() }
+    guard !(try events().events.contains(where: held)) else { return false }
+    try writeAtEnd(line)
     return true
   }
 

@@ -208,7 +208,9 @@ struct ReportWholeTests {
       let run = try #require(row["qaRun"] as? String)
       for path in (row["evidence"] as? [String]) ?? [] {
         let file = repository.root.appending(path: ".harness/runs/\(run)/\(path)")
-        if FileManager.default.fileExists(atPath: file.path) { expected.insert("runs/\(run)/\(path)") }
+        if FileManager.default.fileExists(atPath: file.path) {
+          expected.insert("runs/\(run)/\(path)")
+        }
       }
     }
 

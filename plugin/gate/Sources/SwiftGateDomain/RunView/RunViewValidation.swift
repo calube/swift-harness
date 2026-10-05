@@ -654,6 +654,10 @@ extension RunViewValidation {
   /// contact sheet, and each evidence path a row or 1 of its earlier runs lists. These are the
   /// only files a live page may fetch from a run directory.
   public var linkedFiles: Set<String> {
-    flowFiles
+    let attempts = rows.flatMap { row in
+      [(row.qaRun, row.evidence)] + row.history.map { ($0.qaRun, $0.evidence) }
+    }
+    return flowFiles.union(
+      attempts.flatMap { run, evidence in evidence.map { "\(run)/\($0)" } })
   }
 }

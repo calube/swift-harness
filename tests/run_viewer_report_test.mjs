@@ -366,7 +366,10 @@ const tests = {
     const { view, acted: { tab, flows, kept, ticks } } = rendered
     const qaRun = '20261004T220955Z-1614d1ea'
     assert.deepEqual(tab.rows, ['3:red', '1:pass', '2:pass'])
-    assert.deepEqual(tab.damage, [])
+    // The capture kept only each flow's flow.json and the state row's output, so the report names
+    // each other evidence path it couldn't copy, and no video or sheet, which stand-ins fill.
+    for (const line of tab.damage) assert.match(line, /^runs\/[^:]+: linked but not in its run directory, so not copied$/)
+    assert.ok(!tab.damage.some((line) => /\/(video\.mp4|sheet\.png):/.test(line)), tab.damage.join('\n'))
     assert.equal(tab.media, 0)
     assert.equal(tab.errors, '0')
     const flowRows = view.validation.rows.filter((r) => r.flow)

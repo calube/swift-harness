@@ -102,11 +102,9 @@ struct ReportEvidenceTests {
           atPath: clone.folder.appending(path: RunReportFolder.evidenceBase + relative).path),
         "\(relative)")
     }
-    #expect(
-      ReportWholeTests.files(
-        under: clone.folder.appending(
-          path: "runs/\(EvidenceClone.finalRun)/qa/logs/01-req-launch-empty-board/container"))
-        .contains { $0.hasSuffix(".ktx") })
+    let container = clone.folder.appending(
+      path: "runs/\(EvidenceClone.finalRun)/qa/logs/01-req-launch-empty-board/container")
+    #expect(ReportWholeTests.files(under: container).contains { $0.hasSuffix(".ktx") })
 
     let damaged = Set(
       try #require(view["damage"] as? [[String: Any]]).compactMap { $0["source"] as? String })
