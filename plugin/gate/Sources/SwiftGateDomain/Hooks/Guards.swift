@@ -88,11 +88,11 @@ public enum BashGuard {
   /// plan under `swift-harness/plans/`, where `qa adopt` copies it.
   private static func isValidationFlow(_ path: String) -> Bool {
     let parts = path.split(separator: "/").map(String.init)
-    for index in parts.indices.dropLast() where parts[index] == ".harness" {
+    for index in parts.indices.dropLast() where parts[index] == RunLayout.treeDirectory {
       if parts[index + 1] == RunLayout.qaPreparedDirectory { return true }
     }
     for index in parts.indices where parts[index] == "plans" && index >= 1 {
-      if parts[index - 1] == "swift-harness", index + 2 < parts.count,
+      if parts[index - 1] == RunLayout.gitDirDirectory, index + 2 < parts.count,
         parts[index + 2] == "qa"
       {
         return true
