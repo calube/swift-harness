@@ -137,6 +137,14 @@ enum PlanImportRun {
     } catch {
       return invalid(report, error, livePath)
     }
+    let clientModules: [String]
+    do throws(GitError) {
+      clientModules = PlanLintValidation.clientModules(in: try await git.trackedFiles())
+    } catch {
+      report.message = "listing the repository's tracked files: \(error)"
+      return report
+    }
+    let contractTask = contract?.task ?? landedContract(in: plan, tasks: livePlan.tasks)
     do throws(ReportContractViolation) {
       var findings: [Finding] = []
       if let validation = livePlan.validation {
@@ -151,7 +159,7 @@ enum PlanImportRun {
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
           },
-          contractTask: contract?.task)
+          contractTask: contractTask, clientModules: clientModules)
       } else {
         findings += try PlanLintValidation.appWithoutFlowFindings(
           table: nil,
@@ -161,7 +169,7 @@ enum PlanImportRun {
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
           },
-          file: livePath, contractTask: contract?.task)
+          file: livePath, contractTask: contractTask)
       }
       findings += try PlanLintCheckDependencies.findings(
         tasks: livePlan.tasks.map {
@@ -397,6 +405,17 @@ enum PlanImportRun {
     return ContractLanding.outcome(
       task: contract.task, runID: contract.runID, history: history, planBranch: branch,
       planBranchTip: tip)
+  }
+
+  /// The contract an earlier import landed, for an import without `--contract`: the 1 task of
+  /// `tasks` with a return in the plan's pre-build returns, which only a landed contract writes.
+  private static func landedContract(in plan: PlanStateLayout.Plan, tasks: [LivePlanTask])
+    -> String?
+  {
+    let returned = tasks.map(\.id).filter {
+      FileManager.default.fileExists(atPath: plan.returnsDirectory + "/\($0).json")
+    }
+    return returned.count == 1 ? returned.first : nil
   }
 
   /// Sets a pending contract task `done` in `ledger` once its return is written to the plan's

@@ -65,6 +65,31 @@ struct RunStoreTests {
   }
 
   @Test(
+    "a brownfield run's history line names the areas an area-test step ran for, once each, and an owned run's line names none — catches check-return unable to tell which areas' tests a task gate ran"
+  )
+  func recordsTestedAreas() throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let step = { (step: GateStep, area: String?) in
+      GateStepTiming(
+        step: step, tier: nil, milliseconds: 1, verdict: .green, derivedData: .none, area: area)
+    }
+    try store.record(
+      try Self.report("run-a"), finishedAt: Date(), command: "check slice",
+      gateSteps: [
+        step(.neutral, "InterviewStarter"), step(.areaBuild, "InterviewStarter"),
+        step(.areaTest, "LogClient"), step(.areaTest, "AppFeature"), step(.prove, "AppFeature"),
+        step(.areaTest, "AppFeature"),
+      ])
+    try store.record(
+      try Self.report("run-b"), finishedAt: Date(), command: "check fast",
+      gateSteps: [step(.test, nil)])
+
+    let history = try store.readHistory()
+
+    #expect(history.records.map(\.testedAreas) == [["AppFeature", "LogClient"], nil])
+  }
+
+  @Test(
     "a run recorded at a HEAD commit carries its sha in report.json and its history line, after an older line without one that still decodes — catches a gate run no one can tie to the commit it ran at, or older history dropped"
   )
   func recordsHeadCommit() throws {

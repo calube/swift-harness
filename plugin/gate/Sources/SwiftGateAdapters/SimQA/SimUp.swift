@@ -2,6 +2,30 @@ import Darwin
 import Foundation
 import SwiftGateDomain
 
+/// The device a `sim up` run uses.
+public enum SimUpDevice: Sendable, Equatable {
+  /// A `sim hold` of the run's own, which `sim down` gives back with its device.
+  case own
+  /// The device a hold that outlives the run holds, borrowed under the run's own lease.
+  case shared(SimSharedHold)
+}
+
+/// A hold 1 `qa run` keeps for all its flow rows, each row borrowing its device in turn.
+public struct SimSharedHold: Sendable, Equatable {
+  /// The hold's own lease's run id.
+  public var runID: String
+  /// The process the hold lasts no longer than.
+  public var ownerPID: Int32
+  /// Where the holder logs, when this run starts it.
+  public var logFile: URL
+
+  public init(runID: String, ownerPID: Int32, logFile: URL) {
+    self.runID = runID
+    self.ownerPID = ownerPID
+    self.logFile = logFile
+  }
+}
+
 /// What `swiftgate sim up` does: check the pinned `agent-device`, check the scenario, start a
 /// `sim hold` for the run and wait for its lease, build and install the app scheme on the leased
 /// device, open it in the scenario through `agent-device`, record the session in the lease, and
@@ -22,10 +46,11 @@ public struct SimUp: Sendable {
     public var derivedDataPath: String
     /// The `swiftgate` binary the holder runs as.
     public var swiftgateExecutable: String
+    public var device: SimUpDevice
 
     public init(
       worktree: URL, target: SimTarget, scenario: String?, runID: String, simDirectory: URL,
-      derivedDataPath: String, swiftgateExecutable: String
+      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own
     ) {
       self.worktree = worktree
       self.target = target
@@ -34,17 +59,18 @@ public struct SimUp: Sendable {
       self.simDirectory = simDirectory
       self.derivedDataPath = derivedDataPath
       self.swiftgateExecutable = swiftgateExecutable
+      self.device = device
     }
 
     /// An owned repository's request, from its `.swiftgate.toml`.
     public init(
       worktree: URL, config: Config, scenario: String?, runID: String, simDirectory: URL,
-      derivedDataPath: String, swiftgateExecutable: String
+      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own
     ) {
       self.init(
         worktree: worktree, target: SimTarget(owned: config), scenario: scenario, runID: runID,
         simDirectory: simDirectory, derivedDataPath: derivedDataPath,
-        swiftgateExecutable: swiftgateExecutable)
+        swiftgateExecutable: swiftgateExecutable, device: device)
     }
   }
 
@@ -154,34 +180,141 @@ public struct SimUp: Sendable {
         request.runID)
     }
 
-    let holderPID: Int32
-    do {
-      holderPID = try dependencies.launcher.launch(
-        DetachedLaunch(
-          executable: request.swiftgateExecutable,
-          arguments: ["sim", "hold", "--run", request.runID],
-          workingDirectory: request.worktree.path, logPath: log.path))
-    } catch {
-      throw environment(error.message, request.runID)
+    // The clone boots while the app builds; only the install needs both.
+    async let held = device(for: request, log: log)
+    let built = await build(request, container: container, headCommit: headCommit, log: log)
+    let leased: SimLease
+    switch await held {
+    case .failure(let failure): throw failure
+    case .success(let lease): leased = lease
     }
-    let lease = try await waitForLease(runID: request.runID, holderPID: holderPID, log: log)
+    let app: BuiltApp
+    switch built {
+    case .failure(let failure):
+      // A borrowed device has no lease of this run's yet, so the hold keeps it.
+      if case .own = request.device { throw release(failure, runID: request.runID) }
+      throw failure
+    case .success(let built): app = built
+    }
 
     do {
+      let lease = try borrowedLease(request, hold: leased)
       return try await prepare(
-        request, lease: lease, container: container, version: version, headCommit: headCommit,
+        request, lease: lease, app: app, version: version, headCommit: headCommit,
         startedAt: startedAt, log: log)
     } catch {
       throw release(error, runID: request.runID)
     }
   }
 
-  /// Everything after the hold, on the leased device. The caller gives the device back on a throw.
+  /// The run's own holder's lease, or the shared hold's.
+  private func device(for request: Request, log: URL) async -> Result<SimLease, SimUpFailure> {
+    do throws(SimUpFailure) {
+      switch request.device {
+      case .own:
+        let holderPID = try launchHolder(
+          request, arguments: ["sim", "hold", "--run", request.runID], log: log)
+        return .success(
+          try await waitForLease(runID: request.runID, holderPID: holderPID, log: log))
+      case .shared(let hold):
+        return .success(try await sharedHold(hold, request: request))
+      }
+    } catch {
+      return .failure(error)
+    }
+  }
+
+  private func build(
+    _ request: Request, container: XcodebuildContainer, headCommit: String, log: URL
+  ) async -> Result<BuiltApp, SimUpFailure> {
+    do throws(SimUpFailure) {
+      return .success(
+        try await builtApp(request, container: container, headCommit: headCommit, log: log))
+    } catch {
+      return .failure(error)
+    }
+  }
+
+  private func launchHolder(_ request: Request, arguments: [String], log: URL)
+    throws(SimUpFailure) -> Int32
+  {
+    do {
+      return try dependencies.launcher.launch(
+        DetachedLaunch(
+          executable: request.swiftgateExecutable, arguments: arguments,
+          workingDirectory: request.worktree.path, logPath: log.path))
+    } catch {
+      throw environment(error.message, request.runID)
+    }
+  }
+
+  /// The shared hold's lease while its holder lives; else a new holder's, owned by the hold's
+  /// owner. A dead holder's lease is dropped first, and the orphan sweep deletes its device.
+  private func sharedHold(_ hold: SimSharedHold, request: Request) async throws(SimUpFailure)
+    -> SimLease
+  {
+    let current: SimLease?
+    do {
+      current = try dependencies.leases.read(runID: hold.runID)
+    } catch {
+      throw environment(error.message, request.runID)
+    }
+    if let current, dependencies.isAlive(current.holderPID) { return current }
+    if current != nil {
+      do {
+        try dependencies.leases.remove(runID: hold.runID)
+      } catch {
+        throw environment(error.message, request.runID)
+      }
+    }
+    do {
+      try FileManager.default.createDirectory(
+        at: hold.logFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+    } catch {
+      throw environment(
+        "could not create the folder of \(hold.logFile.path): \(error.localizedDescription)",
+        request.runID)
+    }
+    let holderPID = try launchHolder(
+      request,
+      arguments: ["sim", "hold", "--run", hold.runID, "--owner-pid", String(hold.ownerPID)],
+      log: hold.logFile)
+    return try await waitForLease(runID: hold.runID, holderPID: holderPID, log: hold.logFile)
+  }
+
+  /// The lease the run works under: its own holder's, or, on a shared hold, a lease of its own
+  /// naming the hold's device and holder, which `sim down` removes without the device going.
+  private func borrowedLease(_ request: Request, hold: SimLease) throws(SimUpFailure) -> SimLease {
+    guard case .shared = request.device else { return hold }
+    let lease = SimLease(
+      runID: request.runID, worktree: hold.worktree, udid: hold.udid, holderPID: hold.holderPID,
+      session: nil)
+    do {
+      try dependencies.leases.write(lease)
+    } catch {
+      throw environment(error.message, request.runID)
+    }
+    return lease
+  }
+
+  /// Everything after the hold and the build, on the leased device. The caller gives the device
+  /// back on a throw. A borrowed device's last run may have left the app and keychain items, so
+  /// both go before the install.
   private func prepare(
-    _ request: Request, lease: SimLease, container: XcodebuildContainer, version: String,
-    headCommit: String, startedAt: Date, log: URL
+    _ request: Request, lease: SimLease, app: BuiltApp, version: String, headCommit: String,
+    startedAt: Date, log: URL
   ) async throws(SimUpFailure) -> SimUpStarted {
     let runID = request.runID
-    let app = try await builtApp(request, container: container, headCommit: headCommit, log: log)
+    if case .shared = request.device {
+      do {
+        try await dependencies.simctl.uninstall(lease.udid, bundleID: app.bundleID)
+        try await dependencies.simctl.resetKeychain(lease.udid)
+      } catch {
+        throw environment(
+          "resetting \(app.bundleID) on the shared device \(lease.udid) failed: \(error.message)",
+          runID)
+      }
+    }
     do {
       try await dependencies.simctl.install(lease.udid, appPath: app.path)
     } catch {

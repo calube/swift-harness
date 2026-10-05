@@ -52,13 +52,22 @@ private struct ValidationClone {
     "GIT_COMMITTER_NAME": "Test", "GIT_COMMITTER_EMAIL": "test@example.com",
   ])
 
-  init(plan: String, xcodeArea: Bool = false, config fixture: String = "memos-4-config.toml")
-    async throws
-  {
+  /// - Parameter files: repository-relative paths committed empty beside `store.go`, such as a
+  ///   trial's tracked files.
+  init(
+    plan: String, xcodeArea: Bool = false, config fixture: String = "memos-4-config.toml",
+    files: [String] = []
+  ) async throws {
     root = try TestTemporaryDirectory.make("swiftgate-validation").resolvingSymlinksInPath()
     try await git("init", "-q", "-b", "main")
     try await git("config", "commit.gpgsign", "false")
     try Data("package store\n".utf8).write(to: root.appending(path: "store.go"))
+    for file in files {
+      let url = root.appending(path: file)
+      try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data().write(to: url)
+    }
     try await git("add", "-A")
     try await git("commit", "-q", "-m", "base")
     var config = try String(
@@ -224,6 +233,92 @@ struct PlanImportValidationTests {
         "req-send-success", "req-send-failure", "req-replace-screen",
       ], "\(report.message)")
     #expect(!clone.exists("ledger.json"))
+  }
+
+  @Test(
+    "the price-tracker trial's plan, in a clone holding the starter's tracked files, fails the import with screen-without-flow for req-refresh, which only the reducer task covers, and obstacle-fakeable for req-load-states and req-chart-states at the Validation heading, and imports once those 3 are flow rows — catches the trial's plan that excused journeys a fake APIClient could drive"
+  )
+  func priceTrackerNetworkReasonsFailImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "price-tracker-1-PLAN.md"),
+      encoding: .utf8)
+    let files = try String(
+      contentsOf: ValidationClone.trial.appending(path: "price-tracker-1-base-files.txt"),
+      encoding: .utf8
+    ).split(separator: "\n").map(String.init)
+    let clone = try await ValidationClone(
+      plan: captured, config: "price-tracker-1-config.toml", files: files)
+    defer { clone.remove() }
+    func run() async -> PlanImportReport {
+      await PlanImportRun.run(
+        slug: ValidationClone.slug, root: clone.root,
+        git: LiveGit(runner: clone.runner, repositoryRoot: clone.root.path),
+        contract: .init(task: "spec-contract", runID: "20261005T025011Z-b9aa0eba"))
+    }
+
+    let report = await run()
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.verdict == .red)
+    // A reason-only row keeps no line of its own, so its finding names the section's.
+    let section = try #require(line(of: "## Validation", in: captured))
+    #expect(
+      report.message.contains(
+        "line \(section): \(PlanLintValidation.screenWithoutFlowRuleID): req-refresh "),
+      "\(report.message)")
+    for requirement in ["req-load-states", "req-chart-states"] {
+      #expect(
+        report.message.contains(
+          "line \(section): \(PlanLintValidation.obstacleFakeableRuleID): \(requirement) "),
+        "\(report.message)")
+    }
+    #expect(report.message.contains("`Packages/APIClient`"), "\(report.message)")
+    #expect(!clone.exists("ledger.json"))
+    #expect(!clone.exists("validation.json"))
+
+    var flowed = captured
+    for (requirement, flow) in [
+      ("req-load-states", "load-failure"), ("req-refresh", "refresh"),
+      ("req-chart-states", "chart-failure"),
+    ] {
+      let old = try #require(
+        captured.split(separator: "\n").first { $0.hasPrefix("| \(requirement) |") })
+      flowed = try replacing(
+        String(old),
+        with: "| \(requirement) | flow | `qa/\(flow).flow.json` | launch-wiring | spec-validation | |",
+        in: flowed)
+    }
+    try clone.write(plan: flowed)
+    let fixed = await run()
+    #expect(fixed.status == .imported, "\(fixed.message)")
+  }
+
+  @Test(
+    "the second send-money trial's re-import, with no --contract but the landed contract's return in the plan's returns, lints exactly as an import naming the contract does, and no finding names the done contract's UITests write — catches a re-import that reads the contract as a screen task, which the orchestrator then hid by editing its Writes"
+  )
+  func reimportExcludesLandedContract() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-2-reimport-PLAN.md"),
+      encoding: .utf8)
+    let clone = try await ValidationClone(plan: captured, config: "send-money-2-config.toml")
+    defer { clone.remove() }
+    let returns = clone.planDirectory.appending(path: "returns", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: returns, withIntermediateDirectories: true)
+    try Data(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-2-contract-return.json")
+    ).write(to: returns.appending(path: "send-money-contract.json"))
+    let git = LiveGit(runner: clone.runner, repositoryRoot: clone.root.path)
+
+    let named = await PlanImportRun.run(
+      slug: ValidationClone.slug, root: clone.root, git: git,
+      contract: .init(task: "send-money-contract", runID: "20261005T024943Z-c1163c48"))
+    let reimported = await PlanImportRun.run(slug: ValidationClone.slug, root: clone.root, git: git)
+
+    #expect(!reimported.message.contains("`send-money-contract` writes"), "\(reimported.message)")
+    #expect(reimported.status == named.status, "\(reimported.message)")
+    if named.status == .invalid {
+      #expect(reimported.message == named.message)
+    }
   }
 
   @Test(

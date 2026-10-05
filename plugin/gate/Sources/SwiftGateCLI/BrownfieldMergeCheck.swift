@@ -16,10 +16,12 @@ enum BrownfieldMergeCheck {
     let trackedTree: TrackedTreeSnapshot
     /// `git rev-parse <commit>^{tree}`: the baseline file's name.
     let tree: @Sendable (_ commit: String) async throws -> String
-    /// Whether `slice` only builds the area, so its changed tests and their prove run here.
+    /// Whether `slice` may have left the area's changed tests unproved, so their prove runs here.
     let sliceBuildsOnly: @Sendable (BrownfieldArea) -> Bool
     /// Per command run, when ``bound`` is `nil`.
     let deadline: Duration
+    /// Reads each test step's totals for the run's `report.json`.
+    var testCounts = AreaTestCountReader()
     /// Each command's bound, from the area's warm-up times and the run's time box.
     var bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
@@ -39,10 +41,11 @@ enum BrownfieldMergeCheck {
     }
 
     /// The clone's config and state, live git, scratch trees under the worktree's git dir and
-    /// `/bin/sh` commands. `slice` builds only the areas whose warm test time, as the warm-up
-    /// measured it at the merge base with `base`, doesn't fit the slice budget; with no `base`,
-    /// every area. Each command's bound comes from those times and the time box of the
-    /// `swiftgate run` going on, read as `tier` runs.
+    /// `/bin/sh` commands. `slice` runs and proves the changed tests of every area whose
+    /// `test_files` narrows a run to them, whatever its warm test time; any other area's it may
+    /// leave to this tier, which proves them again. Each command's bound comes from the warm-up
+    /// times at the merge base with `base` and the time box of the `swiftgate run` going on, read
+    /// as `tier` runs; with no `base`, from the box alone.
     static func live(root: URL, base: String? = nil, tier: CheckTier = .merge)
       async throws(BrownfieldCheckSetupError) -> Dependencies
     {
@@ -89,8 +92,6 @@ enum BrownfieldMergeCheck {
         }
         return tree
       }
-      // With no merge base or no warm-up there, no area is known to have run its changed tests
-      // at `slice`, so every touched area proves again here.
       var times = WarmupTimesFile(tree: "")
       if let base, let mergeBase = try? await unbounded.git.mergeBase("HEAD", base),
         let baseTree = try? await tree(mergeBase)
@@ -99,8 +100,7 @@ enum BrownfieldMergeCheck {
       }
       let box = ActiveRunTimeBox.find(
         layout: layout, now: Date(), finalSeconds: MeasuredFinalGateReader.seconds(worktree: root))
-      let bounds = AreaCommandBounds(
-        times: times, box: box, tier: tier, fallback: liveDeadline)
+      let bounds = AreaCommandBounds(times: times, box: box, tier: tier, fallback: liveDeadline)
       // Each bound is taken as its command starts, so the box's time left is current.
       let bound: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = {
         area, step, tree in
@@ -108,13 +108,13 @@ enum BrownfieldMergeCheck {
       }
       let prove = BrownfieldProve.Dependencies(
         git: unbounded.git, scratch: unbounded.scratch, runner: runner, deadline: liveDeadline,
+        layout: layout,
         bound: { area, step in bound(area, step, .scratch) })
-      let budget = config.brownfield.sliceBudgetSeconds
       return Dependencies(
         config: config, layout: layout, git: prove.git, runner: runner,
         baseline: BaselineStore(layout: layout, runner: runner, scratch: prove.scratch),
         prove: prove, trackedTree: snapshot, tree: tree,
-        sliceBuildsOnly: { [times] area in times.buildsOnly(area.name, budgetSeconds: budget) },
+        sliceBuildsOnly: { !$0.selectsChangedTests },
         deadline: liveDeadline, bound: bound)
     }
   }
@@ -290,6 +290,7 @@ enum BrownfieldMergeCheck {
         brownfield: dependencies.config.brownfield, areas: proved,
         allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
         judge: dependencies.config.judge)
+      let derivedData = BrownfieldProve.derivedData(proved, layout: dependencies.layout)
       let (judgement, milliseconds) = await GateRun.timed {
         await BrownfieldProve.run(
           root: root, base: proofBase, config: config,
@@ -298,7 +299,8 @@ enum BrownfieldMergeCheck {
           proofs: context.proofs, dependencies: dependencies.prove)
       }
       context.steps.record(
-        .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict)
+        .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict,
+        derivedData: derivedData)
       outcome.findings += judgement.findings
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
@@ -330,18 +332,44 @@ enum BrownfieldMergeCheck {
   }
 
   /// `area`'s `build`, `test` and `lint`, then `e2e` at `final`, 1 after another so they never
-  /// share a build directory at once. A step the box leaves too little time isn't started, and
-  /// neither is any after it.
+  /// share a build directory at once. The clone a test step runs on is leased as the area
+  /// starts, so it boots while the build runs, and goes back once the area is done. A step the
+  /// box leaves too little time isn't started, and neither is any after it.
   private static func run(
     _ area: BrownfieldArea, tier: CheckTier, files: [String], added: [AddedLines], root: URL,
     context: GateRun.Context, dependencies: Dependencies
   ) async -> AreaSteps {
-    var result = AreaSteps(area: area.name)
     let steps: [AreaStep] = tier == .final ? [.build, .test, .lint, .e2e] : [.build, .test, .lint]
+    guard let warming = dependencies.runner as? any TestDeviceWarming else {
+      return await run(
+        area, tier: tier, steps: steps, files: files, added: added, root: root,
+        context: context, dependencies: dependencies, runner: dependencies.runner)
+    }
+    let tests = [AreaStep.test, .e2e].filter(steps.contains).compactMap { step in
+      prepare(
+        area, step: step, repositoryRoot: root.path(percentEncoded: false), files: [],
+        deadline: dependencies.deadline, dependencies: dependencies)?.request.command
+    }
+    let warmed = await warming.warmed(for: tests)
+    let result = await run(
+      area, tier: tier, steps: steps, files: files, added: added, root: root, context: context,
+      dependencies: dependencies, runner: warmed)
+    await warmed.release()
+    return result
+  }
+
+  private static func run(
+    _ area: BrownfieldArea, tier: CheckTier, steps: [AreaStep], files: [String],
+    added: [AddedLines], root: URL, context: GateRun.Context, dependencies: Dependencies,
+    runner: any AreaCommandRunning
+  ) async -> AreaSteps {
+    var result = AreaSteps(area: area.name)
     for step in steps {
       guard let template = AreaCommandExpansion.template(for: step, in: area) else {
         // `e2e` is optional: discovery proposes it only where it found one.
-        if step != .e2e, let dropped = dropped(area, step: step) { result.findings.append(dropped) }
+        if step != .e2e, let dropped = dropped(area, step: step) {
+          result.findings.append(dropped)
+        }
         continue
       }
       let selection = step == .lint ? files : []
@@ -371,9 +399,16 @@ enum BrownfieldMergeCheck {
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue
       }
-      let (outcome, milliseconds) = await GateRun.timed {
-        await dependencies.runner.run(
-          XcodeDerivedData.request(prepared.request, layout: dependencies.layout))
+      let request = XcodeDerivedData.request(prepared.request, layout: dependencies.layout)
+      let derivedData = GateStepCollector.derivedData(
+        buildDirectories: XcodeDerivedData.buildDirectories(
+          request, kind: area.kind, layout: dependencies.layout
+        ).map { URL(filePath: $0, directoryHint: .isDirectory) })
+      let (outcome, milliseconds) = await GateRun.timed { await runner.run(request) }
+      if [.test, .testFiles, .e2e].contains(step),
+        let counts = await dependencies.testCounts.counts(of: request)
+      {
+        context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
       }
       var lintFindings: [Finding] = []
       var lintUnread = false
@@ -388,7 +423,8 @@ enum BrownfieldMergeCheck {
       }
       context.steps.record(
         gateStep(step), tier: nil, milliseconds: milliseconds,
-        verdict: outcome == .passed ? .green : .red, area: area.name)
+        verdict: outcome == .passed ? .green : .red,
+        derivedData: step == .lint ? .none : derivedData, area: area.name)
       if outcome == .passed, let key, let reuse = dependencies.reuse {
         reuse.store.record(AreaStepPass(runID: reuse.runID, tier: tier.rawValue), key: key)
       }

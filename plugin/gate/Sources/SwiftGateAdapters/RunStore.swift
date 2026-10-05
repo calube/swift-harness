@@ -86,6 +86,7 @@ public struct RunStore: Sendable {
   ///     `test.result`s.
   ///   - flows: each kept flow T3 ran, 1 `qa.flow` apiece, pointing at the `gate.run`.
   ///   - reuseKey: the ``GateReuse`` key of a brownfield tier's inputs, in the history line.
+  ///   - areaTests: each area test step's totals, in `report.json`.
   /// - Throws: ``RunStoreError/eventsUnwritten(_:)`` when only the events failed, after the run
   ///   is recorded.
   public func record(
@@ -93,7 +94,8 @@ public struct RunStore: Sendable {
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
     treeHash: String? = nil, dirty: Bool? = nil, gateSteps: [GateStepTiming] = [],
     checkTier: CheckTier? = nil, testResults: [TestCaseResult] = [], baselineCount: Int? = nil,
-    proofs: [ProvedTest] = [], flows: [QAFlowRecord] = [], reuseKey: String? = nil
+    proofs: [ProvedTest] = [], flows: [QAFlowRecord] = [], reuseKey: String? = nil,
+    areaTests: [AreaTestCounts] = []
   ) throws(RunStoreError) {
     let clock = ContinuousClock()
     let start = clock.now
@@ -103,12 +105,12 @@ public struct RunStore: Sendable {
     let line: Data
     do {
       reportData = try RecordedRunReport.encode(
-        RecordedRunReport(report: report, headCommit: headCommit))
+        RecordedRunReport(report: report, headCommit: headCommit, areaTests: areaTests))
       line = try RunHistoryJSON.encodeLine(
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,
           proofBases: proofBases, headCommit: headCommit, base: base, dirty: dirty,
-          reuseKey: reuseKey))
+          reuseKey: reuseKey, testedAreas: GateStepTiming.testedAreas(in: gateSteps)))
     } catch {
       throw .io(operation: "encode", path: reportFile.path, reason: String(describing: error))
     }

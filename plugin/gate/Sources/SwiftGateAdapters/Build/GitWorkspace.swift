@@ -38,6 +38,12 @@ public protocol GitWorkspace: Sendable {
   /// Deletes the local branch whatever it is merged into; callers check that first.
   func deleteBranch(_ branch: String) async throws(GitWorkspaceError)
 
+  /// Creates `refs/heads/<branch>` at `commit`; fails when the branch exists.
+  func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError)
+
+  /// The local branches whose history holds `commit`, sorted.
+  func branches(containing commit: String) async throws(GitWorkspaceError) -> [String]
+
   /// APFS-clones each of `relativePaths` from `source` into `destination` at the same relative
   /// path, then deletes every `ModuleCache` directory inside the clones, whose headers record the
   /// source's absolute path. A path missing from `source` is skipped.

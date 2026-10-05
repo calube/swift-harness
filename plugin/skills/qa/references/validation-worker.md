@@ -47,6 +47,9 @@ exists and fails for the reason the feature is missing.
   Target elements by `id="…"` selectors whose ids are raw values of the app's `AccessibilityID`
   module, the file `[qa] accessibility_ids` names, never by an `@e` ref or a point. Every flow
   checks at least 1 thing with a `wait` or `is` step; a `get` reads a value and never counts.
+  A screen a dependency client feeds never reaches the live service: the flow's first step is
+  `{"command": "open", "input": {"app": "<bundle id>", "relaunch": true, "launchArgs":
+  ["-harness-scenario", "<name>"]}}`, naming the contract's fake scenario its journey needs.
 - **State**: a shell script that exits non-zero when the stored or sent result is wrong. It reads
   1 of: a database query, a read after the write, the app's stored data, or a log line. It gets
   `QA_PORT` (a server's port), `QA_DIR` (the plan's `qa/` folder), `QA_EVIDENCE_DIR`, and, after its

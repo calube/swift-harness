@@ -514,27 +514,33 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   }
 
   /// Each task the build carried through review, in the order the log first names it, with the
-  /// state that shows it was reviewed. A task the build carried through review is one it merged,
-  /// or one it started that ended blocked or needing a replan, since a return halts only after
-  /// its review; a task marked done with no merge was landed without one.
+  /// state that shows it was reviewed. A task the build carried through review is one whose
+  /// merge is still on the plan branch, one whose merge an undo took back before it was
+  /// abandoned, or one it started that ended blocked or needing a replan, since a return halts
+  /// only after its review; a task marked done with no merge was landed without one.
   private static func reviewedTasks(_ run: RunReportBuild) -> [(task: String, state: String)] {
     var order: [String] = []
-    var merged: Set<String> = []
+    var undone: Set<String> = []
     var ended: [String: TaskStatus] = [:]
     for event in run.log.events {
       switch event {
       case .merge(let merge):
-        merged.insert(merge.task)
         if !order.contains(merge.task) { order.append(merge.task) }
+      case .undo(let undo):
+        undone.insert(undo.task)
       case .transition(let transition) where transition.from == .inProgress:
         ended[transition.task] = transition.to
         if !order.contains(transition.task) { order.append(transition.task) }
-      case .transition, .undo, .gate, .returnCheck, .finish:
+      case .transition, .gate, .returnCheck, .finish:
         continue
       }
     }
+    let merged = Set(run.log.mergedTasks)
     return order.compactMap { task in
       if merged.contains(task) { return (task, "merged") }
+      if undone.contains(task), ended[task] == .abandoned {
+        return (task, "abandoned, merge undone")
+      }
       if let status = ended[task], [.blocked, .needsReplan].contains(status) {
         return (task, status.rawValue)
       }

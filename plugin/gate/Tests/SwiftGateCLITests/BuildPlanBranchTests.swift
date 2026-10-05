@@ -326,6 +326,54 @@ struct BuildPlanBranchTests {
   }
 
   @Test(
+    "remove of a merged brownfield task worktree keeps its gate reports in the clone's common state root, where the report reads them, not in the plan checkout's own git dir — catches kept reports deleted with the plan checkout"
+  )
+  func removeKeepsTaskGatesInTheCommonStateRoot() async throws {
+    let scenario = try await PlanBranchScenario()
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    let tip = try await scenario.commitTask()
+    let profile = BuildPresetCatalog.profile(root: scenario.user)
+    let run = try #require(
+      try await BuildRunStore.latest(plan: PlanBranchScenario.slug, git: scenario.git))
+    try await run.append(
+      .returnCheck(
+        .init(
+          task: PlanBranchScenario.task, fix: false, verdict: .green, commit: tip,
+          checkID: "green-check", rules: [], at: PinnedClock().now())))
+    let merged = await BuildMergeRun.run(
+      slug: PlanBranchScenario.slug, task: PlanBranchScenario.task, undo: false,
+      session: PlanBranchScenario.session, git: scenario.git, workspace: scenario.workspace,
+      merger: LiveMergeRunner(runner: scenario.runner), clock: PinnedClock(), profile: profile)
+    try #require(merged.status == .merged, "\(merged.message)")
+    let runID = RunID.make(startedAt: PinnedClock().now(), suffix: 9)
+    try RunStore(worktreeRoot: URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory))
+      .record(
+        try RunReport(
+          runID: runID, durationMilliseconds: 1,
+          tiers: [
+            try TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1, testCounts: nil)
+          ], findings: []),
+        finishedAt: PinnedClock().now(), command: "check slice", headCommit: tip)
+
+    let removed = await WorktreeRun.remove(
+      slug: PlanBranchScenario.slug, task: PlanBranchScenario.task,
+      session: PlanBranchScenario.session, git: scenario.git, workspace: scenario.workspace,
+      profile: profile)
+
+    #expect(removed.status == .removed, "\(removed.message)")
+    #expect(removed.keptRuns == [runID])
+    let common = URL(filePath: scenario.common, directoryHint: .isDirectory)
+    let kept = StateRoot.gitDir(common).url(RunLayout.runDirectory(for: runID))
+    #expect(FileManager.default.fileExists(atPath: kept.path), "\(removed.message)")
+    let checkout = StateRootResolver.resolve(
+      worktree: URL(filePath: scenario.checkout, directoryHint: .isDirectory))
+    let left = checkout.url(RunLayout.runDirectory(for: runID))
+    #expect(!FileManager.default.fileExists(atPath: left.path))
+  }
+
+  @Test(
     "a build worker's Write in its brownfield task worktree passes the PreToolUse hook from the clone and from the worktree, while its Write to the plan's PLAN.md is still denied as plan state — catches every worker write denied guard.plan-state because the worktree sits in the plan dir"
   )
   func workerWritesInItsTaskWorktree() async throws {
@@ -369,5 +417,63 @@ struct BuildPlanBranchTests {
 
     #expect(report.verdict != .blocked, "\(report.message)")
     #expect(!report.message.contains("has no worktree"))
+  }
+
+  @Test(
+    "check-return refuses a brownfield return whose slice ran no test of the area its new test file sits in, and accepts it once a gate ran that area's tests — catches a ready-to-merge task whose new tests first run at the merge gate"
+  )
+  func checkReturnRefusesUntestedAreaTests() async throws {
+    let scenario = try await PlanBranchScenario(
+      config: PlanBranchScenario.config.replacingOccurrences(
+        of: "test = \"pytest\"\n", with: "test = \"pytest\"\ntest_files = \"pytest {files}\"\n"))
+    defer { scenario.remove() }
+    let created = await scenario.create()
+    try #require(created.status == .created, "\(created.message)")
+    let worktree = URL(filePath: scenario.taskWorktree, directoryHint: .isDirectory)
+    let test = "Core/tests/test_value.py"
+    try FileManager.default.createDirectory(
+      at: worktree.appending(path: "Core/tests"), withIntermediateDirectories: true)
+    try Data("VALUE = 2\n".utf8).write(to: worktree.appending(path: "Core/value.py"))
+    try Data("def test_value():\n    assert VALUE == 2\n".utf8).write(
+      to: worktree.appending(path: test))
+    try await scenario.git("add", "-A", in: scenario.taskWorktree)
+    try await scenario.git("commit", "-q", "-m", "feat: value", in: scenario.taskWorktree)
+    let commit = try await scenario.git("rev-parse", "HEAD", in: scenario.taskWorktree)
+    let finished = Date(timeIntervalSince1970: 1_790_000_000)
+
+    func check(_ step: GateStep, suffix: UInt32) async throws -> BuildCheckReturnReport {
+      let runID = RunID.make(startedAt: finished, suffix: suffix)
+      try RunStore(worktreeRoot: worktree).record(
+        try RunReport(
+          runID: runID, durationMilliseconds: 1200,
+          tiers: [
+            TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1200, testCounts: nil)
+          ], findings: []),
+        finishedAt: finished, command: "check slice", headCommit: commit, dirty: false,
+        gateSteps: [
+          GateStepTiming(
+            step: step, tier: nil, milliseconds: 1, verdict: .green, derivedData: .none,
+            area: "core")
+        ])
+      let file = scenario.base.appending(path: "return-\(suffix).json")
+      try TaskReturnJSON.encode(
+        TaskReturn(
+          task: PlanBranchScenario.task, outcome: .readyToMerge, commits: [commit],
+          gate: .init(tier: .slice, verdict: .green, runID: runID),
+          review: .init(mode: .classified, findings: []), testsAdded: [], notes: "value",
+          designConflict: nil)
+      ).write(to: file)
+      return await BuildCheckReturnRun.run(
+        file: file.path, plan: PlanBranchScenario.slug,
+        git: LiveGit(runner: scenario.runner, repositoryRoot: scenario.checkout),
+        profile: BuildPresetCatalog.profile(root: scenario.user))
+    }
+
+    let built = try await check(.areaBuild, suffix: 1)
+    #expect(built.findings.map(\.rule) == [.testsNotRun], "\(built.message) \(built.findings)")
+    #expect(built.findings.first?.message.contains(test) == true)
+
+    let tested = try await check(.areaTest, suffix: 2)
+    #expect(tested.verdict == .green, "\(tested.message) \(tested.findings)")
   }
 }

@@ -64,6 +64,23 @@ public struct LiveGitWorkspace: GitWorkspace {
     try await succeed(["branch", "--quiet", "-D", "--", branch])
   }
 
+  public func createBranch(_ branch: String, at commit: String) async throws(GitWorkspaceError) {
+    try Self.checkRef(branch)
+    try Self.checkRef(commit)
+    try await succeed(["branch", "--quiet", "--no-track", "--", branch, commit])
+  }
+
+  public func branches(containing commit: String) async throws(GitWorkspaceError) -> [String] {
+    try Self.checkRef(commit)
+    let arguments = ["branch", "--list", "--contains", commit, "--format=%(refname:short)"]
+    let output = try await git(arguments)
+    guard output.status.isSuccess else {
+      throw .git(
+        .commandFailed(arguments: arguments, status: output.status, stderr: output.stderr.text))
+    }
+    return output.stdout.text.split(separator: "\n").map(String.init).sorted()
+  }
+
   public func cloneWarmBuild(
     _ relativePaths: [String], from source: String, into destination: String
   ) async throws(GitWorkspaceError) -> [String] {

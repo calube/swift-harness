@@ -17,8 +17,15 @@ struct BuildNextReport: Sendable, Equatable, Encodable {
   /// Every not-done task the app target needs, which the no-new-starts phase still starts.
   let required: [Required]
   /// Minutes the stall watch lets a worker's transcripts sit unchanged: the preset's `stall_min`,
-  /// or ``BuildPreset/defaultStallMin`` when the preset doesn't say.
+  /// or ``BuildPreset/defaultStallMin`` when the preset doesn't say, scaled down by
+  /// ``StallWatch/minutes(preset:secondsToCutoff:)`` as a time box's cutoff nears.
   let stallMin: Int
+  /// Running tasks whose checked return waits to merge, in the order their returns were checked.
+  /// Merge the first while ``merging`` is absent.
+  let readyToMerge: [MergeQueue.Ready]
+  /// The merge on `main` whose task isn't done yet: its gate, or the steps after it, still run.
+  /// No other task merges until it is done or undone.
+  let merging: MergeQueue.Merging?
   /// A `swiftgate run`'s box: when starts stop, when the cutoff comes and when the box ends.
   /// Absent for a run without one.
   let timeBox: TimeBox?
@@ -137,6 +144,12 @@ enum BuildNextRun {
         }
       }
       let running = Set(ledger.tasks.filter { $0.status == .inProgress }.map(\.id))
+      let log: BuildEventLog
+      do {
+        log = try run.events()
+      } catch {
+        return .blocked(command, slug, "reading build run \(runID)'s events: \(error)")
+      }
       let now = clock.now()
       // The clone's measured `final` grows the reserve, so the cutoff it reports comes earlier.
       let finalSeconds = MeasuredFinalGateReader.seconds(worktree: root)
@@ -146,7 +159,12 @@ enum BuildNextRun {
       }
       let result = BuildScheduler.next(
         ledger: ledger, running: running, preset: record.preset, startedAt: record.startedAt,
-        now: now, required: required, timeBox: timeBox)
+        now: now, required: required, timeBox: timeBox,
+        idle: running.filter { log.workerFinished(task: $0) })
+      let queue = log.mergeQueue(running: running)
+      let secondsToCutoff = timeBox.map {
+        max(0, Int($0.deadlines.cutoffAt.timeIntervalSince(now).rounded(.up)))
+      }
       let notDone = Set(ledger.tasks.filter { $0.status != .done }.map(\.id))
       let report = BuildNextReport(
         runId: runID, phase: result.phase, toStart: result.toStart, running: result.running,
@@ -155,13 +173,15 @@ enum BuildNextRun {
         },
         required: required.tasks.filter { notDone.contains($0.taskID) }.map {
           BuildNextReport.Required(task: $0.taskID, appPath: $0.appPath)
-        }, stallMin: record.preset.effectiveStallMin,
+        },
+        stallMin: StallWatch.minutes(
+          preset: record.preset.effectiveStallMin, secondsToCutoff: secondsToCutoff),
+        readyToMerge: queue.ready, merging: queue.merging,
         timeBox: timeBox.map { box in
           let deadlines = box.deadlines
           return BuildNextReport.TimeBox(
             noNewStartsAt: deadlines.noNewStartsAt, cutoffAt: deadlines.cutoffAt,
-            endsAt: deadlines.endsAt,
-            secondsToCutoff: max(0, Int(deadlines.cutoffAt.timeIntervalSince(now).rounded(.up))))
+            endsAt: deadlines.endsAt, secondsToCutoff: secondsToCutoff ?? 0)
         })
       return BuildLoopResult(
         command: command, plan: slug, verdict: .green, report: report, holder: nil,
@@ -184,6 +204,12 @@ enum BuildNextRun {
       var line =
         "build next: run \(report.runId), phase \(report.phase.rawValue); start: "
         + "\(list(report.toStart)); running: \(list(report.running))"
+      if let merging = report.merging {
+        line += "; merging: \(merging.task)"
+      }
+      if !report.readyToMerge.isEmpty {
+        line += "; ready to merge: " + list(report.readyToMerge.map(\.task))
+      }
       if let box = report.timeBox {
         line += "; \(box.secondsToCutoff) s to the cutoff"
       }

@@ -2723,6 +2723,44 @@ last `sed` replaced the clone's absolute path in the GREEN merge gate's baseline
 '/Users|/private|/var/folders|caleb|@[a-z]+\.|home|/tmp' RunView/brownfield-rejected` and the secrets grep
 above matched nothing.
 
+## Run view: brownfield runs cut off with an undone merge
+
+`RunView/price-tracker-1/` and `RunView/send-money-2/` are the state 2 brownfield trials of
+2026-10-05 left, each a `swiftgate run` on a copy of the evals starter app, with build runs
+`20261005T025144Z-77b256da` and `20261005T025212Z-65cdde10` of plan `spec`. They feed the gate
+budget, the gate watch, the merge queue, the scheduler's free slots, the run view and the report's
+review depth.
+
+- In price-tracker-1, 3 tasks ran at once. The `app-core` merge gate's prove step hung from about
+  03:03 to 03:20, and nothing stopped it. The orchestrator never handled `client-live`'s return, and the
+  view lost its 3 slice gates. At the cutoff, `app-core` was undone and abandoned after
+  a `continue` budget halt.
+- In send-money-2, 3 checked returns held every slot while the validation task waited. The run
+  merged `send-ui`, undid it, fixed it, merged it again, then undid and abandoned it at the cutoff.
+
+With `T` the trial's folder under the block-prep harness runs, `C=$T/state` (the clone's
+`swift-harness` state root, copied after the run), `P=$C/plans/spec`, `R` the build run's folder
+under `$P/build`, and `t` the trial's name, copied 2026-10-05:
+
+```sh
+S="s#/Users/[^/\"]*/Developer/trials/practice/$t/repo-#../repo-#g; s#\"/Users/[^/\"]*/Developer/trials/practice/$t/repo/spec\.md\"#\"/spec.md\"#g"
+mkdir -p events returns
+cp $C/events/{gate,span,build,brownfield,usage}.jsonl $C/events/store.json events/
+sed -E "$S" $P/ledger.json > ledger.json; sed -E "$S" $P/clock.json > clock.json; cp $P/plan.json plan.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/cutoff.json cutoff.json; cp $R/returns/*.json returns/
+```
+
+The `sed` made each ledger worktree path relative (`../repo-spec-<task>`) and set `clock.json`'s
+`spec` and `origin` to `/spec.md`, as `brownfield-blocked` spells them. The trials removed every
+task worktree before they ended, so neither capture has a `worktrees/` folder.
+
+`RunView/price-tracker-1/out/merge-{tracker-ui,app-core}.json` are the orchestrator's merge gate
+outputs, copied unedited with `cp $P/out/merge-{tracker-ui,app-core}.json out/`. The
+`tracker-ui` gate's JSON is GREEN. The `app-core` file is empty, because its gate never finished.
+Its creation time in the clone was 03:00:00Z, which the gate-wait tests set again because git
+keeps no creation time. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|/tmp'` matched
+nothing in either folder. `home` matches only a task title in send-money-2's `plan.json`.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
@@ -3434,8 +3472,8 @@ Each call's backgrounded output file held only `[killed]`. `grep -niE
 
 ## Brownfield trial: the warm-up times and time box an area command's bound reads
 
-`BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run on the
-interview starter wrote at its base tree: AppFeature's warm test took 31.7 s, and that run's
+`BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run wrote at its
+base tree: AppFeature's warm test took 31.7 s, and that run's
 merge gate then held a hung test's prove step for 1033 s. `price-tracker-1-clock.json` is the same
 run's launch clock, with its absolute spec paths cut to `/trial/repo/`. From the trial's copied
 state directory `S`:
@@ -3467,3 +3505,113 @@ sed -E 's#"/[^"]*/send-money-2/repo/#"/trial/repo/#' $S/plans/spec/clock.json \
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/send-money-2-*` matched nothing.
+
+## Brownfield trials: new tests a build-only slice never ran
+
+The price-tracker trial's app-core task returned 2 new test files from a GREEN slice that only
+built `AppFeature` (31.7 s warm test against a 30 s budget), so they first ran at the merge gate,
+where 1 hung. The send-money trial's `AppFeature` (27.4 s, measured before its files changed) went
+build-only once its build took the slice past the budget, and no merge proved its tests. Each file
+is copied unchanged; `$RUNS` is the trials' report folder and `$TRIALS` the trial clones' folder.
+From `plugin/gate/Tests/Fixtures`:
+
+```sh
+cp $RUNS/price-tracker-1/state/config.toml BrownfieldTrial/price-tracker-1-config.toml
+git -C $TRIALS/price-tracker-1/repo show \
+  spec/app-core:Packages/AppFeature/Tests/AppCoreTests/AssetDetailFeatureTests.swift \
+  > BrownfieldTrial/price-tracker-1-AssetDetailFeatureTests.swift
+mkdir -p BuildReturn/price-tracker-1
+cp $RUNS/price-tracker-1/state/plans/spec/build/20261005T025144Z-77b256da/returns/app-core.json \
+  BuildReturn/price-tracker-1/app-core.json
+cp $RUNS/price-tracker-1/state/runs/20261005T025412Z-b8b146f8/events/gate.jsonl \
+  BuildReturn/price-tracker-1/app-core-slice-gate.jsonl
+cp $RUNS/send-money-2/state/config.toml BrownfieldTrial/send-money-2-config.toml
+cp $RUNS/send-money-2/state/warmup/a12c4719959d18b4f7d759e4eeab4fe56f0a9cb5.json \
+  BrownfieldTrial/send-money-2-warmup.json
+git -C $TRIALS/send-money-2/repo show \
+  ebc5027:Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift \
+  > BrownfieldTrial/send-money-2-AmountInputTests.swift
+```
+
+`app-core-slice-gate.jsonl` is the slice run the return cites: its `gate.step`s build `AppFeature`
+and `InterviewStarter` and test neither, each labelled `derivedData: "none"`.
+`grep -rniE '/Users|/private|/var/folders|caleb'` over these files matched nothing.
+
+## Brownfield trial: an area test step's reports
+
+`BrownfieldTrial/send-money-2-junit/` holds the `{junit}` reports the second send-money trial's
+`APIClient` package area left in the clone's state, written by its test command `swift test
+--xunit-output {junit}` during the run's warm-up: `APIClient.test.xml` is XCTest's, with no case,
+and `APIClient.test-swift-testing.xml` is Swift Testing's companion, with 7 passing cases. Every
+gate `report.json` of that run had `testCounts: null`, so how many tests an area ran was lost once
+a later step overwrote these files. `S` is the clone's state under its git common dir. From the
+repository root:
+
+```sh
+S=<clone>/.git/swift-harness F=plugin/gate/Tests/Fixtures/BrownfieldTrial/send-money-2-junit
+mkdir -p $F
+cp $S/junit/APIClient.test.xml $S/junit/APIClient.test-swift-testing.xml $F/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the 2 files matched nothing.
+
+## Brownfield trial: a network-fed app excused from flows
+
+The first price-tracker trial ran `swiftgate run start spec.md` on the iOS app starter, whose 1
+`xcode` area is rooted at `.` and whose `Packages/APIClient` is a `@Dependency` client.
+`BrownfieldTrial/price-tracker-1-PLAN.md` is its `PLAN.md` at the run's end. Its 2 flow rows hit
+the live API, `req-load-states` and `req-chart-states` are excused with `network:`, and
+`req-refresh`, covered only by the reducer task `app-core`, imported with a reason naming no
+obstacle. `price-tracker-1-config.toml` is the clone's `config.toml`, and
+`price-tracker-1-plan.json` and `price-tracker-1-validation.json` are what `plan import` wrote from
+that plan. `price-tracker-1-base-files.txt` lists the files tracked at the run's base commit. `S`
+is the clone. From the repository root:
+
+```sh
+S=<clone> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/.git/swift-harness/plans/spec/PLAN.md $F/price-tracker-1-PLAN.md
+cp $S/.git/swift-harness/plans/spec/plan.json $F/price-tracker-1-plan.json
+cp $S/.git/swift-harness/plans/spec/validation.json $F/price-tracker-1-validation.json
+cp $S/.git/swift-harness/config.toml $F/price-tracker-1-config.toml
+git -C $S ls-tree -r --name-only fe7f9f7b7802d43ba8990d2582d5e50f96c6e1dd \
+  > $F/price-tracker-1-base-files.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
+
+## Brownfield trial: a re-import after the contract landed
+
+The second send-money trial imported its plan with `--contract send-money-contract`, then
+re-imported it without the flag to add an assumption. That re-import linted the done contract as a
+screen task, since it writes `UITests/LaunchFlowUITests.swift`.
+`BrownfieldTrial/send-money-2-reimport-PLAN.md` is the plan that re-import read: the plan the
+orchestrator's transcript wrote with a heredoc, with the assumption its next call inserted.
+`send-money-2-contract-return.json` is the return the first import wrote for the landed contract,
+and `send-money-2-config.toml` the clone's `config.toml`. `T` is the orchestrator's transcript and
+`S` the clone's state. From the repository root:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+python3 - "$T" > $F/send-money-2-reimport-PLAN.md <<'PY'
+import json, sys
+calls = []
+for line in open(sys.argv[1]):
+    entry = json.loads(line)
+    content = entry.get('message', {}).get('content')
+    if isinstance(content, list):
+        calls += [(entry['timestamp'], c['input']['command']) for c in content
+                  if c.get('type') == 'tool_use' and c['name'] == 'Bash']
+first = dict(calls)['2026-10-05T02:52:02.253Z']
+start = first.index("PLAN.md <<'EOF'\n") + len("PLAN.md <<'EOF'\n")
+plan = first[start:first.index("\nEOF\n", start)] + "\n"
+added = ("- The 3 running tasks all appear in a validation row's Runs after, so none may merge "
+         "before the at-base qa run, and build next offered no slot for spec-validation while "
+         "they held all 3: spec-validation started outside build next, with worktree create and "
+         "ledger set, to break that wait.\n")
+sys.stdout.write(plan.replace("- Currency formatting uses", added + "- Currency formatting uses"))
+PY
+cp $S/config.toml $F/send-money-2-config.toml
+cp $S/plans/spec/returns/send-money-contract.json $F/send-money-2-contract-return.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.

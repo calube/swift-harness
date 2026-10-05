@@ -14,6 +14,9 @@ enum BrownfieldProve {
     let readFile: @Sendable (URL) -> String?
     /// Per command run, when ``bound`` is `nil`.
     let deadline: Duration
+    /// The worktree's state, whose prove DerivedData an `xcodebuild` in the scratch tree builds
+    /// in; `nil` leaves each command as it is.
+    let layout: BrownfieldStateLayout?
     /// Each area's bound for a command in the scratch tree, by step.
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
 
@@ -22,7 +25,7 @@ enum BrownfieldProve {
       readFile: @escaping @Sendable (URL) -> String? = {
         try? String(contentsOf: $0, encoding: .utf8)
       },
-      deadline: Duration,
+      deadline: Duration, layout: BrownfieldStateLayout? = nil,
       bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)? = nil
     ) {
       self.git = git
@@ -30,6 +33,7 @@ enum BrownfieldProve {
       self.runner = runner
       self.readFile = readFile
       self.deadline = deadline
+      self.layout = layout
       self.bound = bound
     }
 
@@ -42,8 +46,22 @@ enum BrownfieldProve {
         git: LiveGit(runner: process, repositoryRoot: root.path),
         scratch: LiveScratchWorktrees(
           runner: process, repositoryRoot: root.path, directory: layout.scratchDirectory),
-        runner: runner, deadline: deadline)
+        runner: runner, deadline: deadline,
+        layout: layout)
     }
+  }
+
+  /// Whether the prove DerivedData of each `xcode` area in `areas` already holds a build; `none`
+  /// when none is an `xcode` area, since a scratch tree's other builds start in a fresh folder.
+  static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
+    -> GateDerivedData
+  {
+    GateStepCollector.derivedData(
+      buildDirectories: areas.filter { $0.kind == .xcode }.map {
+        URL(
+          filePath: XcodeDerivedData.provePath(area: $0.name, layout: layout) + "/Build",
+          directoryHint: .isDirectory)
+      })
   }
 
   /// - Parameters:
@@ -242,11 +260,11 @@ enum BrownfieldProve {
         template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: ids),
         files: ChangedTestIDs.filesArgument(areaRoot: area.root, ids: ids),
         junit: junit.map(ChangedTestIDs.shellQuoted))
+      let request = AreaCommandRequest(
+        area: area.name, step: step, command: command, workingDirectory: directory.path,
+        deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
       return await dependencies.runner.run(
-        AreaCommandRequest(
-          area: area.name, step: step, command: command, workingDirectory: directory.path,
-          deadline: bound?.duration ?? dependencies.deadline, environment: [:],
-          junitPath: junit))
+        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request)
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement

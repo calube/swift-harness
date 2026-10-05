@@ -1,0 +1,160 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 6 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-decimal"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 420,
+      "gate" : "slice",
+      "id" : "send-money-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-money-contract",
+      "writeSet" : [
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/AccountClient/AccountClient.swift",
+        "Packages/AppFeature/Sources/AppCore/AccessibilityID.swift"
+      ]
+    },
+    {
+      "branch" : "spec/account-fake",
+      "covers" : [
+        "req-fake"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "account-fake",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-account-fake",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AccountClient/InMemoryAccount.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/InMemoryAccountTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/amount-entry",
+      "covers" : [
+        "req-keypad",
+        "req-amount-format",
+        "req-continue",
+        "req-decimal"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 220,
+      "gate" : "slice",
+      "id" : "amount-entry",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-amount-entry",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
+        "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AmountFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/send-flow",
+      "covers" : [
+        "req-search",
+        "req-pick-contact",
+        "req-confirm",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "send-flow",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-flow",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/ConfirmFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/ConfirmFeatureTests.swift"
+      ]
+    },
+    {
+      "branch" : "spec/send-ui",
+      "covers" : [
+        "req-search",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 260,
+      "gate" : "slice",
+      "id" : "send-ui",
+      "status" : "abandoned",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-send-ui",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppUI/"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-search",
+        "req-send-success",
+        "req-send-failure"
+      ],
+      "deps" : [
+        "send-money-contract"
+      ],
+      "estLines" : 80,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "../repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "send-money-contract"
+    ],
+    [
+      "account-fake",
+      "amount-entry",
+      "send-flow"
+    ],
+    [
+      "send-ui",
+      "spec-validation"
+    ]
+  ]
+}

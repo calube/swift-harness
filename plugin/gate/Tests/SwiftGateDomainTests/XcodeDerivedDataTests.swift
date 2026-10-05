@@ -96,4 +96,53 @@ struct XcodeDerivedDataTests {
     let request = XcodeDerivedData.request(Self.request("npm test"), layout: Self.linked)
     #expect(request == Self.request("npm test"))
   }
+
+  @Test(
+    "prove's run of the trial's test command in a scratch tree builds in the worktree's prove DerivedData for the area, seeded from the area's seed, in a linked worktree and the main checkout — catches prove building cold in Xcode's global DerivedData, 1.3 GB per scratch path, or over the worktree's own build"
+  )
+  func proveRequests() throws {
+    let test = try Self.trialCommand("test")
+    let prove = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/Aidoku"
+    let mainProve = "/clone/.git/swift-harness/derived-data/prove/Aidoku"
+
+    let linked = XcodeDerivedData.proveRequest(Self.request(test), layout: Self.linked)
+    #expect(linked.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' test "))
+    #expect(linked.derivedDataSeed == DerivedDataSeedCopy(seed: Self.seed, destination: prove))
+
+    let main = XcodeDerivedData.proveRequest(Self.request(test), layout: Self.main)
+    #expect(main.command.hasPrefix("xcodebuild -derivedDataPath '\(mainProve)' test "))
+    #expect(main.derivedDataSeed == DerivedDataSeedCopy(seed: Self.seed, destination: mainProve))
+
+    #expect(
+      XcodeDerivedData.proveRequest(Self.request("swift test"), layout: Self.linked)
+        == Self.request("swift test"))
+  }
+
+  @Test(
+    "an xcode step's build directory is the Build folder of the DerivedData its command was given, a swiftpm step's is its area's .build, and any other step has none — catches every gate step labelled derivedData none, 73-133 s xcode builds included"
+  )
+  func buildDirectories() throws {
+    let build = XcodeDerivedData.request(
+      Self.request(try Self.trialCommand("build")), layout: Self.linked)
+    #expect(
+      XcodeDerivedData.buildDirectories(build, kind: .xcode, layout: Self.linked)
+        == ["\(Self.own)/Build"])
+    let prove = XcodeDerivedData.proveRequest(
+      Self.request(try Self.trialCommand("test")), layout: Self.linked)
+    #expect(
+      XcodeDerivedData.buildDirectories(prove, kind: .xcode, layout: Self.linked)
+        == ["/clone/.git/worktrees/task/swift-harness/derived-data/prove/Aidoku/Build"])
+    #expect(
+      XcodeDerivedData.buildDirectories(
+        Self.request("swift build"), kind: .swiftpm, layout: Self.linked)
+        == ["/work/task/.build"])
+    #expect(
+      XcodeDerivedData.buildDirectories(Self.request("npm test"), kind: .node, layout: Self.linked)
+        == [])
+    #expect(
+      XcodeDerivedData.buildDirectories(
+        Self.request("xcodebuild test -scheme App -derivedDataPath build/dd"), kind: .xcode,
+        layout: Self.linked) == [],
+      "a DerivedData the repository names is one the harness doesn't track")
+  }
 }

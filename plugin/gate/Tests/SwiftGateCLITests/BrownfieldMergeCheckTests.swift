@@ -45,12 +45,13 @@ struct BrownfieldMergeCheckTests {
   private static func run(
     _ clone: Clone, tier: CheckTier, areas: [BrownfieldArea], changed: [String],
     runner: FakeAreaCommandRunner, sliceBuildsOnly: Bool = false,
-    context: GateRun.Context? = nil,
+    context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil,
     bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
       nil,
     reuse: AreaStepReuse? = nil
   ) async throws -> GateRunParts {
+    let runner = areaRunner ?? runner
     let git = FakeGit(
       changed: changed, mergeBase: "base0",
       addedSince: changed.map { AddedLines(path: $0, ranges: [1...1]) })
@@ -270,6 +271,38 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "an area's test clone is asked for before its build runs, its test runs on that clone, and the clone goes back when the area is done — catches a merge gate's test step paying its clone's boot after the build"
+  )
+  func testCloneWarmsDuringTheBuild() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try Fixture.text("BrownfieldTrial/aidoku-validation-config.toml")
+    func command(_ key: String) throws -> String {
+      try #require(
+        config.split(separator: "\n").first { $0.hasPrefix("\(key) = \"") }
+          .map { String($0.dropFirst(key.count + 4).dropLast()) })
+    }
+    let leases = FakeTestDeviceLeases()
+    let askedAtBuild = Mutex<[Int]>([])
+    let base = FakeAreaCommandRunner { request in
+      if request.step == .build { askedAtBuild.withLock { $0.append(leases.destinations.count) } }
+      return .passed
+    }
+    let area = Self.area(
+      "app", test: try command("test"), testFiles: nil, lint: nil, build: try command("build"))
+
+    _ = try await Self.run(
+      clone, tier: .merge, areas: [area], changed: ["app/Sources/View.swift"], runner: base,
+      areaRunner: LeasedDeviceAreaRunner(base: base, leases: leases))
+
+    #expect(askedAtBuild.withLock { $0 } == [1])
+    let test = try #require(base.requests.first { $0.step == .test })
+    #expect(
+      test.command.contains("-destination 'id=\(FakeDevices.device.udid)'"), "\(test.command)")
+    #expect((leases.entered, leases.left) == (1, 1))
+  }
+
+  @Test(
     "final runs every area and its e2e while merge runs only the touched area — catches final narrowing to the plan's diff"
   )
   func finalRunsEveryArea() async throws {
@@ -296,6 +329,45 @@ struct BrownfieldMergeCheckTests {
     let timed = Set(
       context.steps.steps.compactMap { step in step.area.map { "\($0) \(step.step)" } })
     #expect(timed.isSuperset(of: ["api areaBuild", "api areaTest", "web areaBuild"]))
+  }
+
+  @Test(
+    "final hands each area's test and e2e totals, read from the reports the step wrote, to the run, by area then step — catches the trial's kept report with no count of the tests an area ran"
+  )
+  func finalRecordsEachAreasTestTotals() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let swiftTest = "swift test --xunit-output {junit}"
+    let areas = [
+      Self.area("web", test: swiftTest, e2e: "e2e --junit {junit}"),
+      Self.area("api", test: swiftTest),
+    ]
+    let reports = try ["APIClient.test.xml", "APIClient.test-swift-testing.xml"].map {
+      try Fixture.data("BrownfieldTrial/send-money-2-junit/\($0)")
+    }
+    let runner = FakeAreaCommandRunner { request in
+      if let junit = request.junitPath {
+        try? FileManager.default.createDirectory(
+          atPath: (junit as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        let companion = JUnitReports.companionPaths(of: junit)[0]
+        FileManager.default.createFile(atPath: junit, contents: reports[0])
+        FileManager.default.createFile(atPath: companion, contents: reports[1])
+      }
+      return .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    _ = try await Self.run(
+      clone, tier: .final, areas: areas, changed: ["web/src/lib.js"], runner: runner,
+      context: context)
+
+    let seven = JUnitCounts(tests: 7, failures: 0, skipped: 0)
+    #expect(
+      context.areaTests.all == [
+        AreaTestCounts(area: "api", step: .test, counts: seven),
+        AreaTestCounts(area: "web", step: .test, counts: seven),
+        AreaTestCounts(area: "web", step: .e2e, counts: seven),
+      ])
   }
 
   @Test(

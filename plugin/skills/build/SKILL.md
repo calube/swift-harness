@@ -68,8 +68,9 @@ it with no verdict. So before step 1, warm the binary:
 ```
 
 Give that call, and every `swiftgate` command after it, the Bash tool's `timeout` at 600000, its
-longest. Never pass `run_in_background` to one. The stall watch and the budget timer in the
-reference are the only Bash work this skill sends to the background.
+longest. Never pass `run_in_background` to one, except the merge gate: the stall watch, the
+budget timer and the merge gate the [merge gate watch](references/event-loop.md#merge-gate-watch)
+launches are the only Bash work this skill sends to the background.
 
 ## 1. Start
 
@@ -152,11 +153,17 @@ so say nothing; any other non-zero exit prints 1 line for the report, and the st
    its `notes` from there.
 3. By `outcome`: `gate-red` or `review-blocked` halts that task, and `design-conflict` follows
    [§8.4](references/event-loop.md#design-conflict). `ready-to-merge` goes on.
-4. `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
+4. Merge from the [merge queue](references/event-loop.md#merge-queue): wait until `build next`
+   lists the task first in `readyToMerge` with `merging` absent. Then
+   `"$SG" build merge <slug> <task> --session <session> --json`, only after step 1 exits 0 and as
    its own command: `build merge` refuses unless the build run's newest check of this return is
-   GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`). Then
-   `"$SG" check --tier <mergeGate>` on main (with a plan surface,
-   `"$SG" check --tier <mergeGate> --base <surfaceCommit>`), then record it for the ledger page:
+   GREEN at the branch tip (`return-unchecked`, `return-not-green`, `return-stale`). Then the merge
+   gate on main, `"$SG" check --tier <mergeGate> --json > <plans>/<slug>/out/merge-<task>.json`
+   (with a plan surface,
+   `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json > <plans>/<slug>/out/merge-<task>.json`),
+   launched with `run_in_background: true` and watched with `"$SG" build gate-wait` as the
+   [merge gate watch](references/event-loop.md#merge-gate-watch) says. Once it reads, record it
+   for the ledger page:
    `"$SG" build record-gate <slug> --kind merge --task <task> --run-id <its run id> --session <session> --json`.
    A conflict or a red gate goes to [the fixer](references/event-loop.md#conflict-or-red-main). A
    gate whose every gating finding is one of the step 1 baseline's counts as GREEN: a task that

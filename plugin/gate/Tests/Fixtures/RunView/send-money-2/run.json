@@ -1,0 +1,29 @@
+{
+  "endsAtFinish" : true,
+  "plan" : "spec",
+  "preset" : {
+    "designTier" : "none",
+    "maxParallel" : 3,
+    "mergeGate" : "merge",
+    "onDesignConflict" : "amend",
+    "review" : "classified",
+    "stopStartsBeforeMin" : 13,
+    "taskGate" : "slice",
+    "taskProof" : "prove",
+    "timeBudgetMin" : 40,
+    "workerModel" : "claude-sonnet-5-5"
+  },
+  "presetName" : "brownfield",
+  "runId" : "20261005T025212Z-65cdde10",
+  "schemaVersion" : 1,
+  "startedAt" : "2026-10-05T02:52:12Z",
+  "timeBox" : {
+    "limits" : {
+      "budgetMin" : 40,
+      "finalReserveMin" : 5,
+      "source" : "config",
+      "stopStartsBeforeMin" : 13
+    },
+    "startedAt" : "2026-10-05T02:44:02Z"
+  }
+}

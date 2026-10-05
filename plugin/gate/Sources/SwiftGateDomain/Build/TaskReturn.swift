@@ -210,6 +210,7 @@ public struct TaskReturnFinding: Sendable, Equatable, Encodable {
     case targetOutsideSurface = "build-return.target-outside-surface"
     case testNeedsStub = "build-return.test-needs-stub"
     case staleGate = "build-return.stale-gate"
+    case testsNotRun = "build-return.tests-not-run"
   }
 
   public let rule: Rule
@@ -244,10 +245,12 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     /// Whether the run started on a tree with uncommitted changes; `nil` when its history line
     /// doesn't say.
     public let dirty: Bool?
+    /// The brownfield areas whose tests the run ran; `nil` when its history line doesn't say.
+    public let testedAreas: [String]?
 
     public init(
       tier: CheckTier?, verdict: Verdict, steps: [String] = [], proofBases: [String] = [],
-      headCommit: String? = nil, dirty: Bool? = nil
+      headCommit: String? = nil, dirty: Bool? = nil, testedAreas: [String]? = nil
     ) {
       self.tier = tier
       self.verdict = verdict
@@ -255,6 +258,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
       self.proofBases = proofBases
       self.headCommit = headCommit
       self.dirty = dirty
+      self.testedAreas = testedAreas
     }
 
     /// Whether the run proved and mutated the change: `ready` always does, a lower tier only
@@ -275,13 +279,24 @@ public struct TaskReturnEvidence: Sendable, Equatable {
       self.init(
         tier: Self.tier(ofCommand: record.command), verdict: record.verdict,
         steps: record.steps ?? [], proofBases: record.proofBases ?? [],
-        headCommit: record.headCommit, dirty: record.dirty)
+        headCommit: record.headCommit, dirty: record.dirty, testedAreas: record.testedAreas)
     }
 
     /// The tier of a run history `command` such as `check push`; `nil` for any other command.
     public static func tier(ofCommand command: String?) -> CheckTier? {
       guard let command, command.hasPrefix("check ") else { return nil }
       return CheckTier(rawValue: String(command.dropFirst("check ".count)))
+    }
+  }
+
+  /// 1 test file the task branch adds or changes, in the brownfield area that owns it.
+  public struct AddedTest: Sendable, Equatable {
+    public let path: String
+    public let area: String
+
+    public init(path: String, area: String) {
+      self.path = path
+      self.area = area
     }
   }
 
@@ -319,6 +334,9 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   /// The task branch's new and changed host tests, built at the plan's proof bases. `nil` when
   /// the plan has no surface commit or the branch changes no host test.
   public let testBuild: ProofBaseTestBuild?
+  /// The test files the task branch adds or changes in brownfield areas whose `slice` runs changed
+  /// tests alone, so a green task gate must have run them. Empty outside the brownfield profile.
+  public let addedTests: [AddedTest]
 
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
@@ -326,7 +344,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
     taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil,
-    testBuild: ProofBaseTestBuild? = nil, lastCommit: String? = nil
+    testBuild: ProofBaseTestBuild? = nil, lastCommit: String? = nil,
+    addedTests: [AddedTest] = []
   ) {
     self.branch = branch
     self.branchExists = branchExists
@@ -343,6 +362,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.taskGateStepsRequired = taskGateStepsRequired
     self.planSurface = planSurface
     self.testBuild = testBuild
+    self.addedTests = addedTests
   }
 }
 
@@ -662,6 +682,7 @@ public enum TaskReturnCheck {
         }
       }
       findings += staleGateFindings(gate, run, evidence)
+      findings += testsNotRunFindings(gate, run, evidence)
       if !(run.tier.map { covers($0, evidence.taskGate) } ?? false) {
         findings.append(
           .init(
@@ -714,6 +735,31 @@ public enum TaskReturnCheck {
             + "the task gate again with this swiftgate and cite that run"))
     }
     return findings
+  }
+
+  /// A test the task adds or changes in an area whose `slice` runs changed tests alone must have
+  /// run in the gate the return cites, or it first runs at the merge gate, after review. 1
+  /// finding per area.
+  private static func testsNotRunFindings(
+    _ gate: TaskReturn.Gate, _ run: TaskReturnEvidence.GateRun, _ evidence: TaskReturnEvidence
+  ) -> [TaskReturnFinding] {
+    let byArea = Dictionary(grouping: evidence.addedTests, by: \.area)
+    return byArea.keys.sorted().compactMap { area in
+      guard run.testedAreas?.contains(area) != true else { return nil }
+      let files = (byArea[area] ?? []).map(\.path).joined(separator: ", ")
+      let why =
+        run.testedAreas == nil
+        ? "gate run \(gate.runID)'s history line doesn't record which areas' tests it ran, so "
+          + "nothing shows that the task's tests in \(area) (\(files)) ran"
+        : "gate run \(gate.runID) ran no test of area \(area), so the task's tests there "
+          + "(\(files)) have never run"
+      return TaskReturnFinding(
+        rule: .testsNotRun,
+        message:
+          why + ". The slice tier runs an area's changed tests through its test_files even when "
+          + "its whole suite is over the budget; run the task gate again with this swiftgate and "
+          + "cite that run")
+    }
   }
 
   private static func reviewFindings(_ taskReturn: TaskReturn, _ evidence: TaskReturnEvidence)

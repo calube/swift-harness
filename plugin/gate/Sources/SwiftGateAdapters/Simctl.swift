@@ -39,6 +39,10 @@ public protocol Simctl: Sendable {
   func shutdown(_ udid: String) async throws(SimctlError)
   func delete(_ udid: String) async throws(SimctlError)
   func install(_ udid: String, appPath: String) async throws(SimctlError)
+  /// Stops the app and removes it with its data; an app that isn't installed is no error.
+  func uninstall(_ udid: String, bundleID: String) async throws(SimctlError)
+  /// Removes every keychain item on the device, which uninstalling an app leaves.
+  func resetKeychain(_ udid: String) async throws(SimctlError)
   /// Returns the launched process's PID.
   func launch(_ udid: String, bundleID: String, arguments: [String]) async throws(SimctlError)
     -> Int32
@@ -103,6 +107,14 @@ public struct LiveSimctl: Simctl {
 
   public func install(_ udid: String, appPath: String) async throws(SimctlError) {
     _ = try await simctl(["install", udid, appPath], timeout: timeouts.boot)
+  }
+
+  public func uninstall(_ udid: String, bundleID: String) async throws(SimctlError) {
+    _ = try await simctl(["uninstall", udid, bundleID], timeout: timeouts.quick)
+  }
+
+  public func resetKeychain(_ udid: String) async throws(SimctlError) {
+    _ = try await simctl(["keychain", udid, "reset"], timeout: timeouts.quick)
   }
 
   public func launch(_ udid: String, bundleID: String, arguments: [String])
