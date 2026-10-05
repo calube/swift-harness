@@ -70,11 +70,12 @@ private struct MergeScenario {
     return await flow(task, fix: fix).merge()
   }
 
-  /// Records a `build check-return` verdict in the build run as the command does.
+  /// Records a `build check-return` verdict in the build run as the command does, of a
+  /// `ready-to-merge` return unless `outcome` says otherwise.
   func check(
     _ task: String, fix: Bool = false, verdict: Verdict, commit: String?,
     checkID: String = "check-\(UUID().uuidString)", rules: [TaskReturnFinding.Rule] = [],
-    outcome: TaskReturn.Outcome? = nil
+    outcome: TaskReturn.Outcome? = .readyToMerge
   ) async throws {
     try await run.append(
       .returnCheck(
