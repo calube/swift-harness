@@ -4957,3 +4957,29 @@ The run, in a zsh whose profile aliases `cp` to `cp -i`, showed what the rewrite
 at 5 s), and the payload carries `permission_mode: "bypassPermissions"`. Scrubbing: the cwd
 becomes `/REPO`, the transcript `/HOME/.claude/projects/-REPO/`, and `session_id` the fixed
 `8f2c1d7e-…`; nothing else changed.
+
+## Brownfield trial: merge-train-1's before-merge run credited by its tree
+
+`BrownfieldTrial/merge-train-1-*` come from a brownfield one-shot trial (harness `88498fd6`) whose
+3 screen tasks shared 5 flow rows. A `qa run --after root-ui,list-ui --before-merge` passed rows 1
+and 2 on a trial merge of both branches onto the plan branch at `37f9ee74`. `root-ui` then merged
+alone, moving the plan branch to `3f48493d`, and `build merge list-ui` refused `flows-unchecked`,
+so a second `qa run --after list-ui --before-merge` ran on a trial merge that made the same tree,
+`417d939c`. `$T` is the trial's kept folder and `$R` its repository. The `sed` below renames the trial's 3
+task names, its accessibility-id prefix and its client type, given here as placeholders, and
+changes nothing else:
+
+```sh
+S='s/<root task>/root-ui/g; s/<list task>/list-ui/g; s/<thread task>/thread-ui/g; s/<id prefix>\./app./g; s/<Client type>/AppClient/g'
+sed "$S" $T/validation.json > merge-train-1-validation.json
+sed "$S" $T/state/runs/20261005T151237Z-e88302e9/qa/report.json > merge-train-1-qa-before-root-ui-list-ui.json
+sed "$S" $T/state/runs/20261005T151237Z-e88302e9/qa/merged-tree-run.json > merge-train-1-merged-tree-root-ui-list-ui.json
+sed "$S" $T/state/runs/20261005T151927Z-5b069a41/qa/report.json > merge-train-1-qa-before-list-ui.json
+git -C $R merge-tree --write-tree 3f48493d7a2624df62cf4d05545ff7b55eee9745 \
+  095137156244e4a34e1c32d4bbbe0efd38b831d7 > merge-train-1-list-ui-landing-tree.txt
+```
+
+`merge-train-1-list-ui-landing-tree.txt` is the tree `build merge list-ui` would land: `list-ui`'s
+tip merged into the moved plan branch. It equals both the first run's `merged-tree-run.json` tree
+and the tree of the merge commit `build merge` then made. `grep -niE '/Users|/private|caleb'` on
+the fixtures matched nothing.

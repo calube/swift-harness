@@ -1,0 +1,136 @@
+{
+  "after" : "list-ui",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "9d87df4e3936d6a615b51e7bec49d8a868fb0e64",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "2 of 8 rows verified (3 reason-only): 2 pass, 0 red, 0 unverified, 3 waiting, 0 abandoned",
+  "notes" : [
+    "qa run 20261005T151237Z-e88302e9 ran on the same merged tree 417d939c8db1",
+    "2 rows (1, 2) reused from qa run 20261005T151237Z-e88302e9 by root-ui: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T151237Z-e88302e9 by root-ui at c578c638743d: batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 0,
+      "requirement" : "req-launch-list",
+      "result" : "pass",
+      "reusedFrom" : "20261005T151237Z-e88302e9",
+      "row" : 1,
+      "runsAfter" : [
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-failure-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T151237Z-e88302e9 by root-ui at c578c638743d: batch passed; sim verify GREEN over 7 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button app.list.retry 70×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 0,
+      "requirement" : "req-list-failure-retry",
+      "result" : "pass",
+      "reusedFrom" : "20261005T151237Z-e88302e9",
+      "row" : 2,
+      "runsAfter" : [
+        "list-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-sent.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-send-sending-sent",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    },
+    {
+      "check" : "qa/send-failure-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-send-failure-retry",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on thread-ui",
+      "ms" : 0,
+      "requirement" : "req-preview-update",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "list-ui",
+        "thread-ui",
+        "root-ui"
+      ],
+      "waitingOn" : [
+        "thread-ui"
+      ]
+    }
+  ],
+  "runID" : "20261005T151927Z-5b069a41",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "3f48493d7a2624df62cf4d05545ff7b55eee9745",
+    "branch" : "spec/list-ui",
+    "conflicts" : [
+
+    ],
+    "tip" : "095137156244e4a34e1c32d4bbbe0efd38b831d7"
+  },
+  "verdict" : "GREEN"
+}
