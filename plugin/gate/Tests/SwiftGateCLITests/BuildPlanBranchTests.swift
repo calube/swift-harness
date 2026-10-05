@@ -71,11 +71,20 @@ struct PlanBranchScenario {
   var workspace: LiveGitWorkspace { LiveGitWorkspace(runner: runner, repositoryRoot: user.path) }
   var planBranch: String { BrownfieldRunReport.planBranch(slug: Self.slug) }
   let checkout: String
-  let taskWorktree: String
+  /// Where task `t1`'s worktree is now: the pooled slot holding its branch, else its own
+  /// `<repo>-<plan>-t1` beside the clone.
+  var taskWorktree: String { worktree(of: Self.task) }
+
+  /// Where `task`'s worktree is now, as every command names it.
+  func worktree(of task: String) -> String {
+    (try? TaskWorktree(commonDirectory: common, plan: Self.slug, task: task, profile: .brownfield)
+      .path) ?? ""
+  }
 
   /// `config` is the clone's `config.toml`; `files` are the base commit's, by repository path.
   init(
-    config: String = Self.config, files: [String: Data] = ["app.py": Data("print('hi')\n".utf8)]
+    config: String = Self.config, files: [String: Data] = ["app.py": Data("print('hi')\n".utf8)],
+    tasks: [String] = [Self.task]
   ) async throws {
     base = TestTemporaryDirectory.root
       .appending(path: "build-plan-branch-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -115,7 +124,6 @@ struct PlanBranchScenario {
     let names = try TaskWorktree(
       commonDirectory: common, plan: Self.slug, task: Self.task, profile: .brownfield)
     checkout = names.mainCheckout
-    taskWorktree = names.path
     let checkout = self.checkout
     _ = try await run("branch", "--no-track", BrownfieldRunReport.planBranch(slug: Self.slug))
     _ = try await run(
@@ -125,14 +133,18 @@ struct PlanBranchScenario {
     _ = try await run("commit", "-q", "-m", "contract", in: checkout)
     contract = try await run("rev-parse", "HEAD", in: checkout)
 
+    let common = self.common
     let ledger = Ledger(
       schemaVersion: 1, resume: "building", maxParallel: 3,
-      tasks: [
+      tasks: try tasks.map { task in
         LedgerTask(
-          id: Self.task, deps: [], writeSet: ["Core/"], gate: .slice, tests: [], covers: [],
-          estLines: 20, status: .inProgress, worktree: taskWorktree)
-      ],
-      waves: [[Self.task]])
+          id: task, deps: [], writeSet: ["Core/"], gate: .slice, tests: [], covers: [],
+          estLines: 20, status: .inProgress,
+          worktree: try TaskWorktree(
+            commonDirectory: common, plan: Self.slug, task: task, profile: .brownfield
+          ).path)
+      },
+      waves: [tasks])
     try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
     #expect(try PlanLock(plan: plan).claim(session: Self.session) == .claimed)
     try await BuildRunStore.create(
@@ -159,9 +171,11 @@ struct PlanBranchScenario {
     try await Self.git(arguments, in: directory ?? user.path, runner: runner)
   }
 
-  func create(install: WorktreeNodeInstall.Dependencies = .live()) async -> WorktreeReport {
+  func create(_ task: String = Self.task, install: WorktreeNodeInstall.Dependencies = .live())
+    async -> WorktreeReport
+  {
     await WorktreeRun.create(
-      slug: Self.slug, task: Self.task, session: Self.session, git: git, workspace: workspace,
+      slug: Self.slug, task: task, session: Self.session, git: git, workspace: workspace,
       profile: BuildPresetCatalog.profile(root: user), install: install)
   }
 
@@ -277,7 +291,7 @@ struct BuildPlanBranchTests {
   }
 
   @Test(
-    "a brownfield merge lands the task branch on the plan branch in the plan's checkout, and remove then deletes the merged worktree, while the user's branch never moves — catches a merge into the user's checked-out branch"
+    "a brownfield merge lands the task branch on the plan branch in the plan's checkout, and remove then returns the merged worktree's slot detached and clean and deletes its branch, while the user's branch never moves — catches a merge into the user's checked-out branch"
   )
   func mergeLandsOnThePlanBranch() async throws {
     let scenario = try await PlanBranchScenario()
@@ -310,18 +324,20 @@ struct BuildPlanBranchTests {
     #expect(FileManager.default.fileExists(atPath: scenario.checkout + "/value.py"))
     try await scenario.expectUserUntouched()
 
+    let worktree = scenario.taskWorktree
     let removed = await WorktreeRun.remove(
       slug: PlanBranchScenario.slug, task: PlanBranchScenario.task,
       session: PlanBranchScenario.session, git: scenario.git, workspace: scenario.workspace,
       profile: profile)
 
     #expect(removed.status == .removed, "\(removed.message)")
-    #expect(removed.worktree == scenario.taskWorktree)
-    #expect(scenario.isBesideTheClone(scenario.taskWorktree), "\(scenario.taskWorktree)")
-    #expect(!FileManager.default.fileExists(atPath: scenario.taskWorktree))
-    let listed = try await scenario.git("worktree", "list", "--porcelain")
-    #expect(!listed.contains("worktree \(scenario.taskWorktree)\n"))
-    #expect(!listed.hasSuffix("worktree \(scenario.taskWorktree)"))
+    #expect(removed.worktree == worktree)
+    #expect(scenario.isBesideTheClone(worktree), "\(worktree)")
+    #expect(try await scenario.git("status", "--porcelain", in: worktree) == "")
+    #expect(try await scenario.git("rev-parse", "HEAD", in: worktree) == tip)
+    #expect(try await scenario.git("branch", "--show-current", in: worktree) == "")
+    #expect(try await scenario.git("branch", "--list", "\(PlanBranchScenario.slug)/*") == "")
+    #expect(scenario.taskWorktree != worktree)
     try await scenario.expectUserUntouched()
   }
 
