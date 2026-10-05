@@ -269,7 +269,8 @@ struct SimUpTests {
     #expect(
       started
         == SimUpStarted(
-          runID: Self.runID, udid: Self.udid, session: session, scenario: "fixed-fact"))
+          runID: Self.runID, udid: Self.udid, session: session, scenario: "fixed-fact",
+          setup: started.setup))
     let launch = try #require(rig.launcher.launches.first)
     #expect(launch.executable == "/plugin/bin/sg")
     #expect(launch.arguments == ["sim", "hold", "--run", Self.runID])
