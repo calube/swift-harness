@@ -1041,6 +1041,31 @@ const tests = {
     assert.equal(owned.workerCalls[0].opts.model, 'claude-sonnet-5-5', 'an owned preset refused a pinned id')
   },
 
+  async 'every worker and fix prompt, in either profile, runs gates at the 600000 timeout, waits on a longer one with build gate-wait on its JSON file, and forbids waiting on a process by name — catches a gate moved to the background at 120 s and watched by a pgrep -f loop that matches its own shell'() {
+    const behave = profile =>
+      profile === 'brownfield'
+        ? { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
+        : { workers: [red(), workerReturn()] }
+    const cases = [
+      { profile: 'brownfield', args: brownfieldArgs(), scratch: `${brownfieldArgs().stateRoot}/tmp` },
+      { profile: 'owned', args: baseArgs({ review: 'gate' }), scratch: `${baseArgs().worktree}/.harness/tmp` },
+    ]
+    for (const { profile, args, scratch } of cases) {
+      const { workerCalls } = await run(args, behave(profile))
+      assert.equal(workerCalls.length, 2, profile)
+      for (const { prompt } of workerCalls) {
+        assert.match(prompt, /in the foreground with the Bash tool's `timeout` at 600000/, `${profile}: no 600000 timeout:\n${prompt}`)
+        assert.ok(prompt.includes(`${SG} check`) && prompt.includes(`${SG} test-only`), `${profile}: the rule does not name both gate commands`)
+        assert.ok(prompt.includes(`--json > ${scratch}/gate.json`), `${profile}: no JSON redirect for a background gate:\n${prompt}`)
+        assert.ok(
+          prompt.includes(`${SG} build gate-wait ${args.plan} --tier ${args.taskGate} --output ${scratch}/gate.json --json`),
+          `${profile}: no gate-wait on the gate's file:\n${prompt}`,
+        )
+        for (const word of ['`pgrep -f`', '`pkill`', '`killall`']) assert.ok(prompt.includes(word), `${profile}: ${word} is not forbidden`)
+      }
+    }
+  },
+
   async 'a prove task gate passes --prove and never --mutate, from the plan branch, in every worker prompt — catches prove-only proof still mutating, or a slice gated against main'() {
     const behave = { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
     const { workerCalls } = await run(brownfieldArgs(), behave)
