@@ -2791,6 +2791,40 @@ cp evals/results/2026-10-04-brownfield-ios-validation/config.toml \
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-config.toml`
 matched nothing.
 
+## Brownfield trial: a merge fixer looping on the merge gate
+
+The third iOS validation trial on `Aidoku/Aidoku` sent 1 red merge to the fixer, which found each
+of its test file's 3 faults by running `check --tier merge` again.
+`BrownfieldTrial/aidoku-validation-3-fixer-gates.jsonl` holds each of its Bash calls that ran a
+`check --tier`, in order, with the fix worktree as `/WORKTREE` and the harness's plugin as
+`/PLUGIN`. `BrownfieldTrial/aidoku-validation-3-test-compile.tail.txt` is the output tail that the
+red merge gate's `area.test-failed` finding quoted after `exit 65:`. It shows the new test file
+that didn't compile, with the plan checkout as `/CLONE` and Xcode's DerivedData as `/DERIVED`. `W`
+is the fix worktree, `P` the plugin, `C` the plan checkout and `D` the DerivedData directory the
+trial ran with. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial \
+  W=… P=… C=… D=… python3 - <<'PY'
+import json, os
+S, F, W, P, C, D = (os.environ[k] for k in ("S", "F", "W", "P", "C", "D"))
+with open(f"{F}/aidoku-validation-3-fixer-gates.jsonl", "w") as out:
+    for line in open(f"{S}/fixer.jsonl"):
+        content = json.loads(line).get("message", {}).get("content")
+        for c in content if isinstance(content, list) else []:
+            if c.get("type") == "tool_use" and c["name"] == "Bash" and "check --tier" in c["input"]["command"]:
+                command = c["input"]["command"].replace(W, "/WORKTREE").replace(P, "/PLUGIN")
+                out.write(json.dumps({"command": command}) + "\n")
+report = json.load(open(f"{S}/gates/merge-setting.json"))
+message = next(x["message"] for x in report["findings"] if x["severity"] == "major")
+tail = message.split("exit 65:\n", 1)[1].replace(C, "/CLONE").replace(D, "/DERIVED")
+open(f"{F}/aidoku-validation-3-test-compile.tail.txt", "w").write(tail)
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
+nothing.
+
 ## Brownfield trial: an iOS plan whose acceptance row names a source file
 
 `BrownfieldTrial/aidoku-validation-2-PLAN.md` is the `PLAN.md` the orchestrator first wrote in
