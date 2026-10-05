@@ -177,6 +177,45 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "final hands each area's test and e2e totals, read from the reports the step wrote, to the run, by area then step — catches the trial's kept report with no count of the tests an area ran"
+  )
+  func finalRecordsEachAreasTestTotals() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let swiftTest = "swift test --xunit-output {junit}"
+    let areas = [
+      Self.area("web", test: swiftTest, e2e: "e2e --junit {junit}"),
+      Self.area("api", test: swiftTest),
+    ]
+    let reports = try ["APIClient.test.xml", "APIClient.test-swift-testing.xml"].map {
+      try Fixture.data("BrownfieldTrial/send-money-2-junit/\($0)")
+    }
+    let runner = FakeAreaCommandRunner { request in
+      if let junit = request.junitPath {
+        try? FileManager.default.createDirectory(
+          atPath: (junit as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        let companion = JUnitReports.companionPaths(of: junit)[0]
+        FileManager.default.createFile(atPath: junit, contents: reports[0])
+        FileManager.default.createFile(atPath: companion, contents: reports[1])
+      }
+      return .passed
+    }
+    let context = GateRun.Context(runID: "run", directory: clone.base)
+
+    _ = try await Self.run(
+      clone, tier: .final, areas: areas, changed: ["web/src/lib.js"], runner: runner,
+      context: context)
+
+    let seven = JUnitCounts(tests: 7, failures: 0, skipped: 0)
+    #expect(
+      context.areaTests.all == [
+        AreaTestCounts(area: "api", step: .test, counts: seven),
+        AreaTestCounts(area: "web", step: .test, counts: seven),
+        AreaTestCounts(area: "web", step: .e2e, counts: seven),
+      ])
+  }
+
+  @Test(
     "a dropped step reports area.step-dropped and never gates — catches a missing command read as a pass with no report line, or as a failure"
   )
   func droppedStepIsReportedAndNeverGates() async throws {
