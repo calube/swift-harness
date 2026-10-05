@@ -1,0 +1,21 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "8c791e42a7bb407476dadb3dee5cae3cc804ecc0",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "no validation row to run",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+
+  ],
+  "runID" : "20261005T020255Z-74e7bef9",
+  "schemaVersion" : 1,
+  "settled" : true,
+  "verdict" : "GREEN"
+}

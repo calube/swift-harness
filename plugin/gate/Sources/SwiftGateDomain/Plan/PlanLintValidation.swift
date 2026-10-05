@@ -7,6 +7,17 @@ public enum PlanLintValidation {
   public static let flowWithoutIOSRuleID = "plan-lint.validation-flow-without-ios"
   public static let checkSourceFileRuleID = "plan-lint.validation-check-source-file"
   public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
+  public static let appWithoutFlowRuleID = "plan-lint.validation-app-without-flow"
+
+  /// What may stop a flow checking a screen requirement. A screen requirement's `Reason` opens
+  /// with 1 of these and a colon, such as `data: needs a source with 50 chapters`, or it doesn't
+  /// excuse the requirement from a flow row: unit and acceptance tests never stand in for one.
+  public static let obstacleKinds = ["network", "hardware", "account", "data", "system"]
+
+  /// The obstacle kind `reason` opens with, when a detail follows its colon; `nil` otherwise.
+  public static func obstacle(of reason: String) -> String? {
+    nil
+  }
 
   /// A task as the screen check reads it: the requirements it covers and the paths it writes.
   public struct TaskWrites: Sendable, Equatable {
@@ -46,10 +57,11 @@ public enum PlanLintValidation {
   ///   - sectionLine: the line the table starts on, when it came from markdown.
   ///   - tasks: each task's covers and writes, for the screen check; empty skips it.
   ///   - appAreas: the repository's `xcode` areas, whose screens a task can touch.
+  ///   - contractTask: the contract task, whose stub screens carry no behaviour a flow can check.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
     file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
-    appAreas: [AppArea] = []
+    appAreas: [AppArea] = [], contractTask: String? = nil
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))

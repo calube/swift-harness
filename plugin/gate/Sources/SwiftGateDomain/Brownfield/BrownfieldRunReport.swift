@@ -139,12 +139,15 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     public let verdict: Verdict
     public let rows: Int
     public let verified: Int
+    /// The table's requirements left to unit tests with only a reason; none of `rows`.
+    public let reasonOnly: Int
 
-    public init(runID: String?, verdict: Verdict, rows: Int, verified: Int) {
+    public init(runID: String?, verdict: Verdict, rows: Int, verified: Int, reasonOnly: Int = 0) {
       self.runID = runID
       self.verdict = verdict
       self.rows = rows
       self.verified = verified
+      self.reasonOnly = reasonOnly
     }
   }
 
