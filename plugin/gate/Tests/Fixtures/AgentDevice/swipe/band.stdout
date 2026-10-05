@@ -1,0 +1,139 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 4 (wait): wait timed out for selector: id=\"probe.direction\" label=\"right\". Current surface: none, Swipes 0, Screen 402 x 778.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muvisjr8-064b4a82",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/requests/63872654c2bef631.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-swipe",
+      "requestId": "63872654c2bef631"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 5000,
+      "readableCaptures": 2,
+      "captures": 2,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 3722,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4047,
+          "durationMs": 680,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 5001,
+      "currentSurface": {
+        "labels": [
+          "none",
+          "Swipes 0",
+          "Screen 402 x 778",
+          "SwipeProbe"
+        ]
+      },
+      "step": 4,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.direction\" label=\"right\"",
+        "5000"
+      ],
+      "executed": 3,
+      "total": 5,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-swipe",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-swipe",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/requests/63872654c2bef631.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-swipe/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.SwipeProbe",
+            "appBundleId": "com.example.SwipeProbe",
+            "startup": {
+              "durationMs": 2136,
+              "measuredAt": "2026-10-05T17:24:55.468Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.SwipeProbe",
+              "appBundleId": "com.example.SwipeProbe"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 762,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 1215,
+              "totalDurationMs": 2136
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-51189",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.SwipeProbe"
+          },
+          "durationMs": 3153
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 540,
+            "selector": "id=\"probe.count\" label=\"Swipes 0\""
+          },
+          "durationMs": 541
+        },
+        {
+          "step": 3,
+          "command": "gesture",
+          "ok": true,
+          "data": {
+            "kind": "fling",
+            "durationMs": 100,
+            "pointerCount": 1,
+            "from": {
+              "x": 60,
+              "y": 437
+            },
+            "to": {
+              "x": 341,
+              "y": 437
+            },
+            "gestureEndUptimeMs": 372123768.821,
+            "gestureStartUptimeMs": 372123351.5590834,
+            "runnerMainThreadBusy": false,
+            "currentUptimeMs": 372123769.04875004,
+            "message": "Flung",
+            "executionProfile": "endpoint-hold",
+            "timing": {
+              "executionProfile": "endpoint-hold",
+              "gestureDurationMs": 100
+            }
+          },
+          "durationMs": 698
+        }
+      ]
+    }
+  }
+}

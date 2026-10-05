@@ -525,6 +525,36 @@ magnifying-glass image are both labelled `Search`, `fill label="Search"` and
 `fill label="Search" editable=true` each filled the field. A strict absence wait is
 `{"absent": …}` or `{"kind": "absent", "absent": …}`; both passed in about 680 ms.
 
+### AgentDevice/swipe
+
+Where each `gesture` `kind: swipe` preset moves its finger, captured on 2026-10-05 with
+`agent-device` 0.21.18, Xcode 26.2 and the iOS 26.2 runtime. In a build trial the validation
+worker searched the installed tool's package for the swipe step's input, and a retry brief had to
+ask for a recognizer the preset swipe would cross. The app is `SwipeProbe.swift` with
+`Info.plist`: a `DragGesture` over the whole screen shows the direction it saw under
+`probe.direction`, its start and end points under `probe.path`, and `Swipes <n>` under
+`probe.count`; with the launch argument `-probe-band` the recognizer covers only a 120 pt band at
+the top. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/swipe/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+iPhone 17 device (402 x 874 pt), and deletes it on exit. Each batch relaunches the app, waits for
+`Swipes 0`, runs the swipe as step 3, waits 5 s for the direction, then reads `probe.path`.
+
+| Files | Step 3 |
+|---|---|
+| `right.{steps.json,stdout,stderr,status}` | `preset: right`: a 100 ms fling from (60, 437) to (341, 437). Exits 0 |
+| `left.{…}` | `preset: left`: (341, 437) to (60, 437). Exits 0 |
+| `left-edge.{…}` | `preset: left-edge`: (394, 437) to (60, 437), from the right edge leftward. Exits 0 |
+| `right-edge.{…}` | `preset: right-edge`: (8, 437) to (341, 437), from the left edge rightward. Exits 0 |
+| `band.{…}` | `-probe-band`, `preset: right`: exits 1, `details.step` 4, the wait timed out with `Swipes 0` |
+| `no-preset.{…}` | `{"kind": "swipe"}`: exits 1, `INVALID_ARGS`, "Expected preset to be one of: left, right, left-edge, right-edge." |
+| `direction-key.{…}` | `{"kind": "swipe", "direction": "right"}`: exits 1, the same message |
+| `preset-up.{…}` | `{"kind": "swipe", "preset": "up"}`: exits 1, the same message |
+
 ### AgentDevice/under-search-bar
 
 A list row iOS 26's floating bottom `.searchable` field covers, captured on 2026-10-05 with

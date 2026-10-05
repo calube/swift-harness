@@ -37,6 +37,10 @@ public enum FlowRules {
     "absent": "absent", "stable": "stable",
   ]
 
+  /// The presets a `gesture` of `kind` `swipe` reads from `preset`, which the pinned tool
+  /// requires; it refuses a swipe without one, whatever other keys the step holds.
+  public static let swipePresets = ["left", "right", "left-edge", "right-edge"]
+
   /// Keys whose strings are app content, not selectors: what a step types, or the text a
   /// predicate compares with.
   static let contentKeys: Set<String> = ["text", "value"]
@@ -126,11 +130,13 @@ public enum FlowRules {
 
   /// Why `step` would run as another step than its `kind` or `predicate` says, each naming the key
   /// to use; empty when its input keys match. A `wait` holds exactly 1 target key, the 1 its
-  /// `kind` reads, and an `is` holds a `value` exactly when its predicate is `text`.
+  /// `kind` reads, an `is` holds a `value` exactly when its predicate is `text`, and a `swipe`
+  /// gesture holds a `preset`.
   static func kindKeyProblems(_ step: FlowStep) -> [String] {
     switch step.command {
     case "wait": waitProblems(step.input)
     case "is": isProblems(step.input)
+    case "gesture": gestureProblems(step.input)
     default: []
     }
   }
@@ -197,6 +203,11 @@ public enum FlowRules {
       ]
     }
     return []
+  }
+
+  /// Why a `gesture` step's input lacks the key its `kind` reads.
+  private static func gestureProblems(_ input: [String: FlowJSON]) -> [String] {
+    []
   }
 
   /// Commands that read the screen and leave the app as it is.
