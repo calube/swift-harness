@@ -362,7 +362,8 @@ struct BuildLoopCommandTests {
     let report = try #require(result.report, "\(result.message)")
     #expect(result.verdict == .green)
     #expect(report.runReport == nil)
-    #expect(report.runReportNote?.contains("no build run") == true, "\(report.runReportNote ?? "nil")")
+    #expect(
+      report.runReportNote?.contains("no build run") == true, "\(report.runReportNote ?? "nil")")
   }
 
   @Test("next with no build run exits 2 — catches a budget measured from no start time")

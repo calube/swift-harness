@@ -15,7 +15,8 @@ public enum RunViewBuilder {
       .compactMap { $0 }.min()
     let lastTime = times.max()
     let state: RunView.RunState =
-      !BuildHalts.open(in: events).isEmpty ? .halted : join.finalGate == nil ? .running : .done
+      !BuildHalts.open(in: events).isEmpty
+      ? .halted : endOfRun(ledgerEvents) == nil ? .running : .done
     let runEnd = state == .done ? lastTime : nil
 
     let runSpan = RunViewSpans.runSpan(start: startedAt, state: state, end: lastTime, join: join)
@@ -66,6 +67,17 @@ public enum RunViewBuilder {
     RunViewGateFailures.fill(&view, input: input, events: events)
     RunViewFailureReasons.fill(&view, input: input)
     return view
+  }
+
+  /// When the run ended: its newest ledger event is `build finish`'s, so nothing resumed after
+  /// it. A log written before `build finish` recorded its end ends at a GREEN final gate
+  /// instead; any other newest event, a red final's fix loop included, means it still runs.
+  static func endOfRun(_ events: [BuildEvent]) -> Date? {
+    switch events.last {
+    case .finish(let finish): finish.at
+    case .gate(let gate) where gate.stage == .final && gate.verdict == .green: gate.at
+    default: nil
+    }
   }
 
   /// An event read from 2 stores counts once.

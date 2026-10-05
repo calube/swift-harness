@@ -293,7 +293,8 @@ struct ViewCommandTests {
     let first = try await fetch("/view.json")
     let unwritten = (first["unwritten"] as? [[String: Any]]) ?? []
     #expect(unwritten.contains { ($0["source"] as? String)?.hasSuffix("events.jsonl") == true })
-    #expect(!((first["spans"] as? [[String: Any]]) ?? []).contains { $0["phase"] as? String == "task" })
+    #expect(
+      !((first["spans"] as? [[String: Any]]) ?? []).contains { $0["phase"] as? String == "task" })
     let cursor = try #require(first["cursor"] as? String)
 
     try captured.write(to: log)

@@ -159,7 +159,9 @@ struct RunViewCursorTests {
   func clearedRowsSendTheWholeList() {
     var old = Self.view(cursor: "c1-old")
     old.damage = [RunView.Damage(source: ".harness/events/gate.jsonl:4", reason: "torn last line")]
-    old.unwritten = [RunView.Damage(source: "plans/p/build/r/events.jsonl", reason: "not written yet")]
+    old.unwritten = [
+      RunView.Damage(source: "plans/p/build/r/events.jsonl", reason: "not written yet")
+    ]
     let new = Self.view(cursor: "c1-new")
 
     let changes = RunViewChanges.between(old, new)
@@ -167,7 +169,9 @@ struct RunViewCursorTests {
     #expect(changes.unwritten == [])
 
     var kept = new
-    kept.damage = [RunView.Damage(source: "a", reason: "b"), RunView.Damage(source: "c", reason: "d")]
+    kept.damage = [
+      RunView.Damage(source: "a", reason: "b"), RunView.Damage(source: "c", reason: "d"),
+    ]
     var grown = kept
     grown.damage.append(RunView.Damage(source: "e", reason: "f"))
     #expect(RunViewChanges.between(kept, grown).damage == grown.damage)

@@ -94,7 +94,8 @@ struct ReportWholeTests {
     let fixAt = Date(timeIntervalSince1970: 1_790_000_000 + 30_000_000)
     try Self.append(
       .transition(
-        .init(task: "counter-core-reset-and-decrement-floor", from: .done, to: .inProgress, at: fixAt)),
+        .init(
+          task: "counter-core-reset-and-decrement-floor", from: .done, to: .inProgress, at: fixAt)),
       to: repository)
     let resumed = try #require(try Self.view(repository)["run"] as? [String: Any])
     #expect(resumed["state"] as? String == "running")

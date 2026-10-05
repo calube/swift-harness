@@ -107,7 +107,8 @@ enum ReportRun {
       return blocked("\(error)")
     }
     guard input.join != nil else { return blocked("no plan holds build run `\(buildRun)`") }
-    let view = RunViewBuilder.build(input)
+    var view = RunViewBuilder.build(input)
+    if view.run.state != .done { view.run.snapshotAt = now }
     let json: Data
     do {
       if let rejection = try RunViewGuard.rejection(of: view) { return blocked("\(rejection)") }
