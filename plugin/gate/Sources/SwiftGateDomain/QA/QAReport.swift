@@ -26,6 +26,9 @@ public struct QAReport: Sendable, Equatable {
   public let settled: Bool
   /// The commit the rows ran at; `nil` when none ran.
   public let commit: String?
+  /// The absolute path of the `at-base-run.json` a `--prepared-by` run wrote; `nil` when it wrote
+  /// none.
+  public let atBaseRecord: String?
   public let verdict: Verdict
   public let rows: [QARow]
   /// The table's requirements left to unit tests with only a reason, which no check runs.
@@ -43,7 +46,8 @@ public struct QAReport: Sendable, Equatable {
   public init(
     runID: String, plan: String, after: String?, atBase: Bool, final: Bool = false,
     settled: Bool = false, commit: String?, rows: [QARow], gaps: [QAEvidenceGap] = [],
-    notes: [String] = [], reasonOnly: Int = 0, checkableRows: Int? = nil
+    notes: [String] = [], reasonOnly: Int = 0, checkableRows: Int? = nil,
+    atBaseRecord: String? = nil
   ) {
     let unverifiable = checkableRows == 0 && !atBase
     let findings =
@@ -67,7 +71,7 @@ public struct QAReport: Sendable, Equatable {
       }
     self.init(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
-      commit: commit,
+      commit: commit, atBaseRecord: atBaseRecord,
       verdict: findings.contains { $0.severity.failsGate } ? .red : .green, rows: rows,
       reasonOnly: reasonOnly, findings: findings, notes: notes, message: message)
   }
@@ -97,8 +101,8 @@ public struct QAReport: Sendable, Equatable {
 
   private init(
     runID: String?, plan: String?, after: String?, atBase: Bool, final: Bool, settled: Bool,
-    commit: String?, verdict: Verdict, rows: [QARow], reasonOnly: Int = 0, findings: [Finding],
-    notes: [String], message: String
+    commit: String?, atBaseRecord: String? = nil, verdict: Verdict, rows: [QARow],
+    reasonOnly: Int = 0, findings: [Finding], notes: [String], message: String
   ) {
     self.schemaVersion = Self.currentSchemaVersion
     self.runID = runID
@@ -108,6 +112,7 @@ public struct QAReport: Sendable, Equatable {
     self.final = final
     self.settled = settled
     self.commit = commit
+    self.atBaseRecord = atBaseRecord
     self.verdict = verdict
     self.rows = rows
     self.reasonOnly = reasonOnly
@@ -142,8 +147,8 @@ public struct QAReport: Sendable, Equatable {
   public func adding(notes more: [String]) -> QAReport {
     QAReport(
       runID: runID, plan: plan, after: after, atBase: atBase, final: final, settled: settled,
-      commit: commit, verdict: verdict, rows: rows, reasonOnly: reasonOnly, findings: findings,
-      notes: notes + more, message: message)
+      commit: commit, atBaseRecord: atBaseRecord, verdict: verdict, rows: rows,
+      reasonOnly: reasonOnly, findings: findings, notes: notes + more, message: message)
   }
 
   /// 1 finding per row that fails or can't be trusted. At the merge base a red row is the point,
@@ -200,8 +205,8 @@ extension QAReport {
 
 extension QAReport: Codable {
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, runID, plan, after, atBase, final, settled, commit, verdict, rows,
-      reasonOnly, findings, notes, message
+    case schemaVersion, runID, plan, after, atBase, final, settled, commit, atBaseRecord, verdict,
+      rows, reasonOnly, findings, notes, message
   }
 
   public init(from decoder: any Decoder) throws {
@@ -221,6 +226,8 @@ extension QAReport: Codable {
       // Reports written before a run knew the build had ended hold no key.
       settled: try c.decodeIfPresent(Bool.self, forKey: .settled) ?? false,
       commit: try c.decodeIfPresent(String.self, forKey: .commit),
+      // Reports written before a prepared run named its record hold no key.
+      atBaseRecord: try c.decodeIfPresent(String.self, forKey: .atBaseRecord),
       verdict: try c.decode(Verdict.self, forKey: .verdict),
       rows: try c.decode([QARow].self, forKey: .rows),
       // Reports written before reason-only rows were counted hold no key.
@@ -241,6 +248,7 @@ extension QAReport: Codable {
     try c.encode(final, forKey: .final)
     try c.encode(settled, forKey: .settled)
     try c.encode(commit, forKey: .commit)
+    try c.encode(atBaseRecord, forKey: .atBaseRecord)
     try c.encode(verdict, forKey: .verdict)
     try c.encode(rows, forKey: .rows)
     try c.encode(reasonOnly, forKey: .reasonOnly)
