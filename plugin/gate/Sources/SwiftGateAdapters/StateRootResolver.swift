@@ -12,6 +12,17 @@ import SwiftGateDomain
 public enum StateRootResolver {
   /// Relative to the git common dir.
   public static let commonConfigFile = "\(RunLayout.gitDirDirectory)/config.toml"
+  /// Relative to the git common dir: ``CommittedConfigSetAside``'s record.
+  public static let setAsideFile =
+    "\(RunLayout.gitDirDirectory)/\(CommittedConfigSetAside.fileName)"
+
+  /// Whether the clone whose common dir is `commonDir` runs the brownfield profile over a
+  /// committed `.swiftgate.toml`: its `config.toml` and the set-aside record both exist.
+  public static func setsAsideCommittedConfig(commonDir: URL) -> Bool {
+    let files = FileManager.default
+    return files.fileExists(atPath: commonDir.appending(path: commonConfigFile).path)
+      && files.fileExists(atPath: commonDir.appending(path: setAsideFile).path)
+  }
 
   public static func resolve(worktree: URL) -> StateRoot {
     let files = FileManager.default
