@@ -87,6 +87,16 @@ Default to `verified: false` when you can't trace a defect to a concrete wrong o
 find the cited rule and the quoted code. A dropped real finding costs one review round; a verified
 false one costs an engineer's afternoon and the panel's credibility.
 
+### Sibling tasks
+
+A build task's prompt may list sibling tasks, each with its write set: the plan's tasks building
+beside this one, whose code on this branch is the plan's stubs or absent. Set `deferred_to` to a
+sibling's id on a `defect` only when the test or fix it asks for could pass only once that sibling
+merges: its failure scenario runs through code in that sibling's write set. Still verify the
+finding on its merits and keep its severity. Never defer a standards violation, or a gap in this
+task's own code: a finding about the task's wiring that a test could pin today stays as it is.
+A deferred finding never blocks the task; its return records the deferral for the build.
+
 ## Design findings
 
 These come from the design review panel. Each is about a design doc, not code: `location.anchor`

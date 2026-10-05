@@ -82,10 +82,7 @@ const tests = {
     }
   },
 
-  'the contract, the verifier and the build reviewers state when a finding defers to a sibling task, and that a standards violation or the task\'s own behaviour never does — catches a build task review-blocked for a test only a parallel task\'s code could make pass'() {
-    assert.match(contract, /## Deferred to a sibling task/, 'the contract has no deferral section')
-    assert.match(contract, /`deferred_to`/, 'the contract never names deferred_to')
-    assert.match(contract, /never blocks/, 'the contract does not say a deferral never blocks')
+  'the verifier and the build reviewers state when a finding defers to a sibling task, and that a standards violation or the task\'s own behaviour never does — catches a build task review-blocked for a test only a parallel task\'s code could make pass'() {
     const verifier = read('agents/verifier.md')
     assert.match(verifier, /`deferred_to`/, 'verifier.md never names deferred_to')
     assert.match(verifier, /could pass only once that sibling merges/, 'verifier.md lacks the deferral test')

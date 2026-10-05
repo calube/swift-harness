@@ -379,11 +379,11 @@ function assertTaskReturn(result, mode) {
 }
 
 // A screen task built in parallel with an engine task, both on the plan contract's stubs: its
-// second review round asked for a test of behaviour only the engine's write set builds.
+// second review captured asked for a test of behaviour only the engine's write set builds.
 const siblingStub = name => JSON.parse(readFileSync(join(root, `gate/Tests/Fixtures/BuildReturn/sibling-stub/${name}.json`), 'utf8'))
 const siblingStubRun = () => {
   const [engine, screen] = siblingStub('ledger-tasks')
-  const round = siblingStub('second-round')
+  const captured = siblingStub('second-review')
   const args = brownfieldArgs({
     task: screen.id,
     plan: 'spec',
@@ -393,10 +393,10 @@ const siblingStubRun = () => {
     base: 'swift-harness/spec',
   })
   const worker = brownfieldReturn({ task: screen.id, commits: ['0e29ba9', '36eaada'] })
-  return { engine, screen, round, args, worker, siblings: [{ task: engine.id, writeSet: engine.writeSet }] }
+  return { engine, screen, captured, args, worker, siblings: [{ task: engine.id, writeSet: engine.writeSet }] }
 }
 // The captured verifier answer, each entry deferred to `task` as the verifier would mark it.
-const deferredTo = (round, task) => () => ({ findings: round.verify.findings.map(f => ({ ...f, deferred_to: task })) })
+const deferredTo = (captured, task) => () => ({ findings: captured.verify.findings.map(f => ({ ...f, deferred_to: task })) })
 const SIBLING_HEADING = 'Sibling tasks'
 
 const tests = {
@@ -1456,11 +1456,11 @@ const tests = {
   },
 
 
-  async "the captured sibling-stub round: a verified major the verifier defers to the listed engine sibling neither blocks nor starts a fix pass, and the return records the deferral — catches the 345 s review-blocked halt and retry a test only the sibling's code could make pass cost"() {
-    const { engine, round, args, worker, siblings } = siblingStubRun()
+  async "the captured sibling-stub review: a verified major the verifier defers to the listed engine sibling neither blocks nor starts a fix pass, and the return records the deferral — catches the 345 s review-blocked halt and retry a test only the sibling's code could make pass cost"() {
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
     const { result, workerCalls, reviewerCalls, verifyCalls } = await run(
       { ...args, siblings },
-      { workers: [worker], diffRisk: judged('medium'), reviews: { 'test-quality': [round.review] }, verifies: { 'test-quality': [deferredTo(round, engine.id)] } },
+      { workers: [worker], diffRisk: judged('medium'), reviews: { 'test-quality': [captured.review] }, verifies: { 'test-quality': [deferredTo(captured, engine.id)] } },
     )
     assert.equal(workerCalls.length, 1, 'a fix pass ran for a deferred finding')
     assertTaskReturn(result, 'classified')
@@ -1479,13 +1479,13 @@ const tests = {
     assert.deepEqual(deferral?.enum, [engine.id], 'the verifier schema offers no deferral to the listed sibling')
   },
 
-  async "the captured sibling-stub round with no siblings listed still blocks, and its fix pass is handed the finding — catches the deferral loosening review for a task that builds alone"() {
-    const { round, args, worker } = siblingStubRun()
+  async "the captured sibling-stub review with no siblings listed still blocks, and its fix pass is handed the finding — catches the deferral loosening review for a task that builds alone"() {
+    const { captured, args, worker } = siblingStubRun()
     const { result, workerCalls, reviewerCalls, verifyCalls } = await run(args, {
       workers: [worker, worker],
       diffRisk: judged('medium'),
-      reviews: { 'test-quality': [round.review, round.review] },
-      verifies: { 'test-quality': [deferredTo(round, 'spec-engine'), deferredTo(round, 'spec-engine')] },
+      reviews: { 'test-quality': [captured.review, captured.review] },
+      verifies: { 'test-quality': [deferredTo(captured, 'spec-engine'), deferredTo(captured, 'spec-engine')] },
     })
     assert.equal(workerCalls.length, 2, 'no fix pass for a verified major')
     assert.equal(result.outcome, 'review-blocked')
@@ -1496,12 +1496,12 @@ const tests = {
   },
 
   async "a deferral to a task that isn't a listed sibling, of a standards violation, or of an unverified finding, never defers — catches a verifier excusing the task's own behaviour"() {
-    const { engine, round, args, worker, siblings } = siblingStubRun()
-    const violation = { ...round.review.findings[0], kind: 'standards-violation', rule: 'P9' }
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
+    const violation = { ...captured.review.findings[0], kind: 'standards-violation', rule: 'P9' }
     const cases = [
-      { review: round.review, verify: deferredTo(round, 'spec-contract'), blocks: true },
+      { review: captured.review, verify: deferredTo(captured, 'spec-contract'), blocks: true },
       { review: { findings: [violation] }, verify: findings => ({ findings: findings.map(f => ({ ...f, verified: true, verification_note: 'rule applies', deferred_to: engine.id })) }), blocks: true },
-      { review: round.review, verify: findings => ({ findings: findings.map(f => ({ ...f, verified: false, verification_note: 'not traced', deferred_to: engine.id })) }), blocks: false },
+      { review: captured.review, verify: findings => ({ findings: findings.map(f => ({ ...f, verified: false, verification_note: 'not traced', deferred_to: engine.id })) }), blocks: false },
     ]
     for (const [i, c] of cases.entries()) {
       const { result, workerCalls } = await run(
@@ -1516,15 +1516,15 @@ const tests = {
   },
 
   async 'a deferred finding beside a blocking one still sends only the blocking one to the fix pass, and the deferral survives into the final return — catches a fix pass told to write a test it cannot make pass'() {
-    const { engine, round, args, worker, siblings } = siblingStubRun()
+    const { engine, captured, args, worker, siblings } = siblingStubRun()
     const own = finding({ file: args.writeSet[0], line: 54, title: 'tick never asserted', category: 'would-not-fail' })
-    const review = { findings: [round.review.findings[0], own] }
+    const review = { findings: [captured.review.findings[0], own] }
     const verify = findings => ({
       findings: findings.map(f => ({ ...f, verified: true, verification_note: 'traced', ...(f.title === own.title ? {} : { deferred_to: engine.id }) })),
     })
     const { result, workerCalls } = await run(
       { ...args, siblings },
-      { workers: [worker, worker], diffRisk: judged('medium'), reviews: { 'test-quality': [review, { findings: [round.review.findings[0]] }] }, verifies: { 'test-quality': [verify, verify] } },
+      { workers: [worker, worker], diffRisk: judged('medium'), reviews: { 'test-quality': [review, { findings: [captured.review.findings[0]] }] }, verifies: { 'test-quality': [verify, verify] } },
     )
     assert.equal(workerCalls.length, 2)
     const fixFindings = JSON.parse(workerCalls[1].prompt.slice(workerCalls[1].prompt.indexOf('{', workerCalls[1].prompt.indexOf('Earlier return and findings')))).findings
