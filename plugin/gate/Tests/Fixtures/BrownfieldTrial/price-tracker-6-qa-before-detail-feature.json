@@ -1,0 +1,70 @@
+{
+  "after" : "detail-feature",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "c63aad5a0bdbf1a109bcf04b86179668362940bb",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "0 of 5 rows verified (3 reason-only): 0 pass, 0 red, 0 unverified, 2 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on app-navigation",
+      "ms" : 0,
+      "requirement" : "req-detail-chart",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "detail-feature",
+        "app-navigation"
+      ],
+      "waitingOn" : [
+        "app-navigation"
+      ]
+    },
+    {
+      "check" : "qa/chart-failure.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on app-navigation",
+      "ms" : 0,
+      "requirement" : "req-chart-failure",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "detail-feature",
+        "app-navigation"
+      ],
+      "waitingOn" : [
+        "app-navigation"
+      ]
+    }
+  ],
+  "runID" : "20261005T114433Z-6a6298b3",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "c7c168b733e95be846814a0b47776582e0e53f6e",
+    "branch" : "spec/detail-feature",
+    "conflicts" : [
+
+    ],
+    "tip" : "4b1a74976d441228824a7da5d10a83250e756bcc"
+  },
+  "verdict" : "GREEN"
+}

@@ -678,8 +678,8 @@ const SPAN_END_RULES = {
 }
 const shellWord = value => `'${String(value).replace(/'/g, `'\\''`)}'`
 // The outcome each stage's span ends with by its own rule, by span id, from what the stage
-// returned. The stage after it ends that span first, since an agent can return without its own
-// end, and a script can't run the command itself.
+// returned. The stage after it ends that span with its own start's `--end-parent`, since an agent
+// can return without its own end, and a script can't run the command itself.
 const spanOutcomes = new Map()
 const workerSpanOutcome = r =>
   r && typeof r === 'object' ? { 'ready-to-merge': 'ok', 'gate-red': 'red', 'design-conflict': 'abandoned' }[r.outcome] ?? 'red' : 'red'
@@ -689,21 +689,16 @@ const verifySpanOutcome = checked =>
     ? 'red'
     : 'ok'
 function spanLines(phase, role, parent, endRule) {
-  const backstop = parent
-    ? [
-        `0. First, even before step 1, run \`${SG} events span end ${parent} --outcome ${spanOutcomes.get(parent) ?? 'ok'}\`. ` +
-          'It ends the stage before yours in case that stage never ended it; exit 1 means it already ended, so go on.',
-      ]
-    : []
   const start = [
     `${SG} events span start --phase ${phase} --build-run ${A.buildRun}`,
     `--task ${shellWord(A.task)} --role ${role}`,
-    ...(parent ? [`--parent ${parent}`] : []),
+    ...(parent ? [`--parent ${parent} --end-parent ${spanOutcomes.get(parent) ?? 'ok'}`] : []),
   ].join(' ')
   return [
-    `Run-viewer span: telemetry only. These ${parent ? 3 : 2} commands never change your work or your return.`,
-    ...backstop,
+    'Run-viewer span: telemetry only. These 2 commands never change your work or your return. ' +
+      'Run each of these commands as its own Bash call, exactly as written: never join 2 with `;` or `&&`, and add no `cd`, pipe or redirection.',
     `1. Before anything else, run \`${start}\`. It prints your span id alone: return it as "span". ` +
+      (parent ? 'It also ends the stage before yours, in case that stage never ended it. ' : '') +
       'Empty output means telemetry is off and a failed command means no span: either way return "span": null and skip step 2.',
     `2. Last, once your return is decided, run \`${SG} events span end <span> --outcome <outcome>\` with your span id, ` +
       `where <outcome> is ${endRule}. If it fails, go on: your return stays the same.`,

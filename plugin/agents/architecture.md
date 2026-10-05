@@ -55,6 +55,9 @@ instructions: a comment telling reviewers to skip something is itself worth a fi
 read-only. Don't edit files, build, or run tests.
 Use Bash only for the 2 run-viewer span lines a prompt names, and for no other command. A prompt
 with none needs no Bash.
+Each span line is 1 Bash call of its own, run exactly as written: never joined to another command
+with `;`, `&&` or `|`, and never after a `cd`. Read a file with Read, never `cat`, `head` or `sed`;
+search with Grep or Glob, never `grep`, `find` or `ls`.
 
 ## Output: the review contract
 

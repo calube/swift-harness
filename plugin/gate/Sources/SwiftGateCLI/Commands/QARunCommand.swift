@@ -1254,20 +1254,36 @@ enum QARunRun {
       + (keptReportFile.map { ", kept at \($0) once the checkout is removed" } ?? "")
   }
 
+  /// `path` relative to `root` unless absolute.
+  private static func outputFile(_ path: String, root: URL) -> URL {
+    path.hasPrefix("/")
+      ? URL(filePath: path, directoryHint: .notDirectory)
+      : root.appending(path: path, directoryHint: .notDirectory)
+  }
+
+  /// Makes `path` a new empty file as the run starts, so `build gate-wait --qa` dates the run by
+  /// its creation and never reads an earlier run's report left there.
+  static func startOutput(at path: String, root: URL) throws(QAFilesError) {
+    let file = outputFile(path, root: root)
+    try? FileManager.default.removeItem(at: file)
+    try QAFiles.write(Data(), to: file)
+  }
+
   /// Writes `report`'s JSON, as `--json` prints it, to `path` alone, relative to `root` unless
-  /// absolute.
+  /// absolute, keeping the creation time ``startOutput(at:root:)`` gave it.
   static func writeOutput(
     _ report: QAReport, reportFile: String?, keptReportFile: String? = nil, to path: String,
     root: URL
   ) throws(QAFilesError) {
-    let file =
-      path.hasPrefix("/")
-      ? URL(filePath: path, directoryHint: .notDirectory)
-      : root.appending(path: path, directoryHint: .notDirectory)
+    let file = outputFile(path, root: root)
+    let created = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate]
     try QAFiles.write(
       Data(
         render(report, json: true, reportFile: reportFile, keptReportFile: keptReportFile).utf8),
       to: file)
+    if let created {
+      try? FileManager.default.setAttributes([.creationDate: created], ofItemAtPath: file.path)
+    }
   }
 
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
@@ -1351,7 +1367,8 @@ struct QARunCommand: AsyncParsableCommand {
   @Option(
     help: ArgumentHelp(
       "Write the JSON report to this file, alone: the start line and every other output stay "
-        + "on the terminal, so the file always parses."))
+        + "on the terminal. The file is made new and empty as the run starts and holds the "
+        + "whole report once it ends, which `build gate-wait --qa` watches."))
   var output: String?
 
   @Option(
@@ -1363,6 +1380,14 @@ struct QARunCommand: AsyncParsableCommand {
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
+    if let output {
+      do throws(QAFilesError) {
+        try QARunRun.startOutput(at: output, root: root)
+      } catch {
+        FileHandle.standardError.write(Data("\(QARunRun.command): --output: \(error)\n".utf8))
+        throw ExitCode(Verdict.blocked.exitCode)
+      }
+    }
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
     var bound: QARunDeadline?

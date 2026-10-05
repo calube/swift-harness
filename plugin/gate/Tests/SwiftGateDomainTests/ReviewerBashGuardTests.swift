@@ -20,6 +20,7 @@ struct ReviewerBashGuardTests {
     arguments: [
       start, end,
       "\"$SG\" events span start --phase verify --build-run r1 --task t --role review",
+      start + " --end-parent ok", start + " --end-parent=red",
       "$SG events span end 0123456789abcdef --outcome red",
       "${SG} events span end 0123456789abcdef --outcome=ok",
       "  \(end)  ",

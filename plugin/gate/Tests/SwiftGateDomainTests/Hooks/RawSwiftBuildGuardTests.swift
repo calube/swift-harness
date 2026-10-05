@@ -15,7 +15,7 @@ struct RawSwiftBuildGuardTests {
     gitDir: URL(filePath: "/CLONE/.git/worktrees/repo-spec", directoryHint: .isDirectory))
 
   @Test(
-    "each of the trial orchestrator's 4 contract-phase swift builds, which built cold in each package's own .build for 33 s and 177 s, is denied as guard.raw-swift-build naming the slice gate, test-only with the --area it needs and the clone's shared scratch path — catches a build that skips the warm scratch path the slice gate then builds in 9 s"
+    "each of the trial orchestrator's 4 contract-phase swift builds, which built cold in each package's own .build for 33 s and 177 s, is denied as guard.raw-swift-build naming the slice gate, test-only with the --area it needs in the `<Target>.<Suite>` form a swiftpm filter matches, and the clone's shared scratch path — catches a build that skips the warm scratch path the slice gate then builds in 9 s"
   )
   func capturedContractBuildsDenied() throws {
     let calls = try JSONDecoder().decode(
@@ -29,8 +29,8 @@ struct RawSwiftBuildGuardTests {
       #expect(violation.ruleID == BrownfieldBuildGuard.rawSwiftBuildRuleID)
       #expect(violation.reason.contains("--tier slice"), "\(violation.reason)")
       #expect(
-        violation.reason.contains("`\"$SG\" test-only --area <area> <Target>/<Class>`"),
-        "the form test-only takes when several areas run tests: \(violation.reason)")
+        violation.reason.contains("`\"$SG\" test-only --area <area> <Target>.<Suite>[/<test>]`"),
+        "the form a swiftpm area's filter takes: \(violation.reason)")
       #expect(
         violation.reason.contains(
           "--scratch-path /CLONE/.git/swift-harness/caches/swiftpm-scratch/"),

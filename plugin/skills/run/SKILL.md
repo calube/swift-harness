@@ -81,7 +81,11 @@ the foreground, with the Bash tool's `timeout` at 600000, its longest. Never pas
 The merge gates and `final` are the exception, since a hung test can hold one for an hour. Each
 runs with `run_in_background: true`, its JSON redirected to `<out>`. Then `"$SG" build gate-wait`
 holds the turn in the foreground until it ends or overruns its deadline, as the build loop's
-[merge gate watch](../build/references/event-loop.md#merge-gate-watch) says.
+[merge gate watch](../build/references/event-loop.md#merge-gate-watch) says. The `--at-base` and
+before-merge `qa run`s, which hold a device for minutes, run the same way with
+`--output <out>/qa-<name>.json`, watched by `build gate-wait --qa`, as its
+[qa run watch](../build/references/event-loop.md#qa-run-watch) says, so a worker's return is
+checked while they run.
 The other background work in a run is the Workflow and Agent tool calls, which keep the session
 alive until they return; no timer runs beside them. Every Agent tool call, each explorer, the validation worker and the merge fixer,
 passes `run_in_background: true`: a foreground one blocks every merge and start until it returns.
@@ -288,8 +292,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `"$SG" ledger set <slug> <task> done --session <session> --json` and
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
-        `"$SG" qa run --plan <slug> --at-base --json` in `<checkout>`, in the foreground like every
-        gate, though a flow row boots a leased device. This `--at-base` run is never skipped, and
+        `"$SG" qa run --plan <slug> --at-base --json --output <out>/qa-at-base.json` in
+        `<checkout>`, in the background under the qa run watch. This `--at-base` run is never skipped, and
         no task that a row's `Runs after` names merges before it has run: such a task that
         finishes first keeps its checked return and merges once this run is done. It takes each
         row the worker's `--prepared-by` run proved from the `at-base-run.json` the adopt copied
@@ -314,8 +318,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      frees the merges waiting on item 3; its rows have no checks, so `qa run` reads them red and
      the report quotes them.
    - **Validate before each merge**, as [the build loop's before-merge step](../build/references/event-loop.md#before-each-merge)
-     says: before `build merge`, `"$SG" qa run --plan <slug> --after <task> --before-merge --json`
-     in `<checkout>` runs the rows that merge makes ready, acceptance, then flow, then state, on
+     says: before `build merge`,
+     `"$SG" qa run --plan <slug> --after <task> --before-merge --json --output <out>/qa-<task>.json`
+     in `<checkout>`, in the background under the qa run watch, runs the rows that merge makes ready, acceptance, then flow, then state, on
      the task's branch merged into `<plan-branch>` in a scratch tree; `<plan-branch>` doesn't
      move. `build merge` refuses `flows-unchecked` until that run is GREEN at the branch's tip.
      A row whose other tasks all have checked returns waiting to merge runs before the first of
@@ -506,5 +511,6 @@ a failed summary prints 1 line. Merging
   call is the 1 exception: that tool takes only aliases.
 - Every gate is a `swiftgate` command. Never hand-write a check or read a gate's verdict from its
   exit status alone; read its JSON, kept under `<out>` when kept in a file.
-- Gates and `qa run` run in the foreground, except the merge gates and `final`, which run in the
-  background while `build gate-wait` watches them in the foreground (Foreground work).
+- Gates and `qa run` run in the foreground, except the merge gates, `final` and the `--at-base`
+  and before-merge `qa run`s, which run in the background while `build gate-wait` watches them
+  in the foreground (Foreground work).
