@@ -230,8 +230,9 @@ struct WarmupCommand: AsyncParsableCommand {
   }
 
   /// Each xcode area's build in `checkout`, and each swiftpm area's into its prove scratch path,
-  /// then the same in each slot `slots` adds, those all at once: the plan checkout takes the
-  /// contract's build before any task takes a slot. Last, each xcode area's tests are built in
+  /// then the same in each slot `slots` adds, turn by turn (``Warmup/slotTurns(tasks:qa:)``): the
+  /// plan checkout takes the contract's build before any task takes a slot, and the contract's gate
+  /// shares the machine with 1 slot's builds at a time. Last, each xcode area's tests are built in
   /// `checkout`'s kept prove tree, where its merge gates prove, once nothing waits on the slots.
   private static func seed(
     areas: [BrownfieldArea], checkout: URL?, slots: @Sendable () async -> Slots,
@@ -253,18 +254,20 @@ struct WarmupCommand: AsyncParsableCommand {
     checkouts.slots = added.tasks
     checkouts.qaSlot = added.qa
     checkouts.notes += added.notes
-    async let app: QAAppBuild? = {
-      guard let slot = added.qa else { return nil }
-      return await qaApp(slot)
-    }()
-    let (builds, notes) = await build(
-      areas: areas, in: added.tasks, tree: tree, deadline: deadline, process: process,
-      runner: runner)
-    checkouts.builds += builds
-    checkouts.notes += notes
-    if let built = await app {
-      checkouts.builds += built.build.map { [$0] } ?? []
-      checkouts.notes += built.notes
+    for turn in Warmup.slotTurns(tasks: added.tasks, qa: added.qa) {
+      switch turn {
+      case .tasks(let paths):
+        let (builds, notes) = await build(
+          areas: areas, in: paths, tree: tree, deadline: deadline, process: process,
+          runner: runner)
+        checkouts.builds += builds
+        checkouts.notes += notes
+      case .qa(let slot):
+        if let built = await qaApp(slot) {
+          checkouts.builds += built.build.map { [$0] } ?? []
+          checkouts.notes += built.notes
+        }
+      }
     }
     if let checkout {
       let (builds, notes) = await buildProveTree(

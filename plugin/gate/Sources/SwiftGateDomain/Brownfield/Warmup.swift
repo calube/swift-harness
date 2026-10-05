@@ -215,6 +215,25 @@ public enum Warmup {
     maxParallel + 1
   }
 
+  /// 1 turn of the warm-up's slot builds: some task slots' builds, or the qa slot's app build.
+  public enum SlotTurn: Sendable, Equatable {
+    case tasks([String])
+    case qa(String)
+  }
+
+  /// How many task slots build at once.
+  public static let slotsAtOnce = 1
+
+  /// The order the warm-up builds the slots in, 1 turn after another: ``slotsAtOnce`` task slots
+  /// a turn, with the qa slot after the first turn.
+  public static func slotTurns(tasks: [String], qa: String?) -> [SlotTurn] {
+    var turns: [SlotTurn] = stride(from: 0, to: tasks.count, by: slotsAtOnce).map {
+      .tasks(Array(tasks[$0..<min($0 + slotsAtOnce, tasks.count)]))
+    }
+    if let qa { turns.insert(.qa(qa), at: min(1, turns.count)) }
+    return turns
+  }
+
   public struct Dependencies: Sendable {
     public let layout: BrownfieldStateLayout
     /// Absolute: the worktree's toplevel.
