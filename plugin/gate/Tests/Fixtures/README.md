@@ -5244,3 +5244,26 @@ head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-
 ```
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
+
+## Brownfield trial: a screen driven by a clock, with no held scenario
+
+`BrownfieldTrial/clock-screen-1-PLAN.md` is the `PLAN.md` a 2026-10-05 brownfield practice trial
+on the iOS app starter left at its run's end. Its screen task's reducer runs a repeating timer from
+the moment the view appears, its contract reads no `-harness-scenario`, its engine takes a seed,
+and its reason-only rows excuse each interaction with a moving entity as random. The launch flow
+row raced the timer and ended `unverified`. `S` is the trial's clone and `SCRUB` a rename script
+kept with the trial, not here:
+
+```sh
+python3 $SCRUB $S/.git/swift-harness/plans/spec/PLAN.md \
+  > plugin/gate/Tests/Fixtures/BrownfieldTrial/clock-screen-1-PLAN.md
+```
+
+The script renames each app-specific type, accessibility id, label, noun and requirement id to a
+generic one (`EngineCore`, `TargetFeature`, `TargetView`, `target.*`, `req-motion`, `req-cut-target`,
+`req-hazard`), and keeps the `slice` gate tier's name. Task ids, writes, line numbers, the table's
+shape, and each brief's and reason's words for the timer, the clock, the tick, the seed, `random`
+and `moving` are as captured. The clone's `config.toml` differs from
+`price-tracker-1-config.toml` only in `discovered_at`, and its base commit's tracked files equal
+`price-tracker-1-base-files.txt`, so the import test reads those 2.
+`grep -niE '/Users|/private|/var/folders|caleb'` on the file matched nothing.
