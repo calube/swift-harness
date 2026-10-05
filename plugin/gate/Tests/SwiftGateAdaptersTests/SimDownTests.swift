@@ -205,6 +205,59 @@ struct SimDownTests {
     #expect(Self.closes(agent).count == 1)
   }
 
+  /// An `agent-device` state directory under the test's root holding a folder per session name.
+  func stateDirectory(sessions: [String]) throws -> URL {
+    let state = root.appending(path: "agent-device", directoryHint: .isDirectory)
+    for name in sessions {
+      let folder = state.appending(path: "sessions/\(name)", directoryHint: .isDirectory)
+      try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+      try Data("runner\n".utf8).write(to: folder.appending(path: "runner.log"))
+    }
+    return state
+  }
+
+  func sessionFolderExists(_ state: URL, _ name: String) -> Bool {
+    FileManager.default.fileExists(atPath: state.appending(path: "sessions/\(name)").path)
+  }
+
+  @Test(
+    "sim down deletes the folder agent-device kept for the run's closed session, by its exact name, and leaves every other session's folder, a later row of the same run included — catches session folders piling up after every qa run, or a cleanup that sweeps another run's"
+  )
+  func closedSessionFolderRemoved() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let others = ["\(Self.session)-row2", "qa-par-p1", "cwd_9bef56ac4371b83e_ios"]
+    let state = try stateDirectory(sessions: [Self.session] + others)
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent()
+    agent.update { $0.stateDirectory = state.path }
+    let (lease, process, holding) = try await startHolder(simctl, agent: agent)
+
+    let result = await down(agent, simctl: simctl, isAlive: process.isAlive)
+
+    #expect(try result.get().outcome == .released(runID: Self.runID, udid: lease.udid))
+    #expect(!sessionFolderExists(state, Self.session))
+    for other in others { #expect(sessionFolderExists(state, other), "\(other)") }
+    #expect(try await holding.value.end == .released)
+  }
+
+  @Test(
+    "a session agent-device still lists after close keeps its folder — catches a cleanup that deletes the state of a session that is still open"
+  )
+  func openSessionFolderKept() async throws {
+    defer { try? FileManager.default.removeItem(at: root) }
+    let state = try stateDirectory(sessions: [Self.session])
+    let simctl = FakeSimctl(devices: [Self.base])
+    let agent = Self.agent(closeEndsSession: false)
+    agent.update { $0.stateDirectory = state.path }
+    let (_, process, holding) = try await startHolder(simctl, agent: agent)
+
+    let failure = Self.failure(await down(agent, simctl: simctl, isAlive: process.isAlive))
+
+    #expect(failure?.rule == .driverFailed)
+    #expect(sessionFolderExists(state, Self.session))
+    await finish(holding)
+  }
+
   @Test(
     "a session still listed after close is BLOCKED sim.driver-failed, though the device is still given back — catches a sim down that reports success with the session left open"
   )
