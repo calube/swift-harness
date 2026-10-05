@@ -1,0 +1,12 @@
+Test session results, code coverage, and logs:
+	/TRIAL/repo/.git/worktrees/repo-spec/swift-harness/runs/20261005T010428Z-75c783e4/qa/02-req-status-text.acceptance.xcresult
+
+** TEST SUCCEEDED **
+
+Testing started
+
+--- stderr ---
+2026-10-04 20:06:08.663 xcodebuild[45299:83064861] [MT] IDETestOperationsObserverDebug: 39.142 elapsed -- Testing started completed.
+2026-10-04 20:06:08.663 xcodebuild[45299:83064861] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-04 20:06:08.663 xcodebuild[45299:83064861] [MT] IDETestOperationsObserverDebug: 39.142 sec, +39.142 sec -- end
+
