@@ -121,7 +121,7 @@
       const label = `step ${st.n}${st.label != null ? " " + st.label : ""}, ${st.ok ? "passed" : "failed"}, ${(st.offsetMs / 1000).toFixed(1)} s`;
       const attrs = `class="tl-tick ${st.ok ? "ok" : "bad"}" data-span="${esc(s.id)}" data-n="${st.n}" style="left:${pct(at)}%" title="${esc(label)}" aria-label="${esc(label)}"`;
       return f.video != null
-        ? `<a ${attrs} href="${esc(M.evidenceHref(f.run, f.video, st.offsetMs))}" target="_blank" rel="noopener"></a>`
+        ? `<a ${attrs} href="${esc(M.evidenceHref(f.run, f.video, st.offsetMs, view.evidenceBase))}" target="_blank" rel="noopener"></a>`
         : `<span ${attrs} role="img"></span>`;
     }).join("");
   }

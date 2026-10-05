@@ -433,10 +433,11 @@
       .concat(badge("waiting", "plain", c.waiting, c.waiting + " waiting", c.waiting + " validation " + plural(c.waiting, "row") + " waiting on a task"));
   }
 
-  // A link to a file a run left, relative to the page: a report sits in `reports/` beside
-  // `runs/`, and the live page at `/` reaches `/runs/`. With `offsetMs` it opens the video there.
-  function evidenceHref(run, path, offsetMs) {
-    const href = "../runs/" + encodeURIComponent(run) + "/" + String(path).split("/").map(encodeURIComponent).join("/");
+  // A link to a file a run left, relative to the page: a report's folder keeps a copy under its
+  // view's `evidenceBase`, and the live page at `/` reaches `/runs/`. With `offsetMs` it opens the
+  // video there.
+  function evidenceHref(run, path, offsetMs, base) {
+    const href = (base || "../runs/") + encodeURIComponent(run) + "/" + String(path).split("/").map(encodeURIComponent).join("/");
     return offsetMs == null ? href : href + "#t=" + Math.max(0, offsetMs) / 1000;
   }
 

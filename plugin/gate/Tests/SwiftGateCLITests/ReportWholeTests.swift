@@ -211,7 +211,8 @@ struct ReportWholeTests {
     let html = try String(contentsOf: folder.appending(path: "index.html"), encoding: .utf8)
     let block = try ReportCommandTests.dataBlock(html)
     let stored = try String(contentsOf: folder.appending(path: "view.json"), encoding: .utf8)
-    #expect(block == stored)
+    // The page escapes `<` and friends inside its data block, so the 2 compare as JSON.
+    #expect(NSDictionary(dictionary: try Self.object(block)).isEqual(to: try Self.object(stored)))
     var embedded = try Self.object(block)
     #expect(embedded["evidenceBase"] as? String == "runs/")
     embedded["evidenceBase"] = NSNull()
@@ -230,7 +231,9 @@ struct ReportWholeTests {
       Self.run(repository, .html, buildRun: nil, from: folderPath)
         == .wrote(path: "\(folderPath)/index.html"))
     let again = try String(contentsOf: folder.appending(path: "index.html"), encoding: .utf8)
-    #expect(try ReportCommandTests.dataBlock(again) == stored)
+    #expect(
+      NSDictionary(dictionary: try Self.object(try ReportCommandTests.dataBlock(again)))
+        .isEqual(to: try Self.object(stored)))
     #expect(Self.files(under: folder) == expected)
   }
 
