@@ -332,6 +332,13 @@ merge and start until it returns. Keep `<agent>`, the id the launch result names
 - the plan slug and the task id;
 - `fixWorktree` and `fixBranch` from the `build merge` JSON;
 - the case: `conflicted` with `conflictedFiles`, or a clean merge that turned the merge gate red;
+- for red validation rows, each row's red evidence, quoted from the red run's `qa/report.json`
+  row and its files: the requirement's text, the `check`, the failing step's number and command,
+  what that step expected (its selector or value in the flow file) and what it observed (its
+  `message`), and the absolute paths of the row's `evidence` files, `steps.json`, `sheet.png` and
+  `video.mp4`, in the checkout that ran it. Never add a likely or guessed cause, such as a
+  flow-side timing problem or a clock race, and never say no app change is needed: the fixer
+  judges the cause from that evidence and a reproduction test, as its rules say;
 - both returns: this task's, and that of the task it collides with, read from `<returns>`. For a
   conflict, that's the merged task whose `writeSet` holds a conflicted file; otherwise, or when none
   does, the task merged last;
@@ -476,7 +483,8 @@ names, as below.
   `main` untouched, as for a conflict. It is a halt answered by rule:
   `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
   `"$SG" build resume --run <run> --task <task> --answer retry`, then the fixer as for a red
-  merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON.
+  merge gate, given each red row's `requirement`, `layer`, `check` and `message` from the JSON,
+  and its evidence as the fixer's brief says.
   The fixer's branch runs it again with `--fix` before `build merge --fix`. Never merge on your
   own judgement: a row red at the newest `--at-base` report too goes to the fixer like any other.
 - Exit 2 (BLOCKED): the table, the ledger or the scratch tree failed. Keep its `message` for the
@@ -502,8 +510,10 @@ another in the same fix worktree, starting with the row whose step failed first.
 2. Launch 1 Agent tool call in the background, passing `run_in_background: true`, with
    `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the fix worktree as its
    worktree, `<slug>` as its plan, the rows' `writer` as its task id and the requirement's rows from
-   `validation.json`. It quotes the `flow row:` line, both red run ids and the evidence paths their
-   `qa/report.json` rows name, and says to follow the repair mode of
+   `validation.json`. It quotes the `flow row:` line, both red run ids and each red run's evidence:
+   the failing step, what it expected and what it observed, and the absolute paths of the
+   `steps.json`, `sheet.png` and `video.mp4` their `qa/report.json` rows name. It never adds a
+   likely or guessed cause, the fixer's or yours, beyond that line. It says to follow the repair mode of
    `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`, which runs the at-base proof
    itself. Never prescribe the edit: the fixer's suggestion, such as an `is` in place of a `wait`,
    can weaken the check. Record its usage as for the validation task, under the task the row
@@ -517,7 +527,9 @@ another in the same fix worktree, starting with the row whose step failed first.
    `<why>` is the `flow row:` line's reason, on 1 line. Then `/bin/rm -rf <fixWorktree>/.harness/qa`.
    - GREEN: go on to the next requirement's round, if any. Once every round is taken, launch the
      fixer again, 1 more attempt with its own span, ingest and check, given its last return and
-     each adopt's `repaired` record. It runs the before-merge `qa run --fix` again and returns
+     each adopt's `repaired` record. Quote the evidence of its newest red run as its first brief
+     does, the failing step, what it expected and what it observed, with the `steps.json` and
+     `sheet.png` paths, and never a likely or guessed cause, nor that no app change is expected. It runs the before-merge `qa run --fix` again and returns
      `ready-to-merge` once its rows are GREEN, which merges as above. A `flow row:` line for a
      repaired row in that return takes a second round while `run clock` is before
      `noNewStartsAt`, and halts after it.

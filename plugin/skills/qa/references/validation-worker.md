@@ -188,8 +188,12 @@ fixer's `flow row:` line, both red run ids and their evidence paths. The worktre
 
 - Read the evidence the brief names, `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-gestures.md` and
   `${CLAUDE_PLUGIN_ROOT}/docs/simulator-qa-flow-steps.md`.
-  Decide whether the flow is at fault: a step the pinned tool can't drive as written, a selector
-  for the wrong element, or a step the app can't satisfy as written.
+  Hold the red run's frames in its `sheet.png`, and the failing step in its `steps.json`, against
+  the requirement's text first. A screen that shows a state the requirement rules out, such as an
+  effect with no cause on screen or an entity gone before it was drawn, is an app defect, whatever
+  the fixer's line says: return `no repair` for it. Otherwise decide whether the flow is at fault:
+  a step the pinned tool can't drive as written, a selector for the wrong element, or a step the
+  app can't satisfy as written.
 - Change only the requirement's files in that folder, and add no other file. Keep every `wait` and
   `is` step, in order, with a `timeoutMs` no shorter: change, add or drop only the steps that drive
   the app. A `wait` whose target sits under another kind's key, which `qa lint` names as
@@ -216,13 +220,15 @@ Return 1 line:
 ```text
 repaired: <requirement> <path>: red: <message> (qa run <run id>)
 no repair: <requirement>: <why>
+no repair: <requirement>: app defect: <frame>: <what it shows against the requirement>
 no repair: <requirement>: contract gap: <name>: <why>
 ```
 
 Return `no repair` when the flow already drives what the requirement needs and the app is at
-fault, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
+fault, with `app defect: <frame>:` when the frames show it, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
 A `held` scenario for a state the fake ends before the `wait` sees it is such a name: name the
 one the flow would launch with. So is a `held` or seeded scenario for a screen whose state
-advances on a clock, when the red step read a state the clock had already moved: a fixer's
+advances on a clock, when the red step checked a starting state and its frames show that state
+correct and then moved by the clock before the step read it: a fixer's
 `flow row:` line that says `contract gap: held` names that case. Return it at once when the
 contract has no such scenario; no rewrite of the flow wins a race with the clock.
