@@ -48,7 +48,8 @@ public struct AreaStepResults: AreaStepReusing {
 }
 
 /// 1 area's prove that proved every changed test it ran, as a later gate on the same reverted
-/// tree may take it without running it again.
+/// tree, or at the same head tree with the same changed tests, may take it without running it
+/// again.
 public struct ProvePass: Sendable, Equatable, Codable {
   /// The gate run that ran it.
   public let runID: String
@@ -73,7 +74,9 @@ public struct ProvePass: Sendable, Equatable, Codable {
   }
 }
 
-/// The proves that passed in a clone, by ``GateReuse/proveKey(_:mergeBase:area:command:tests:copied:renames:)``.
+/// The proves that passed in a clone, each by both
+/// ``GateReuse/proveKey(_:mergeBase:area:command:tests:copied:renames:)`` and
+/// ``GateReuse/proveHeadKey(_:area:command:tests:copied:)``.
 public protocol ProveReusing: Sendable {
   /// The pass recorded for `key`, or `nil`.
   func pass(_ key: String) -> ProvePass?

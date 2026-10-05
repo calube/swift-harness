@@ -5029,6 +5029,39 @@ PY
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a `cd` to a variable the same command assigned
+
+`Hooks/assigned-variable-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
+later 2026-10-05 brownfield practice trial: from the clone's checkout it assigned the plan
+checkout's path to a variable, `cd`'d to that variable, and edited a relative glob in place with
+`sed -i`. The guard named the glob in the user's checkout. The clone becomes `/CLONE`, the
+deleted import line names `AppClient` and the commit subject is replaced by a generic one. With
+`T` the trial's run folder, whose `run.jsonl` is the orchestrator's stream-json output:
+
+```sh
+python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/assigned-variable-cd-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
+    c=re.sub(r'import [A-Za-z]+Client','import AppClient',c)
+    return re.sub(r'commit -q -m "[^"]*"','commit -q -m "Add the contract"',c)
+cwd=None; denied={}
+lines=[json.loads(l) for l in open(sys.argv[1])]
+for d in lines:
+    if d.get('type')=='system' and d.get('subtype')=='init' and cwd is None: cwd=d['cwd']
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_result' and str(b.get('content')).startswith('PreToolUse:Bash hook error: swiftgate guard.run-user-checkout'):
+            denied[b['tool_use_id']]=b['content']
+for d in lines:
+    for b in (d.get('message') or {}).get('content') or []:
+        if isinstance(b,dict) and b.get('type')=='tool_use' and b.get('id') in denied:
+            json.dump({"cwd":scrub(cwd),"command":scrub(b['input']['command']),
+                       "denial":scrub(denied[b['id']])},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -aEi '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## qa lint: a flow that waits for a state the fake ends on its own
 
 `QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
@@ -5111,6 +5144,27 @@ git -C $R merge-tree --write-tree 3f48493d7a2624df62cf4d05545ff7b55eee9745 \
 tip merged into the moved plan branch. It equals both the first run's `merged-tree-run.json` tree
 and the tree of the merge commit `build merge` then made. `grep -niE '/Users|/private|caleb'` on
 the fixtures matched nothing.
+
+## Brownfield trial: final re-proving the last merge's head
+
+In a practice brownfield trial (2026-10-05) the last merge gate proved the app area's changed UI
+test in 85 s, measured from the merge's first parent, then `final` on the same head commit and
+tree proved it again in 77 s, measured from the plan base. Each stored its pass under a different
+prove key. `last-merge-prove-gate-events.jsonl` holds, for the merge gate then the final, its
+`gate.run` event, its `prove` step event and its `prove.result` events. From the trial clone's
+state directory `S`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+for r in 20261005T163430Z-8dfcee9d 20261005T163642Z-8c038743; do
+  grep -h '"kind":"gate.run"' $S/runs/$r/events/gate.jsonl
+  grep -h '"step":"prove"' $S/runs/$r/events/gate.jsonl
+  grep -h '"kind":"prove.result"' $S/runs/$r/events/test.jsonl
+done > $F/last-merge-prove-gate-events.jsonl
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/last-merge-prove-gate-events.jsonl`
+matched nothing.
 
 ## Brownfield trial: at-base-1's validation rows and its at-base runs
 
