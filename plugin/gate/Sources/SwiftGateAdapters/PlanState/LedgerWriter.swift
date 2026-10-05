@@ -106,9 +106,10 @@ public struct LedgerWriter: Sendable {
       status = target
     case .branch(let name):
       branch = name
-    case .landedWith:
-      if case .refused(let reason) = LedgerTransition.check(from: task.status, to: .done) {
-        throw .refusedTransition(task: task.id, reason: reason)
+    case .landedWith(let carrier):
+      guard task.status != .done else {
+        throw .refusedTransition(
+          task: task.id, reason: "done is already the task's status; \(carrier)'s merge changes it")
       }
       status = .done
     }

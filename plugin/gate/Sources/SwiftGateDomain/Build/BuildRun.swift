@@ -465,12 +465,17 @@ public struct BuildEventLog: Sendable, Equatable {
   /// later merge of the same task puts it back at the end.
   public var mergedTasks: [String] {
     var tasks: [String] = []
+    var carriedBy: [String: [String]] = [:]
     for event in events {
       switch event {
       case .merge(let merge):
-        tasks.removeAll { $0 == merge.task }
-        tasks.append(merge.task)
-      case .undo(let undo): tasks.removeAll { $0 == undo.task }
+        let landed = [merge.task] + merge.carried
+        tasks.removeAll { landed.contains($0) }
+        tasks += landed
+        carriedBy[merge.task] = merge.carried
+      case .undo(let undo):
+        let gone = [undo.task] + (carriedBy[undo.task] ?? [])
+        tasks.removeAll { gone.contains($0) }
       case .transition, .gate, .returnCheck, .finish: continue
       }
     }
@@ -495,12 +500,18 @@ public struct BuildEventLog: Sendable, Equatable {
   /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
   public func mergeStage(task: String) -> CutoffTaskStage? {
     var stage: CutoffTaskStage?
+    // The task whose merge put this one on `main`: itself, or the fix that carried it.
+    var landedBy = task
     for event in events {
       switch event {
-      case .merge(let merge) where merge.task == task: stage = .merged
-      case .undo(let undo) where undo.task == task: stage = nil
+      case .merge(let merge) where merge.task == task || merge.carried.contains(task):
+        stage = .merged
+        landedBy = merge.task
+      case .undo(let undo) where undo.task == landedBy: stage = nil
       case .gate(let gate):
-        guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
+        guard case .merge(let gated) = gate.stage, gated == landedBy, stage != nil else {
+          continue
+        }
         stage = gate.verdict == .green ? .landed : .merged
       case .merge, .undo, .transition, .returnCheck, .finish: continue
       }

@@ -215,10 +215,18 @@ enum QARunRun {
       }
       if !options.atBase {
         let build = await buildEvents(slug: slug, git: git, notes: &notes)
-        merged = progress.merged(per: build)
+        var mergedTasks = progress.merged(per: build)
         if options.after == nil, options.final || build?.finalGated == true {
           ended = progress.statuses
+          let landed = await landedUnmerged(
+            progress: progress, merged: mergedTasks, log: build, slug: slug, git: git)
+          mergedTasks.formUnion(landed.map(\.task))
+          notes += landed.map { landing in
+            "\(landing.task) is \(landing.status.rawValue) in the ledger, but its branch tip "
+              + "\(landing.tip.prefix(12)) is in HEAD, landed by another merge: its rows run"
+          }
         }
+        merged = mergedTasks
       }
     }
     var runPlan = QARunPlan.make(
@@ -569,7 +577,26 @@ enum QARunRun {
         commit = nil
         notes.append("the report names no commit: reading HEAD failed: \(error)")
       }
-      rows = await runPlan.execute(atBase: false) { await checks.run($0, in: root.path) }
+      // A trial merge that made this same tree already proved the rows it passed.
+      var onHead = checks
+      if options.final, commit != nil {
+        do throws(GitWorkspaceError) {
+          let tree = try await dependencies.merger.tree(of: "HEAD", in: root.path)
+          if let record = QAMergedTreeRun.newest(
+            on: tree, in: QARunHistory.mergedTreeRuns(worktree: root))
+          {
+            let reuse = record.run.reuse(in: runPlan, digests: digests, results: [.pass])
+            onHead.reused.merge(reuse.outcomes) { kept, _ in kept }
+            notes.append(
+              "qa run \(record.run.runID) ran on this same tree \(tree.prefix(12)) in a trial "
+                + "merge")
+            notes += reuseNotes(record: record.run, reuse: reuse)
+          }
+        } catch {
+          notes.append("no earlier run's rows reused: reading HEAD's tree: \(error)")
+        }
+      }
+      rows = await runPlan.execute(atBase: false) { await onHead.run($0, in: root.path) }
     }
     notes += await checks.finishFlows()
     await checks.testDevices?.releaseAll()
@@ -669,6 +696,41 @@ enum QARunRun {
         "the build run's events didn't read, so only the ledger says what merged: \(error)")
       return nil
     }
+  }
+
+  /// A task the ledger doesn't count as merged whose branch tip `HEAD` holds anyway: another
+  /// task's merge landed it, as a fixer's branch that took it in does.
+  struct Landing: Sendable, Equatable {
+    let task: String
+    let status: TaskStatus
+    let tip: String
+  }
+
+  /// The tasks outside `merged` whose branch tip is in `HEAD` and is no commit the plan branch
+  /// itself stood at in `log`: a branch with no commits of its own points at one of those, and
+  /// landed nothing. With no build events, none.
+  private static func landedUnmerged(
+    progress: LedgerProgress, merged: Set<String>, log: BuildEventLog?, slug: String,
+    git: any Git
+  ) async -> [Landing] {
+    guard let log else { return [] }
+    var planCommits: Set<String> = []
+    for event in log.events {
+      switch event {
+      case .merge(let merge): planCommits.formUnion([merge.preCommit, merge.postCommit])
+      case .undo(let undo): planCommits.formUnion([undo.fromCommit, undo.toCommit])
+      case .transition, .gate, .returnCheck, .finish: continue
+      }
+    }
+    var landed: [Landing] = []
+    for task in progress.tasks where !merged.contains(task.id) {
+      guard let tip = try? await git.revision("refs/heads/\(slug)/\(task.id)"),
+        !planCommits.contains(tip),
+        (try? await git.isAncestor(tip, of: "HEAD")) == true
+      else { continue }
+      landed.append(Landing(task: task.id, status: task.status, tip: tip))
+    }
+    return landed
   }
 
   /// 1 note naming the rows taken from `record`, and 1 per ready row that ran instead.
@@ -1057,6 +1119,12 @@ enum QARunRun {
   static func writeOutput(
     _ report: QAReport, reportFile: String?, to path: String, root: URL
   ) throws(QAFilesError) {
+    let file =
+      path.hasPrefix("/")
+      ? URL(filePath: path, directoryHint: .notDirectory)
+      : root.appending(path: path, directoryHint: .notDirectory)
+    try QAFiles.write(
+      Data(render(report, json: true, reportFile: reportFile).utf8), to: file)
   }
 
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
@@ -1151,6 +1219,16 @@ struct QARunCommand: AsyncParsableCommand {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)
     let runner = LiveProcessRunner()
     let agentDevice = LiveAgentDevice(runner: runner)
+    var bound: QARunDeadline?
+    if let deadline {
+      let now = Date()  // swiftgate:allow det.date-init — a --deadline counts from now
+      guard let parsed = QARunDeadline.parse(deadline, now: now) else {
+        throw ValidationError(
+          "--deadline `\(deadline)` is neither a time after now in ISO 8601 nor whole seconds "
+            + "from now")
+      }
+      bound = parsed
+    }
     let tasks =
       after.map { list in
         list.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
@@ -1183,7 +1261,8 @@ struct QARunCommand: AsyncParsableCommand {
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
         testDevices: LiveTestDeviceLeases(runner: runner),
-        deadline: await QARunRun.deadline(root: root, runner: runner, final: final),
+        deadline: QARunDeadline.earlier(
+          await QARunRun.deadline(root: root, runner: runner, final: final), bound),
         started: { runID, report in
           // Before any row runs, so a caller that backgrounds the run waits on this file.
           let line =
@@ -1199,7 +1278,17 @@ struct QARunCommand: AsyncParsableCommand {
       (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path
     }.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
-    Console.write(QARunRun.render(report, json: json, reportFile: reportFile))
+    if let output {
+      do throws(QAFilesError) {
+        try QARunRun.writeOutput(report, reportFile: reportFile, to: output, root: root)
+      } catch {
+        FileHandle.standardError.write(Data("\(QARunRun.command): --output: \(error)\n".utf8))
+        throw ExitCode(Verdict.blocked.exitCode)
+      }
+      Console.write(QARunRun.summary(report, reportFile: reportFile))
+    } else {
+      Console.write(QARunRun.render(report, json: json, reportFile: reportFile))
+    }
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
   }
 }

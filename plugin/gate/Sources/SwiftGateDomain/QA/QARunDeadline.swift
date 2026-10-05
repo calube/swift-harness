@@ -30,12 +30,23 @@ public struct QARunDeadline: Sendable, Equatable {
   /// A `qa run --deadline`: an ISO 8601 time, or whole seconds from `now`; `nil` when `text` is
   /// neither, or names no time after `now`.
   public static func parse(_ text: String, now: Date) -> QARunDeadline? {
-    nil
+    let trimmed = text.trimmingCharacters(in: .whitespaces)
+    let at: Date
+    if let seconds = Int(trimmed) {
+      at = now.addingTimeInterval(TimeInterval(seconds))
+    } else if let date = try? Date(trimmed, strategy: .iso8601) {
+      at = date
+    } else {
+      return nil
+    }
+    guard at > now else { return nil }
+    return QARunDeadline(at: at, name: optionName)
   }
 
   /// The earlier of 2 deadlines; `nil` when both are.
   public static func earlier(_ first: QARunDeadline?, _ second: QARunDeadline?) -> QARunDeadline? {
-    first ?? second
+    guard let first, let second else { return first ?? second }
+    return second.at < first.at ? second : first
   }
 
   /// Whether a row may start at `now`, and with how long.

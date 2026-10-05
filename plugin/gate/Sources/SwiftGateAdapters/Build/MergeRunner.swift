@@ -371,8 +371,8 @@ public struct BuildMerge: Sendable {
           reason: .alreadyMerged)
       }
       try await checkReturn(command, context)
-      try await checkCarried(command, context)
-      try await checkFlows(command, context, main: pre)
+      let carried = try await checkCarried(command, context)
+      try await checkFlows(command, context, main: pre, carried: carried)
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
         let subject = try await merger.subject(of: "refs/heads/\(branch)", in: main)
@@ -380,9 +380,12 @@ public struct BuildMerge: Sendable {
       }
       switch outcome {
       case .merged(let post):
+        let landed = carried.map(\.task)
         do throws(BuildRunStoreError) {
           try await context.run.append(
-            .merge(.init(task: task, preCommit: pre, postCommit: post, at: clock.now())))
+            .merge(
+              .init(
+                task: task, preCommit: pre, postCommit: post, at: clock.now(), carried: landed)))
         } catch {
           throw stop(
             command, context, .blocked,
@@ -390,10 +393,18 @@ public struct BuildMerge: Sendable {
               + "couldn't record the merge event: \(error). `main` is merged; record or reset it "
               + "by hand before the next merge.", pre: pre, post: post)
         }
+        let unmarked = await markLanded(landed, context)
         return report(
           command, context, .merged, .green, mainCheck: mainCheck, pre: pre, post: post,
+          carried: landed.isEmpty ? nil : landed,
           message: "merged \(branch) into \(context.names.baseBranch): \(pre) → \(post)"
-            + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : ""))
+            + (last == nil ? "; no earlier merge event, so main wasn't compared with one" : "")
+            + (landed.isEmpty
+              ? ""
+              : "; it carried the unmerged branch of "
+                + landed.map { "`\($0)`" }.joined(separator: ", ")
+                + ", which landed with it: now merged and done, so its rows run")
+            + unmarked)
       case .conflicted(let files):
         try await abort(command, context, pre: pre)
         if fix {
@@ -709,9 +720,9 @@ public struct BuildMerge: Sendable {
   /// does, unless this merges the fixer's branch, whose worktree exists; that fixer's branch sets
   /// the task aside, so the other tasks' merges no longer wait on it. A plan with no table, or one
   /// whose state doesn't read, needs no run here: `qa run` itself reports that table.
-  private func checkFlows(_ command: String, _ context: Context, main: String)
-    async throws(Stop)
-  {
+  private func checkFlows(
+    _ command: String, _ context: Context, main: String, carried: [QATrialMerge.Branch] = []
+  ) async throws(Stop) {
     let readiness: QAMergeReadiness
     let tip: String
     let alongside: [String]
@@ -731,7 +742,10 @@ public struct BuildMerge: Sendable {
       tip = try await merger.commit(
         of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
       merged = progress.merged(per: log)
-      let waiting = try await waitingBranches(context, progress: progress, log: log)
+      // A carried branch lands with this merge, so a row over both needs a run that took it.
+      let waiting =
+        try await waitingBranches(context, progress: progress, log: log)
+        + carried
       reports = beforeMergeReports(context)
       alongside = QAMergeReadiness.alongside(
         table: table, merged: merged, task: task, waiting: waiting)
@@ -766,8 +780,11 @@ public struct BuildMerge: Sendable {
         + "return since; check \(one ? "that return" : "those returns") as the completion "
         + "notices arrive, then run 1 `swiftgate qa run --plan \(plan) --after \(together) "
         + "--before-merge` over them all. The wait lapses at \(lapsesAt.formatted(.iso8601)), "
-        + "when `\(task)` merges on its own rows"
-      throw stop(command, context, .refused, message, reason: .flowsPending)
+        + "when `\(task)` merges on its own rows. This is a wait, not a red merge: no halt"
+      throw Stop(
+        report: report(
+          command, context, .deferred, .green, reason: .flowsPending, pre: main, action: .wait,
+          waitUntil: lapsesAt.formatted(.iso8601), message: message))
     }
     let tasks = ([task] + alongside).joined(separator: ",")
     let run =
@@ -821,6 +838,29 @@ public struct BuildMerge: Sendable {
     }
   }
 
+  /// Marks each carried task `done` in the ledger, with its transition in the build run.
+  /// - Returns: a sentence naming any task left unmarked, empty when every one was marked: the
+  ///   merge stands either way, and its event already counts them merged.
+  private func markLanded(_ landed: [String], _ context: Context) async -> String {
+    guard !landed.isEmpty,
+      let plan = try? PlanStateLayout(commonDirectory: context.common).plan(self.plan)
+    else { return "" }
+    var unmarked: [String] = []
+    for other in landed {
+      do {
+        let change = try await LedgerWriter(plan: plan).update(task: other, .landedWith(task))
+        try await context.run.append(
+          .transition(
+            .init(task: other, from: change.before.status, to: .done, at: clock.now())))
+      } catch {
+        unmarked.append("`\(other)` (\(error))")
+      }
+    }
+    guard !unmarked.isEmpty else { return "" }
+    return "; the ledger didn't take " + unmarked.joined(separator: ", ")
+      + " as done: run `ledger set` for it"
+  }
+
   /// Every other running task, outside `skipping`, whose worker's own gate passed at its branch's
   /// tip on a clean tree with no check of its return recorded since: its return is on its way. A
   /// task with a fixer's branch is set aside, as in ``waitingBranches(_:progress:log:)``.
@@ -864,16 +904,21 @@ public struct BuildMerge: Sendable {
   /// Refuses a fixer's branch that holds another running task's branch tip not yet merged into
   /// `main`: a fix worktree cut for a RED run over several tasks took their branches in, and
   /// merging it would land their work under this task's merge, with no merge of their own.
-  private func checkCarried(_ command: String, _ context: Context) async throws(Stop) {
+  /// - Returns: the unmerged branches it holds of tasks no longer running, abandoned or blocked,
+  ///   each at its tip: they land with this merge, and their rows with it.
+  private func checkCarried(_ command: String, _ context: Context) async throws(Stop)
+    -> [QATrialMerge.Branch]
+  {
     guard fix,
       let plan = try? PlanStateLayout(commonDirectory: context.common).plan(self.plan),
       let progress = try? PlanStateStore(plan: plan).ledgerProgress()
-    else { return }
+    else { return [] }
     var carried: [String] = []
+    var landing: [QATrialMerge.Branch] = []
     do {
       let fixTip = try await merger.commit(
         of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
-      for other in progress.tasks where other.id != task && other.status == .inProgress {
+      for other in progress.tasks where other.id != task && other.status != .done {
         let names = try TaskWorktree(
           commonDirectory: context.common, plan: self.plan, task: other.id, profile: profile)
         guard try await workspace.branchExists(names.branch),
@@ -881,7 +926,12 @@ public struct BuildMerge: Sendable {
         else { continue }
         let otherTip = try await merger.commit(
           of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
-        if try await git.isAncestor(otherTip, of: fixTip) { carried.append(other.id) }
+        guard try await git.isAncestor(otherTip, of: fixTip) else { continue }
+        if other.status == .inProgress {
+          carried.append(other.id)
+        } else {
+          landing.append(QATrialMerge.Branch(task: other.id, branch: names.branch, tip: otherTip))
+        }
       }
     } catch {
       throw stop(command, context, .blocked, "reading the tasks \(context.branch) holds: \(error)")
@@ -895,6 +945,7 @@ public struct BuildMerge: Sendable {
           + (carried.count == 1 ? "that task" : "those tasks") + " first, then this fix",
         reason: .fixCarriesUnmerged)
     }
+    return landing
   }
 
   /// The plan's `qa run --before-merge` reports that merged this task's branch in the main
@@ -1150,7 +1201,8 @@ public struct BuildMerge: Sendable {
     reason: BuildMergeReport.Reason? = nil, mainCheck: BuildMergeReport.MainCheck? = nil,
     pre: String? = nil, post: String? = nil,
     conflicted: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
-    cut: Bool = false, message: String
+    cut: Bool = false, action: BuildMergeReport.Action? = nil, waitUntil: String? = nil,
+    carried: [String]? = nil, message: String
   ) -> BuildMergeReport {
     let cut = cut || status == .conflicted || status == .undone
     return BuildMergeReport(
@@ -1159,6 +1211,7 @@ public struct BuildMerge: Sendable {
       mainCheckout: context.names.mainCheckout, mainCheck: mainCheck, preCommit: pre,
       postCommit: post, fixWorktree: cut ? Self.fixPath(context) : nil,
       fixBranch: cut ? context.fix.branch : nil, conflictedFiles: conflicted,
-      gateRunId: gateRunId, keptBranches: keptBranches, message: message)
+      gateRunId: gateRunId, keptBranches: keptBranches, action: action, waitUntil: waitUntil,
+      carried: carried, message: message)
   }
 }

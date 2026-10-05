@@ -558,10 +558,38 @@ enum BuildCheckReturnRun {
         else { continue }
         writeSet += other.writeSet
       }
+      writeSet += redRowOwners(task, ledger: ledger, slug: slug, common: common, profile: profile)
+        .flatMap(\.writeSet)
     } catch {
       throw Blocked("reading the task branches the fix branch holds: \(error)")
     }
     return writeSet
+  }
+
+  /// The merged tasks a RED row of `task`'s before-merge runs also runs after: the screen that
+  /// row fails on may be theirs, already on the plan branch, and the fix lands in this fixer's
+  /// worktree, so their files are the fixer's to edit too.
+  private static func redRowOwners(
+    _ task: LedgerTask, ledger: Ledger, slug: String, common: String,
+    profile: RepositoryProfile
+  ) -> [LedgerTask] {
+    guard
+      let main = try? TaskWorktree(
+        commonDirectory: common, plan: slug, task: task.id, profile: profile
+      ).mainCheckout
+    else { return [] }
+    let reports = QARunHistory.beforeMergeReports(
+      worktree: URL(filePath: main, directoryHint: .isDirectory), plan: slug
+    ).filter {
+      $0.after == task.id || $0.trialMerge?.alongside.contains { $0.task == task.id } == true
+    }
+    let owners = Set(
+      reports.flatMap(\.rows)
+        .filter { $0.result == .red && $0.runsAfter.contains(task.id) }
+        .flatMap(\.runsAfter))
+    return ledger.tasks.filter {
+      $0.id != task.id && $0.status == .done && owners.contains($0.id)
+    }
   }
 
   private static func branchChanges(tip: String, git: any Git) async throws(Blocked) -> [String] {
