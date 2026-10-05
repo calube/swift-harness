@@ -94,7 +94,9 @@ extension ShellSyntax {
   /// Every directory each top-level command may run in, by index into `commands`, read in order
   /// as the shell runs them. A literal `cd` or `pushd` moves the shell to its operand, a relative
   /// one from each directory the shell may be in (as with `CDPATH` unset). Unless its directory
-  /// exists now, the `cd` may fail and leave the shell where it was. A command after `&&` runs
+  /// exists now, or an earlier `mkdir -p` of the line made it on every path to the `cd`, the
+  /// `cd` may fail and leave the shell where it was. A lone `mkdir -p` of literal paths is read
+  /// as succeeding: it fails only on a path that is a file or can't be written. A command after `&&` runs
   /// where everything before it succeeded, after `||` where something failed, and after `;` or a
   /// newline wherever the shell may be; a pipeline's commands run in subshells that move nothing,
   /// and `exit` ends the shell.
@@ -129,14 +131,21 @@ extension ShellSyntax {
     var variables: [String: String] = [:]
     var succeeded: [ShellDirectory] = [.start]
     var failed: [ShellDirectory] = []
+    // The absolute directories a `mkdir -p` made on every path that ends in `succeeded`, and on
+    // every path that ends in `failed`.
+    var madeIfSucceeded: Set<String> = []
+    var madeIfFailed: Set<String> = []
     var position = 0
     while position < top.count {
       guard let link = joining(commands[top[position]].links) else { break }
       let runs: [ShellDirectory]
+      let made: Set<String>
       switch link {
-      case .and: runs = succeeded
-      case .or: runs = failed
-      default: runs = merged(succeeded, failed)
+      case .and: (runs, made) = (succeeded, madeIfSucceeded)
+      case .or: (runs, made) = (failed, madeIfFailed)
+      default:
+        runs = merged(succeeded, failed)
+        made = madeOnBoth(succeeded, madeIfSucceeded, failed, madeIfFailed)
       }
       if let opener = commands[top[position]].words.first, compoundOpeners.contains(opener) {
         guard let closer = staticCompound(top, from: position, commands) else { break }
@@ -146,6 +155,8 @@ extension ShellSyntax {
         for index in top[position...closer] { forget(commands[index], in: &variables) }
         succeeded = runs
         failed = runs
+        madeIfSucceeded = made
+        madeIfFailed = made
         position = closer + 1
         continue
       }
@@ -158,8 +169,20 @@ extension ShellSyntax {
         })
       else { break }
       let after: (succeeded: [ShellDirectory], failed: [ShellDirectory])
+      var madeAfter = made
       if pipeline.count > 1 {
         after = (runs, runs)
+      } else if let operands = madeDirectories(pipeline[0], variables: variables) {
+        for operand in operands {
+          for directory in runs {
+            if operand.hasPrefix("/") {
+              madeAfter.insert(operand)
+            } else if case .path(let base) = directory, base.hasPrefix("/") {
+              madeAfter.insert(base + "/" + operand)
+            }
+          }
+        }
+        after = (runs, [])
       } else if isDirectoryCommand(pipeline[0]) {
         guard let operand = certainDirectory(pipeline[0], variables: variables) else { break }
         let moved = merged(
@@ -171,7 +194,8 @@ extension ShellSyntax {
           }, [])
         let certain = moved.allSatisfy { directory in
           guard case .path(let path) = directory else { return false }
-          return path.hasPrefix("/") && directoryExists(path)
+          return path.hasPrefix("/")
+            && (directoryExists(path) || made.contains { $0 == path || $0.hasPrefix(path + "/") })
         }
         after = (moved, certain ? [] : runs)
       } else if unwrapped(pipeline[0]).name == "exit" {
@@ -193,12 +217,18 @@ extension ShellSyntax {
       }
       switch link {
       case .and:
+        madeIfFailed = madeOnBoth(failed, madeIfFailed, after.failed, madeAfter)
+        madeIfSucceeded = madeAfter
         succeeded = after.succeeded
         failed = merged(failed, after.failed)
       case .or:
+        madeIfSucceeded = madeOnBoth(succeeded, madeIfSucceeded, after.succeeded, madeAfter)
+        madeIfFailed = madeAfter
         succeeded = merged(succeeded, after.succeeded)
         failed = after.failed
       default:
+        madeIfSucceeded = madeAfter
+        madeIfFailed = madeAfter
         succeeded = after.succeeded
         failed = after.failed
       }
@@ -244,6 +274,43 @@ extension ShellSyntax {
   private static func joining(_ links: [ShellLink]) -> ShellLink? {
     if links.contains(where: { $0 == .open || $0 == .close || $0 == .background }) { return nil }
     return links.first { $0 != .sequence } ?? .sequence
+  }
+
+  /// What a `mkdir -p` made on every path of both `first` and `second`, each with the directories
+  /// made on its paths; a side no path reaches constrains nothing.
+  private static func madeOnBoth(
+    _ first: [ShellDirectory], _ madeOnFirst: Set<String>,
+    _ second: [ShellDirectory], _ madeOnSecond: Set<String>
+  ) -> Set<String> {
+    if first.isEmpty { return madeOnSecond }
+    if second.isEmpty { return madeOnFirst }
+    return madeOnFirst.intersection(madeOnSecond)
+  }
+
+  /// The operands of a plain `mkdir -p` (or `--parents`) whose every operand is 1 literal path
+  /// after `variables` are expanded, without trailing slashes; `nil` for any other command.
+  private static func madeDirectories(_ entry: ParsedCommand, variables: [String: String])
+    -> [String]?
+  {
+    guard entry.words.first == "mkdir" else { return nil }
+    let arguments = Array(entry.words.dropFirst())
+    let parents = arguments.prefix { $0 != "--" }.contains { argument in
+      argument == "--parents"
+        || (argument.hasPrefix("-") && !argument.hasPrefix("--")
+          && argument.dropFirst().prefix { $0 != "m" }.contains("p"))
+    }
+    let operands = scan(arguments, valued: ["-m", "--mode"]).operands
+    guard parents, !operands.isEmpty else { return nil }
+    var directories: [String] = []
+    for operand in operands {
+      guard let directory = expanded(operand, variables),
+        !directory.contains(where: { "*?[{~\\".contains($0) })
+      else { return nil }
+      var trimmed = Substring(directory)
+      while trimmed.count > 1, trimmed.hasSuffix("/") { trimmed = trimmed.dropLast() }
+      directories.append(String(trimmed))
+    }
+    return directories
   }
 
   /// `first` then the directories of `second` it lacks, in order.

@@ -5059,6 +5059,19 @@ PY
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: a heredoc after `mkdir -p <dir> && cd <dir> && NAME=value`
+
+`Hooks/mkdir-cd-assignment-heredoc-bash.json` is the 1 Bash call `guard.run-user-checkout` denied
+in a later 2026-10-05 brownfield practice trial: from the clone's checkout it made a validation
+slot's `.harness/qa/spec` with `mkdir -p`, `cd`'d into it, assigned a variable, and on the next
+line wrote a flow file there with a heredoc. The directory didn't exist when the hook ran, so the
+guard kept the starting directory in play and named the write in the user's checkout. It was
+captured with the command of the relative-heredoc section above, unchanged, from that trial's
+`run.jsonl`: the same scrub makes the clone `/CLONE` and the bundle id `com.example.App`, and
+every heredoc body is dropped.
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## Brownfield trial: a `cd` to a variable the same command assigned
 
 `Hooks/assigned-variable-cd-bash.json` is the 1 Bash call `guard.run-user-checkout` denied in a
@@ -5214,3 +5227,20 @@ sed "$S" $R/runs/20261005T162135Z-bd20614a/qa/report.json > at-base-1-qa-at-base
 ```
 
 `grep -niE '/Users|/private|caleb'` on the fixtures matched nothing.
+
+## Brownfield trial: a merge gate recorded from the user's checkout
+
+`RecordGate/merge-gate-report.json` and `RecordGate/merge-gate-run-event.json` are the `report.json`
+and the `gate.run` event (the first line of the run's `events/gate.jsonl`) of a GREEN `check merge`
+run a 2026-10-05 brownfield practice trial's orchestrator ran in the plan checkout. Its
+`build record-gate` from the user's checkout was BLOCKED because the run's history line was in the
+plan checkout's store. The history line itself didn't outlive the checkout, so a test records the
+captured report with the event's `command` and `time`. With `R` the run's directory in the trial's
+kept runs and `AREA` the app's area name, which becomes `App`:
+
+```sh
+sed "s/$AREA/App/g" $R/report.json > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-report.json
+head -1 $R/events/gate.jsonl > plugin/gate/Tests/Fixtures/RecordGate/merge-gate-run-event.json
+```
+
+`grep -aE '/Users|/private|/var/folders|caleb'` on both files matched nothing.
