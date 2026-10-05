@@ -1848,7 +1848,8 @@ printed 0.
 `RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
 `RunView/build-run-1` once `report --html` had written its final report, for the live view's
 snapshot test. The test drops `cursor`, a digest of file times. Captured again at the commit that
-adds the view's `cost` and each role's `costUSD`, from `plugin/gate` after `swift build`:
+adds the view's `deferred` list (empty for this run, which deferred no finding), from `plugin/gate`
+after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
@@ -1861,7 +1862,7 @@ cp $F/ledger-events.jsonl $P/build/$RUN/events.jsonl && cp -R $F/returns $P/buil
 cp -R $F/events .harness/events && cp -R $F/runs .harness/runs
 $SG report --html $RUN                                  # wrote .harness/reports/<run>/index.html
 $SG view --build-run $RUN --port 58431 &
-curl -sf -o $T/view.json http://127.0.0.1:58431/view.json && kill %1
+sleep 2; curl -sf -o $T/view.json http://127.0.0.1:58431/view.json && kill %1
 cp $T/view.json <fixtures>/RunView/view-json/build-run-1-final.json
 ```
 
