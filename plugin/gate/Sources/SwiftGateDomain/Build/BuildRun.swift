@@ -431,7 +431,18 @@ public struct BuildEventLog: Sendable, Equatable {
   /// How far `task`'s merge got: `nil` when it isn't on `main`, ``CutoffTaskStage/landed`` once a
   /// GREEN merge gate is recorded after its newest merge, and ``CutoffTaskStage/merged`` before.
   public func mergeStage(task: String) -> CutoffTaskStage? {
-    nil
+    var stage: CutoffTaskStage?
+    for event in events {
+      switch event {
+      case .merge(let merge) where merge.task == task: stage = .merged
+      case .undo(let undo) where undo.task == task: stage = nil
+      case .gate(let gate):
+        guard case .merge(let gated) = gate.stage, gated == task, stage != nil else { continue }
+        stage = gate.verdict == .green ? .landed : .merged
+      case .merge, .undo, .transition, .returnCheck: continue
+      }
+    }
+    return stage
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

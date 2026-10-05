@@ -79,13 +79,15 @@ enum BuildCutoffRun {
           "the cutoff comes in \(wait) s, at \(box.deadlines.cutoffAt.formatted(.iso8601)); "
             + "running tasks keep going until then")
       }
-      let merged = Set(log.mergedTasks)
       let tasks = ledger.tasks.compactMap { task -> CutoffTask? in
         switch task.status {
         case .inProgress:
-          let gating =
-            merged.contains(task.id)
-            || readyToMerge(task.id, run: store.layout.directory)
+          // The ledger reads `done` only after a merge's post-merge steps, so the run's events
+          // say whether its merge and merge gate already happened.
+          if let stage = log.mergeStage(task: task.id) {
+            return CutoffTask(id: task.id, stage: stage)
+          }
+          let gating = readyToMerge(task.id, run: store.layout.directory)
           return CutoffTask(id: task.id, stage: gating ? .gating : .working)
         case .pending, .blocked: return CutoffTask(id: task.id, stage: .notStarted)
         case .done, .abandoned, .needsReplan: return nil
@@ -117,7 +119,7 @@ enum BuildCutoffRun {
           command: command, plan: slug, runId: record.runID, at: now,
           endsAt: box.deadlines.endsAt,
           finish: decisions.filter { $0.action == .finishMerge }.map(\.task),
-          landed: [],
+          landed: tasks.filter { $0.stage == .landed }.map(\.id),
           abandoned: abandoned,
           notStarted: decisions.filter { $0.action == .notStarted }.map(\.task), path: path,
           notes: notes),
@@ -189,7 +191,9 @@ struct BuildCutoffCommand: AsyncParsableCommand {
       + "already gating finish its merge while that merge, `final` and the report still fit "
       + "in the box, sets every other running task `abandoned` with the reason, and writes "
       + "the decisions to the run's cutoff.json. It also acts once starts have stopped with "
-      + "nothing running, naming the tasks that never started. Exits 0 when it decided, 1 "
+      + "nothing running, naming the tasks that never started. A task whose merge is already "
+      + "recorded always finishes, and one whose merge gate is recorded GREEN is listed under "
+      + "`landed`, with only its post-merge steps left. Exits 0 when it decided, 1 "
       + "when --session doesn't hold the plan's lock or the cutoff hasn't come, and 2 for an "
       + "owned run, a missing --session or unreadable plan state.")
 

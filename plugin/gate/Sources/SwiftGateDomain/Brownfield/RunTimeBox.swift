@@ -204,15 +204,17 @@ public enum CutoffRule {
   /// `final` (111 s there) plus `build finish`, the checkout's removal and the report.
   public static let finalAndReportSeconds = 180
 
-  /// 1 decision per task, in `tasks`' order. A gating task finishes its merge when that merge
-  /// gate, every merge already chosen before it, and `final` with the report all fit before the
-  /// box ends; any other running task is abandoned with the reason.
+  /// 1 decision per task, in `tasks`' order. A task already merged always finishes: its merge
+  /// is on `main`, and abandoning it there would leave its code merged under an `abandoned` task.
+  /// A merged task whose merge gate isn't GREEN yet holds that gate's time first. A gating task
+  /// finishes its merge when that merge gate, every merge gate held before it, and `final` with
+  /// the report all fit before the box ends; any other running task is abandoned with the reason.
   public static func decide(tasks: [CutoffTask], timeBox: RunTimeBox, now: Date)
     -> [CutoffDecision]
   {
     let left = timeBox.secondsLeft(at: now)
     let ends = timeBox.deadlines.endsAt.formatted(.iso8601)
-    var merging = 0
+    var merging = tasks.filter { $0.stage == .merged }.count * mergeGateSeconds
     return tasks.map { task in
       switch task.stage {
       case .notStarted:
@@ -225,7 +227,17 @@ public enum CutoffRule {
           task: task.id, action: .abandon,
           reason: "still working at the cutoff, \(left) s before the box ends at \(ends); its "
             + "merge wouldn't fit beside final and the report")
-      case .gating, .merged, .landed:
+      case .landed:
+        return CutoffDecision(
+          task: task.id, action: .finishMerge,
+          reason: "its merge and a GREEN merge gate are recorded: only the steps after its merge "
+            + "gate are left")
+      case .merged:
+        return CutoffDecision(
+          task: task.id, action: .finishMerge,
+          reason: "its merge is on main: finish its merge gate (\(mergeGateSeconds) s) and the "
+            + "steps after it, \(left) s before the box ends")
+      case .gating:
         let available = left - merging
         guard mergeGateSeconds + finalAndReportSeconds <= available else {
           return CutoffDecision(

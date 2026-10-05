@@ -280,8 +280,11 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      go on with the loop. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
         already set it `abandoned`, with the reason the report quotes.
-     2. Merge each task in `finish`, in order, as the build loop's completion step does. A
-        conflict or a RED `merge` gate gets no fixer at the cutoff: `build merge --undo`, then
+     2. Merge each task in `finish`, in order, as the build loop's completion step does, from
+        where it stands: a task already merged skips `build merge`, and one in `landed` skips
+        its merge gate too, going straight to `qa run --after`, `ledger set … done` and
+        `worktree remove` (with `--fix` after a fix merge). A conflict or a RED `merge` gate
+        gets no fixer at the cutoff: `build merge --undo`, then
         `"$SG" ledger set <slug> <task> abandoned --session <session> --json`.
      3. Start nothing else, and go to step 8.
 
