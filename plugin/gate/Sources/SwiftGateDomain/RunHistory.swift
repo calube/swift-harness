@@ -57,11 +57,15 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
   /// ``GateReuse/key(_:)`` of the inputs a brownfield tier ran on, so a later run on the same
   /// inputs can answer with this one. Absent for every other run, and when an input was unknown.
   public let reuseKey: String?
+  /// The brownfield areas whose tests the run ran, sorted, so `build check-return` can tell a
+  /// task's added tests ran. Absent for a run with no area step, and in records written before it
+  /// existed.
+  public let testedAreas: [String]?
 
   public init(
     report: RunReport, finishedAt: Date, command: String? = nil, steps: [String]? = nil,
     proofBases: [String]? = nil, headCommit: String? = nil, base: String? = nil,
-    dirty: Bool? = nil, reuseKey: String? = nil
+    dirty: Bool? = nil, reuseKey: String? = nil, testedAreas: [String]? = nil
   ) {
     self.schemaVersion = Self.schemaVersion
     self.runID = report.runID
@@ -77,6 +81,7 @@ public struct RunHistoryRecord: Sendable, Equatable, Codable {
     self.base = base
     self.dirty = dirty
     self.reuseKey = reuseKey
+    self.testedAreas = testedAreas
   }
 }
 

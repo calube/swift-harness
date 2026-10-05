@@ -168,6 +168,13 @@ public struct WarmupTimesFile: Sendable, Equatable {
     return test > budgetSeconds * 1_000
   }
 
+  /// `true` when `slice` runs none of `area`'s changed tests: its whole suite is over
+  /// `budgetSeconds` or unmeasured, and its `test_files` can't narrow a run to them. `merge`
+  /// then runs and proves them.
+  public func sliceSkipsChangedTests(_ area: BrownfieldArea, budgetSeconds: Int) -> Bool {
+    buildsOnly(area.name, budgetSeconds: budgetSeconds)
+  }
+
   private struct StoredArea: Codable {
     let coldMs: Int
     let testMs: Int?

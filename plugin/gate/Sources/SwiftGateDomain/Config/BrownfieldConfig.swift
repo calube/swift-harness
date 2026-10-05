@@ -112,6 +112,14 @@ public struct BrownfieldArea: Sendable, Equatable {
   }
 }
 
+extension BrownfieldArea {
+  /// Whether `test_files` narrows a run to the changed tests (`{tests}` or `{files}`), so `slice`
+  /// can run and prove them even when the whole suite is over its budget.
+  public var selectsChangedTests: Bool {
+    false
+  }
+}
+
 /// 1 `[[allow]]` entry: a finding waived on 1 line, matched by its text's hash, so a moved line
 /// keeps its waiver and an edited one loses it.
 public struct BrownfieldAllow: Sendable, Equatable {

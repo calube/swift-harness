@@ -74,6 +74,14 @@ public struct GateStepTiming: Sendable, Equatable {
   }
 }
 
+extension GateStepTiming {
+  /// The areas an `area-test` step ran for, sorted; `nil` when no step ran for an area, so the
+  /// run wasn't a brownfield tier's.
+  public static func testedAreas(in steps: [GateStepTiming]) -> [String]? {
+    nil
+  }
+}
+
 /// The working tree a run started on. A dirty tree has no tree hash: untracked and modified files
 /// can change a verdict without changing `HEAD`, so it never matches another run. Files under a
 /// `.harness/` directory are the harness's own state and don't make a tree dirty.
