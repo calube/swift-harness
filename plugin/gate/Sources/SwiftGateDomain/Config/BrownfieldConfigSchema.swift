@@ -126,7 +126,8 @@ public enum BrownfieldConfigSchema {
       reader.issues.append(.xcodeTableUnexpected(path: path, area: name, kind: kind))
     }
     reader.rejectUnknownKeys(
-      in: table, at: path, allowed: ["workspace", "project", "inclusion", "manifest", "schemes"])
+      in: table, at: path,
+      allowed: ["workspace", "project", "inclusion", "manifest", "schemes", "packages"])
     let workspace = reader.nonEmptyString(table, "workspace", at: path)
     let project = reader.nonEmptyString(table, "project", at: path)
     if (table["workspace"] == nil) == (table["project"] == nil) {
@@ -138,7 +139,8 @@ public enum BrownfieldConfigSchema {
     guard let inclusion else { return nil }
     return XcodeAreaConfig(
       workspace: workspace, project: project, inclusion: inclusion, manifest: manifest,
-      schemes: reader.stringArray(table, "schemes", at: path) ?? [])
+      schemes: reader.stringArray(table, "schemes", at: path) ?? [],
+      packages: reader.stringArray(table, "packages", at: path) ?? [])
   }
 
   private static func readAllow(_ reader: inout Reader, _ root: [String: ConfigValue])

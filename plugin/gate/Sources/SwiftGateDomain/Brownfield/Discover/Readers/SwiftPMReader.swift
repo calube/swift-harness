@@ -1,49 +1,135 @@
 import Foundation
 
-/// Reads Package.swift files: an area per package, `swift test` with `--filter`.
+/// Reads Package.swift files: an area per package, `swift test` with `--filter`, or `xcodebuild`
+/// on a simulator for a package that declares iOS and not macOS, which `swift test` can't build
+/// on the Mac.
 ///
 /// Area commands run in the area's root, so they name no package path. A package an Xcode area
 /// already builds (beside its project or workspace, or referenced as a local package) is left to
-/// that area, so 1 package never becomes 2 areas.
+/// that area when the area's test scheme runs all its test targets; otherwise it is an area of
+/// its own, whose `test` leaves out the targets the scheme runs.
 public struct SwiftPMReader: EcosystemReader {
   public init() {}
 
   public func areas(in tree: TrackedTreeSnapshot) -> [ProposedArea] {
-    let absorbed = XcodeReader.packageDirectories(claimedIn: tree)
+    let apart = XcodeReader.packagesTestedApart(in: tree)
+    let absorbed = XcodeReader.packageDirectories(claimedIn: tree).subtracting(apart.keys)
     return tree.paths.compactMap { path -> ProposedArea? in
       let parts = path.split(separator: "/").map(String.init)
       // `Package@swift-6.0.swift` variants describe the same package; `Tuist/Package.swift`
       // declares a Tuist project's dependencies, not a package of its own.
       guard parts.last == "Package.swift", parts.dropLast().last != "Tuist" else { return nil }
       let root = SwiftDiscoverPaths.dirname(path)
-      guard !absorbed.contains(root), let data = tree.read(path) else { return nil }
-      let manifest = String(decoding: data, as: UTF8.self)
-      let name =
-        root == "."
-        ? (SwiftDiscoverText.quoted(after: "name:", following: "Package(", in: manifest) ?? "root")
-        : SwiftDiscoverPaths.basename(root)
-      var commands: [AreaStep: Sourced<String>] = [
-        .build: Sourced(value: "swift build", source: path, confidence: .found)
-      ]
-      var missing: [AreaStep: String] = [:]
-      if manifest.contains(".testTarget(") {
-        commands[.test] = Sourced(value: "swift test", source: path, confidence: .found)
+      guard !absorbed.contains(root) else { return nil }
+      return Self.area(manifest: path, in: tree, runElsewhere: apart[root] ?? [])
+    }
+  }
+
+  /// The area the package whose manifest is `path` makes. `runElsewhere` names its test targets an
+  /// Xcode scheme already runs, which this area's `test` leaves out.
+  public static func area(
+    manifest path: String, in tree: TrackedTreeSnapshot, runElsewhere: Set<String> = []
+  ) -> ProposedArea? {
+    let root = SwiftDiscoverPaths.dirname(path)
+    guard let data = tree.read(path) else { return nil }
+    let manifest = String(decoding: data, as: UTF8.self)
+    let name =
+      root == "."
+      ? (SwiftDiscoverText.quoted(after: "name:", following: "Package(", in: manifest) ?? "root")
+      : SwiftDiscoverPaths.basename(root)
+    let skipped = runElsewhere.sorted()
+    var commands: [AreaStep: Sourced<String>] = [:]
+    var missing: [AreaStep: String] = [:]
+    let tests = manifest.contains(".testTarget(")
+    if SwiftPMManifest.isIOSOnly(manifest) {
+      // The scheme Xcode makes for a package: its 1 product's, else `<package>-Package`.
+      let products = SwiftPMManifest.products(in: manifest)
+      let packageName =
+        SwiftDiscoverText.quoted(after: "name:", following: "Package(", in: manifest) ?? name
+      let scheme = SwiftDiscoverText.shellWord(
+        products.count == 1 ? products[0] : "\(packageName)-Package")
+      commands[.build] = Sourced(
+        value: "xcodebuild build -scheme \(scheme) -destination "
+          + XcodeReader.destination(scheme: "iOS", generic: true) + XcodeReader.headlessFlags,
+        source: path, confidence: .guessed)
+      if tests {
+        commands[.test] = Sourced(
+          value: "xcodebuild test -scheme \(scheme) -destination "
+            + XcodeReader.destination(scheme: "iOS", generic: false) + XcodeReader.headlessFlags
+            + skipped.map { " -skip-testing:\(SwiftDiscoverText.shellWord($0))" }.joined(),
+          source: path, confidence: .guessed)
+      }
+    } else {
+      commands[.build] = Sourced(value: "swift build", source: path, confidence: .found)
+      if tests {
+        commands[.test] = Sourced(
+          value: "swift test"
+            + skipped.map { " --skip \(SwiftDiscoverText.shellWord("^\($0)\\."))" }.joined(),
+          source: path, confidence: .found)
         commands[.testFiles] = Sourced(
           value: "swift test --filter {tests}", source: path, confidence: .found)
-      } else {
-        missing[.test] = "no test target in \(path)"
       }
-      if let lint = SwiftDiscoverLint.command(root: root, tree: tree) {
-        commands[.lint] = lint
-      } else {
-        missing[.lint] = SwiftDiscoverLint.missingReason
-      }
-      return ProposedArea(
-        name: SwiftDiscoverText.areaName(name), root: root, language: .swift, kind: .swiftpm,
-        source: path, commands: commands, missing: missing,
-        testGlobs: [SwiftDiscoverPaths.join(root, "Tests/**/*.swift")], xcode: nil,
-        generatedProjectTracked: nil)
     }
+    if !tests { missing[.test] = "no test target in \(path)" }
+    if let lint = SwiftDiscoverLint.command(root: root, tree: tree) {
+      commands[.lint] = lint
+    } else {
+      missing[.lint] = SwiftDiscoverLint.missingReason
+    }
+    return ProposedArea(
+      name: SwiftDiscoverText.areaName(name), root: root, language: .swift, kind: .swiftpm,
+      source: path, commands: commands, missing: missing,
+      testGlobs: [SwiftDiscoverPaths.join(root, "Tests/**/*.swift")], xcode: nil,
+      generatedProjectTracked: nil)
+  }
+}
+
+/// What discover reads from a `Package.swift`'s text, without evaluating it.
+enum SwiftPMManifest {
+  /// The `name:` of every `.testTarget(`.
+  static func testTargets(in manifest: String) -> [String] {
+    names(after: ".testTarget(", in: manifest)
+  }
+
+  /// The `name:` of every `.library(` and `.executable(` product.
+  static func products(in manifest: String) -> [String] {
+    names(after: ".library(", in: manifest) + names(after: ".executable(", in: manifest)
+  }
+
+  /// Whether `platforms:` names iOS and not macOS: such a package often imports UIKit, which
+  /// `swift build` on the Mac can't find.
+  static func isIOSOnly(_ manifest: String) -> Bool {
+    guard let key = manifest.range(of: "platforms:"),
+      let open = manifest[key.upperBound...].firstIndex(of: "[")
+    else { return false }
+    var depth = 0
+    var end = manifest.endIndex
+    for index in manifest[open...].indices {
+      switch manifest[index] {
+      case "[": depth += 1
+      case "]":
+        depth -= 1
+        if depth == 0 { end = index }
+      default: break
+      }
+      if end != manifest.endIndex { break }
+    }
+    let platforms = manifest[open..<end]
+    return platforms.contains(".iOS(") && !platforms.contains(".macOS(")
+  }
+
+  private static func names(after anchor: String, in manifest: String) -> [String] {
+    var names: [String] = []
+    var rest = manifest[...]
+    while let range = rest.range(of: anchor) {
+      rest = rest[range.upperBound...]
+      let body = rest.drop { $0.isWhitespace }
+      guard body.hasPrefix("name:"),
+        let name = SwiftDiscoverText.quoted(after: "name:", in: String(body))
+      else { continue }
+      names.append(name)
+    }
+    return names
   }
 }
 

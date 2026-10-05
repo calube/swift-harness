@@ -1,0 +1,19 @@
+excluded:
+  - vendor
+  - ScanNow/generated
+  - App/Sources/ScanNowCore/generated
+  - App/Tests/ScanNowCoreTests/generated
+  - AppStoreSnapshots/SnapshotHelper.swift
+  - fastlane
+  - App/.build
+
+disabled_rules:
+  - todo
+  - trailing_comma
+
+opt_in_rules:
+  - file_header
+
+comma: error
+colon:
+  severity: error

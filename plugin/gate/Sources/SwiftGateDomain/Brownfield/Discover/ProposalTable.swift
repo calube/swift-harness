@@ -67,6 +67,8 @@ public struct DiscoverRecord: Sendable, Equatable, Codable {
     public let inclusion: XcodeInclusion
     public let manifest: String?
     public let schemes: [String]
+    /// Optional, so a record without the key still decodes.
+    public let packages: [String]?
     public let source: String
     public let confidence: Confidence
   }
@@ -148,7 +150,8 @@ extension DiscoverRecord.Area {
         DiscoverRecord.Xcode(
           workspace: $0.value.workspace, project: $0.value.project,
           inclusion: $0.value.inclusion, manifest: $0.value.manifest,
-          schemes: $0.value.schemes, source: $0.source, confidence: $0.confidence)
+          schemes: $0.value.schemes, packages: $0.value.packages, source: $0.source,
+          confidence: $0.confidence)
       },
       generatedProjectTracked: area.generatedProjectTracked)
   }
@@ -167,7 +170,8 @@ extension DiscoverRecord.Area {
         Sourced(
           value: XcodeAreaConfig(
             workspace: $0.workspace, project: $0.project, inclusion: $0.inclusion,
-            manifest: $0.manifest, schemes: $0.schemes), source: $0.source,
+            manifest: $0.manifest, schemes: $0.schemes, packages: $0.packages ?? []),
+          source: $0.source,
           confidence: $0.confidence)
       },
       generatedProjectTracked: generatedProjectTracked)
