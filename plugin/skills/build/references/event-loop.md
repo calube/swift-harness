@@ -195,8 +195,9 @@ Merges land on `main` 1 at a time: `build merge --undo` takes back only the newe
 second merge on top of an ungated one would block its undo. `build next` reports the queue.
 `merging` is the merge on `main` whose task isn't done yet. `readyToMerge` lists each running task
 whose checked return waits to merge, in the order `build check-return` passed them, with
-`fix: true` for a fixer's return, which merges with `--fix`. Merge the first task in `readyToMerge` only while
-`merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
+`fix: true` for a fixer's return, which merges with `--fix`. A task whose halt was answered `retry`
+after its return was checked is in `fixing` instead, until its fixer's return is checked. Merge the
+first task in `readyToMerge` only while `merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
 run.
 
 A task whose return `build check-return` passed, or whose merge is on `main`, holds no slot: its
@@ -298,10 +299,10 @@ end the span by its outcome: `"$SG" events span end <span> --outcome ok` for `re
 else `"$SG" events span end <span> --outcome red`.
 
 Then record its usage under the task it fixed:
-`"$SG" events ingest --session <session> --agent-id <agent> --role build-worker --task <task> --build-run <run>`,
+`"$SG" events ingest --session <session> --agent-id <agent> --role build-fixer --task <task> --build-run <run>`,
 with the `<agent>` its launch named. The fixer is
-this session's own subagent, which the session's own ingest files as the orchestrator's, so run this
-one first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
+this session's own subagent, which the session's own ingest files as `build-fixer` with no task,
+so run this one first. As at each completion, an exit 2 that says `telemetry is off` means say nothing, and any
 other non-zero exit prints 1 line for the report and the step goes on.
 
 Write its reply, the notice's `<result>`, to `.harness/build/<run>/fix-<task>.json` and check it.

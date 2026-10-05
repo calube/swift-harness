@@ -1,0 +1,8 @@
+{
+  "name": "Monitor",
+  "input": {
+    "description": "second qa run at-base finishing",
+    "timeout_ms": 600000,
+    "command": "until [ -s /TMP/cb039a0d-04f4-428a-b575-e73a1e11d628/tasks/br6qrysvd.output ] && ! pgrep -f 'swiftgate qa run --plan spec' >/dev/null; do sleep 2; done; echo done"
+  }
+}

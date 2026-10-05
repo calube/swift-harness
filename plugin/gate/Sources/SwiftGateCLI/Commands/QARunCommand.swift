@@ -56,6 +56,9 @@ enum QARunRun {
     var deadline: QARunDeadline?
     /// Merges the branch a `--before-merge` run checks into its scratch tree.
     var merger: any MergeRunner = LiveMergeRunner(runner: LiveProcessRunner())
+    /// Told the run's id and where its report will be written, once its run directory exists
+    /// and before any row runs, so a caller can wait on that file.
+    var started: (@Sendable (_ runID: String, _ report: URL) -> Void)? = nil
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -253,6 +256,7 @@ enum QARunRun {
     } catch {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
+    dependencies.started?(runID, qaDirectory.appending(path: QAReport.fileName))
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
@@ -1023,7 +1027,14 @@ struct QARunCommand: AsyncParsableCommand {
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
         testDevices: LiveTestDeviceLeases(runner: runner),
-        deadline: await QARunRun.deadline(root: root, runner: runner, final: final)))
+        deadline: await QARunRun.deadline(root: root, runner: runner, final: final),
+        started: { runID, report in
+          // Before any row runs, so a caller that backgrounds the run waits on this file.
+          let line =
+            "\(QARunRun.command): run \(runID) started; its report will be written to "
+            + "\(report.path)\n"
+          FileHandle.standardError.write(Data(line.utf8))
+        }))
     let reportFile = report.runID.flatMap { runID in
       (try? RunStore(worktreeRoot: root).runDirectory(for: runID))?
         .appending(path: "\(QAReport.directory)/\(QAReport.fileName)").path

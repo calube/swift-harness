@@ -191,7 +191,7 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   it red first. A screen is a `Writes` path inside the area's root with a folder or file named
   `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or a
   `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
-  `…Reducer` or `…ViewModel`. The contract's stubs don't count. A requirement no flow can check
+  `…Reducer` or `…ViewModel`. The contract's stubs don't count. Such a requirement no flow can check
   opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
   `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. An existing-tests requirement opens its reason-only row with `gate:` and the tier, `final` or `merge`. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
@@ -329,7 +329,8 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      reports `phase` `cutoff`, or when a `build next` reports `no-new-starts` with nothing in
      `toStart` or `running` while tasks are still pending. Exit 1 means the cutoff hasn't come:
      go on with the loop. It prices each task's landing from this run's recorded merge and
-     `final` gates, using fixed estimates only before any is recorded, and charges a task's
+     `final` gates, using fixed estimates only before any is recorded; before any `final`, it
+     prices `final` by the area steps it can't take from the merge gates' passes, and charges a task's
      before-merge `qa run` unless a GREEN one covers its tip. It lands a task whenever that fits
      before the box ends. Its JSON decides every task, and you follow it as written:
      1. `TaskStop` the workflow and the stall watch of each task in `abandoned`: the command
