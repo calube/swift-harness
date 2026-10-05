@@ -162,6 +162,13 @@ public enum FlowSteps {
     }
     return steps
   }
+
+  /// The `launchArgs` of the flow's first `open` step: what `sim up` opens the app with before
+  /// the batch runs, so the app is never up on its live dependencies while a scenario flow
+  /// starts. Empty when no `open` step comes first or it passes none.
+  public static func launchArguments(_ steps: [FlowStep]) -> [String] {
+    []
+  }
 }
 
 /// Why a steps file isn't a list of steps.

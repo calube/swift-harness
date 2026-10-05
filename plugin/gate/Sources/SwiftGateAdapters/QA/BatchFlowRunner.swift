@@ -19,6 +19,9 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
   public var simDirectory: URL
   /// `nil` launches the app with its live dependencies.
   public var scenario: String?
+  /// What `sim up` opens the app with in place of the scenario's argument: the flow's first
+  /// `open` step's `launchArgs`. `nil` opens it with the scenario's.
+  public var launchArguments: [String]?
   /// Which controls `sim verify`'s accessibility rules judge.
   public var audit: SimAuditScope
   /// The `qa run`'s device the row borrows; `nil` brings a device up for the row alone.
@@ -26,12 +29,14 @@ public struct QAFlowSimulatorRequest: Sendable, Equatable {
 
   public init(
     worktree: URL, runID: String, simDirectory: URL, scenario: String?,
-    audit: SimAuditScope = .everyControl, hold: QAFlowDeviceHold? = nil
+    launchArguments: [String]? = nil, audit: SimAuditScope = .everyControl,
+    hold: QAFlowDeviceHold? = nil
   ) {
     self.worktree = worktree
     self.runID = runID
     self.simDirectory = simDirectory
     self.scenario = scenario
+    self.launchArguments = launchArguments
     self.audit = audit
     self.hold = hold
   }
