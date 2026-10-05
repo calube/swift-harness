@@ -13,6 +13,15 @@ public struct AreaTestCountReader: Sendable {
 
   /// `nil` when the step left no report that reads.
   public func counts(of request: AreaCommandRequest) async -> JUnitCounts? {
-    nil
+    if let junit = request.junitPath, let report = JUnitReportFiles.read(at: junit),
+      let counts = AreaOutcomeReading.junitCounts(report)
+    {
+      return counts
+    }
+    guard let bundle = request.resultBundlePath, FileManager.default.fileExists(atPath: bundle),
+      let contents = try? await xcresults.read(bundlePath: bundle),
+      let report = XcresultTestReport.junit(fromTests: contents.testResults)
+    else { return nil }
+    return AreaOutcomeReading.junitCounts(report)
   }
 }

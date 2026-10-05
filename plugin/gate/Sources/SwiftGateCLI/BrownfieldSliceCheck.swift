@@ -600,8 +600,10 @@ enum BrownfieldSliceCheck {
         plan, template: template, step: step, repositoryRoot: repositoryRoot,
         dependencies: dependencies)
     }
-    let (outcome, milliseconds) = await GateRun.timed {
-      await dependencies.runner.run(atHead(request(root), dependencies))
+    let head = atHead(request(root), dependencies)
+    let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(head) }
+    if let counts = await dependencies.testCounts.counts(of: head) {
+      context.areaTests.record(AreaTestCounts(area: area.name, step: step, counts: counts))
     }
     context.steps.record(
       .areaTest, tier: nil, milliseconds: milliseconds,

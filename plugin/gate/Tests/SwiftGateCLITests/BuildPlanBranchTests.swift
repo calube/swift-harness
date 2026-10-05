@@ -352,8 +352,9 @@ struct BuildPlanBranchTests {
       .record(
         try RunReport(
           runID: runID, durationMilliseconds: 1,
-          tiers: [try TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1, testCounts: nil)],
-          findings: []),
+          tiers: [
+            try TierResult(tier: .t1, verdict: .green, durationMilliseconds: 1, testCounts: nil)
+          ], findings: []),
         finishedAt: PinnedClock().now(), command: "check slice", headCommit: tip)
 
     let removed = await WorktreeRun.remove(
@@ -368,8 +369,8 @@ struct BuildPlanBranchTests {
     #expect(FileManager.default.fileExists(atPath: kept.path), "\(removed.message)")
     let checkout = StateRootResolver.resolve(
       worktree: URL(filePath: scenario.checkout, directoryHint: .isDirectory))
-    #expect(
-      !FileManager.default.fileExists(atPath: checkout.url(RunLayout.runDirectory(for: runID)).path))
+    let left = checkout.url(RunLayout.runDirectory(for: runID))
+    #expect(!FileManager.default.fileExists(atPath: left.path))
   }
 
   @Test(

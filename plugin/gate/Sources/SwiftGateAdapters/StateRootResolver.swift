@@ -66,6 +66,12 @@ public enum StateRootResolver {
     return .gitDir(common)
   }
 
+  /// Where a removed worktree's runs go: the clone's ``keptRuns(commonDir:)`` when it has them,
+  /// else the state root of `mainCheckout`, the checkout its work merges into.
+  public static func keptRuns(commonDir: URL, mainCheckout: URL) -> StateRoot {
+    keptRuns(commonDir: commonDir) ?? resolve(worktree: mainCheckout)
+  }
+
   /// The brownfield state layout of the clone holding `worktree`; `nil` when `worktree` is in no
   /// git checkout or its common dir holds no `config.toml`.
   public static func brownfieldLayout(worktree: URL) -> BrownfieldStateLayout? {

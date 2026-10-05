@@ -105,7 +105,7 @@ public struct RunStore: Sendable {
     let line: Data
     do {
       reportData = try RecordedRunReport.encode(
-        RecordedRunReport(report: report, headCommit: headCommit))
+        RecordedRunReport(report: report, headCommit: headCommit, areaTests: areaTests))
       line = try RunHistoryJSON.encodeLine(
         RunHistoryRecord(
           report: report, finishedAt: finishedAt, command: command, steps: steps,

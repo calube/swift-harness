@@ -93,7 +93,8 @@ enum GateRun {
         dirty: telemetry.tree?.dirty, gateSteps: context.steps.steps, checkTier: checkTier,
         testResults: context.tests.cases, baselineCount: parts.baselineCount,
         proofs: context.proofs.results, flows: context.flows.flows,
-        reuseKey: telemetry.tree?.dirty == false ? reuseKey : nil)
+        reuseKey: telemetry.tree?.dirty == false ? reuseKey : nil,
+        areaTests: context.areaTests.all)
     }
     Console.write(
       try ReportRenderer.render(
@@ -235,9 +236,15 @@ final class AreaTestCountCollector: Sendable {
   init() {}
 
   func record(_ counted: AreaTestCounts) {
+    counts.withLock { $0.append(counted) }
   }
 
-  var all: [AreaTestCounts] { counts.withLock { $0 } }
+  var all: [AreaTestCounts] {
+    let order = AreaStep.allCases
+    return counts.withLock { $0 }.sorted {
+      ($0.area, order.firstIndex(of: $0.step) ?? 0) < ($1.area, order.firstIndex(of: $1.step) ?? 0)
+    }
+  }
 }
 
 /// The kept flows 1 gate run's T3 recorded, in the order it handed them over.
