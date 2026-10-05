@@ -3227,6 +3227,40 @@ The `sed` replaces the trial folder in the ledger's worktree paths and the clock
 which hold machine paths. `grep -rniE '/Users|/private|/var/folders|caleb' RunView/tic-tac-toe-1-kept-runs`
 matched nothing.
 
+## Run report: every evidence path a row lists
+
+`RunView/tic-tac-toe-2-evidence/` is the second tic-tac-toe trial's plan state, build run
+`20261005T014044Z-0066dd3b` of plan `spec`, for the report folder's evidence copies. It holds every
+`qa run`'s `report.json`, and the whole evidence of row 1 of the final run
+`20261005T020215Z-2bdf5cdb`: its flow folder, its logs and its app container. Rows 2 to 5 and the
+earlier runs keep no evidence, so a report has paths it can't copy. Its `ledger-events.jsonl` also
+holds the same merge gate recorded twice. `S` is the trial folder. From the repository root:
+
+```sh
+S=<trial folder> R=$S/repo/.git/swift-harness X=$PWD/plugin/gate/Tests/Fixtures/RunView/tic-tac-toe-2-evidence
+B=$R/plans/spec/build/20261005T014044Z-0066dd3b Q=20261005T020215Z-2bdf5cdb
+scrub() { LC_ALL=C sed -e "s#$S/#/TRIAL/#g" -e "s#$HOME/#/HOME/#g" "$1" > "$2"; }
+mkdir -p $X/events $X/returns
+cp $R/events/qa.jsonl $R/events/store.json $X/events/
+scrub $R/plans/spec/ledger.json $X/ledger.json
+scrub $R/plans/spec/clock.json $X/clock.json
+cp $R/plans/spec/plan.json $X/plan.json
+cp $B/run.json $X/run.json
+cp $B/events.jsonl $X/ledger-events.jsonl
+cp $B/returns/*.json $X/returns/
+for d in $R/runs/*/qa; do r=$(basename $(dirname $d)); mkdir -p $X/runs/$r/qa; cp $d/report.json $X/runs/$r/qa/; done
+cd $R/runs/$Q
+find qa/01-req-launch-empty-board.flow qa/logs/01-req-launch-empty-board -type d -exec mkdir -p "$X/runs/$Q/{}" \;
+find qa/01-req-launch-empty-board.flow qa/logs/01-req-launch-empty-board -type f -print0 | while IFS= read -r -d '' f; do
+  if LC_ALL=C grep -qaF "$HOME/" "$f"; then scrub "$f" "$X/runs/$Q/$f"; else cp "$f" "$X/runs/$Q/$f"; fi
+done
+```
+
+`scrub` replaces the trial folder with `/TRIAL/` and the home folder with `/HOME/` in each text
+file that names them, and changes nothing else. Git keeps no empty folder, so the container's
+empty `Documents`, `tmp`, `SystemData`, `Library/Preferences` and `Library/Caches` aren't here.
+`grep -rlaE '/Users|/var/folders|caleb' RunView/tic-tac-toe-2-evidence` matched nothing.
+
 ## Run view: every qa run of a row
 
 `RunView/aidoku-validation-3/` is the third iOS validation trial on `Aidoku/Aidoku`, build run

@@ -181,7 +181,7 @@ struct ReportWholeTests {
   }
 
   @Test(
-    "an ended run's report is a folder of its page, its guarded view and copies of the flow files it links, and nothing else, that still opens and renders again after the plan state and run stores are removed — catches a report that dies with plan cleanup"
+    "an ended run's report is a folder of its page, its guarded view and copies of the flow and evidence files it links, and nothing else, that still opens and renders again after the plan state and run stores are removed — catches a report that dies with plan cleanup"
   )
   func finalReportSurvivesCleanup() throws {
     let (repository, qaRun, _) = try ViewCommandTests.flowRepository()
@@ -202,6 +202,15 @@ struct ReportWholeTests {
       }
     }
     #expect(expected.count > 2, "the captured flows link no file")
+    let rows = try #require(
+      (printed["validation"] as? [String: Any])?["rows"] as? [[String: Any]])
+    for row in rows {
+      let run = try #require(row["qaRun"] as? String)
+      for path in (row["evidence"] as? [String]) ?? [] {
+        let file = repository.root.appending(path: ".harness/runs/\(run)/\(path)")
+        if FileManager.default.fileExists(atPath: file.path) { expected.insert("runs/\(run)/\(path)") }
+      }
+    }
 
     let folderPath = ".harness/reports/\(Self.buildRun)"
     #expect(Self.run(repository, .html) == .wrote(path: "\(folderPath)/index.html"))
@@ -216,6 +225,14 @@ struct ReportWholeTests {
     var embedded = try Self.object(block)
     #expect(embedded["evidenceBase"] as? String == "runs/")
     embedded["evidenceBase"] = NSNull()
+    #expect(
+      Set(try #require(embedded["evidenceFiles"] as? [String]).map { "runs/\($0)" })
+        == expected.subtracting(["index.html", "view.json"]))
+    embedded["evidenceFiles"] = NSNull()
+    // Only the report names the linked files it couldn't copy.
+    embedded["damage"] = try #require(embedded["damage"] as? [[String: Any]]).filter {
+      ($0["source"] as? String)?.hasPrefix(RunReportFolder.evidenceBase) != true
+    }
     #expect(NSDictionary(dictionary: embedded).isEqual(to: printed))
     for name in expected where name.hasSuffix(".html") || name.hasSuffix(".json") {
       let text = try String(contentsOf: folder.appending(path: name), encoding: .utf8)

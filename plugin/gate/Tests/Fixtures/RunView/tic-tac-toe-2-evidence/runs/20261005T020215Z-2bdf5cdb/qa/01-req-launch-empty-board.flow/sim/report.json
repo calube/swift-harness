@@ -1,0 +1,16 @@
+{
+  "blocked" : null,
+  "checkoutHead" : "df9ccd51a33f64984c61485eaf201cbb5c3d925d",
+  "command" : "sim verify",
+  "findings" : [
+
+  ],
+  "headCommit" : "df9ccd51a33f64984c61485eaf201cbb5c3d925d",
+  "notes" : [
+
+  ],
+  "runID" : "20261005T020215Z-2bdf5cdb-row1",
+  "schemaVersion" : 1,
+  "stepCount" : 11,
+  "verdict" : "GREEN"
+}
