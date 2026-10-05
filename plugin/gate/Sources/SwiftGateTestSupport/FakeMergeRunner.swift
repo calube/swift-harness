@@ -61,6 +61,11 @@ public final class FakeMergeRunner: MergeRunner {
     subject
   }
 
+  /// The commit ``commit(of:in:)`` answers for `ref`, as its tree's name.
+  public func tree(of ref: String, in checkout: String) async throws(GitWorkspaceError) -> String {
+    "tree-" + (try await commit(of: ref, in: checkout))
+  }
+
   public func merge(_ branch: String, message: String, in checkout: String)
     async throws(GitWorkspaceError) -> MergeOutcome
   {

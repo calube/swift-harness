@@ -29,6 +29,14 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let notes: [String]
 }
 
+/// What `build cutoff` reads of the run's past to price landing each task.
+struct CutoffHistory: Sendable {
+  /// Each recorded gate run's duration in milliseconds, by run id.
+  var gateMilliseconds: [String: Int] = [:]
+  /// The plan's `qa run --before-merge` reports.
+  var beforeMergeReports: [QAReport] = []
+}
+
 /// `build cutoff`: the brownfield run's answer to the time box's cutoff, decided by
 /// ``CutoffRule`` with no one asked.
 enum BuildCutoffRun {
@@ -42,10 +50,11 @@ enum BuildCutoffRun {
   ///     leaves both alone.
   ///   - finalSeconds: how long the clone's `final` gate takes, which grows the final reserve and
   ///     brings the cutoff earlier.
+  ///   - history: the gates and before-merge qa runs that price each task's landing.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock,
     telemetry: BuildCutoffTelemetry?, leftovers: (any RunLeftovers)? = nil,
-    finalSeconds: Int? = nil
+    finalSeconds: Int? = nil, history: CutoffHistory = CutoffHistory()
   ) async -> BuildLoopResult<BuildCutoffReport> {
     if let refusal: BuildLoopResult<BuildCutoffReport> = await BuildLoop.authorize(
       command, slug: slug, session: session, git: git)

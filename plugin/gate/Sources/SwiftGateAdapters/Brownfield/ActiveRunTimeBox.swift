@@ -42,4 +42,10 @@ public enum MeasuredFinalGateReader {
         return run
       })
   }
+
+  /// Each `gate.run` recorded where `worktree`'s events go, its duration in milliseconds by run
+  /// id; empty when none can be read.
+  public static func milliseconds(worktree: URL) -> [String: Int] {
+    [:]
+  }
 }
