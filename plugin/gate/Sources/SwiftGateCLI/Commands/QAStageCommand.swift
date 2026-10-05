@@ -146,8 +146,8 @@ struct QAStageCommand: AsyncParsableCommand {
       + "flow repair.",
     discussion:
       "Removes the checkout's .harness/qa/, then copies each check file the plan's "
-      + "validation.json rows for the requirement name from the plan's qa/ into "
-      + ".harness/qa/<plan>/, keeping each file's permissions. Copies nothing unless the "
+      + "validation.json rows for the requirement name from the plan's qa/"
+      + " into .harness/qa/<plan>/, keeping each file's permissions. Copies nothing unless the "
       + "checkout is one `git worktree list` names and every file is in plan state. Exits 0 "
       + "when it filled the folder, 1 when it refused, and 2 when plan state can't be read.")
 
