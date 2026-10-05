@@ -224,9 +224,10 @@ extension GateReuseTests {
 
     let test = "UITests/LaunchFlowUITests.swift"
     let blob: String? = "f7ee87b460b1e3bc4166c0afdc1cdbc41fa951f9"
-    func inputs(_ run: GateRunEvent, proofBase: String, tree: String? = nil, binary: String? = nil,
-      config: String = "c1") -> GateReuse.Inputs
-    {
+    func inputs(
+      _ run: GateRunEvent, proofBase: String, tree: String? = nil, binary: String? = nil,
+      config: String = "c1"
+    ) -> GateReuse.Inputs {
       GateReuse.Inputs(
         tier: run.tier, treeHash: tree ?? run.treeHash, mergeBase: proofBase,
         sourceHash: binary ?? run.sourceHash,
