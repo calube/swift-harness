@@ -82,6 +82,10 @@ runs beside them.
 
 ## 1. Read the spec
 
+Start the live run viewer: `"$SG" view --ensure` prints its URL, or nothing under
+`SWIFTGATE_VIEW=off`. Print `Live: <url>`. It shows the build run once step 7 starts it, and step 7's
+call reuses it. A failure prints 1 line for the report and never stops the run.
+
 Open the phase: `"$SG" events span start --phase spec-read --build-run <slug>`, kept as `<span>`.
 
 Read `<spec>` whole. List what it asks for as numbered requirements, each a sentence a test could
@@ -170,6 +174,13 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
+- A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
+  when an acceptance UI test also checks it, so `qa run` records its journey and proves it red
+  first. A
+  task writes a screen when a `Writes` path inside the area's root has a folder or file named
+  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
+  `.storyboard` or `.xib`. A requirement no flow can check gives the reason in its row's `Reason`.
+  The import fails naming each requirement that has neither.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
@@ -341,8 +352,9 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    whole at the merge base, with no test id, is `baseline.whole-step` and RED. Each baseline finding
    names where the head's and the merge base's output tail and report were kept: read those first.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
-3. `"$SG" qa run --plan <slug> --json` in `<checkout>` runs every validation row whose tasks
-   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict with a `red` row
+3. `"$SG" qa run --plan <slug> --final --json` in `<checkout>` runs every validation row whose
+   tasks merged, and records each flow with a video. Read its verdict, and keep its `runID` and
+   rows for item 5 and step 9. A RED verdict with a `red` row
    counts as a red `final` in item 4, whose fix task owns the files the red rows' checks exercise,
    and item 4's second `final` runs this item again. After `final` a row that never verified,
    `unverified` or `abandoned`, is RED too; with no `red` row no fix task makes it run, so it
@@ -353,7 +365,10 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    span with `"$SG" events span end <span> --outcome red`, goes on to item 5 and ends the run RED;
    the report quotes its findings as `rule: message`. Past the cutoff a fix task doesn't fit in
    the box: a red `final` then goes straight to item 5 and ends the run RED.
-5. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+5. `"$SG" build finish <slug> --session <session> --qa-run <runID> --json`, naming item 3's
+   newest `runID`. A plan with a validation table can't finish without the newest `qa run
+   --final` and its id: `build finish` refuses, naming that run and its verdict. It records the
+   verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
    reports in the user's checkout, and `<plan-branch>` holds every commit.

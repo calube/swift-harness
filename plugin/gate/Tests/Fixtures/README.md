@@ -1580,6 +1580,29 @@ cp .harness/events/span.jsonl <fixtures>/RunView/span-sequence/span.jsonl
 The file holds the 4 lines written, unedited. `grep -ciE '/Users|/private|/var/folders|/tmp|caleb|swift-harness' RunView/span-sequence/span.jsonl`
 printed 0.
 
+`RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
+`RunView/build-run-1` once `report --html` had written its final report, for the live view's
+snapshot test. The test drops `cursor`, a digest of file times. Captured at the commit that adds
+`/final`, from `plugin/gate` after `swift build`:
+
+```sh
+SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
+export SWIFTGATE_HARNESS_ROOT=$PWD/.. LLVM_PROFILE_FILE=$T/%p.profraw
+mkdir $T/app && cd $T/app && git init -q && : > .swiftgate.toml
+RUN=20261004T045528Z-58d28c78 P=.git/swift-harness/plans/2026-10-03-counter-reset-and-floor
+mkdir -p $P/build/$RUN .harness
+cp $F/ledger.json $F/plan.json $P/ && cp $F/plan.md $P/spec-page.md && cp $F/run.json $P/build/$RUN/
+cp $F/ledger-events.jsonl $P/build/$RUN/events.jsonl && cp -R $F/returns $P/build/$RUN/returns
+cp -R $F/events .harness/events && cp -R $F/runs .harness/runs
+$SG report --html $RUN                                  # wrote .harness/reports/<run>/index.html
+$SG view --build-run $RUN --port 58431 &
+curl -sf -o $T/view.json http://127.0.0.1:58431/view.json && kill %1
+cp $T/view.json <fixtures>/RunView/view-json/build-run-1-final.json
+```
+
+The file is the answer as served, unedited. `grep -ciE '/Users|/private|/var/folders|/tmp|caleb|swift-harness' RunView/view-json/build-run-1-final.json`
+printed 0.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can
@@ -2915,6 +2938,33 @@ PY
 The plan is the heredoc's text, unchanged. `grep -niE '/Users|/private|/var/folders|caleb'` on
 both files matched nothing.
 
+## Brownfield trial: a UI plan with no flow row, finished on a RED qa run
+
+The first tic-tac-toe trial ran `swiftgate run spec.md` on an iOS app starter with 1 `xcode`
+area rooted at `.`. `BrownfieldTrial/tic-tac-toe-1-PLAN.md` is its `PLAN.md`: the
+`ttt-screen` task writes `Packages/AppFeature/Sources/AppUI/` and `UITests/` and covers 3
+requirements whose only rows are acceptance rows naming 1 XCUITest class, with no `flow` row
+(finding 4). `tic-tac-toe-1-config.toml` is the clone's `config.toml`, and
+`tic-tac-toe-1-plan.json` and `tic-tac-toe-1-validation.json` are what `plan import` wrote from
+that plan. `tic-tac-toe-1-qa/<run>/qa/report.json` holds the 2 `qa run --plan spec` reports of
+step 8, both RED and neither `--final`; the orchestrator ran `build finish` before it read the
+second (finding 10). `S` is the trial folder, which kept the clone's plan state and each run's
+`qa/` folder. From the repository root:
+
+```sh
+S=<trial folder> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+mkdir -p $F/tic-tac-toe-1-qa
+cp $S/PLAN.md $F/tic-tac-toe-1-PLAN.md
+cp $S/config.toml $F/tic-tac-toe-1-config.toml
+cp $S/plan.json $F/tic-tac-toe-1-plan.json
+cp $S/validation.json $F/tic-tac-toe-1-validation.json
+for r in 20261005T010144Z-9350394a 20261005T010428Z-75c783e4; do
+  mkdir -p $F/tic-tac-toe-1-qa/$r/qa && cp $S/qa-runs/$r/report.json $F/tic-tac-toe-1-qa/$r/qa/
+done
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/tic-tac-toe-1-*` matched nothing.
+
 ## Brownfield trial: a flow row's sim run on an iOS clone
 
 `BrownfieldTrial/aidoku-setting-flow/` is flow row 1 of the second iOS validation trial on
@@ -3015,4 +3065,52 @@ cp $S/cutoff.json $F/aidoku-validation-3-cutoff.json
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-validation-3-*` matched
+nothing.
+
+## QA: a test runner the busy shared simulator refused to launch
+
+`QA/runner-launch/` and `Xcresult/runner-busy.*` come from a brownfield trial whose `test:`
+acceptance rows ran `xcodebuild test -destination 'platform=iOS Simulator,name=iPhone 17'` on the
+shared device while other sessions launched on it. `busy-1.tail.txt` and `busy-2.tail.txt` are the
+ends of 2 rows' saved output (`qa/<row>.acceptance.txt`, stdout then stderr) from 2 `qa run`s, each
+exit 65 with "Failed to install or launch the test runner … Busy (\"Application failed preflight
+checks\")". `passed.tail.txt` is the end of a passing row's output from the same run as `busy-1`.
+`Xcresult/runner-busy.{tests,build-results}.json` are read from `busy-1`'s result bundle, and
+`runner-busy.status` is that run's exit status. From `plugin/gate/Tests/Fixtures`, with `S` the
+trial folder and `APP`, `CLASS`, `REQ` the app's name, its UI test class and the busy row's
+requirement:
+
+```sh
+SCRUB="s#$S/#/TRIAL/#g; s#/Users/[^/]*/#/HOME/#g; s#$APP#App#g; s#$CLASS#MainFlowUITests#g; s#$REQ#req-reset#g"
+tailfrom() { a=$(grep -n "$2" "$1" | head -1 | cut -d: -f1); sed -n "$a,\$p" "$1" | sed -E "$SCRUB"; }
+mkdir -p QA/runner-launch
+tailfrom $S/qa-runs/<busy-1 run>/<row>.acceptance.txt '^\*\*\* If you believe' > QA/runner-launch/busy-1.tail.txt
+tailfrom $S/qa-runs/<busy-2 run>/<row>.acceptance.txt '^\*\*\* If you believe' > QA/runner-launch/busy-2.tail.txt
+tailfrom $S/qa-runs/<busy-1 run>/<passing row>.acceptance.txt '^Test session results' > QA/runner-launch/passed.tail.txt
+B=$S/repo/.harness/runs/<busy-1 run>/qa/<row>.acceptance.xcresult
+xcrun xcresulttool get test-results tests --path $B | sed -E "$SCRUB" > Xcresult/runner-busy.tests.json
+xcrun xcresulttool get build-results --path $B | sed -E "$SCRUB" > Xcresult/runner-busy.build-results.json
+echo 65 > Xcresult/runner-busy.status
+```
+
+The `sed` replaces the trial folder with `/TRIAL/`, the home folder with `/HOME/`, and the app,
+class and requirement names, and changes nothing else. The result bundle's only failing case is
+the runner's own "encountered an error", whose message is the launch failure.
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/runner-launch Xcresult/runner-busy.*` matched
+nothing.
+
+## Brownfield trial: a clone that commits its own config
+
+`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A
+brownfield one-shot trial ran `swiftgate run spec.md` on a fresh copy of the starter, and its
+discovery wrote the common dir's `config.toml` beside this committed file, so every command in the
+user's checkout failed on the 2 configs. The copy in that trial's repository matched this file byte
+for byte. From the repository root:
+
+```sh
+cp evals/apps/interview-starter/.swiftgate.toml \
+  plugin/gate/Tests/Fixtures/BrownfieldTrial/starter-swiftgate.toml
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/starter-swiftgate.toml` matched
 nothing.

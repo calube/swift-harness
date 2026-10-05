@@ -1,5 +1,5 @@
 // Checks the run viewer's board module: the pure lane rules, then the module in headless Chrome
-// with a RunView built here, moving a card as partials arrive, badging its tab, and opening the task
+// with a RunView built here, moving a card as polled views arrive, badging its tab, and opening the task
 // popover and from it the drawer.
 // Run: node tests/run_viewer_board_test.mjs
 // Regressions caught: a halt hidden behind the task's stage, a pending task shown as started before
@@ -102,27 +102,43 @@ const unitTests = {
   },
 }
 
-// A worker building `list`; the first partial ends the worker and opens review, the second merges it.
+// The whole view the next poll answers: `view` with each row of `rows` in place of the row with
+// its key, or added after the rest.
+function nextView(view, rows) {
+  const out = { ...view }
+  for (const [field, list] of Object.entries(rows)) {
+    const key = field === 'gates' ? 'runId' : 'id'
+    const merged = (view[field] || []).slice()
+    for (const row of list) {
+      const at = merged.findIndex((r) => r[key] === row[key])
+      if (at >= 0) merged[at] = row; else merged.push(row)
+    }
+    out[field] = merged
+  }
+  return out
+}
+
+// A worker building `list`; the first poll ends the worker and opens review, the second merges it.
 const liveView = runView({
   spec: [{ id: 'req-list', title: 'List notes', tasks: ['list'] }],
   tasks: [task('list', { status: 'in-progress', model: 'sonnet', covers: ['req-list'] }), task('later', { deps: ['list'] })],
   spans: [span('run', null, 'run', 0, null), span('tl', 'run', 'task', 2, null, { task: 'list' }),
     span('wl', 'tl', 'worker', 2, null, { task: 'list' })],
 })
-const partials = [
+const polled = [
   {
-    cursor: 'c1',
     spans: [span('wl', 'tl', 'worker', 2, 8, { task: 'list' }), span('gl', 'tl', 'gate', 8, 9, { task: 'list', gateRun: 'g-list', outcome: 'ok' }),
       span('rl', 'tl', 'review', 9, null, { task: 'list' })],
     gates: [gate('g-list', 'list', 'GREEN')],
   },
   {
-    cursor: 'c2',
     tasks: [task('list', { status: 'done', model: 'sonnet', covers: ['req-list'], commits: ['4be91c0'], mergeGateRun: 'g-list', mergedAt: at(12) })],
     spans: [span('rl', 'tl', 'review', 9, 11, { task: 'list' }), span('ml', 'tl', 'merge', 11, 12, { task: 'list', gateRun: 'g-list' }),
       span('tl', 'run', 'task', 2, 12, { task: 'list' })],
   },
 ]
+const firstPoll = nextView(liveView, polled[0])
+const secondPoll = nextView(firstPoll, polled[1])
 
 function writePage() {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-board-'))
@@ -155,7 +171,7 @@ const BADGES = "Object.fromEntries([...document.querySelectorAll('[role=tab][dat
 const withCard = (id, action) => `(() => { const c = document.querySelector('.card[data-task="${id}"]'); if (!c) return false; c.${action}(); return true })()`
 
 const pageTests = {
-  async 'the board draws 6 lanes from a test-built RunView, and 2 partials move a card from building to merged with 0 console errors — catches a card that never moves on a poll'() {
+  async 'the board draws 6 lanes from a test-built RunView, and 2 polled views move a card from building to merged with 0 console errors — catches a card that never moves on a poll'() {
     let board = await page.evaluate(BOARD)
     assert.equal(board.hidden, false, 'the board panel stays hidden')
     assert.ok(board.height > 0)
@@ -164,11 +180,11 @@ const pageTests = {
     assert.match(board.list, /sonnet/)
     assert.match(board.list, /req-list/)
     assert.match(board.list, /no gate yet/)
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify(partials[0])})`)
+    await page.evaluate(`window.runViewer.replace(${JSON.stringify(firstPoll)})`)
     board = await page.evaluate(BOARD)
     assert.equal(board.laneOf.list, 'review')
     assert.match(board.list, /GREEN/)
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify(partials[1])})`)
+    await page.evaluate(`window.runViewer.replace(${JSON.stringify(secondPoll)})`)
     board = await page.evaluate(BOARD)
     assert.deepEqual(board.laneOf, { list: 'merged', later: 'queued' })
     assert.equal(board.errors, '0')
@@ -177,10 +193,10 @@ const pageTests = {
 
   async 'the Board tab badges the view\'s blocked tasks, and a poll that halts a task moves its card and the badge — catches a badge that drifts from the board'() {
     assert.deepEqual(await page.evaluate(BADGES), {}, 'precondition: nothing in flight or blocked after the merge')
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify({ cursor: 'c3', tasks: [task('later', { status: 'blocked', deps: ['list'] })] })})`)
+    await page.evaluate(`window.runViewer.replace(${JSON.stringify(nextView(secondPoll, { tasks: [task('later', { status: 'blocked', deps: ['list'] })] }))})`)
     assert.deepEqual(await page.evaluate(BADGES), { blocked: '1' })
     assert.equal((await page.evaluate(BOARD)).laneOf.later, 'blocked')
-    await page.evaluate(`window.runViewer.apply(${JSON.stringify({ cursor: 'c4', tasks: [task('later', { deps: ['list'] })] })})`)
+    await page.evaluate(`window.runViewer.replace(${JSON.stringify(nextView(secondPoll, { tasks: [task('later', { deps: ['list'] })] }))})`)
     assert.deepEqual(await page.evaluate(BADGES), {})
   },
 

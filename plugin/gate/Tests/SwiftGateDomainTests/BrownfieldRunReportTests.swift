@@ -89,12 +89,39 @@ import Testing
         .merge(.init(task: "report-export-api", preCommit: "a", postCommit: "b", at: at)),
         .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "gate-1", at: at)),
       ])),
-    validation: RunReportInput<QAReport>? = nil
+    validation: RunReportInput<QAReport>? = nil,
+    setAside: RunReportInput<CommittedConfigSetAside>? = nil
   ) -> BrownfieldRunReportInputs {
     BrownfieldRunReportInputs(
       slug: "csv", planBranch: "swift-harness/csv", planBranchHead: planBranchHead, plan: plan,
       baseline: baseline, discover: discover, build: build, ledger: ledger,
-      validation: validation)
+      validation: validation, setAside: setAside)
+  }
+
+  @Test(
+    "a run that set the committed config aside says so in its own section, and a record that won't read says why — catches a run on the brownfield profile reported as if the repository's own config governed it"
+  )
+  func committedConfigSection() {
+    let record = CommittedConfigSetAside(
+      blob: "4b825dc642cb6eb9a060e54bf8d69288fbee4904",
+      setAsideAt: Date(timeIntervalSince1970: 1_800_000_000))
+    let path = "/clone/.git/swift-harness/committed-config-set-aside.json"
+
+    let read = BrownfieldRunReport.make(Self.inputs(setAside: .read(record)))
+    let broken = BrownfieldRunReport.make(
+      Self.inputs(setAside: .unreadable(source: path, reason: "not JSON")))
+    let none = BrownfieldRunReport.make(Self.inputs(setAside: .missing(path: path)))
+
+    #expect(read.committedConfig == .init(items: [record.reportLine], note: nil))
+    #expect(
+      lines("Committed config", in: read.text) == [
+        ".swiftgate.toml (blob 4b825dc642cb6eb9a060e54bf8d69288fbee4904) set aside for this "
+          + "clone at 2027-01-15T08:00:00Z: every command ran the brownfield profile, and the "
+          + "file is unchanged in the tree"
+      ])
+    #expect(broken.committedConfig?.note?.contains(path) == true)
+    #expect(none.committedConfig == nil)
+    #expect(!none.text.contains("## Committed config"))
   }
 
   @Test(

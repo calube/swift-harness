@@ -54,7 +54,19 @@ public struct DetachedLauncher: DetachedLaunching {
     // A fresh session detaches it from the caller's terminal and process group. Closing every
     // other descriptor keeps it from holding the caller's pipes open, which would make whoever
     // reads the caller's output wait for the holder too.
-    posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT))
+    // A Swift concurrency thread blocks most signals, and a spawned process inherits that mask,
+    // so without an empty mask and default actions the process ignores a SIGTERM forever.
+    var empty = sigset_t()
+    sigemptyset(&empty)
+    posix_spawnattr_setsigmask(&attributes, &empty)
+    var all = sigset_t()
+    sigfillset(&all)
+    posix_spawnattr_setsigdefault(&attributes, &all)
+    posix_spawnattr_setflags(
+      &attributes,
+      Int16(
+        POSIX_SPAWN_SETSID | POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGMASK
+          | POSIX_SPAWN_SETSIGDEF))
 
     let argv = ([request.executable] + request.arguments).map { strdup($0) } + [nil]
     defer { for pointer in argv { free(pointer) } }

@@ -122,13 +122,39 @@ private struct BuildScenario {
 
   func finish(
     session: String? = Self.alice, plan: String = Self.plan, at: Date = Self.startedAt,
-    report: Bool = false
+    report: Bool = false, qaRun: String? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
     await BuildFinishRun.run(
       slug: plan, session: session, git: git, clock: FixedClock(date: at),
-      root: report ? repository : nil, pluginRoot: report ? Fixture.checkoutRoot : nil)
+      root: report ? repository : nil, pluginRoot: report ? Fixture.checkoutRoot : nil,
+      qaRun: qaRun)
+  }
+
+  /// The tic-tac-toe trial's `plan.json` and `validation.json` as plan `slug`'s state: a live
+  /// plan with a validation table.
+  func writeLivePlan(_ slug: String) throws {
+    let trial = Fixture.directory.appending(path: "BrownfieldTrial")
+    let directory = try layout(slug).directory
+    for (name, file) in [
+      ("tic-tac-toe-1-plan.json", "plan.json"),
+      ("tic-tac-toe-1-validation.json", ValidationTable.fileName),
+    ] {
+      try write(directory + "/" + file, try Data(contentsOf: trial.appending(path: name)))
+    }
+  }
+
+  /// Copies each `<run>/qa/report.json` under `source` into the repository's runs directory.
+  func copyQARuns(from source: URL) throws {
+    let runs = RunStore(worktreeRoot: repository).state.url(
+      RunLayout.runsDirectory, directoryHint: .isDirectory)
+    for run in try FileManager.default.contentsOfDirectory(atPath: source.path) {
+      let report = source.appending(path: "\(run)/qa/report.json")
+      guard FileManager.default.fileExists(atPath: report.path) else { continue }
+      try write(
+        runs.appending(path: "\(run)/qa/report.json").path, try Data(contentsOf: report))
+    }
   }
 }
 
@@ -346,6 +372,86 @@ struct BuildLoopCommandTests {
     let view = try #require(
       JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any])
     #expect((view["run"] as? [String: Any])?["state"] as? String == "done")
+  }
+
+  @Test(
+    "finish on the tic-tac-toe trial's live plan refuses without --qa-run, with an older run's id, and with the newest run's id when that run isn't --final, each naming the newest run and its RED verdict and recording no finish — catches a finish run before the newest validation result was read"
+  )
+  func finishRefusesAnUnreadOrNonFinalQARun() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    let slug = "spec"
+    try scenario.writeRepository()
+    try scenario.claim(slug)
+    try scenario.setIndex(.planned, plan: slug)
+    try scenario.writeLedger([("ttt-screen", .done)], plan: slug)
+    try scenario.writeLivePlan(slug)
+    try scenario.copyQARuns(
+      from: Fixture.directory.appending(path: "BrownfieldTrial/tic-tac-toe-1-qa"))
+    let runID = try #require(await scenario.start(plan: slug).report?.runId)
+    let newest = "20261005T010428Z-75c783e4"
+
+    for qaRun in [nil, "20261005T010144Z-9350394a", newest] {
+      let result = await scenario.finish(plan: slug, report: true, qaRun: qaRun)
+
+      #expect(result.verdict == .red, "\(qaRun ?? "nil"): \(result.message)")
+      #expect(result.message.contains(newest), "\(result.message)")
+      #expect(result.message.contains("RED"), "\(result.message)")
+      if qaRun == newest {
+        #expect(result.message.contains("--final"), "\(result.message)")
+      }
+    }
+    let events = try await BuildRunStore.open(plan: slug, runID: runID, git: scenario.git)
+      .events().events
+    #expect(!events.contains { $0.kind == .finish }, "\(events)")
+  }
+
+  @Test(
+    "finish on a live plan with a validation table and no qa run refuses and asks for qa run --final — catches a run finished with no validation at all"
+  )
+  func finishRefusesWithoutAQARun() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    let slug = "spec"
+    try scenario.writeRepository()
+    try scenario.claim(slug)
+    try scenario.setIndex(.planned, plan: slug)
+    try scenario.writeLedger([("ttt-screen", .done)], plan: slug)
+    try scenario.writeLivePlan(slug)
+    _ = try #require(await scenario.start(plan: slug).report?.runId)
+
+    let result = await scenario.finish(plan: slug, report: true, qaRun: nil)
+
+    #expect(result.verdict == .red, "\(result.message)")
+    #expect(result.message.contains("qa run --plan spec --final"), "\(result.message)")
+  }
+
+  @Test(
+    "finish naming the newest qa run --final, a captured RED run, finishes and records that run and its RED verdict in the finish event and the report — catches a RED validation the finish drops"
+  )
+  func finishRecordsTheNewestFinalVerdict() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    let slug = "2026-10-03-counter-reset-and-floor"
+    let qaRun = "20261004T220955Z-1614d1ea"
+    try scenario.writeRepository()
+    try scenario.claim(slug)
+    try scenario.setIndex(.planned, plan: slug)
+    try scenario.writeLedger([("a", .done)], plan: slug)
+    try scenario.writeLivePlan(slug)
+    try scenario.copyQARuns(from: Fixture.directory.appending(path: "RunView/qa-flows/runs"))
+    let runID = try #require(await scenario.start(plan: slug).report?.runId)
+    let finishedAt = BuildScenario.startedAt.addingTimeInterval(600)
+
+    let result = await scenario.finish(plan: slug, at: finishedAt, report: true, qaRun: qaRun)
+
+    let report = try #require(result.report, "\(result.message)")
+    #expect(report.validation?.runID == qaRun)
+    #expect(report.validation?.verdict == .red)
+    #expect(result.message.contains("validation RED"), "\(result.message)")
+    let events = try await BuildRunStore.open(plan: slug, runID: runID, git: scenario.git)
+      .events().events
+    #expect(events.last == .finish(.init(at: finishedAt, qaRun: qaRun, validation: .red)))
   }
 
   @Test(

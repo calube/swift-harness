@@ -48,12 +48,16 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
   /// The plan's newest `qa run` over every row, neither at the merge base nor `--after` a task;
   /// `nil` when the plan has no validation table.
   public let validation: RunReportInput<QAReport>?
+  /// The clone's ``CommittedConfigSetAside`` record; `.missing` when the run set nothing aside,
+  /// `nil` when not looked for.
+  public let setAside: RunReportInput<CommittedConfigSetAside>?
 
   public init(
     slug: String, planBranch: String, planBranchHead: String?, plan: RunReportInput<String>,
     baseline: RunReportInput<BaselineFile>, discover: RunReportInput<DiscoverRecord>,
     build: RunReportInput<RunReportBuild>, ledger: RunReportInput<Ledger>,
-    validation: RunReportInput<QAReport>? = nil
+    validation: RunReportInput<QAReport>? = nil,
+    setAside: RunReportInput<CommittedConfigSetAside>? = nil
   ) {
     self.slug = slug
     self.planBranch = planBranch
@@ -64,6 +68,7 @@ public struct BrownfieldRunReportInputs: Sendable, Equatable {
     self.build = build
     self.ledger = ledger
     self.validation = validation
+    self.setAside = setAside
   }
 }
 
@@ -180,6 +185,9 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
   /// The run's time box, then each task that didn't fit it with why; `nil` for a build run with
   /// no box.
   public let timeBox: Section<String>?
+  /// The committed config the run set aside, so the clone ran the brownfield profile; `nil` when
+  /// the run set nothing aside.
+  public let committedConfig: Section<String>?
 
   public init(
     plan: String, planBranch: String, planBranchHead: String?, final: Final?, finalNote: String?,
@@ -187,7 +195,8 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     buildOnlyAreas: Section<String>, droppedSteps: Section<DroppedStep>,
     reviewFallbacks: Section<String>, unfinishedTasks: Section<UnfinishedTask>,
     reviewDepths: Section<String> = Section(items: [], note: nil),
-    timeBox: Section<String>? = nil, validation: Validation? = nil, validationNote: String? = nil
+    timeBox: Section<String>? = nil, validation: Validation? = nil, validationNote: String? = nil,
+    committedConfig: Section<String>? = nil
   ) {
     self.plan = plan
     self.planBranch = planBranch
@@ -204,12 +213,14 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     self.timeBox = timeBox
     self.validation = validation
     self.validationNote = validationNote
+    self.committedConfig = committedConfig
   }
 
   private enum CodingKeys: String, CodingKey {
     case plan, planBranch, planBranchHead, final, finalNote, validation, validationNote
     case assumptions, baselineFailures
     case buildOnlyAreas, droppedSteps, reviewFallbacks, reviewDepths, unfinishedTasks, timeBox
+    case committedConfig
   }
 
   /// Every key is always present; an absent value is `null`.
@@ -230,6 +241,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     try c.encode(reviewDepths, forKey: .reviewDepths)
     try c.encode(unfinishedTasks, forKey: .unfinishedTasks)
     try c.encode(timeBox, forKey: .timeBox)
+    try c.encode(committedConfig, forKey: .committedConfig)
   }
 
   /// The steps `merge` and `final` run for every area: one with no command is worth a line even
@@ -248,7 +260,19 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
       reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
-      validation: validation, validationNote: validationNote)
+      validation: validation, validationNote: validationNote,
+      committedConfig: Self.committedConfig(inputs.setAside))
+  }
+
+  private static func committedConfig(_ input: RunReportInput<CommittedConfigSetAside>?)
+    -> Section<String>?
+  {
+    guard let input else { return nil }
+    switch input {
+    case .missing: return nil
+    case .read(let record): return Section(items: [record.reportLine], note: nil)
+    case .unreadable: return Section(items: [], note: describe(input, what: "the set-aside record"))
+    }
   }
 
   private static func validation(_ input: RunReportInput<QAReport>?) -> (Validation?, String?) {
@@ -637,6 +661,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     }
     out += render("Unfinished tasks", unfinishedTasks) { "\($0.id): \($0.status.rawValue)" }
     if let timeBox { out += render("Time box", timeBox) { $0 } }
+    if let committedConfig { out += render("Committed config", committedConfig) { $0 } }
     out += render("Assumptions", assumptions) { $0 }
     out += render("Baseline failures", baselineFailures) {
       "\($0.area) \($0.step.rawValue): " + ($0.test ?? "the whole step")

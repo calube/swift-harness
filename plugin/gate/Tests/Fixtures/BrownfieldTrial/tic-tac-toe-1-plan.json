@@ -1,0 +1,92 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "ttt-contract" : {
+        "acceptance" : [
+          "the app builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any rule behaviour"
+        ],
+        "scope" : [
+          "`TicTacToe` target in `Packages/AppFeature` with `Player`, `GameStatus` and `Game` (`cells`, `status`, `play(at:)` as a no-op stub)",
+          "`TicTacToeTests` target, and `TicTacToeTests` plus `AppCoreTests` in the scheme's test action"
+        ],
+        "title" : "Declare the TicTacToe engine types as stubs and run the package tests in the scheme.",
+        "why" : "requirement \"keep the rules separate from the UI\"; both later tasks compile against `Game`."
+      },
+      "ttt-engine" : {
+        "acceptance" : [
+          "Swift Testing tests in `GameTests.swift` fail on the stub, then pass: X first and alternation; occupied cell ignored; all 8 lines win for X and for O (parameterised); no move accepted after a win; a full board with no line is `.draw`, including a last move that both fills the board and completes a line counting as a win",
+          "slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any UI, reducer or app change; changing the public API the contract declared"
+        ],
+        "scope" : [
+          "`play(at:)` places the current player's mark, then sets `status` to `.won(player)` on a completed row, column or diagonal, `.draw` on a full board with no line, else `.turn(otherPlayer)`",
+          "a move on an occupied cell, an index outside 0...8, or any move once `status` is `.won` or `.draw` leaves the game unchanged"
+        ],
+        "title" : "Implement the tic-tac-toe rules in `Game.play(at:)`, test-first.",
+        "why" : "spec section 1, \"The game rules\", and the criterion \"The rules have unit tests that run without the UI\"."
+      },
+      "ttt-screen" : {
+        "acceptance" : [
+          "`GameFeatureTests` (Swift Testing, TestStore) in `Tests/AppCoreTests/` fail first, then pass: tapping a cell plays it, new game resets",
+          "`UITests/GameFlowUITests.swift`, class `GameFlowUITests`: launch shows \"X's turn\"; tapping alternates X and O and a tapped occupied cell keeps its mark; X completing the top row shows \"X wins\" and a later tap changes nothing; a drawn sequence shows \"Draw\"; \"New game\" empties the board and shows \"X's turn\"",
+          "slice is GREEN"
+        ],
+        "outOfScope" : [
+          "removing `AppFeature`, `AppView`, `APIClient` or their tests; animations, iPad layout, a computer opponent"
+        ],
+        "scope" : [
+          "`GameFeature` reducer in `AppCore` (`Sources/AppCore/GameFeature.swift`): state holds a `Game`; actions `cellTapped(Int)` calls `game.play(at:)`, `newGameButtonTapped` resets to `Game()`",
+          "`GameView` in `AppUI` (`Sources/AppUI/GameView.swift`): a 3×3 grid of buttons with ids `game.cell.0`...`game.cell.8` and accessibility label \"X\", \"O\" or \"Empty\"; a `Text` with id `game.status` reading \"X's turn\", \"O's turn\", \"X wins\", \"O wins\" or \"Draw\"; a button titled \"New game\" with id `game.newGame`",
+          "`App/InterviewStarterApp.swift` roots the app on `GameFeature`/`GameView` instead of `AppFeature`/`AppView`",
+          "`UITests/LaunchFlowUITests.swift` checks launch shows \"X's turn\" and 9 empty cells, in place of the posts check"
+        ],
+        "title" : "Make the app's root screen the tic-tac-toe board, driven by a TCA `GameFeature` over `Game`.",
+        "why" : "spec section 2, \"The board screen\", and the criteria on launch, tapping, the result text and \"New game\"."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-turns",
+        "title" : "X moves first and the turn alternates between X and O after each accepted move"
+      },
+      {
+        "id" : "req-ignored-moves",
+        "title" : "A move on an occupied cell, or after the game has ended, changes nothing"
+      },
+      {
+        "id" : "req-win-lines",
+        "title" : "Each of the 8 lines (3 rows, 3 columns, 2 diagonals) filled by one player ends the game with that player as the winner"
+      },
+      {
+        "id" : "req-draw",
+        "title" : "A full board with no line ends the game as a draw"
+      },
+      {
+        "id" : "req-rules-tested",
+        "title" : "The rules have unit tests that run without the UI"
+      },
+      {
+        "id" : "req-board-screen",
+        "title" : "Launching the app shows an empty 3×3 board instead of the posts screen, and tapping an empty cell places the current player's mark"
+      },
+      {
+        "id" : "req-status-text",
+        "title" : "The screen shows \"X's turn\" or \"O's turn\" while playing, and \"X wins\", \"O wins\" or \"Draw\" once the game ends"
+      },
+      {
+        "id" : "req-new-game",
+        "title" : "A \"New game\" button clears the board and gives the turn back to X"
+      }
+    ]
+  },
+  "resume" : "planned; 3 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}

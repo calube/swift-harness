@@ -92,6 +92,8 @@ public struct RuleIDSourceScan: Sendable, Equatable {
     "toml", "txt", "xml", "yaml", "yml",
     // Final-pass evidence a flow row keeps: `sheet.png`, `video.mp4`.
     "mp4", "png",
+    // A result bundle a test run writes: `test-only.xcresult`.
+    "xcresult",
     // Build file extensions discovery reads: `build.gradle.kts`, `mix.exs`, `go.mod`, `build.zig`.
     "gradle", "kts", "exs", "mod", "zig",
     // Node, Python and Ruby files discovery reads: `eslint.config.mjs`, `setup.cfg`, `tox.ini`.

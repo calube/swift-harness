@@ -41,9 +41,14 @@ public enum HookProject: Sendable, Equatable {
 
 extension ProjectRoot {
   /// ``locate(from:)``'s owned project, or else the enclosing worktree when its clone runs the
-  /// brownfield profile.
+  /// brownfield profile. A clone that set its committed config aside runs the brownfield profile.
   public static func locateProfile(from directory: URL) -> HookProject? {
-    if let owned = locate(from: directory) { return .owned(owned) }
+    if let owned = locate(from: directory),
+      !(ConfigLoader.commonDirectory(enclosing: owned)
+        .map(StateRootResolver.setsAsideCommittedConfig(commonDir:)) ?? false)
+    {
+      return .owned(owned)
+    }
     guard let worktree = worktreeRoot(from: directory),
       let gitDir = StateRootResolver.gitDirectory(enclosing: worktree)
     else { return nil }

@@ -102,7 +102,10 @@ reference are the only Bash work this skill sends to the background.
 5. `"$SG" build start <slug> --preset <preset> --session <session> --json`. Keep `runId`. Exit 1
    because the index is `building` means a run already exists: resume it instead
    ([resume](references/event-loop.md#resume)). Any other non-zero exit: halt.
-6. Read `<plans>/<slug>/build/<run>/run.json` for the preset, and start the cutoff timer when
+6. `"$SG" view --ensure` starts the live run viewer, or reuses the one running, and prints its URL.
+   Print `Live: <url>` to the user. Empty output means `SWIFTGATE_VIEW=off`: print nothing. A
+   failure prints 1 line for the report and never stops the build.
+7. Read `<plans>/<slug>/build/<run>/run.json` for the preset, and start the cutoff timer when
    `timeBudgetMin` isn't 0 ([time budget](references/event-loop.md#time-budget)).
 
 A plan surface is on `main` before the build starts, and its stubs add API no test covers yet.

@@ -88,7 +88,7 @@ struct RuleIndexTests {
       BashGuard.rawXcodebuildRuleID,
       BashGuard.simctlAllRuleID, SimulatorSelection.baseAmbiguousRuleID,
       BashGuard.snapshotRecordRuleID, BashGuard.globalDerivedDataRuleID,
-      BashGuard.validationFlowByHandRuleID,
+      BashGuard.validationFlowByHandRuleID, FixerGateCapGuard.ruleID,
       EditGuard.snapshotReferenceRuleID, EditGuard.packageResolvedRuleID,
       SubagentScopeGuard.outsideCheckoutsRuleID, SubagentScopeGuard.buildAgentMainCheckoutRuleID,
       SubagentScopeGuard.protectedPathRuleID,
@@ -158,6 +158,7 @@ extension RuleIndexTests {
       PlanLintCoverage.packOverBudgetRuleID, PlanLintValidation.uncoveredRuleID,
       PlanLintValidation.unknownTaskRuleID, PlanLintValidation.stateWithoutFlowRuleID,
       PlanLintValidation.flowWithoutIOSRuleID, PlanLintValidation.checkSourceFileRuleID,
+      PlanLintValidation.screenWithoutFlowRuleID,
     ]
     let build = [
       "build-next.unmerged-dependency", "build-next.missing-model", "build-next.write-set-overlap",
