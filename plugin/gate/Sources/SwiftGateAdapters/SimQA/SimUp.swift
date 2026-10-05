@@ -65,12 +65,12 @@ public struct SimUp: Sendable {
     /// An owned repository's request, from its `.swiftgate.toml`.
     public init(
       worktree: URL, config: Config, scenario: String?, runID: String, simDirectory: URL,
-      derivedDataPath: String, swiftgateExecutable: String
+      derivedDataPath: String, swiftgateExecutable: String, device: SimUpDevice = .own
     ) {
       self.init(
         worktree: worktree, target: SimTarget(owned: config), scenario: scenario, runID: runID,
         simDirectory: simDirectory, derivedDataPath: derivedDataPath,
-        swiftgateExecutable: swiftgateExecutable)
+        swiftgateExecutable: swiftgateExecutable, device: device)
     }
   }
 
