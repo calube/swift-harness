@@ -3431,3 +3431,27 @@ PY
 
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## Brownfield trial: a network-fed app excused from flows
+
+The first price-tracker trial ran `swiftgate run start spec.md` on the iOS app starter, whose 1
+`xcode` area is rooted at `.` and whose `Packages/APIClient` is a `@Dependency` client.
+`BrownfieldTrial/price-tracker-1-PLAN.md` is its `PLAN.md` at the run's end. Its 2 flow rows hit
+the live API, `req-load-states` and `req-chart-states` are excused with `network:`, and
+`req-refresh`, covered only by the reducer task `app-core`, imported with a reason naming no
+obstacle. `price-tracker-1-config.toml` is the clone's `config.toml`, and
+`price-tracker-1-plan.json` and `price-tracker-1-validation.json` are what `plan import` wrote from
+that plan. `price-tracker-1-base-files.txt` lists the files tracked at the run's base commit. `S`
+is the clone. From the repository root:
+
+```sh
+S=<clone> F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/.git/swift-harness/plans/spec/PLAN.md $F/price-tracker-1-PLAN.md
+cp $S/.git/swift-harness/plans/spec/plan.json $F/price-tracker-1-plan.json
+cp $S/.git/swift-harness/plans/spec/validation.json $F/price-tracker-1-validation.json
+cp $S/.git/swift-harness/config.toml $F/price-tracker-1-config.toml
+git -C $S ls-tree -r --name-only fe7f9f7b7802d43ba8990d2582d5e50f96c6e1dd \
+  > $F/price-tracker-1-base-files.txt
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 5 files matched nothing.
