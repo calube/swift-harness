@@ -362,7 +362,15 @@ public enum Warmup {
   public static func proveTreeRequest(
     area: BrownfieldArea, toplevel: String, layout: BrownfieldStateLayout, deadline: Duration
   ) -> AreaCommandRequest? {
-    nil
+    let generated = area.xcode.map { $0.inclusion == .xcodegen || $0.inclusion == .tuist } ?? false
+    guard !generated, let building = XcodeBuildForTesting.area(area),
+      let prepared = AreaCommandExpansion.prepare(
+        area: building, step: .build, repositoryRoot: toplevel, files: [], tests: [],
+        junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
+        deadline: deadline, environment: [:])
+    else { return nil }
+    return ScratchTreeBuild.request(
+      prepared.request, kind: .xcode, layout: layout, waits: BuildLockWaits())
   }
 
   /// The seed build's result from what its command came to.

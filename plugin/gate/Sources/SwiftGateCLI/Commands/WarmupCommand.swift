@@ -231,7 +231,8 @@ struct WarmupCommand: AsyncParsableCommand {
 
   /// Each xcode area's build in `checkout`, and each swiftpm area's into its prove scratch path,
   /// then the same in each slot `slots` adds, those all at once: the plan checkout takes the
-  /// contract's build before any task takes a slot.
+  /// contract's build before any task takes a slot. Last, each xcode area's tests are built in
+  /// `checkout`'s kept prove tree, where its merge gates prove, once nothing waits on the slots.
   private static func seed(
     areas: [BrownfieldArea], checkout: URL?, slots: @Sendable () async -> Slots,
     qaApp: @escaping @Sendable (_ slot: String) async -> QAAppBuild?,
@@ -265,7 +266,59 @@ struct WarmupCommand: AsyncParsableCommand {
       checkouts.builds += built.build.map { [$0] } ?? []
       checkouts.notes += built.notes
     }
+    if let checkout {
+      let (builds, notes) = await buildProveTree(
+        areas: areas, checkout: checkout, deadline: deadline, process: process, runner: runner)
+      checkouts.builds += builds
+      checkouts.notes += notes
+    }
     return checkouts
+  }
+
+  /// Every ``Warmup/proveTreeRequest(area:toplevel:layout:deadline:)`` in `checkout`'s kept prove
+  /// tree at its `HEAD`, 1 after another.
+  private static func buildProveTree(
+    areas: [BrownfieldArea], checkout: URL, deadline: Duration, process: any ProcessRunner,
+    runner: any AreaCommandRunning
+  ) async -> (builds: [WarmupSeedBuild], notes: [String]) {
+    guard areas.contains(where: { $0.kind == .xcode }) else { return ([], []) }
+    let path = checkout.path(percentEncoded: false)
+    let layout: BrownfieldStateLayout
+    do {
+      layout = try await GitTrackedTree(runner: process, directory: checkout).stateLayout()
+    } catch {
+      return ([], ["warmup: \(path)'s prove tree not built: \(error.message)"])
+    }
+    // Only a linked worktree's prove keeps its tree.
+    guard layout.gitDir.standardizedFileURL.path != layout.commonDir.standardizedFileURL.path
+    else { return ([], []) }
+    let scratch = LiveScratchWorktrees(
+      runner: process, repositoryRoot: path, directory: layout.scratchDirectory, keepsTree: true)
+    do throws(ScratchWorktreeError) {
+      let builds = try await scratch.withScratchTree(
+        ScratchTreeRequest(revision: "HEAD", revertTo: "HEAD", copiedPaths: [], revertedPaths: [])
+      ) { toplevel in
+        var builds: [WarmupSeedBuild] = []
+        var top = toplevel.path(percentEncoded: false)
+        while top.count > 1, top.hasSuffix("/") { top.removeLast() }
+        for area in areas {
+          guard
+            let request = Warmup.proveTreeRequest(
+              area: area, toplevel: top, layout: layout, deadline: deadline)
+          else { continue }
+          let started = ContinuousClock.now
+          let outcome = await runner.run(request)
+          builds.append(
+            Warmup.seedBuild(
+              area: area.name, checkout: top, outcome: outcome,
+              milliseconds: milliseconds(ContinuousClock.now - started)))
+        }
+        return builds
+      }
+      return (builds, [])
+    } catch {
+      return ([], ["warmup: \(path)'s prove tree not built: \(error)"])
+    }
   }
 
   /// Every ``Warmup/seedRequest(area:checkout:layout:tree:deadline:)`` and
