@@ -64,6 +64,22 @@ public struct QATrialMerge: Sendable, Equatable, Codable {
   }
 }
 
+/// A running task whose worker's own gate passed at its branch's tip on a clean tree, with no
+/// check of its return recorded since: the worker is reviewing and returning.
+public struct QAPendingReturn: Sendable, Equatable {
+  public let task: String
+  /// The gate run that passed at the tip.
+  public let gateRunID: String
+  /// When that gate run finished.
+  public let gatedAt: Date
+
+  public init(task: String, gateRunID: String, gatedAt: Date) {
+    self.task = task
+    self.gateRunID = gateRunID
+    self.gatedAt = gatedAt
+  }
+}
+
 /// Whether `build merge` may land a task, going by the validation rows its merge makes ready, the
 /// rows it waits on with tasks whose checked returns wait to merge too, and the
 /// `qa run --before-merge` reports of its branch.
@@ -121,6 +137,22 @@ public enum QAMergeReadiness: Sendable, Equatable {
       return taken.allSatisfy { $0.task == task || others.contains($0) }
     }
     return newest(of: covering, rows: rows)
+  }
+
+  /// How long after its gate passed a pending return holds back another task's merge: the
+  /// review, verification and check that follow a worker's GREEN gate.
+  public static let returnWait: TimeInterval = 300
+
+  /// The pending returns `task`'s merge waits for: those a row naming `task` waits on whose
+  /// every other unmerged task is in `waiting` or pending, while `now` is within
+  /// ``returnWait`` of the gate passing and before `noNewStartsAt`. Merging before them would
+  /// run that row on a trial merge without them, and again on theirs.
+  public static func awaited(
+    table: ValidationTable, merged: Set<String>, task: String,
+    waiting: [QATrialMerge.Branch], pending: [QAPendingReturn], now: Date,
+    noNewStartsAt: Date? = nil
+  ) -> [QAPendingReturn] {
+    []
   }
 
   /// The tasks a run over `task`'s rows merges after it: those of `waiting` that a row naming

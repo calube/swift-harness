@@ -195,8 +195,12 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     /// A validation row runs after this task with every other task it waits on merged, and no
     /// `qa run --before-merge` of the branch at its tip on `main`'s commit is GREEN or conflicted.
     case flowsUnchecked = "flows-unchecked"
-    /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED.
+    /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED in a
+    /// row that runs after this task.
     case flowsRed = "flows-red"
+    /// A validation row runs after this task and another whose worker's gate passed at its
+    /// branch's tip with its return not yet checked, so 1 trial merge of both is minutes away.
+    case flowsPending = "flows-pending"
   }
 
   /// Whether `main` was checked against the run's last merge.
