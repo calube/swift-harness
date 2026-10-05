@@ -3,7 +3,8 @@ import SwiftGateDomain
 
 /// Picks a worktree's ``StateRoot`` by file existence alone: a committed `.swiftgate.toml` keeps
 /// state in the tree, the git common dir's `swift-harness/config.toml` moves it under the
-/// worktree's own git dir, and anything else keeps the tree.
+/// worktree's own git dir, and anything else keeps the tree. A clone that set its committed
+/// config aside runs the brownfield profile, so every worktree's state is under its git dir.
 ///
 /// It parses no config, so a broken one still gets the right root and its own error from the
 /// loader. The only files it reads are git's own pointers: a linked worktree's `.git` file and its
@@ -12,14 +13,24 @@ import SwiftGateDomain
 public enum StateRootResolver {
   /// Relative to the git common dir.
   public static let commonConfigFile = "\(RunLayout.gitDirDirectory)/config.toml"
+  /// Relative to the git common dir: ``CommittedConfigSetAside``'s record.
+  public static let setAsideFile =
+    "\(RunLayout.gitDirDirectory)/\(CommittedConfigSetAside.fileName)"
+
+  /// Whether the clone whose common dir is `commonDir` runs the brownfield profile over a
+  /// committed `.swiftgate.toml`: its `config.toml` and the set-aside record both exist.
+  public static func setsAsideCommittedConfig(commonDir: URL) -> Bool {
+    let files = FileManager.default
+    return files.fileExists(atPath: commonDir.appending(path: commonConfigFile).path)
+      && files.fileExists(atPath: commonDir.appending(path: setAsideFile).path)
+  }
 
   public static func resolve(worktree: URL) -> StateRoot {
     let files = FileManager.default
-    if files.fileExists(atPath: worktree.appending(path: Config.fileName).path) {
-      return .tree(worktree)
-    }
+    let owned = files.fileExists(atPath: worktree.appending(path: Config.fileName).path)
     guard let gitDir = gitDirectory(enclosing: worktree) else { return .tree(worktree) }
     let common = commonDirectory(of: gitDir)
+    if owned, !setsAsideCommittedConfig(commonDir: common) { return .tree(worktree) }
     guard files.fileExists(atPath: common.appending(path: commonConfigFile).path) else {
       return .tree(worktree)
     }

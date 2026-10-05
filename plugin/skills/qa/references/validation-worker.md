@@ -68,7 +68,10 @@ lint finding isn't ready: fix it and run it again before you return.
   It runs only the rows you write, from your prepared folder, at the merge base in a scratch tree:
   each flow is linted, run as 1 batch on a device `sim up` leases, snapped at each step and judged
   by `sim verify`, and each state row runs on its flow's device. Record each row's `result` and
-  `message`, and the run id. A row that reads `pass` can't tell the change from its absence: fix
+  `message`, and the run id. Run it last, after your final edit, and leave the
+  `at-base-run.json` it writes: once `qa adopt` copies your folder, the orchestrator's
+  `qa run --at-base` takes each row whose check is still byte-identical from it instead of
+  running the row again. A row that reads `pass` can't tell the change from its absence: fix
   the check. A row that reads `unverified` has no red run: fix what its message names and run
   again.
 
