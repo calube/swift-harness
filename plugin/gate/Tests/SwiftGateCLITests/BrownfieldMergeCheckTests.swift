@@ -247,6 +247,51 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "final takes a test step a merge passed on the same inputs even when the box has less time left than the step's measure, and refuses one with no pass naming final, not merge — catches final BLOCKED for a step that already passed on its tree"
+  )
+  func finalReusesBeforeTheTimeBound() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let areas = [Self.area("App")]
+    let changed = ["App/src/lib.js"]
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+    let short: @Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound = { _, step, _ in
+      step == .test
+        ? AreaCommandBound(
+          duration: .seconds(105), reason: "the 105 s left before the run's box ends",
+          expected: .milliseconds(191_140))
+        : AreaCommandBound(duration: .seconds(600), reason: "the floor")
+    }
+    _ = try await Self.run(
+      clone, tier: .merge, areas: areas, changed: changed,
+      runner: FakeAreaCommandRunner { _ in .passed },
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+
+    let final = FakeAreaCommandRunner { _ in .passed }
+    let parts = try await Self.run(
+      clone, tier: .final, areas: areas, changed: changed, runner: final, bound: short,
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+
+    #expect(!final.requests.contains { $0.step == .test })
+    #expect(Self.verdict(parts) == .green)
+    #expect(
+      parts.findings.contains {
+        $0.ruleID == GateReuse.ruleID && $0.message.contains("App test passed in merge")
+      })
+
+    let unpassed = FakeAreaCommandRunner { _ in .passed }
+    let refused = try await Self.run(
+      clone, tier: .final, areas: areas, changed: changed, runner: unpassed, bound: short)
+    #expect(!unpassed.requests.contains { $0.step == .test })
+    #expect(Self.verdict(refused) == .blocked)
+    let refusal = try #require(refused.findings.first { $0.ruleID == CheckRun.notRunRuleID })
+    #expect(refusal.message.hasPrefix("final: App test not started"), "\(refusal.message)")
+  }
+
+  @Test(
     "on the third price-tracker trial's areas, after a merge gate that touched the client and feature packages, the cutoff's price of final names LogClient's build and test as the only steps left, exactly the steps final then runs — catches a price whose keys drift from the ones final looks up"
   )
   func finalPriceNamesTheStepsFinalRuns() async throws {

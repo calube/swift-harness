@@ -57,3 +57,15 @@ public enum MeasuredFinalGateReader {
     return durations
   }
 }
+
+/// The clone's gate history, read for how long each area's tests last took in a merge gate.
+public enum MeasuredAreaTestsReader {
+  /// ``MeasuredAreaTests/milliseconds(in:)`` over the gate steps recorded where `worktree`'s
+  /// events go; empty when none can be read.
+  public static func milliseconds(worktree: URL) -> [String: Int] {
+    guard let data = try? HarnessEventFiles(root: worktree).read(.gate, runID: nil),
+      let read = try? HarnessEventJSON.decode(data)
+    else { return [:] }
+    return MeasuredAreaTests.milliseconds(in: read.events)
+  }
+}

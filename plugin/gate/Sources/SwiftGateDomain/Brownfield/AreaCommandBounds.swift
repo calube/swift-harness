@@ -58,12 +58,19 @@ public struct AreaCommandBounds: Sendable {
   public let tier: CheckTier
   /// What a command gets when no warm-up measured its area, or its step has no measure.
   public let fallback: Duration
+  /// Each area's latest whole test run in a merge gate, in milliseconds: what a test step is
+  /// expected to take in place of the warm-up's figure.
+  public let measuredTests: [String: Int]
 
-  public init(times: WarmupTimesFile, box: RunTimeBox?, tier: CheckTier, fallback: Duration) {
+  public init(
+    times: WarmupTimesFile, box: RunTimeBox?, tier: CheckTier, fallback: Duration,
+    measuredTests: [String: Int] = [:]
+  ) {
     self.times = times
     self.box = box
     self.tier = tier
     self.fallback = fallback
+    self.measuredTests = measuredTests
   }
 
   /// A test step in the checkout runs on the build its `build` step just made, so it gets
@@ -105,15 +112,17 @@ public struct AreaCommandBounds: Sendable {
       ? "\(area)'s \(Self.seconds(record.coldMilliseconds)) s cold build and test plus \(warmText)"
       : warmText
     // A build needs no test run, so only test steps and scratch runs can be measured against. A
-    // test in an unbuilt checkout is held to its warm run: its build may be incremental.
+    // test in an unbuilt checkout is held to its warm run: its build may be incremental. A merge
+    // gate's later run of the area's tests replaces the warm-up's figure.
+    let run = measuredTests[area] ?? warm
     let expected: Duration? =
       switch (tree, step) {
       case (.checkout, .test), (.checkout, .testFiles), (.unbuiltCheckout, .test),
         (.unbuiltCheckout, .testFiles):
-        .milliseconds(warm)
+        .milliseconds(run)
       case (.scratch, _): .milliseconds(record.coldMilliseconds)
       // Its build compiles only what differs from the build already there.
-      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(warm)
+      case (.builtScratch, .test), (.builtScratch, .testFiles): .milliseconds(run)
       default: nil
       }
     guard Duration.milliseconds(milliseconds) > Self.floor else {
