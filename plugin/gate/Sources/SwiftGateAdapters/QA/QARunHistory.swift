@@ -15,12 +15,37 @@ public enum QARunHistory {
     }
   }
 
-  /// Every ``QAMergedTreeRun`` under `worktree`'s runs; a record that doesn't decode is passed
-  /// over.
+  /// Every ``QAMergedTreeRun`` under the runs of each checkout of `worktree`'s clone, so a run
+  /// in the plan checkout finds 1 a fixer's slot made on the same tree; a record that doesn't
+  /// decode is passed over, and 1 run read twice counts once.
   public static func mergedTreeRuns(worktree: URL) -> [QAMergedTreeRun] {
-    files(QAMergedTreeRun.fileName, worktree: worktree).compactMap {
-      try? QAMergedTreeRun.decode($0)
+    var seen = Set<String>()
+    return stateRoots(sharing: worktree).flatMap { files(QAMergedTreeRun.fileName, state: $0) }
+      .compactMap { try? QAMergedTreeRun.decode($0) }
+      .filter { seen.insert($0.run.runID).inserted }
+  }
+
+  /// `worktree`'s own state root first, then, when it is under a git dir, the common dir's and
+  /// each linked worktree's: where every checkout of the clone, and every removed checkout's
+  /// kept runs, keep their runs.
+  static func stateRoots(sharing worktree: URL) -> [StateRoot] {
+    let own = StateRootResolver.resolve(worktree: worktree)
+    guard case .gitDir(let gitDir) = own else { return [own] }
+    let common = StateRootResolver.commonDirectory(of: gitDir).standardizedFileURL
+    let linked = common.appending(path: "worktrees", directoryHint: .isDirectory)
+    let names =
+      ((try? FileManager.default.contentsOfDirectory(atPath: linked.path)) ?? []).sorted()
+    let others =
+      [StateRoot.gitDir(common)]
+      + names.map { StateRoot.gitDir(linked.appending(path: $0, directoryHint: .isDirectory)) }
+    var roots = [own]
+    for root in others {
+      let directory = root.directory.standardizedFileURL
+      if !roots.contains(where: { $0.directory.standardizedFileURL == directory }) {
+        roots.append(root)
+      }
     }
+    return roots
   }
 
   /// The `qa/report.json` of `runID` in the first of `worktrees` whose runs hold one that
@@ -40,8 +65,12 @@ public enum QARunHistory {
 
   /// The bytes of `runs/<run id>/qa/<name>` for each run that has one.
   private static func files(_ name: String, worktree: URL) -> [Data] {
-    let runs = RunStore(worktreeRoot: worktree).state.url(
-      RunLayout.runsDirectory, directoryHint: .isDirectory)
+    files(name, state: RunStore(worktreeRoot: worktree).state)
+  }
+
+  /// The bytes of `runs/<run id>/qa/<name>` under `state` for each run that has one.
+  private static func files(_ name: String, state: StateRoot) -> [Data] {
+    let runs = state.url(RunLayout.runsDirectory, directoryHint: .isDirectory)
     let ids = (try? FileManager.default.contentsOfDirectory(atPath: runs.path)) ?? []
     return ids.filter(RunID.isValid).compactMap { id in
       try? Data(contentsOf: runs.appending(path: "\(id)/\(QAReport.directory)/\(name)"))

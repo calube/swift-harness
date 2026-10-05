@@ -50,7 +50,7 @@ struct BrownfieldMergeCheckTests {
     bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
       nil,
-    reuse: AreaStepReuse? = nil
+    reuse: AreaStepReuse? = nil, headTree: String? = nil
   ) async throws -> GateRunParts {
     let runner = areaRunner ?? runner
     let git = FakeGit(
@@ -73,7 +73,7 @@ struct BrownfieldMergeCheckTests {
         deadline: .seconds(5), bound: scratchBound),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
       sliceBuildsOnly: buildsOnly ?? { _ in sliceBuildsOnly }, deadline: .seconds(5),
-      bound: bound,
+      headTree: headTree, bound: bound,
       reuse: reuse)
     return try await BrownfieldMergeCheck.run(
       root: clone.root, tier: tier, base: "main",
@@ -969,8 +969,9 @@ extension BrownfieldMergeCheckTests {
   /// send-money's captured config, whose app target only builds at slice, run at `revision`.
   private static func sendMoneyRun(
     _ clone: Clone, _ branch: SendMoneyPlanBranch, tier: CheckTier, at revision: String,
-    bound: (@Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound)? = nil
-  ) async throws -> (parts: GateRunParts, proofs: [ProvedTest]) {
+    bound: (@Sendable (String, AreaStep, AreaCommandTree) -> AreaCommandBound)? = nil,
+    proveReuse: BrownfieldProve.ProveReuse? = nil, context: GateRun.Context? = nil
+  ) async throws -> (parts: GateRunParts, proofs: [ProvedTest], scratchRuns: Int) {
     try await branch.repository.git("checkout", "-q", "--detach", revision)
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
@@ -987,18 +988,19 @@ extension BrownfieldMergeCheckTests {
     if let bound {
       scratchBound = { area, step in bound(area, step, .scratch) }
     }
+    var prove = BrownfieldProve.Dependencies(
+      git: git, scratch: scratch, runner: runner, deadline: .seconds(5), bound: scratchBound)
+    prove.reuse = proveReuse
     let dependencies = BrownfieldMergeCheck.Dependencies(
       config: config, layout: clone.layout, git: git, runner: runner,
       baseline: BaselineStore(layout: clone.layout, runner: runner, scratch: scratch),
-      prove: BrownfieldProve.Dependencies(
-        git: git, scratch: scratch, runner: runner, deadline: .seconds(5), bound: scratchBound),
-      trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
+      prove: prove, trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
       sliceBuildsOnly: { !$0.selectsChangedTests }, deadline: .seconds(5), bound: bound)
-    let context = GateRun.Context(runID: "run", directory: clone.base)
+    let context = context ?? GateRun.Context(runID: "run", directory: clone.base)
     let parts = try await BrownfieldMergeCheck.run(
       root: clone.root, tier: tier, base: branch.planBase, context: context,
       dependencies: dependencies)
-    return (parts, context.proofs.results)
+    return (parts, context.proofs.results, runner.requests.filter(reverted).count)
   }
 
   @Test(
@@ -1053,5 +1055,135 @@ extension BrownfieldMergeCheckTests {
     let merge = try await Self.sendMoneyRun(
       clone, branch, tier: .merge, at: branch.firstMerge, bound: short)
     #expect(Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
+  }
+}
+
+/// Prove passes kept in memory for 1 test.
+private final class MemoryProves: ProveReusing {
+  private let passes = Mutex<[String: ProvePass]>([:])
+
+  func pass(_ key: String) -> ProvePass? { passes.withLock { $0[key] } }
+
+  func record(_ pass: ProvePass, key: String) { passes.withLock { $0[key] = pass } }
+}
+
+extension BrownfieldMergeCheckTests {
+  /// Reuse for 1 gate run of `tier` over the plan branch, every input but the head tree shared.
+  private static func proveReuse(
+    _ branch: SendMoneyPlanBranch, store: MemoryProves, runID: String, tier: CheckTier
+  ) -> BrownfieldProve.ProveReuse {
+    let repository = branch.repository
+    return BrownfieldProve.ProveReuse(
+      inputs: GateReuse.Inputs(
+        tier: tier, treeHash: "head-\(runID)", mergeBase: branch.planBase, sourceHash: "bin1",
+        stateFiles: ["config": "c1"]),
+      store: store, runID: runID, tier: tier,
+      renames: { since in
+        await GitRenames.between(
+          since, "HEAD", runner: repository.runner, directory: repository.root.path)
+      })
+  }
+
+  @Test(
+    "as in send-money-7, where the first merge gate proved the launch UI test in 96 s and final proved it again in 85 s on the same reverted tree, final takes the merge's proof without a reverted run, records its prove.result again and names the merge run, and its prove step reads reused — catches final re-proving a test nothing has changed since its merge proved it"
+  )
+  func finalTakesTheMergesProveOnTheSameRevertedTree() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+    let store = MemoryProves()
+
+    let merge = try await Self.sendMoneyRun(
+      clone, branch, tier: .merge, at: branch.firstMerge,
+      proveReuse: Self.proveReuse(branch, store: store, runID: "merge-run", tier: .merge))
+    #expect(merge.scratchRuns > 0)
+    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
+
+    let context = GateRun.Context(runID: "final-run", directory: clone.base)
+    let final = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: branch.secondMerge,
+      proveReuse: Self.proveReuse(branch, store: store, runID: "final-run", tier: .final),
+      context: context)
+
+    #expect(final.scratchRuns == 0, "final ran no reverted run")
+    #expect(final.proofs == proved)
+    #expect(Self.verdict(final.parts) == .green)
+    let reused = final.parts.findings.filter {
+      $0.ruleID == GateReuse.ruleID && $0.message.contains("merge-run")
+    }
+    #expect(reused.count == 1, "\(final.parts.findings.map(\.message))")
+    let step = try #require(context.steps.steps.first { $0.step == .prove })
+    #expect(step.derivedData == .reused)
+  }
+
+  @Test(
+    "final runs the prove again when the UI test changed after the merge proved it, or when a later merge renamed a source file the reverted tree puts back — catches a reused proof standing in for a tree prove would build differently"
+  )
+  func finalProvesAgainWhenTheRevertedTreeDiffers() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let branch = try await SendMoneyPlanBranch(root: clone.root)
+    let store = MemoryProves()
+    _ = try await Self.sendMoneyRun(
+      clone, branch, tier: .merge, at: branch.firstMerge,
+      proveReuse: Self.proveReuse(branch, store: store, runID: "merge-run", tier: .merge))
+
+    let repository = branch.repository
+    try await repository.git("checkout", "-q", "main")
+    // Back to its plan-base text first, so git reads the move as a rename since the plan base.
+    try repository.write(SendMoneyPlanBranch.view, "struct AppView {}\n")
+    try await repository.git(
+      "mv", SendMoneyPlanBranch.view, "Packages/AppFeature/Sources/AppUI/HomeView.swift")
+    let renamed = try await repository.commit("rename the view")
+    let afterRename = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: renamed,
+      proveReuse: Self.proveReuse(branch, store: store, runID: "final-1", tier: .final))
+    #expect(afterRename.scratchRuns > 0, "a rename changes the reverted tree")
+
+    try await repository.git("checkout", "-q", "main")
+    let uiTest = repository.root.appending(path: SendMoneyPlanBranch.uiTest)
+    let edited = try String(contentsOf: uiTest, encoding: .utf8) + "\nfinal class More {}\n"
+    try repository.write(SendMoneyPlanBranch.uiTest, edited)
+    let changed = try await repository.commit("edit the UI test")
+    let afterEdit = try await Self.sendMoneyRun(
+      clone, branch, tier: .final, at: changed,
+      proveReuse: Self.proveReuse(branch, store: store, runID: "final-2", tier: .final))
+    #expect(afterEdit.scratchRuns > 0, "a changed test changes the reverted tree")
+  }
+}
+
+extension BrownfieldMergeCheckTests {
+  @Test(
+    "a merge gate on a clean tree records each area step it passed as that tree's baseline answer, which a gate measuring from the merge then finds without a rerun — catches each task cut from a merge rerunning at its merge base a step the merge gate passed there"
+  )
+  func mergePassesAnswerTheBaselineAtTheirTree() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-7-config.toml"))
+    let changed = ["Packages/AppFeature/Sources/AppCore/AppFeature.swift"]
+
+    _ = try await Self.run(
+      clone, tier: .merge, areas: config.areas, changed: changed,
+      runner: FakeAreaCommandRunner { _ in .passed }, headTree: "tree0")
+
+    let results = BaselineStore(
+      layout: clone.layout, runner: FakeAreaCommandRunner { _ in .passed },
+      scratch: FakeScratchWorktrees(root: clone.scratch)
+    ).load(tree: "tree0").results
+    let app = try #require(config.areas.first { $0.name == "AppFeature" })
+    #expect(
+      results[BaselineStepKey(area: "AppFeature", step: .build, command: try #require(app.build))]
+        == .passed, "\(results)")
+
+    let broken = FakeAreaCommandRunner { request in
+      request.area == "AppFeature" && request.step == .build && !clone.inScratch(request)
+        ? .failed(exit: 1, tail: "error: no such module 'AccountClient'", junit: nil) : .passed
+    }
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: config.areas, changed: changed, runner: broken)
+    #expect(!broken.requests.contains { clone.inScratch($0) && $0.step == .build })
+    #expect(Self.gating(parts).contains("area.build-failed Packages/AppFeature"))
   }
 }

@@ -61,6 +61,31 @@ public enum GateReuse {
     return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
+  /// The key of 1 area's prove: its reverted run's verdict reads only the tree prove makes,
+  /// `mergeBase` with the changed tests copied in and each file renamed since put back at its new
+  /// path, and the command it runs there. A `final` whose prove makes the same tree as a merge's
+  /// needn't run it again, whatever else the head changed.
+  /// - Parameters:
+  ///   - inputs: the binary and the clone's config; the head's tree and the baseline aren't read.
+  ///   - tests: the selectors the command runs.
+  ///   - copied: each changed test file copied into the tree, by path, as a digest of its bytes;
+  ///     `nil` for a file the head deleted.
+  ///   - renames: new path → old path for each file renamed since `mergeBase`.
+  public static func proveKey(
+    _ inputs: Inputs, mergeBase: String, area: String, command: String, tests: [String],
+    copied: [String: String?], renames: [String: String]
+  ) -> String {
+    var lines = [
+      "prove schema 1", "merge-base \(mergeBase)", "binary \(inputs.sourceHash)",
+      "config \((inputs.stateFiles["config"] ?? nil) ?? "absent")", "area \(area)",
+      "command \(command)",
+    ]
+    lines += tests.sorted().map { "test \($0)" }
+    lines += copied.keys.sorted().map { "copied \($0) \((copied[$0] ?? nil) ?? "absent")" }
+    lines += renames.keys.sorted().map { "renamed \($0) \(renames[$0] ?? "")" }
+    return digest(Data(lines.joined(separator: "\n").utf8))
+  }
+
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.
   public static func reusable(_ records: [RunHistoryRecord], command: String, key: String)
     -> RunHistoryRecord?

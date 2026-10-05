@@ -237,3 +237,57 @@ struct BaselineAreaRunTests {
         == .failed)
   }
 }
+
+@Suite("a baseline answer implied by another")
+struct BaselineImpliedTests {
+  static let planBaseTree = "a12c4719959d18b4f7d759e4eeab4fe56f0a9cb5"
+
+  /// send-money-7's baseline at its plan base: the warm-up's records and the
+  /// `build-for-testing` answer a slice's 43 s cold rerun added there.
+  static func planBase() throws -> (
+    warmup: [BaselineStepKey: BaselineStepResult], rerun: BaselineRecord
+  ) {
+    let file = try BaselineFile.decode(
+      try Fixture.data("BrownfieldTrial/send-money-7-baseline-plan-base.json"), tree: planBaseTree)
+    let rerun = try #require(
+      file.records.first { $0.key.command.contains(" build-for-testing ") })
+    var warmup = file.results
+    warmup[rerun.key] = nil
+    return (warmup, rerun)
+  }
+
+  @Test(
+    "the app's build-for-testing at send-money-7's plan base is implied passed by the warm-up's passing xcodebuild test of the same scheme and destination, the answer the slice's 43 s cold rerun came to — catches a baseline rerunning a build its base tree's test already passed"
+  )
+  func passingTestImpliesItsBuildForTesting() throws {
+    let (warmup, rerun) = try Self.planBase()
+    #expect(rerun.result == .passed)
+    #expect(Baseline.implied(rerun.key, by: warmup) == .passed)
+  }
+
+  @Test(
+    "nothing is implied by a test that failed, ran a selection or belongs to another area, nor for a plain build — catches an implied pass the record doesn't vouch for"
+  )
+  func onlyAPassingWholeTestImpliesIt() throws {
+    let (warmup, rerun) = try Self.planBase()
+    let test = try #require(
+      warmup.keys.first { $0.area == rerun.key.area && $0.step == .test })
+    var failed = warmup
+    failed[test] = .failed
+    #expect(Baseline.implied(rerun.key, by: failed) == nil)
+
+    var selected = warmup
+    selected[test] = nil
+    selected[
+      BaselineStepKey(
+        area: test.area, step: .test, command: test.command, selection: ["UITests"])] = .passed
+    #expect(Baseline.implied(rerun.key, by: selected) == nil)
+
+    let elsewhere = BaselineStepKey(area: "Other", step: .build, command: rerun.key.command)
+    #expect(Baseline.implied(elsewhere, by: warmup) == nil)
+
+    let plain = try #require(
+      warmup.keys.first { $0.area == rerun.key.area && $0.step == .build })
+    #expect(Baseline.implied(plain, by: [test: .passed]) == nil)
+  }
+}

@@ -70,7 +70,7 @@ struct BrownfieldSliceCheckTests {
     judge:
       @escaping @Sendable (AssertionCandidate, String) async
       -> BrownfieldSliceCheck.AssertionJudgement = { _, _ in .asserts },
-    files: [String: String] = [:], context: GateRun.Context? = nil
+    files: [String: String] = [:], context: GateRun.Context? = nil, headTree: String? = nil
   ) async throws -> GateRunParts {
     let git = FakeGit(
       changed: changes.map(\.path), mergeBase: "base0",
@@ -100,7 +100,7 @@ struct BrownfieldSliceCheckTests {
       },
       history: { _ in history },
       changedBetween: { from, _ in changedSince[from] ?? [] },
-      judgeAssertion: judge, deadline: .seconds(5), box: box, now: { now })
+      judgeAssertion: judge, deadline: .seconds(5), headTree: headTree, box: box, now: { now })
     return try await BrownfieldSliceCheck.run(
       root: clone.root, base: "main",
       context: context ?? GateRun.Context(runID: "run", directory: clone.base),
@@ -1222,5 +1222,73 @@ extension BrownfieldSliceCheckTests {
 
     #expect(!answers.all.isEmpty, "the watchlist tests reached no judge")
     #expect(!answers.all.contains("before"), "\(answers.all)")
+  }
+}
+
+extension BrownfieldSliceCheckTests {
+  /// send-money-7's InterviewStarter `build-for-testing` answer at its contract's tree: what a
+  /// later slice's 111 s cold baseline rerun wrote there, after an earlier slice had passed the
+  /// same step on that same clean tree.
+  private static func contractBuildForTesting() throws -> BaselineRecord {
+    let file = try BaselineFile.decode(
+      try Fixture.data("BrownfieldTrial/send-money-7-baseline-contract.json"),
+      tree: "bf8ec9fb54cc37235d92d4b06cd15cc7d11d55ca")
+    return try #require(file.records.first { $0.key.area == "InterviewStarter" })
+  }
+
+  @Test(
+    "a slice on a clean tree records each step it passed as that tree's baseline answer, the same key send-money-7's cold rerun wrote, so a later slice measuring from that tree finds the app's build-for-testing answered and reruns none of it — catches 111 s of baseline rerun at a tree an earlier gate had already passed"
+  )
+  func passedStepsAnswerTheBaselineAtTheirTree() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-7-config.toml"))
+    let change = Change(
+      path: "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+      text: "struct AppFeature {}\n", added: [1...1])
+    let captured = try Self.contractBuildForTesting()
+
+    _ = try await Self.run(
+      clone, areas: config.areas, changes: [change],
+      runner: FakeAreaCommandRunner { _ in .passed }, headTree: "tree0")
+
+    let store = BaselineStore(
+      layout: clone.layout, runner: FakeAreaCommandRunner { _ in .passed },
+      scratch: FakeScratchWorktrees(root: clone.scratch))
+    #expect(store.load(tree: "tree0").results[captured.key] == .passed)
+
+    let broken = FakeAreaCommandRunner { request in
+      request.area == "InterviewStarter" && request.step == .build && !clone.inScratch(request)
+        ? .failed(exit: 65, tail: "error: cannot find 'AmountView' in scope", junit: nil)
+        : .passed
+    }
+    let parts = try await Self.run(
+      clone, areas: config.areas, changes: [change], runner: broken)
+
+    #expect(!broken.requests.contains { clone.inScratch($0) && $0.area == "InterviewStarter" })
+    #expect(
+      parts.findings.contains {
+        $0.ruleID == "area.build-failed" && $0.severity.failsGate
+      }, "\(parts.findings.map(\.message))")
+  }
+
+  @Test(
+    "a slice with no clean head tree records nothing in the baseline — catches uncommitted work's passes answering for a commit's tree"
+  )
+  func dirtyTreeRecordsNoBaseline() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-7-config.toml"))
+    let change = Change(
+      path: "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
+      text: "struct AppFeature {}\n", added: [1...1])
+
+    _ = try await Self.run(
+      clone, areas: config.areas, changes: [change],
+      runner: FakeAreaCommandRunner { _ in .passed })
+
+    #expect(!FileManager.default.fileExists(atPath: clone.layout.baseline(tree: "tree0").path))
   }
 }
