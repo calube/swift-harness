@@ -57,14 +57,11 @@ struct ShellWriteTargetsTests {
       ("cd /wt && echo x > a", "cd /wt |& cat && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt & echo x > a"),
       ("cd /wt && echo x > a", "cd /wt && pushd -n /main && popd && echo x > a"),
-      ("cd /wt && echo x > a", "cd /wt && cd sub && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt && sh -c 'echo x > a'"),
       ("cd /wt && echo x > a", "f() { cd /main; }; cd /wt && f && echo x > a"),
       ("cd /wt && echo x > a", "trap 'cd /main' DEBUG; cd /wt && echo x > a"),
       ("cd /wt && echo x > a", "cd /wt && eval cd /main && echo x > a"),
       ("cd /wt\necho x > a", "cd /missing\necho x > a"),
-      ("cd /wt\necho x > a", "ls; cd /wt\necho x > a"),
-      ("cd /wt\necho x > a", "cd /wt || exit\necho x > a"),
       ("cd /wt\necho x > a", "cd /wt\nif true; then\ncd /main\nfi\necho x > a"),
       ("cd /wt\necho x > a", "cd /wt\nfor d in a; do cd /main; done\necho x > a"),
       ("cd /wt; echo x > a", "cd /wt; (cd /main; echo x > a)"),
@@ -72,6 +69,58 @@ struct ShellWriteTargetsTests {
   func uncertainCdKeepsTheStartingDirectory(certain: String, uncertain: String) {
     #expect(Self.paths(certain) == ["/wt/a"], "\(certain)")
     #expect(Self.paths(uncertain).contains("a"), "\(uncertain)")
+  }
+
+  /// A Bash call `guard.run-user-checkout` denied in a brownfield trial: a heredoc written on a
+  /// later line than the `cd`s that moved the shell into a plan slot's `.harness/qa/spec`.
+  struct RefusedCall: Decodable {
+    let cwd: String
+    let command: String
+    let denial: String
+  }
+
+  @Test(
+    "the trial's heredoc written after `cd <slot> && mkdir -p rel && cd rel &&` and a newline is named only under the slot, never under the session's starting directory — catches the guard refusing a write it resolved against the wrong directory"
+  )
+  func capturedHeredocAfterRelativeCdFollowsIt() throws {
+    let call = try JSONDecoder().decode(
+      RefusedCall.self, from: Fixture.data("Hooks/relative-heredoc-after-cd-bash.json"))
+    let slot = "/CLONE-spec.slot-6"
+    let paths = ShellSyntax.writeTargets(in: call.command, directoryExists: { $0 == slot })
+      .map(\.path)
+    let denied = try #require(call.denial.split(separator: "`").dropFirst().first)
+    #expect(denied == "\(call.cwd)/launch-list.flow.json")
+    #expect(
+      Set(paths) == [slot + "/.harness/qa/spec/launch-list.flow.json", slot + "/launch-list.flow.json"],
+      "\(paths)")
+  }
+
+  @Test(
+    "a relative cd moves on from the directory the shell is in, and a later line runs where the earlier lines may have left the shell — catches a write after a relative cd or a newline named under the wrong directory",
+    arguments: [
+      ("cd /wt && cd sub && echo x > a", ["/wt/sub/a"]),
+      ("cd /wt && cd ./sub && cd .. && echo x > a", ["/wt/./sub/../a"]),
+      ("cd /wt && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n", ["/wt/s/a", "/wt/a"]),
+      ("cd /wt\ncd sub\necho x > a", ["/wt/sub/a", "/wt/a"]),
+      ("cd sub && echo x > a", ["sub/a"]),
+      ("cd /wt &&\necho x > a", ["/wt/a"]),
+      ("ls; cd /wt\necho x > a", ["/wt/a"]),
+      ("cd /wt || exit\necho x > a", ["/wt/a"]),
+      ("cd /missing || exit 1\necho x > a", ["/missing/a"]),
+      ("cd /wt; cd /missing; echo x > a", ["/missing/a", "/wt/a"]),
+      ("cd /wt && ls | cat > a", ["/wt/a"]),
+    ])
+  func relativeCdAndLaterLinesFollowTheShell(command: String, expected: [String]) {
+    #expect(Set(Self.paths(command)) == Set(expected), "\(command)")
+  }
+
+  @Test(
+    "a write into the main checkout after a relative cd and a newline is still named there — catches the carried directory hiding a main-checkout write"
+  )
+  func relativeCdIntoTheMainCheckoutStaysThere() {
+    let paths = Self.paths("cd /main && mkdir -p s && cd s && \nO=1\ncat > a <<EOF\nEOF\n")
+    #expect(paths.contains("/main/s/a"), "\(paths)")
+    #expect(paths.allSatisfy { $0.hasPrefix("/main/") }, "\(paths)")
   }
 
   @Test(
