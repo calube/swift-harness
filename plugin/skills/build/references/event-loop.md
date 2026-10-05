@@ -10,6 +10,8 @@ Contents:
 - [Launch](#launch): the workflow's args
 - [Validation task](#validation-task): the 1 task that commits nothing
 - [Returns](#returns): where each file goes
+- [Merge queue](#merge-queue): 1 merge at a time, in `build next`'s order
+- [Merge gate watch](#merge-gate-watch): a background merge gate and its deadline
 - [Conflict or red main](#conflict-or-red-main): undo, fixer, fix merge
 - [After each merge](#after-each-merge): the validation rows a merge unblocks
 - [Recording halts](#recording-halts): `build halt` and `build resume` for every halt
@@ -29,11 +31,12 @@ Keep these in the conversation; none of them is a file:
 - the plan's source (its design doc, or its spec page) and its plan surface, from `plan.json`;
 - per running task: its Workflow task id, its stall watch's task id, `worktree`, `branch` and
   `<transcripts>`, the transcript directory the Workflow tool printed;
+- the merge gate's Bash task id while it runs;
 - the order tasks merged in, for the fixer's second return;
 - the ledger page's file path, `.harness/design-render/<slug>-ledger.html`.
 
 Every other fact comes from `swiftgate`: the ledger from `<plans>/<slug>/ledger.json`, the preset
-from `<plans>/<slug>/build/<run>/run.json`, the running set from `build next`.
+from `<plans>/<slug>/build/<run>/run.json`, the running set and the merge queue from `build next`.
 
 `<plans>` must stay repo-relative when a command takes it as a path: `context-pack` reads an
 absolute path only for `--spec-page`, and only inside the repository. From the main checkout's
@@ -142,7 +145,8 @@ with other tasks, or end the turn to wait; never poll.
 
 A design plan's decomposer adds 1 validation task when 2 or more tasks build UI. Its write set is
 `.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
-workflow. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
+workflow. `build next` lists it first, ahead of every other ready task: the tasks its rows run
+after can't merge until its `--at-base` run is done. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
 as for any task, then launch 1 Agent tool call in the background, passing
 `run_in_background: true`, with `subagent_type` `general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
 plan, its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
@@ -185,11 +189,56 @@ This skill never stores a return that fails the check, so no dependent pack quot
 `context-pack --build-run` exits 1 when a dependency's return is missing, so a dependent can't
 start from a return this skill skipped.
 
+## Merge queue
+
+Merges land on `main` 1 at a time: `build merge --undo` takes back only the newest merge, so a
+second merge on top of an ungated one would block its undo. `build next` reports the queue.
+`merging` is the merge on `main` whose task isn't done yet. `readyToMerge` lists each running task
+whose checked return waits to merge, in the order `build check-return` passed them, with
+`fix: true` for a fixer's return, which merges with `--fix`. Merge the first task in `readyToMerge` only while
+`merging` is absent. A task a validation row's `Runs after` names also waits for the `--at-base`
+run.
+
+A task whose return `build check-return` passed, or whose merge is on `main`, holds no slot: its
+worker is done, so `build next` starts another task in its place. Its write set stays reserved until it
+merges, so no task that overlaps it starts.
+
+## Merge gate watch
+
+A merge gate can hang, so it never runs as a foreground call with no deadline. After each merge,
+`mkdir -p <plans>/<slug>/out`, then:
+
+1. Launch the gate with `run_in_background: true` and keep its Bash task id:
+   `"$SG" check --tier <mergeGate> --json > <plans>/<slug>/out/merge-<task>.json`, or for a plan
+   with a surface
+   `"$SG" check --tier <mergeGate> --base <surfaceCommit> --json > <plans>/<slug>/out/merge-<task>.json`.
+   Step 2's `"$SG" build gate-wait` holds the turn in the foreground while it runs.
+2. In the foreground, with the Bash tool's `timeout` at 600000:
+   `"$SG" build gate-wait <slug> --tier <mergeGate> --output <plans>/<slug>/out/merge-<task>.json --json`.
+   It budgets the gate from the tier's recent runs, or from the warm-up's build and test times
+   before the first one, waits up to 2 minutes and prints an `action`:
+
+- `read`: the gate wrote its JSON. Read its `verdict` and `runID` from the output file, and go on
+  as the table below says for its verdict.
+- `wait`: the gate is inside its deadline. Handle any completion notice that arrived, checking
+  its return so it joins the queue, then run `build gate-wait` again. Never end the turn while the
+  gate runs, and never wait on it another way, such as a sleep: a headless session that ends its
+  turn kills the gate.
+- `overrun`: the gate passed its deadline, 3 times its expected time. `TaskStop` its Bash task and
+  treat it as a RED merge gate whose finding is the watch's `message`:
+  `"$SG" build halt --run <run> --task <task> --reason gate-red`, then
+  `"$SG" build merge <slug> <task> --undo --session <session> --json`, then
+  `"$SG" build resume --run <run> --task <task> --answer retry` and the fixer below. Before
+  anything else, run `build next` and merge the first task in its `readyToMerge`: a task queued
+  behind the slow merge lands first, and the slow one comes back through its fixer.
+- `cutoff`: a `swiftgate run`'s cutoff passed with the gate still running. Run `build cutoff` as
+  the run skill says, then `build gate-wait` again.
+
 ## Conflict or red main
 
-The merge gate is the preset's `mergeGate`. Run it on `main` after every clean merge:
-`"$SG" check --tier <mergeGate>`, or `"$SG" check --tier <mergeGate> --base <surfaceCommit>` for a
-plan with a surface. From `origin/main`, the surface's stubs would read as untested changes in
+The merge gate is the preset's `mergeGate`. Run it on `main` after every clean merge, as the
+[merge gate watch](#merge-gate-watch) says, with `--base <surfaceCommit>` for a plan with a
+surface. From `origin/main`, the surface's stubs would read as untested changes in
 every merge; from the surface, the gate judges what the merged tasks changed on top of it.
 
 The start's green-main check may leave a baseline: its findings when the user chose **go on**, or,
@@ -251,11 +300,12 @@ The notice HTML-escapes it: turn `&lt;`, `&gt;` and `&amp;` back into `<`, `>` a
 read the output file the notice names, which is the fixer's whole transcript:
 `"$SG" build check-return .harness/build/<run>/fix-<task>.json --plan <slug> --fix --session <session> --json`.
 
-- The check passes and `outcome` is `ready-to-merge`:
+- The check passes and `outcome` is `ready-to-merge`: wait until `build next` lists it in
+  `readyToMerge` with `merging` absent. Then
   `"$SG" build merge <slug> <task> --fix --session <session> --json`, as its own command after the
   check exits 0 (it refuses a fix whose newest `--fix` check isn't GREEN at the fix branch's tip),
   then the merge gate on
-  `main` again, recorded with `build record-gate --kind merge --task <task>` like the first.
+  `main` again. Watch it and record it with `build record-gate --kind merge --task <task>` like the first.
   GREEN: go on to `ledger set … done` as for a clean merge, and after the task's
   `worktree remove`, remove the fix worktree and branch too:
   `"$SG" worktree remove <slug> <task> --fix --session <session> --json`.
@@ -393,7 +443,7 @@ orchestrator watches from outside. After each launch, run this with `run_in_back
 d=<dir>; m=<stall minutes>; e="${d%/subagents/workflows/*}/workflows/${d##*/}.json"; while /bin/sleep 60; do [ -e "$e" ] && { echo "ended: $d"; exit 0; }; [ -z "$(find "$d" -name 'agent-*.jsonl' -mmin -$m)" ] && { echo "stalled: $d"; exit 0; }; done
 ```
 
-`<stall minutes>` is `stallMin` from `build next`'s report: the preset's `stall_min`, or 15, the run viewer's stall badge too. Every
+`<stall minutes>` is `stallMin` from the newest `build next`: the preset's `stall_min`, or 15, the run viewer's stall badge too. Under a `swiftgate run`'s box, `stallMin` shrinks as the cutoff nears, to half the minutes left to the cutoff and never under 6, so a stall still leaves time to act. Every
 tool call and result appends to an agent's transcript, so that long with no change means no agent in
 that workflow has moved. The Workflow tool writes `workflows/<id>.json` in the session directory
 once the workflow ends, so the watch stops on its own then and prints `ended: <dir>`, which needs

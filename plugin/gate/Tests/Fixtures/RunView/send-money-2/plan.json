@@ -1,0 +1,140 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "account-fake" : {
+        "acceptance" : [
+          "InMemoryAccountTests for a successful send, a failing send, a send above the balance and the starting values fail first, then pass; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the client interface and the seed contacts, which the contract landed"
+        ],
+        "scope" : [
+          "`AccountClient.inMemory(balance:contacts:failSends:)` keeps a locked balance; `send` lowers it and returns a Payment with a fresh id",
+          "with `failSends` set, `send` throws `SendError.declined` and leaves the balance; an amount above the balance throws `insufficientFunds`"
+        ],
+        "title" : "Implement the in-memory AccountClient fake.",
+        "why" : "setup asks for \"a client interface with an in-memory fake: a starting balance of $250.00, a list of about 8 contacts, and a send call that can be made to fail\"."
+      },
+      "amount-entry" : {
+        "acceptance" : [
+          "AmountInputTests cover a third decimal digit, a second decimal point, \"007\" reading \"7\", delete, a leading decimal point and formatting; canContinue at $0.00, at the balance and 1 cent above it",
+          "AmountFeatureTests cover keys updating the input and continue being refused when disabled; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the keypad view and navigation to the confirmation screen"
+        ],
+        "scope" : [
+          "`AmountInput.press`, `amount`, `formatted` and `canContinue(amount:balance:)`",
+          "`AmountFeature`: `keyTapped` updates the input; `continueButtonTapped` sends `delegate(.continued)` only when `State.canContinue`"
+        ],
+        "title" : "Implement the amount-entry rules and the amount feature.",
+        "why" : "\"Enter an amount\": at most 2 decimal digits, no leading zeros, currency formatting, \"Continue\" only for $0.00 < amount <= balance, and Decimal for money."
+      },
+      "send-flow" : {
+        "acceptance" : [
+          "AppFeatureTests and ConfirmFeatureTests with a stubbed AccountClient, for search, the tap, a success and a failure then retry, fail first, then pass; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the views, the fake and the amount rules"
+        ],
+        "scope" : [
+          "`AppFeature.State.filteredContacts`; `task` loads balance and contacts from the client; `contactTapped` pushes `.amount`; the amount delegate pushes `.confirm`; the confirm `sent` delegate lowers the balance, inserts the payment at index 0 of `activity` and pops the path",
+          "`ConfirmFeature`: send and retry call `accountClient.send`, set `isSending`, keep `error` on failure and clear it on retry, and send `delegate(.sent)` on success; log a failed send through LogClient"
+        ],
+        "title" : "Implement search, navigation, the confirm-and-send feature, and the balance and activity updates in the root feature.",
+        "why" : "requirements \"Pick a contact\" and \"Confirm and send\": search filters by name, a tap opens the amount screen, Send calls the client, success updates the balance and activity, failure leaves the balance and shows an error with retry."
+      },
+      "send-money-contract" : {
+        "acceptance" : [
+          "every touched area builds; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "any behaviour of the new types"
+        ],
+        "scope" : [
+          "the AccountClient target with Contact, Payment, SendError, the client and its seed contacts",
+          "AmountInput, KeypadKey, AmountFeature, ConfirmFeature and the root AppFeature with stub bodies",
+          "AccessibilityID, stub AppView, AmountView and ConfirmView; the posts screen removed"
+        ],
+        "title" : "Declare the account client, the feature states and actions, the accessibility ids and stub screens every task compiles against.",
+        "why" : "every requirement crosses AccountClient, AppCore and AppUI, so each task builds against 1 declared shape."
+      },
+      "send-ui" : {
+        "acceptance" : [
+          "the app builds and LaunchFlowUITests compiles; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "reducer logic, the fake and the amount rules"
+        ],
+        "scope" : [
+          "AppView: the balance, the search field, contact rows as buttons sending `contactTapped`, and the activity list newest first",
+          "AmountView: the formatted amount, keys 0-9, decimal point and delete sending `keyTapped`, and Continue disabled unless `canContinue`",
+          "ConfirmView: contact, amount, Send, a progress state, and on error its message with a Try again button",
+          "every control carries its `AccessibilityID`"
+        ],
+        "title" : "Build the home, amount and confirmation screens over the contract's stores.",
+        "why" : "the spec's 3 screens: a searchable contact list with the balance and activity, a custom keypad with Continue, and a confirmation screen with Send, the error and Try again."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the simulator flows against the contract's names, and record why each fails now.",
+        "why" : "each screen requirement needs a check that fails before its tasks merge and passes after."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-fake",
+        "title" : "The account sits behind an AccountClient interface whose in-memory fake starts at $250.00 with 8 contacts, and whose send can be made to fail"
+      },
+      {
+        "id" : "req-search",
+        "title" : "Typing in the contact search filters the contact list by name, ignoring case"
+      },
+      {
+        "id" : "req-pick-contact",
+        "title" : "Tapping a contact opens the amount screen for that contact"
+      },
+      {
+        "id" : "req-keypad",
+        "title" : "The keypad enters digits, a decimal point and delete, rejects a third decimal digit and a second decimal point, and drops leading zeros (\"007\" reads \"7\")"
+      },
+      {
+        "id" : "req-amount-format",
+        "title" : "The amount shows formatted as US dollar currency as the user types"
+      },
+      {
+        "id" : "req-continue",
+        "title" : "\"Continue\" is enabled only for an amount above $0.00 and no more than the current balance"
+      },
+      {
+        "id" : "req-decimal",
+        "title" : "Money is held as Decimal, never a floating-point type"
+      },
+      {
+        "id" : "req-confirm",
+        "title" : "The confirmation screen shows the contact and the amount, and \"Send\" calls the account client"
+      },
+      {
+        "id" : "req-send-success",
+        "title" : "A successful send lowers the balance by the amount and puts the payment at the top of the first screen's activity list"
+      },
+      {
+        "id" : "req-send-failure",
+        "title" : "A failed send leaves the balance unchanged and shows an error with a way to try again"
+      }
+    ]
+  },
+  "resume" : "planned; 6 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}
