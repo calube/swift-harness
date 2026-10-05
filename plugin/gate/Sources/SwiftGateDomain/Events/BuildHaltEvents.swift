@@ -137,7 +137,11 @@ public enum BuildHalts {
   /// left in the box is priced by the cutoff, never judged by hand.
   /// - Parameter cutoffAt: the run's time-box cutoff; `nil` for a build with no box.
   public static func refusal(reason: BuildHaltReason, now: Date, cutoffAt: Date?) -> String? {
-    nil
+    guard reason == .budget, let cutoffAt, now < cutoffAt else { return nil }
+    let left = Int(cutoffAt.timeIntervalSince(now).rounded(.up))
+    return "a `budget` halt is `build cutoff`'s to record, and the cutoff at "
+      + "\(cutoffAt.formatted(.iso8601)) is \(left) s away: go on with the loop, and run "
+      + "`build cutoff` when the clock reaches it"
   }
 
   /// Whole milliseconds from `halt` to `resume`; `0` when the clock ran backwards.

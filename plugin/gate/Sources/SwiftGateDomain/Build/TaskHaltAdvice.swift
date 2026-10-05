@@ -52,6 +52,15 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
     }
     let found =
       rules.isEmpty ? "a \(outcome.rawValue) return" : rules.map(\.rawValue).joined(separator: ", ")
+    if unconfirmedFix, cutoffAt.map({ now < $0 }) ?? true {
+      return TaskHaltAdvice(
+        answer: .verify,
+        why: "\(found) with a committed fix no gate checked: run its gate and its before-merge "
+          + "`qa run --fix` yourself, which starts no new task"
+          + (cutoffAt.map {
+            "; `build cutoff` decides at \(stamp($0)) whatever is unfinished then"
+          } ?? ""))
+    }
     if let noNewStartsAt, now >= noNewStartsAt {
       return TaskHaltAdvice(
         answer: .continue, why: "\(found): no new starts since \(stamp(noNewStartsAt))")
@@ -74,7 +83,7 @@ public struct TaskHaltAdvice: Sendable, Equatable, Encodable {
   public static func isUnconfirmedFix(
     fix: Bool, outcome: TaskReturn.Outcome, commits: [String], gateVerdict: Verdict?
   ) -> Bool {
-    false
+    fix && outcome == .gateRed && !commits.isEmpty && (gateVerdict ?? .blocked) == .blocked
   }
 
   private static func stamp(_ date: Date) -> String {

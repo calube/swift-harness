@@ -115,7 +115,17 @@ public struct BuildRunStore: Sendable {
   /// The record of build run `runID` in whichever plan under `commonDirectory` holds it, or `nil`
   /// when none does or its `run.json` can't be read.
   public static func record(runID: String, commonDirectory: String) -> BuildRunRecord? {
-    nil
+    guard RunID.isValid(runID), let layout = try? PlanStateLayout(commonDirectory: commonDirectory),
+      let plans = try? FileManager.default.contentsOfDirectory(atPath: layout.root)
+    else { return nil }
+    for name in plans.sorted() {
+      guard let run = try? layout.plan(name).buildRun(runID),
+        let data = FileManager.default.contents(atPath: run.runFile),
+        let record = try? BuildRunJSON.decode(data)
+      else { continue }
+      return record
+    }
+    return nil
   }
 
   private static func locate(plan: String, runID: String, git: any Git)

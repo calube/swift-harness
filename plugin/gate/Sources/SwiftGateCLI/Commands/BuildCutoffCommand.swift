@@ -19,8 +19,6 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let abandoned: [CutoffDecision]
   /// Tasks that never started and stay as they are.
   let notStarted: [String]
-  /// Every decision with the exact commands it leaves to run, in order: run them as written.
-  var steps: [CutoffStep] = []
   /// Where the decisions were written for the report.
   let path: String
   /// Gates that were still running in an abandoned task's worktree, each as `<tier> in <path>`.
@@ -29,6 +27,8 @@ struct BuildCutoffReport: Sendable, Equatable, Encodable {
   let prunedScratchTrees: [String]
   /// Telemetry lines that failed; the decisions stand without them.
   let notes: [String]
+  /// Every decision with the exact commands it leaves to run, in order: run them as written.
+  var steps: [CutoffStep] = []
 }
 
 /// What `build cutoff` reads of the run's past to price landing each task.
@@ -179,7 +179,20 @@ enum BuildCutoffRun {
           abandoned: abandoned,
           notStarted: decisions.filter { $0.action == .notStarted }.map(\.task), path: path,
           stoppedGates: stopped.map { "\($0.tier) in \($0.toplevel)" },
-          prunedScratchTrees: sweep.removed, notes: notes),
+          prunedScratchTrees: sweep.removed, notes: notes,
+          steps: decisions.map { decision in
+            let task = tasks.first { $0.id == decision.task }
+            let newest = log.events.last { event in
+              if case .returnCheck(let check) = event { return check.task == decision.task }
+              return false
+            }
+            var fix = false
+            if case .returnCheck(let check) = newest { fix = check.fix }
+            return CutoffRule.step(
+              for: decision, stage: task?.stage ?? .working, fix: fix,
+              beforeMergeQASeconds: task?.beforeMergeQASeconds ?? 0,
+              mergeGate: record.preset.mergeGate, slug: slug, session: session ?? "<session>")
+          }),
         holder: nil,
         message: "cut off build run \(record.runID): \(abandoned.count) task(s) abandoned")
     } catch {
