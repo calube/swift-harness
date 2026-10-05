@@ -110,10 +110,10 @@ struct QARunFlowTests {
 
   static func run(
     _ repo: QARepo, _ simulator: FakeFlowSimulator, events: MemoryEventLog = MemoryEventLog(),
-    atBase: Bool = false
+    atBase: Bool = false, preparedBy: String? = nil
   ) async -> QAReport {
     await QARunRun.run(
-      root: repo.root, options: QARunRun.Options(atBase: atBase),
+      root: repo.root, options: QARunRun.Options(atBase: atBase, preparedBy: preparedBy),
       git: LiveGit(runner: repo.runner, repositoryRoot: repo.root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: repo.runner), ports: LiveQAPorts(),
@@ -260,6 +260,34 @@ struct QARunFlowTests {
     #expect(flow.result == .red)
     #expect(flow.message.contains(FlowRules.noAssertRuleID), "\(flow.message)")
     #expect(simulator.calls.isEmpty)
+  }
+
+  @Test(
+    "--at-base --prepared-by drives the flow from the checkout's .harness/qa/<plan>/ on a leased device, judges it with sim verify, and runs its state row there with QA_DIR set to that folder, so a check that passes at base is caught before qa adopt — catches a validation worker's flow red that only a raw agent-device batch can produce"
+  )
+  func preparedFlowRunsOnDevice() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try Self.plan(repo)
+    let prepared = repo.root.appending(
+      path: ".harness/qa/\(QARepo.slug)", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+    for name in ["count.flow.json", "count.state.sh"] {
+      try FileManager.default.moveItem(
+        at: repo.planDirectory.appending(path: "qa/\(name)"), to: prepared.appending(path: name))
+    }
+    let simulator = try await Self.simulator(repo, batch: "pass")
+
+    let report = await Self.run(repo, simulator, atBase: true, preparedBy: "validation")
+
+    #expect(report.rows.map(\.result) == [.pass, .pass], "\(report.rows.map(\.message))")
+    #expect(simulator.calls.count == 3, "\(simulator.calls)")
+    #expect(simulator.calls.last == "verify", "\(simulator.calls)")
+    #expect(FileManager.default.fileExists(atPath: prepared.appending(path: "state-ran").path))
+    #expect(!FileManager.default.fileExists(atPath: Self.marker(repo).path))
+    #expect(
+      report.findings.map(\.ruleID)
+        == [QAReport.checkPassesAtBaseRuleID, QAReport.checkPassesAtBaseRuleID])
   }
 
   @Test(

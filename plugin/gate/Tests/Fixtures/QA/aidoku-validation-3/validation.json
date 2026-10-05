@@ -1,0 +1,47 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/confirm-large-downloads-toggle.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-setting-toggle",
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-stored-value",
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm-large-downloads-store.state.sh",
+      "layer" : "state",
+      "requirement" : "req-stored-value",
+      "runsAfter" : [
+        "confirm-downloads-setting"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "test: AidokuTests/LargeDownloadConfirmationTests",
+      "layer" : "acceptance",
+      "requirement" : "req-download-check",
+      "runsAfter" : [
+        "confirm-downloads-check"
+      ],
+      "writer" : "confirm-downloads-check"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "needs a source with over 50 chapters and network in the simulator; the req-download-check acceptance test covers the decision the prompt follows",
+      "requirement" : "req-prompt"
+    }
+  ]
+}

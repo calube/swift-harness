@@ -144,8 +144,8 @@ A design plan's decomposer adds 1 validation task when 2 or more tasks build UI.
 `.harness/qa/<slug>/`, which no commit carries, so it never merges and never runs the build-task
 workflow. When `build next` lists it, run `worktree create`, the pack and `ledger set … in-progress`
 as for any task, then launch 1 Agent tool call in the background with `subagent_type`
-`general-purpose` and `model` `opus`. Its prompt names the task's worktree, `<slug>` as its plan,
-its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
+`general-purpose` and `model` `opus`. Its prompt names the task's worktree and id, `<slug>` as its
+plan, its rows (the `validation.json` rows whose `writer` is the task), its context pack, the plan
 surface, and says to work in that worktree and follow
 `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. When it returns:
 
@@ -343,7 +343,7 @@ outcome each halt that task alone. The workflow already spent its 1 fix pass.
    - **Go on without it** (Recommended): it stays `blocked`; its dependents never start.
    - **Retry**: `ledger set … pending`, then let `build next` start it again. Its worktree and
      branch still exist, so skip `worktree create` and launch into the same worktree.
-   - **Abandon**: `ledger set … abandoned`.
+   - **Abandon**: `ledger set … abandoned`, then [discard its worktrees](#abandoned-task).
    - **Stop the build**: start nothing new; running tasks still merge, then [finish](#final-gate).
 
 ## Design conflict
@@ -362,9 +362,9 @@ target or product the task needs, which only a new surface can add.
    every `pending` task that depends on a blocked one, however far down the chain. The block lives
    in the ledger, so a resumed build sees it.
 3. Ask once, quoting `section: claim` and the ids. Options: **stop** (Recommended), **drop** the
-   blocked tasks (`ledger set … abandoned`), or **retry** them (`ledger set … pending`). A retried
-   task that already had a worktree relaunches into it; the others start through `worktree create`
-   as usual. The workflow args carry no note, so a retry with a note means the user edits the design
+   blocked tasks (`ledger set … abandoned`, then [discard their worktrees](#abandoned-task)), or
+   **retry** them (`ledger set … pending`). A retried task that already had a worktree relaunches
+   into it; the others start through `worktree create` as usual. The workflow args carry no note, so a retry with a note means the user edits the design
    or the plan first.
 
 `amend`: set the reporting task `blocked`, and run the amend flow
@@ -398,7 +398,8 @@ last tool call. Options:
 - **Stop and retry** (Recommended): `TaskStop` the workflow, `ledger set … pending`, and relaunch
   into the same worktree. The worker's uncommitted edits stay there.
 - **Wait**: restart the watch. Pick this when the last call is a long gate, such as a `ready` tier.
-- **Abandon**: `TaskStop` the workflow, then `ledger set … abandoned`.
+- **Abandon**: `TaskStop` the workflow, `ledger set … abandoned`, then
+  [discard its worktrees](#abandoned-task).
 
 ## Time budget
 
@@ -424,8 +425,16 @@ When the timer fires, or any `build next` reports `phase` `cutoff`:
 - Nothing running: go to the [final gate](#final-gate).
 - Tasks running: halt. Options: **stop them now** (Recommended), or **let them finish** without new
   starts. A headless session stops them. To stop them: `TaskStop` each workflow, then
-  `ledger set <task> abandoned`, then go to the final gate. `main` stays green: every merge ran
-  the merge gate.
+  `ledger set <task> abandoned` and [discard its worktrees](#abandoned-task), then go to the
+  final gate. `main` stays green: every merge ran the merge gate.
+
+## Abandoned task
+
+Every task set `abandoned` loses its worktrees at once, merged or not:
+`"$SG" worktree remove <slug> <task> --abandoned --session <session> --json`. It removes the
+task's worktree and its fix worktree, whichever exist, uncommitted edits included, and keeps both
+branches so their commits stay reachable. It refuses a task the ledger doesn't record as
+`abandoned`.
 
 ## Final gate
 
@@ -486,7 +495,8 @@ rather than running them again, drives the screens the plan changed and judges e
 `sim verify`. It hands nothing to `/swift-harness:tdd`, since this skill never edits code.
 
 - GREEN from both: go on.
-- RED from either, a red row or a flow `sim verify` judged RED: halt with reason `gate-red`, and
+- RED from either, a red row, a row that never verified (`unverified` or `abandoned`, which gate
+  once the build has ended) or a flow `sim verify` judged RED: halt with reason `gate-red`, and
   quote each red row as `<requirement> <layer>: <message>` and each finding as `rule: message`.
   Options: **stop** (Recommended), which leaves the index at `building` so a sprint can fix it, or
   **finish anyway**.

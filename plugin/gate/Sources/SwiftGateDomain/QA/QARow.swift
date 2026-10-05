@@ -9,6 +9,8 @@ public enum QAResult: String, Sendable, Equatable, Codable, CaseIterable {
   case unverified
   /// A task the row runs after hasn't merged.
   case waiting
+  /// The build ended with a task the row runs after abandoned and unmerged, so the row never ran.
+  case abandoned
 }
 
 /// 1 validation row as 1 `qa run` left it, as `qa/report.json` stores it.

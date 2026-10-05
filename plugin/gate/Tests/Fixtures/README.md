@@ -2510,6 +2510,29 @@ cp $S/qa-runs/20261004T222811Z-0be8aeb0/report.json $F/after-report.json
 
 `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-2` matched nothing.
 
+## qa run: rows still waiting once the build ended
+
+`QA/aidoku-validation-3/` holds what the iOS validation trial's third attempt on `Aidoku/Aidoku`
+left (`evals/results/2026-10-04-brownfield-ios-validation-3/`, finding 1). `validation.json` is the
+plan's table: 2 flow rows and a state row after `confirm-downloads-setting`, and an acceptance row
+after `confirm-downloads-check`. `ledger.json` is the plan's ledger at the end, with
+`confirm-downloads-setting` `abandoned`. `build-events.jsonl` is the build run's
+`events.jsonl`: that task's merge, its GREEN merge gate, then the `final` gate.
+`final-report.json` is the plain `qa run` after `final`: 3 rows `waiting` and GREEN. From the
+repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/QA/aidoku-validation-3
+mkdir -p $F && cp $S/validation.json $F/validation.json
+sed -E 's#/Users/[^/]*/Developer/trials/#/TRIALS/#g' $S/ledger.json > $F/ledger.json
+cp $S/build-events.jsonl $F/build-events.jsonl
+cp $S/qa-runs/20261005T002359Z-7b81c6a7/qa/report.json $F/final-report.json
+```
+
+The `sed` replaces the trial clone's parent folder in each task's `worktree` with `/TRIALS/` and
+changes nothing else. `grep -rniE '/Users|/private|/var/folders|caleb' QA/aidoku-validation-3`
+matched nothing.
+
 ## Run view: a RED gate's report
 
 `RunView/build-run-1/runs/20261004T050310Z-ed998508/report.json` is the `report.json` the merge
@@ -2886,6 +2909,39 @@ cp $R/sim/steps/*.tree.json $F/sim/steps/
 
 `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/aidoku-setting-flow` matched
 nothing.
+
+## Brownfield trial: the validation worker's Bash calls and flows on an iOS clone
+
+`Hooks/aidoku-validation-3-worker-bash.json` holds every Bash command the validation worker ran in
+the third iOS validation trial on `Aidoku/Aidoku`, in order. Calls 14 and 17 drive its prepared
+flows with a raw `agent-device batch`. `BrownfieldTrial/aidoku-validation-3-config.toml` is that
+clone's `config.toml` after the run, and `BrownfieldTrial/aidoku-validation-3-toggle.flow.json` and
+`aidoku-validation-3-store.flow.json` are the 2 flows the worker wrote. `H` is the harness checkout
+the trial ran and `C` the clone. From the repository root:
+
+```sh
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures H=… C=… python3 - <<'PY'
+import json, os
+S, F, H, C = (os.environ[k] for k in ("S", "F", "H", "C"))
+commands = []
+for line in open(f"{S}/validation-worker.jsonl"):
+    entry = json.loads(line)
+    content = (entry.get("message") or {}).get("content")
+    if not isinstance(content, list): continue
+    for block in content:
+        if block.get("type") == "tool_use" and block.get("name") == "Bash":
+            commands.append(block["input"]["command"])
+scrub = lambda s: s.replace(H, "/HARNESS").replace(C, "/CLONE")
+open(f"{F}/Hooks/aidoku-validation-3-worker-bash.json", "w").write(
+    scrub(json.dumps(commands, indent=2, ensure_ascii=False) + "\n"))
+PY
+S=evals/results/2026-10-04-brownfield-ios-validation-3 F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/config.toml $F/aidoku-validation-3-config.toml
+cp $S/qa/confirm-large-downloads-toggle.flow.json $F/aidoku-validation-3-toggle.flow.json
+cp $S/qa/confirm-large-downloads-store.flow.json $F/aidoku-validation-3-store.flow.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the 4 files matched nothing.
 
 ## Node installs: 1 lockfile per package manager
 

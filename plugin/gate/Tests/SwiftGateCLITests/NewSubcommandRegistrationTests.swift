@@ -204,6 +204,11 @@ struct NewSubcommandRegistrationTests {
       ["qa", "run", "--plan", "example-plan", "--after", "example-task", "--at-base", "--json"],
       "run"
     ),
+    (
+      "qa run --at-base --prepared-by",
+      ["qa", "run", "--plan", "example-plan", "--at-base", "--prepared-by", "example-task"],
+      "run"
+    ),
     ("qa adopt", ["qa", "adopt", "../repo-validation", "--json"], "adopt"),
     ("warmup", ["warmup", "--areas", "api,web"], "warmup"),
     (
@@ -249,7 +254,7 @@ struct NewSubcommandRegistrationTests {
   static let implemented: Set<String> = [
     "plan claim", "plan release", "plan release --force", "plan set", "index set", "design-diff",
     "run report",
-    "qa run", "qa run --after --at-base", "qa adopt",
+    "qa run", "qa run --after --at-base", "qa run --at-base --prepared-by", "qa adopt",
     "design-diff --chain", "design-scope", "evidence capture",
     "plan-schedule",
     "prose",
