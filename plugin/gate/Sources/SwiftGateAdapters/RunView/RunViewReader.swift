@@ -131,9 +131,9 @@ public struct RunViewReader: RunViewReading {
     return RunViewInput(
       buildRun: buildRun, events: kept, join: join, ledger: ledger, requirements: requirements,
       damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workers.tasks,
-      unattributedGateRuns: workers.unattributed, launchedAt: prebuild.launchedAt, gateReports: reports,
-      checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa,
-      validation: validation)
+      unattributedGateRuns: workers.unattributed, launchedAt: prebuild.launchedAt,
+      gateReports: reports, checkoutRoots: checkoutRoots(worktrees: worktrees),
+      warmupBaselines: baselines, qaRuns: qa, validation: validation)
   }
 
   /// The plan's `validation.json` as it stands now; `nil` when the plan has none, and damage when

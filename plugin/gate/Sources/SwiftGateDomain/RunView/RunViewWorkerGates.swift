@@ -66,8 +66,8 @@ public enum RunViewWorkerGates {
       if let head = run.head {
         for (task, commits) in branchCommits where commits.contains(head) { owners.insert(task) }
         for check in checked where same(check.commit, head) { owners.insert(check.task) }
-        for (task, taskReturn) in returns where taskReturn.commits.contains(where: { same($0, head) })
-        {
+        for (task, taskReturn) in returns
+        where taskReturn.commits.contains(where: { same($0, head) }) {
           owners.insert(task)
         }
       }
