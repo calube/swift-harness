@@ -343,6 +343,26 @@ tip on `main`'s commit, so run it again after any commit to either. A run whose 
 the same tree as an earlier one takes the rows that passed there with byte-identical checks,
 naming that run in `reusedFrom`, so repeating a fixer's passing run costs seconds.
 
+A row whose `Runs after` names tasks that haven't merged doesn't wait for the last of them. Once
+each unmerged task it names has a checked return in `build next`'s `readyToMerge`, it runs before
+the first of them merges, on 1 trial merge of all their branches onto `main`'s tip:
+
+```
+"$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json
+```
+
+`build merge` of any of those tasks refuses `flows-unchecked` until a run took every one of their
+branches at its tip on `main`'s commit, naming the command with its task list; a GREEN one lets
+each merge in turn. The held device and the reuse of a tree a passing run already checked work as
+above, so the last of them repeats the run in seconds when its merge makes the same tree. A task
+with a fixer's branch is no longer waiting: its rows run again before its fix merges.
+
+- RED over several tasks: pick the task that owns the red behaviour: the one whose write set holds
+  the screen, state or code each red row's message points at. When unsure, take the task the
+  row's `Runs after` names last. Run `build merge` for it first: it refuses `flows-red` and cuts
+  its fix worktree, and the halt and fixer follow as below. The fixer reruns the same run with
+  that task first and `--fix`. Then merge the other tasks: with the owner set aside, they no
+  longer wait on its rows.
 - GREEN: merge. Rows that read `unverified` or `waiting` go in the report with their messages.
   A branch that conflicts with `main` runs no row and names the files: merge, and the conflict
   goes to the fixer as any conflict does.
