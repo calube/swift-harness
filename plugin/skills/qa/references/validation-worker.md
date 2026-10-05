@@ -8,7 +8,7 @@ those checks wait for.
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Work only in your own worktree, from its toplevel.
 
 Run every `"$SG"` call (`qa lint`, `qa run`) in the foreground with the Bash tool's `timeout` at
-600000, never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
+600000, never a shorter one, and never with `run_in_background` or a shell `&`. A call cut at the 120 s default goes on in
 the background while you wait on it, and every merge your rows name waits on you. Never search
 outside your worktree: every file you need is in it, in the brief, or at a path `qa run` prints.
 List a folder by naming it, as `ls .harness/qa/<plan>`, never a bare `ls`: the tool's stdin never
@@ -74,6 +74,11 @@ lint finding isn't ready: fix it and run it again before you return.
   ```bash
   "$SG" qa run --plan <plan> --at-base --prepared-by <your task id> --json
   ```
+
+  Never pipe it through `head`, `tail` or a filter, and never send it to a file outside your
+  worktree: read the whole JSON it prints. Its last member, `summary`, is 1 line naming the
+  verdict, the run id and its `report.json`, which holds the same JSON. A finished run on the same
+  commit is never run again: read its report there, or the `at-base-run.json` beside your checks.
 
   It runs only the rows you write, from your prepared folder, at the merge base in a scratch tree:
   each flow is linted, run as 1 batch on a device `sim up` leases, snapped at each step and judged
