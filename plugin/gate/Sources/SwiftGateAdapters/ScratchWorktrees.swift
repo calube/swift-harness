@@ -318,6 +318,13 @@ public struct LiveScratchWorktrees: ScratchWorktrees {
     }
   }
 
+  /// Removes every worktree registered inside `checkout`'s own git dir, as a linked checkout's
+  /// kept tree is: removing the checkout deletes that git dir and would leave each such tree
+  /// registered with no directory. Nothing for the main checkout, whose git dir holds them all.
+  public func removeTrees(inGitDirectoryOf checkout: String) async -> ScratchWorktreeSweep {
+    ScratchWorktreeSweep()
+  }
+
   /// Removes every scratch tree registered with this repository whose owning process no longer
   /// exists, whichever of its checkouts made it: a tree made from a linked worktree that has since
   /// been removed is never beside a toplevel the per-run sweep looks in.
