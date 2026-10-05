@@ -179,4 +179,47 @@ struct AreaCommandBoundsTests {
     #expect(unbuilt.expected == .milliseconds(11_349))
     #expect(warm.duration == AreaCommandBounds.floor)
   }
+
+  /// A merge gate's then a final's gate events on the same tree, the warm-up times at their base
+  /// and the run's launch clock, from a brownfield trial whose final refused a UI test the merge
+  /// had just run in 17 s.
+  static func finalReuse() throws -> (times: WarmupTimesFile, box: RunTimeBox, events: [HarnessEvent]) {
+    let times = try WarmupTimesFile.decode(
+      Fixture.data("BrownfieldTrial/final-reuse-warmup.json"),
+      tree: "d2d38143ef2b5e7988dceae910f0f2521ea38531")
+    let box = try #require(
+      try RunClock.decode(Fixture.data("BrownfieldTrial/final-reuse-clock.json")).runTimeBox)
+    let events = try HarnessEventJSON.decode(
+      Fixture.data("BrownfieldTrial/final-reuse-gate-events.jsonl")).events
+    return (times, box, events)
+  }
+
+  @Test(
+    "each area's measured test is the whole test a merge gate last ran, never a final's reused 0 ms step or a run at another tier — catches a test step sized from a run that never happened"
+  )
+  func measuredTestsComeFromMergeRuns() throws {
+    let measured = MeasuredAreaTests.milliseconds(in: try Self.finalReuse().events)
+
+    #expect(measured == ["AppFeature": 7059, "App": 17_062])
+  }
+
+  @Test(
+    "a final test step is expected to take the area's latest measured merge run, so 105 s left holds a UI test a merge just ran in 17 s although the warm-up measured it at 191 s — catches a step refused on a stale warm-up figure"
+  )
+  func finalTestIsExpectedToTakeItsLatestMeasuredRun() throws {
+    let (times, box, events) = try Self.finalReuse()
+    let now = box.deadlines.endsAt.addingTimeInterval(-105)
+    let warmupOnly = AreaCommandBounds(times: times, box: box, tier: .final, fallback: .seconds(3600))
+    let measured = AreaCommandBounds(
+      times: times, box: box, tier: .final, fallback: .seconds(3600),
+      measuredTests: MeasuredAreaTests.milliseconds(in: events))
+
+    let stale = warmupOnly.bound(area: "App", step: .test, tree: .checkout, now: now)
+    let bound = measured.bound(area: "App", step: .test, tree: .checkout, now: now)
+
+    #expect(stale.cannotFinish, "the warm-up's 191 s can't fit the 105 s left")
+    #expect(bound.expected == .milliseconds(17_062))
+    #expect(bound.duration == .seconds(105))
+    #expect(!bound.cannotFinish)
+  }
 }
