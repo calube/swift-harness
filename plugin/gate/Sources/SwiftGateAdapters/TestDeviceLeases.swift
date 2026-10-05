@@ -365,7 +365,8 @@ public struct LeasedDeviceAreaRunner: TestDeviceWarming {
       area: request.area, step: request.step, command: request.command,
       workingDirectory: request.workingDirectory, deadline: deadline,
       environment: request.environment, junitPath: request.junitPath,
-      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed,
+      buildLock: request.buildLock)
   }
 
   public func warmed(for commands: [String]) async -> WarmedAreaRunner {
@@ -390,7 +391,8 @@ public struct LeasedDeviceAreaRunner: TestDeviceWarming {
       area: request.area, step: request.step, command: command,
       workingDirectory: request.workingDirectory, deadline: request.deadline,
       environment: request.environment, junitPath: request.junitPath,
-      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed)
+      resultBundlePath: request.resultBundlePath, derivedDataSeed: request.derivedDataSeed,
+      buildLock: request.buildLock)
   }
 
   /// Runs `request`, and once more when the runner didn't launch; a second launch failure stays

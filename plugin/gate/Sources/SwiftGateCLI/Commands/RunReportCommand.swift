@@ -95,6 +95,13 @@ enum BrownfieldRunReportRun {
     case .missing: outcome.runReportNote = "no build run to report"
     case .unreadable(_, let reason): outcome.runReportNote = "the build run didn't read: \(reason)"
     }
+    let setAside = read(layout.committedConfigSetAside.path) {
+      try CommittedConfigSetAside.decode(Data($0.utf8))
+    }
+    var atPlanTip = CommittedConfigSetAside.AtPlanTip.unknown
+    if case .read(let record) = setAside, let head {
+      atPlanTip = await Self.file(record.file, at: head, runner: runner, root: root)
+    }
     let report = BrownfieldRunReport.make(
       BrownfieldRunReportInputs(
         slug: slug, planBranch: branch, planBranchHead: head,
@@ -106,9 +113,7 @@ enum BrownfieldRunReportRun {
         ledger: read(plan.ledgerFile) { try LedgerJSON.decode(Data($0.utf8)) },
         validation: files.fileExists(atPath: plan.directory + "/" + ValidationTable.fileName)
           ? newestWholeRun(slug: slug, root: root, commonDir: layout.commonDir) : nil,
-        setAside: read(layout.committedConfigSetAside.path) {
-          try CommittedConfigSetAside.decode(Data($0.utf8))
-        }))
+        setAside: setAside, setAsideAtPlanTip: atPlanTip))
 
     let path = plan.directory + "/" + BrownfieldRunReport.fileName
     do {
@@ -160,6 +165,27 @@ enum BrownfieldRunReportRun {
       runsDirectory: kept.url(RunLayout.runsDirectory, directoryHint: .isDirectory))
     guard case .read = read else { return own }
     return read
+  }
+
+  /// `file` in `commit`'s tree: its blob, `absent` when the tree has no such path, `unknown`
+  /// when git couldn't say.
+  private static func file(
+    _ file: String, at commit: String, runner: any ProcessRunner, root: URL
+  ) async -> CommittedConfigSetAside.AtPlanTip {
+    let spec = "\(commit):\(file)"
+    do {
+      let output = try await runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: ["rev-parse", "--verify", "--quiet", spec],
+          workingDirectory: root.path, timeout: .seconds(60)))
+      let blob = output.stdout.text.trimmingCharacters(in: .whitespacesAndNewlines)
+      if output.status.isSuccess, !blob.isEmpty { return .blob(blob) }
+      // `--quiet` makes a path the tree lacks exit 1 with no diagnostics.
+      if output.status == .exited(1), output.stderr.bytes.isEmpty { return .absent }
+      return .unknown
+    } catch {
+      return .unknown
+    }
   }
 
   private static func baseline(

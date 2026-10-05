@@ -155,7 +155,8 @@ enum TestOnlyCheck {
       area: placed.area, step: placed.step, command: placed.command,
       workingDirectory: placed.workingDirectory, deadline: bound.duration,
       environment: placed.environment, junitPath: placed.junitPath,
-      resultBundlePath: placed.resultBundlePath, derivedDataSeed: placed.derivedDataSeed)
+      resultBundlePath: placed.resultBundlePath, derivedDataSeed: placed.derivedDataSeed,
+      buildLock: placed.buildLock)
     let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(request) }
     context.steps.record(
       .areaTest, tier: nil, milliseconds: milliseconds,

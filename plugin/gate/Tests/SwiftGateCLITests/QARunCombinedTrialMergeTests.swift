@@ -155,4 +155,43 @@ struct QARunSummaryLineTests {
     let decoded = try QAReportJSON.decode(Data(json.utf8))
     #expect(decoded == report)
   }
+
+  @Test(
+    "a run in a slot of a brownfield clone names the report it writes in the slot and where the clone keeps it once the checkout is removed, in its start line and its last line, and a run in the main checkout names only the 1 path — catches the send-money trial's qa runs naming .git/worktrees/<slot>/ paths that were gone once the slots were removed"
+  )
+  func slotRunNamesTheKeptReport() throws {
+    let base = TestTemporaryDirectory.root.appending(
+      path: "qa-kept-report-\(UUID().uuidString)", directoryHint: .isDirectory
+    ).resolvingSymlinksInPath()
+    defer { TestTemporaryDirectory.remove(base) }
+    let common = base.appending(path: "repo/.git", directoryHint: .isDirectory)
+    let gitDir = common.appending(path: "worktrees/repo-spec.slot-2", directoryHint: .isDirectory)
+    let slot = base.appending(path: "repo-spec.slot-2", directoryHint: .isDirectory)
+    for directory in [common.appending(path: "swift-harness"), gitDir, slot] {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+    try Data("schema = 1\n".utf8).write(to: common.appending(path: "swift-harness/config.toml"))
+    try Data("../..\n".utf8).write(to: gitDir.appending(path: "commondir"))
+    try Data("gitdir: \(gitDir.path)\n".utf8).write(to: slot.appending(path: ".git"))
+    let report = try QAReportJSON.decode(
+      try Fixture.data("BrownfieldTrial/send-money-6-qa-before-account-client-amount-feature.json"))
+    let runID = try #require(report.runID)
+    let written = "\(gitDir.path)/swift-harness/runs/\(runID)/qa/report.json"
+    let kept = "\(common.path)/swift-harness/runs/\(runID)/qa/report.json"
+
+    #expect(QARunRun.keptReportFile(runID: runID, root: slot) == kept)
+    #expect(
+      QARunRun.keptReportFile(runID: runID, root: base.appending(path: "repo")) == nil,
+      "the main checkout writes where the clone keeps it")
+    #expect(
+      QARunRun.startedLine(runID: runID, reportFile: written, keptReportFile: kept)
+        == "qa run: run \(runID) started; its report will be written to \(written), and kept at "
+        + "\(kept) once the checkout is removed\n")
+    let text = QARunRun.render(report, json: false, reportFile: written, keptReportFile: kept)
+    #expect(
+      text.split(separator: "\n").last.map(String.init)
+        == "qa run: \(report.verdict.rawValue) \(report.message); run \(runID), report "
+        + "\(written), kept at \(kept) once the checkout is removed")
+  }
 }
+

@@ -292,6 +292,41 @@ struct QARunCommandTests {
   }
 
   @Test(
+    "each row's qa.check event is written as the row ends, before the next row starts — catches the send-money trial's live viewer showing no row of a 208 s qa run until every row had ended"
+  )
+  func eachRowsEventIsWrittenAsItEnds() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try repo.plan(
+      [
+        validationRow("req-save", .acceptance, "exit 0", after: ["a"]),
+        validationRow("req-load", .acceptance, "exit 3", after: ["a"]),
+        validationRow("req-list", .acceptance, "true", after: ["a"]),
+      ], tasks: ["a": .done])
+    let events = MemoryEventLog()
+    let seen = Mutex<[[Int]]>([])
+    let checks = SeeingChecks(inner: QACommandRunner(runner: repo.runner)) {
+      seen.withLock {
+        $0.append(
+          events.events.compactMap { event -> Int? in
+            guard case .qaCheck(let check) = event.payload else { return nil }
+            return check.row
+          })
+      }
+    }
+
+    let report = await repo.run(QARunRun.Options(), events: events, checks: checks)
+
+    #expect(report.rows.map(\.result) == [.pass, .red, .pass])
+    #expect(seen.withLock { $0 } == [[], [1], [1, 2]], "rows whose events were out as each started")
+    let written = events.events.compactMap { event -> Int? in
+      guard case .qaCheck(let check) = event.payload else { return nil }
+      return check.row
+    }
+    #expect(written == [1, 2, 3], "each row once")
+  }
+
+  @Test(
     "the run writes qa/report.json under its run and 1 qa.check event per row with the run's id, holding no command text — catches a report or event the run viewer can't find"
   )
   func reportAndEvents() async throws {
@@ -581,5 +616,21 @@ struct QAAdoptCommandTests {
     #expect(unknown.verdict == .red)
     #expect(unknown.message.contains("no-such-plan"))
     #expect(!FileManager.default.fileExists(atPath: repo.planDirectory("no-such-plan").path))
+  }
+}
+
+/// Runs each check through `inner`, calling `starting` first.
+private final class SeeingChecks: QACheckRunning {
+  private let inner: QACommandRunner
+  private let starting: @Sendable () -> Void
+
+  init(inner: QACommandRunner, starting: @escaping @Sendable () -> Void) {
+    self.inner = inner
+    self.starting = starting
+  }
+
+  func run(_ request: QACheckRequest) async -> QACheckOutput {
+    starting()
+    return await inner.run(request)
   }
 }

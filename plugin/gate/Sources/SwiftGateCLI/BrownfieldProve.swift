@@ -123,6 +123,9 @@ enum BrownfieldProve {
   struct Outcome: Sendable, Equatable {
     let judgement: ChangedTestJudgement
     let derivedData: GateDerivedData
+    /// How long its reverted runs waited for their build directories, added up; `nil` when none
+    /// took a turn.
+    var lockWaitMilliseconds: Int? = nil
   }
 
   /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by the scratch-tree
@@ -218,6 +221,7 @@ enum BrownfieldProve {
       (layout ?? dependencies.layout).map { Self.derivedData(plans.map(\.area), layout: $0) }
       ?? .none
     let ran: AreaRun
+    let waits = BuildLockWaits()
     do throws(ScratchWorktreeError) {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
         var total = AreaRun()
@@ -226,7 +230,7 @@ enum BrownfieldProve {
             total
             + (await execute(
               plan, in: toplevel, junitDirectory, proofBase: mergeBase, dependencies,
-              derivedData: built, timed: timed))
+              derivedData: built, waits: waits, timed: timed))
         }
         return total
       }
@@ -239,7 +243,7 @@ enum BrownfieldProve {
         with: note(
           "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
             + "reverted")),
-      derivedData: built)
+      derivedData: built, lockWaitMilliseconds: waits.milliseconds)
   }
 
   /// How 1 area's changed tests run.
@@ -328,10 +332,11 @@ enum BrownfieldProve {
 
   /// - Parameters:
   ///   - derivedData: whether the scratch build directories held a build as the prove started.
+  ///   - waits: where its runs add how long they waited for their build directories.
   ///   - timed: takes the area's prove build, and its test runs together, as each ends.
   private static func execute(
     _ plan: AreaPlan, in toplevel: URL, _ junitDirectory: URL, proofBase: String,
-    _ dependencies: Dependencies, derivedData: GateDerivedData,
+    _ dependencies: Dependencies, derivedData: GateDerivedData, waits: BuildLockWaits,
     timed: @Sendable (StepTime) -> Void
   ) async -> AreaRun {
     let area = plan.area
@@ -364,7 +369,9 @@ enum BrownfieldProve {
         area: area.name, step: step, command: command, workingDirectory: directory.path,
         deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
       let placed =
-        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+        dependencies.layout.map {
+          ScratchTreeBuild.request(request, kind: area.kind, layout: $0, waits: waits)
+        }
         ?? request
       let outcome = await dependencies.runner.run(placed)
       return (outcome, await dependencies.testCounts.counts(of: placed)?.tests)
@@ -380,7 +387,9 @@ enum BrownfieldProve {
         deadline: dependencies.bound?(area.name, .build).duration ?? dependencies.deadline,
         environment: [:], junitPath: nil)
       let placed =
-        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+        dependencies.layout.map {
+          ScratchTreeBuild.request(request, kind: area.kind, layout: $0, waits: waits)
+        }
         ?? request
       let (outcome, milliseconds) = await GateRun.timed { await dependencies.runner.run(placed) }
       timed(

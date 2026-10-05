@@ -341,7 +341,7 @@ enum BrownfieldMergeCheck {
       let judgement = ran.judgement
       context.steps.record(
         .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict,
-        derivedData: ran.derivedData)
+        derivedData: ran.derivedData, lockWaitMilliseconds: ran.lockWaitMilliseconds)
       outcome.findings += judgement.findings
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }

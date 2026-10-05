@@ -199,6 +199,24 @@ struct WorktreePoolTests {
   }
 
   @Test(
+    "a build task takes the free slot whose swiftpm prove scratch path the warm-up built over an earlier free one with none — catches a clone with only swiftpm areas handing its built slots to whichever task asked first"
+  )
+  func swiftPMProveBuiltSlotsGoToBuildTasks() async throws {
+    let scenario = try await poolScenario(tasks: ["t1"])
+    defer { scenario.remove() }
+    let base = try await scenario.git("rev-parse", "HEAD", in: scenario.checkout)
+    _ = try await scenario.pool.prepare(count: 2, revision: base, workspace: scenario.workspace)
+    let prove = try await scenario.stateRoot(of: try scenario.slot(2))
+      .appending(path: "derived-data/prove/Feature/debug.yaml")
+    try FileManager.default.createDirectory(
+      at: prove.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data().write(to: prove)
+
+    let built = await scenario.create("t1")
+    #expect(built.worktree == (try scenario.slot(2)), "\(built.message)")
+  }
+
+  @Test(
     "two tasks running at once get 2 slots, each with its own branch checked out — catches 2 workers committing in 1 worktree"
   )
   func concurrentTasksGetTheirOwnSlots() async throws {

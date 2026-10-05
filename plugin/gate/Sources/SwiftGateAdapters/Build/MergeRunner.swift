@@ -798,8 +798,15 @@ public struct BuildMerge: Sendable {
           + "\(context.names.mainCheckout) and merge once it is GREEN",
         reason: .flowsUnchecked)
     case .red(let runID, let rows):
+      // The run is quoted as it was made, whose tasks may differ from those a run now would take.
+      let made = reports.first { $0.runID == runID }.flatMap { report -> String? in
+        guard let after = report.after else { return nil }
+        let tasks = [after] + (report.trialMerge?.alongside.map(\.task) ?? [])
+        return "`swiftgate qa run --plan \(plan) --after \(tasks.joined(separator: ",")) "
+          + "--before-merge\(fix ? " --fix" : "")`"
+      }
       let red =
-        "build-merge.\(BuildMergeReport.Reason.flowsRed.rawValue): \(run) run \(runID) is RED "
+        "build-merge.\(BuildMergeReport.Reason.flowsRed.rawValue): \(made ?? run) run \(runID) is RED "
         + "at \(context.branch)'s tip \(tip) on \(context.names.baseBranch) at \(main), in "
         + rows.map { "row \($0.row) (\($0.requirement)) `\($0.check)`: \($0.message)" }
         .joined(separator: "; ") + "; main is untouched."

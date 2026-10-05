@@ -9,7 +9,9 @@ struct ScratchTreeBuildTests {
   private static let linked = BrownfieldStateLayout(
     commonDir: common,
     gitDir: URL(filePath: "/clone/.git/worktrees/task", directoryHint: .isDirectory))
+  private static let main = BrownfieldStateLayout(commonDir: common, gitDir: common)
   private static let shared = "/clone/.git/swift-harness/caches/swiftpm-scratch/AppFeature"
+  private static let slotProve = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/AppFeature"
 
   /// 1 of the send-money trial's discovered areas, with the commands discovery wrote for it.
   private static func area(_ name: String) throws -> BrownfieldArea {
@@ -35,23 +37,32 @@ struct ScratchTreeBuildTests {
   }
 
   @Test(
-    "the trial's swiftpm build, test and test_files commands build in the area's shared scratch path, the same from every worktree — catches each prove in a fresh scratch tree compiling the area's dependencies cold"
+    "the trial's swiftpm build, test and test_files commands build, in a linked worktree's scratch tree, in that worktree's own prove scratch path, which they take turns in and time, and in the main checkout's in the shared path — catches the send-money trial's 3 concurrent slices taking turns on AppFeature's 1 shared scratch path, proving in 106-323 s against 19-25 s alone"
   )
-  func swiftPMCommandsGetTheSharedPath() throws {
+  func swiftPMCommandsGetTheWorktreesProvePath() throws {
     let area = try Self.area("AppFeature")
     #expect(ScratchTreeBuild.swiftPMScratchPath(area: area.name, layout: Self.linked) == Self.shared)
+    #expect(ScratchTreeBuild.proveScratchPath(area: area.name, layout: Self.linked) == Self.slotProve)
+    #expect(ScratchTreeBuild.proveScratchPath(area: area.name, layout: Self.main) == Self.shared)
     let commands = try [area.build, area.test, area.testFiles].map { try #require($0) }
-    for command in commands {
-      let request = ScratchTreeBuild.request(
-        Self.request(area, command), kind: area.kind, layout: Self.linked)
-      let rest = try #require(command.split(separator: " ", maxSplits: 2).last)
-      let verb = command.split(separator: " ")[1]
-      #expect(
-        request.command
-          == "swift \(verb) --scratch-path '\(Self.shared)'" + (rest == verb ? "" : " \(rest)"),
-        "\(command)")
-      #expect(request.workingDirectory == "/scratch/tree")
+    for (layout, path) in [(Self.linked, Self.slotProve), (Self.main, Self.shared)] {
+      for command in commands {
+        let waits = BuildLockWaits()
+        let request = ScratchTreeBuild.request(
+          Self.request(area, command), kind: area.kind, layout: layout, waits: waits)
+        let rest = try #require(command.split(separator: " ", maxSplits: 2).last)
+        let verb = command.split(separator: " ")[1]
+        #expect(
+          request.command
+            == "swift \(verb) --scratch-path '\(path)'" + (rest == verb ? "" : " \(rest)"),
+          "\(command)")
+        #expect(request.workingDirectory == "/scratch/tree")
+        #expect(request.buildLock == BuildDirectoryLock(directory: path, waits: waits))
+      }
     }
+    let untimed = ScratchTreeBuild.request(
+      Self.request(area, try #require(area.build)), kind: area.kind, layout: Self.linked)
+    #expect(untimed.buildLock == nil)
   }
 
   @Test(
@@ -75,7 +86,7 @@ struct ScratchTreeBuildTests {
   }
 
   @Test(
-    "a scratch tree's xcode command builds in the worktree's prove DerivedData and a swiftpm one in the shared scratch path, and those are the folders a step reads as warm — catches a baseline rerun writing gigabytes into Xcode's global DerivedData and every prove step labelled none"
+    "a scratch tree's xcode command builds in the worktree's prove DerivedData and a swiftpm one in the worktree's prove scratch path, and those are the folders a step reads as warm — catches a baseline rerun writing gigabytes into Xcode's global DerivedData and every prove step labelled none"
   )
   func buildDirectories() throws {
     let starter = try Self.area("InterviewStarter")
@@ -83,7 +94,9 @@ struct ScratchTreeBuildTests {
     let prove = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/InterviewStarter"
     #expect(
       ScratchTreeBuild.buildDirectories(area: starter, layout: Self.linked) == ["\(prove)/Build"])
-    #expect(ScratchTreeBuild.buildDirectories(area: feature, layout: Self.linked) == [Self.shared])
+    #expect(
+      ScratchTreeBuild.buildDirectories(area: feature, layout: Self.linked) == [Self.slotProve])
+    #expect(ScratchTreeBuild.buildDirectories(area: feature, layout: Self.main) == [Self.shared])
     let xcode = ScratchTreeBuild.request(
       Self.request(starter, try #require(starter.build)), kind: .xcode, layout: Self.linked)
     #expect(xcode.command.hasPrefix("xcodebuild -derivedDataPath '\(prove)' "))

@@ -1,0 +1,181 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 5 (wait): wait timed out for selector: id=\"probe.row.alice\". Current surface: Matches 2, Grace, Greg, Toolbar.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muv3rwfn-5e05c1d8",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/requests/66f87d93c214d4f0.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-capture-searchable",
+      "requestId": "66f87d93c214d4f0"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 5000,
+      "readableCaptures": 7,
+      "captures": 7,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 387,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 688,
+          "durationMs": 398,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1386,
+          "durationMs": 426,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2112,
+          "durationMs": 419,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2833,
+          "durationMs": 434,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3568,
+          "durationMs": 452,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4323,
+          "durationMs": 449,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 5002,
+      "currentSurface": {
+        "labels": [
+          "Matches 2",
+          "Grace",
+          "Greg",
+          "Toolbar",
+          "Search names",
+          "close"
+        ],
+        "buttons": [
+          "close",
+          "Clear text",
+          "Dictate",
+          "Emoji"
+        ]
+      },
+      "step": 5,
+      "command": "wait",
+      "positionals": [
+        "id=\"probe.row.alice\"",
+        "5000"
+      ],
+      "executed": 4,
+      "total": 6,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-capture-searchable",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-capture-searchable",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/requests/66f87d93c214d4f0.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-capture-searchable/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.SearchableProbe",
+            "appBundleId": "com.example.SearchableProbe",
+            "startup": {
+              "durationMs": 1111,
+              "measuredAt": "2026-10-05T10:24:29.061Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.SearchableProbe",
+              "appBundleId": "com.example.SearchableProbe"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 311,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 785,
+              "totalDurationMs": 1111
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "agent-device-capture-82521",
+            "id": "UDID",
+            "kind": "simulator",
+            "device_udid": "UDID",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.SearchableProbe"
+          },
+          "durationMs": 1269
+        },
+        {
+          "step": 2,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 456,
+            "selector": "id=\"probe.matches\" label=\"Matches 5\""
+          },
+          "durationMs": 457
+        },
+        {
+          "step": 3,
+          "command": "fill",
+          "ok": true,
+          "data": {
+            "x": 201,
+            "y": 822,
+            "text": "GR",
+            "message": "Filled 2 chars",
+            "delayMs": 0,
+            "referenceWidth": 402,
+            "referenceHeight": 874,
+            "targetKind": "selector",
+            "selector": "role=searchfield",
+            "selectorChain": [
+              "role=\"searchfield\" label=\"Search names\" editable=true",
+              "label=\"Search names\" editable=true",
+              "value=\"Search names\" editable=true"
+            ],
+            "refLabel": "Search names",
+            "resolution": {
+              "source": "runtime",
+              "phase": "pre-action",
+              "kind": "unique"
+            }
+          },
+          "durationMs": 2284
+        },
+        {
+          "step": 4,
+          "command": "wait",
+          "ok": true,
+          "data": {
+            "waitedMs": 439,
+            "selector": "id=\"probe.matches\" label=\"Matches 2\""
+          },
+          "durationMs": 441
+        }
+      ]
+    }
+  }
+}

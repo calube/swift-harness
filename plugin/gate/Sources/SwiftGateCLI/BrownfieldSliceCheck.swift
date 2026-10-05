@@ -766,7 +766,8 @@ enum BrownfieldSliceCheck {
     let judgement = proved.judgement
     context.steps.record(
       .prove, tier: nil, milliseconds: proveMilliseconds, verdict: judgement.verdict,
-      derivedData: proved.derivedData, area: area.name)
+      derivedData: proved.derivedData, area: area.name,
+      lockWaitMilliseconds: proved.lockWaitMilliseconds)
     result.findings += judgement.findings
     result.blocked = result.blocked || judgement.verdict == .blocked
     return result

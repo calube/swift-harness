@@ -113,14 +113,24 @@ public struct WorktreePool: Sendable {
     }
   }
 
-  /// Whether an area was built in the DerivedData of the worktree at `path`.
+  /// Whether an area was built in the DerivedData of the worktree at `path`, or a swiftpm area
+  /// into its prove scratch path there.
   static func hasBuilt(_ path: String) -> Bool {
     let worktree = URL(filePath: path, directoryHint: .isDirectory)
-    let areas = StateRootResolver.resolve(worktree: worktree).directory
-      .appending(path: "derived-data/areas", directoryHint: .isDirectory)
+    let derived = StateRootResolver.resolve(worktree: worktree).directory
+      .appending(path: "derived-data", directoryHint: .isDirectory)
+    let areas = derived.appending(path: "areas", directoryHint: .isDirectory)
+    let prove = derived.appending(path: "prove", directoryHint: .isDirectory)
     let files = FileManager.default
     let names = (try? files.contentsOfDirectory(atPath: areas.path)) ?? []
-    return names.contains { files.fileExists(atPath: areas.appending(path: "\($0)/Build").path) }
+    if names.contains(where: { files.fileExists(atPath: areas.appending(path: "\($0)/Build").path) })
+    {
+      return true
+    }
+    let proved = (try? files.contentsOfDirectory(atPath: prove.path)) ?? []
+    return proved.contains {
+      !((try? files.contentsOfDirectory(atPath: prove.appending(path: $0).path)) ?? []).isEmpty
+    }
   }
 
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never

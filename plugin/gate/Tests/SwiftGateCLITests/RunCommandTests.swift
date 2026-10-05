@@ -961,7 +961,8 @@ struct RunCommandTests {
       slug: prepared.slug, planBranch: nil, base: prepared.clock.base, root: clone.root,
       runner: clone.runner)
     let report = try #require(outcome.report, "\(outcome.message)")
-    #expect(report.committedConfig?.items == [record.reportLine])
+    #expect(report.committedConfig?.items == [record.reportLine(atPlanTip: .blob(blob))])
+    #expect(report.text.contains("the plan branch leaves the file unchanged"), "\(report.text)")
     #expect(report.text.contains("## Committed config"))
   }
 
