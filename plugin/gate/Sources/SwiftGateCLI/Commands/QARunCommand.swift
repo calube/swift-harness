@@ -312,8 +312,30 @@ enum QARunRun {
             }
             return .conflicted(files: files, rows: rows)
           case .merged(let commit):
-            let rows = await runPlan.execute(atBase: false) { await checks.run($0, in: tree.path) }
-            return .merged(commit: commit, rows: rows, released: await checks.finishFlows())
+            // A run whose trial merge made this same tree already proved the rows it passed.
+            var onTree = checks
+            var treeNotes: [String] = []
+            let merged: String?
+            do throws(GitWorkspaceError) {
+              merged = try await merger.tree(of: commit, in: tree.path)
+            } catch {
+              merged = nil
+              treeNotes.append("no earlier run's rows reused: reading the merge's tree: \(error)")
+            }
+            if let merged,
+              let record = QAMergedTreeRun.newest(
+                on: merged, in: QARunHistory.mergedTreeRuns(worktree: root))
+            {
+              let reuse = record.run.reuse(in: runPlan, digests: digests, results: [.pass])
+              onTree.reused.merge(reuse.outcomes) { kept, _ in kept }
+              treeNotes.append(
+                "qa run \(record.run.runID) ran on the same merged tree \(merged.prefix(12))")
+              treeNotes += reuseNotes(record: record.run, reuse: reuse)
+            }
+            let rows = await runPlan.execute(atBase: false) { await onTree.run($0, in: tree.path) }
+            return .merged(
+              commit: commit, tree: merged, rows: rows, notes: treeNotes,
+              released: await onTree.finishFlows())
           }
         }
       } catch {
@@ -327,11 +349,25 @@ enum QARunRun {
         rows = ran
         commit = nil
         trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base, conflicts: files)
-      case .merged(let merged, let ran, let released):
+      case .merged(let merged, let tree, let ran, let treeNotes, let released):
         rows = ran
         commit = merged
-        notes += released
+        notes += treeNotes + released
         trialMerge = QATrialMerge(branch: names.branch, tip: tip, base: base)
+        if let tree {
+          let record = QAMergedTreeRun(
+            tree: tree,
+            run: QAAtBaseRun(
+              runID: runID, preparedBy: after, commit: merged, rows: ran, digests: digests))
+          let file = qaDirectory.appending(path: QAMergedTreeRun.fileName)
+          do {
+            try QAFiles.write(try record.encoded(), to: file)
+          } catch {
+            notes.append(
+              "\(QAMergedTreeRun.fileName) not written, so a later run on this tree runs every "
+                + "row again: \(error)")
+          }
+        }
       }
     } else if options.atBase {
       let main =
@@ -451,8 +487,10 @@ enum QARunRun {
 
   /// What a `--before-merge` run's scratch tree came to.
   private enum TrialMergeRun: Sendable {
-    /// The merge commit, the rows run on it and the shared device's release notes.
-    case merged(commit: String, rows: [QARow], released: [String])
+    /// The merge commit, its tree when it read, the rows run on it, what was reused, and the
+    /// shared device's release notes.
+    case merged(
+      commit: String, tree: String?, rows: [QARow], notes: [String], released: [String])
     /// The files the merge conflicted in, and the ready rows read unverified.
     case conflicted(files: [String], rows: [QARow])
     case failed(String)
@@ -535,8 +573,9 @@ enum QARunRun {
     let runID: String
     let plan: QARunPlan
     let atBase: Bool
-    /// The recorded outcomes of the rows a prepared at-base run proved, by row.
-    let reused: [Int: QACheckOutcome]
+    /// The recorded outcomes of the rows a prepared at-base run, or a before-merge run on the
+    /// same merged tree, proved, by row.
+    var reused: [Int: QACheckOutcome]
     /// What each row took in the recorded at-base run, in milliseconds, by row.
     let expected: [Int: Int]
     /// What a `test:` acceptance row resolves in.

@@ -101,6 +101,20 @@ const tests = {
     assert.equal(M.fmtTokens({ input: 1000, output: 500, cacheRead: 2500, cacheWrite: 1000 }), '5k')
   },
 
+  'the run cost reads in dollars with what it leaves out, and no cost reads as none, never $0 — catches a report header showing tokens where the run cost $6.32'() {
+    assert.equal(M.fmtUSD(6.3199), '$6.32')
+    assert.equal(M.fmtUSD(0.1205), '$0.12')
+    assert.equal(M.fmtUSD(0.004), '<$0.01')
+    assert.equal(M.fmtUSD(null), null)
+    assert.equal(M.fmtUSD(undefined), null)
+    const cost = { usd: 6.3199, agentsUSD: 6.1994, judgeUSD: 0.1205, priced: 150, unpriced: 0, judgeCalls: 9, judgeCallsWithoutCost: 0 }
+    assert.deepEqual(M.costStat(cost), ['$6.32', 'cost, 9 judge calls included'])
+    assert.deepEqual(M.costStat({ ...cost, judgeCalls: 0, judgeUSD: 0, usd: 6.1994 }), ['$6.20', 'cost'])
+    assert.deepEqual(M.costStat({ ...cost, unpriced: 3 }), ['$6.32', 'cost, 9 judge calls included, 3 messages unpriced'])
+    assert.equal(M.costStat(null), null)
+    assert.equal(M.costStat(undefined), null)
+  },
+
   'blocks inverts the deps — catches a link list read 1 way'() {
     const view = runView({
       tasks: [task('store'), task('queue', { deps: ['store'] }), task('ui', { deps: ['store', 'queue'] })],

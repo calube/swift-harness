@@ -19,6 +19,8 @@ enum BrownfieldProve {
     let layout: BrownfieldStateLayout?
     /// Each area's bound for a command in the scratch tree, by step.
     let bound: (@Sendable (_ area: String, _ step: AreaStep) -> AreaCommandBound)?
+    /// How many tests a reverted run ran, from the reports it left.
+    var testCounts = AreaTestCountReader()
 
     init(
       git: any Git, scratch: any ScratchWorktrees, runner: any AreaCommandRunning,
@@ -51,10 +53,14 @@ enum BrownfieldProve {
     }
   }
 
-  /// What a prove decided, and how its reverted runs built: `none` when it ran none.
-  struct Outcome: Sendable, Equatable {
-    let judgement: ChangedTestJudgement
-    let derivedData: GateDerivedData
+  /// Whether the scratch-tree build directories of `areas` already hold a build; `none` when no
+  /// area's kind has 1 the harness places.
+  static func derivedData(_ areas: [BrownfieldArea], layout: BrownfieldStateLayout)
+    -> GateDerivedData
+  {
+    GateStepCollector.derivedData(
+      buildDirectories: areas.flatMap { ScratchTreeBuild.buildDirectories(area: $0, layout: layout) }
+        .map { URL(filePath: $0, directoryHint: .isDirectory) })
   }
 
   /// - Parameters:
@@ -72,12 +78,20 @@ enum BrownfieldProve {
     ).judgement
   }
 
-  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by how its reverted
-  /// runs built: `cold` when any started without its build directory, `warm` when each found
-  /// one, and `none` when none ran or none builds where the harness can tell.
+  /// What a prove decided, and how its reverted runs built: `none` when it ran none.
+  struct Outcome: Sendable, Equatable {
+    let judgement: ChangedTestJudgement
+    let derivedData: GateDerivedData
+  }
+
+  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by the scratch-tree
+  /// build directories of the areas whose changed tests it runs, read before they run, and `none`
+  /// when it runs none.
+  ///
+  /// - Parameter layout: the clone's state the label reads; `nil` reads `dependencies`'.
   static func prove(
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
-    proofs: ProveResultCollector, dependencies: Dependencies
+    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil
   ) async -> Outcome {
     func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
       Outcome(judgement: judgement, derivedData: .none)
@@ -120,7 +134,9 @@ enum BrownfieldProve {
       }
     }
     guard !plans.isEmpty else {
-      return unbuilt(judgement.merged(with: note("prove: no new or changed tests since \(base)")))
+      let names = config.areas.map(\.name).joined(separator: ", ")
+      return unbuilt(
+        judgement.merged(with: note("prove: no new or changed tests in \(names) since \(base)")))
     }
     // A plan whose run the box leaves too little time isn't started: it would only be killed.
     plans = plans.filter { plan in
@@ -143,6 +159,9 @@ enum BrownfieldProve {
     }
     let request = ScratchTreeRequest(
       revision: "HEAD", revertTo: mergeBase, copiedPaths: tests, revertedPaths: reverted)
+    let built =
+      (layout ?? dependencies.layout).map { Self.derivedData(plans.map(\.area), layout: $0) }
+      ?? .none
     let ran: AreaRun
     do throws(ScratchWorktreeError) {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
@@ -164,7 +183,7 @@ enum BrownfieldProve {
         with: note(
           "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
             + "reverted")),
-      derivedData: ran.built.contains(.cold) ? .cold : ran.built.contains(.warm) ? .warm : .none)
+      derivedData: built)
   }
 
   /// How 1 area's changed tests run.
@@ -194,14 +213,11 @@ enum BrownfieldProve {
     var proven = 0
     var total = 0
     var proved: [ProvedTest] = []
-    /// How each run started, in run order.
-    var built: [GateDerivedData] = []
 
     static func + (lhs: AreaRun, rhs: AreaRun) -> AreaRun {
       AreaRun(
         judgement: lhs.judgement.merged(with: rhs.judgement), proven: lhs.proven + rhs.proven,
-        total: lhs.total + rhs.total, proved: lhs.proved + rhs.proved,
-        built: lhs.built + rhs.built)
+        total: lhs.total + rhs.total, proved: lhs.proved + rhs.proved)
     }
   }
 
@@ -263,15 +279,22 @@ enum BrownfieldProve {
     // Read again for each run: the box's time left shrinks between them.
     var bound: AreaCommandBound?
     var runs = 0
-    var built: [GateDerivedData] = []
-    func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> AreaCommandOutcome {
+    /// The run's outcome and how many tests its reports show it ran.
+    func run(_ template: String, step: AreaStep, ids: [AreaTestID]) async -> (
+      outcome: AreaCommandOutcome, executed: Int?
+    ) {
       runs += 1
       bound = dependencies.bound?(area.name, step)
       var junit: String?
       if template.contains("{junit}") {
         try? FileManager.default.createDirectory(
           at: junitDirectory, withIntermediateDirectories: true)
-        junit = junitDirectory.appending(path: "\(area.name)-prove-\(runs).xml").path
+        let path = junitDirectory.appending(path: "\(area.name)-prove-\(runs).xml").path
+        // An earlier prove's report at the same path would read as this run's.
+        for stale in [path] + JUnitReports.companionPaths(of: path) {
+          try? FileManager.default.removeItem(atPath: stale)
+        }
+        junit = path
       }
       let command = ChangedTestIDs.expand(
         template, tests: ChangedTestIDs.testsArgument(kind: area.kind, ids: ids),
@@ -280,10 +303,11 @@ enum BrownfieldProve {
       let request = AreaCommandRequest(
         area: area.name, step: step, command: command, workingDirectory: directory.path,
         deadline: bound?.duration ?? dependencies.deadline, environment: [:], junitPath: junit)
-      let proving =
-        dependencies.layout.map { XcodeDerivedData.proveRequest(request, layout: $0) } ?? request
-      built.append(Self.derivedData(proving, kind: area.kind, layout: dependencies.layout))
-      return await dependencies.runner.run(proving)
+      let placed =
+        dependencies.layout.map { ScratchTreeBuild.request(request, kind: area.kind, layout: $0) }
+        ?? request
+      let outcome = await dependencies.runner.run(placed)
+      return (outcome, await dependencies.testCounts.counts(of: placed)?.tests)
     }
     let outcomes: [(AreaTestID, AreaCommandOutcome)]
     let judgement: ChangedTestJudgement
@@ -291,21 +315,25 @@ enum BrownfieldProve {
     switch plan.command {
     case .whole(let command):
       whole = true
-      let outcome = await run(command, step: .test, ids: plan.ids)
+      let outcome = await run(command, step: .test, ids: plan.ids).outcome
       outcomes = plan.ids.map { ($0, outcome) }
       judgement = ProveVerdict.judgeWhole(
         area: area.name, ids: plan.ids, outcome: outcome, bound: bound)
     case .selected(let template):
       whole = false
       let together = await run(template, step: .testFiles, ids: plan.ids)
-      if ProveVerdict.needsRerunAlone(together, idCount: plan.ids.count) {
+      if ProveVerdict.needsRerunAlone(
+        together.outcome, idCount: plan.ids.count, executed: together.executed)
+      {
         var alone: [(AreaTestID, AreaCommandOutcome)] = []
         for id in plan.ids {
-          alone.append((id, await run(template, step: .testFiles, ids: [id])))
+          let ran = await run(template, step: .testFiles, ids: [id])
+          alone.append((id, ProveVerdict.reading(ran.outcome, executed: ran.executed)))
         }
         outcomes = alone
       } else {
-        outcomes = plan.ids.map { ($0, together) }
+        let outcome = ProveVerdict.reading(together.outcome, executed: together.executed)
+        outcomes = plan.ids.map { ($0, outcome) }
       }
       judgement = ProveVerdict.judge(area: area.name, outcomes: outcomes, bound: bound)
     }
@@ -316,31 +344,7 @@ enum BrownfieldProve {
     return AreaRun(
       judgement: judgement, proven: proven, total: plan.ids.count,
       proved: BrownfieldProofs.proved(
-        area: area.name, outcomes: outcomes, whole: whole, proofBase: proofBase), built: built)
-  }
-
-  /// Whether `request`'s build directories exist before it runs: an `xcodebuild` whose prove
-  /// DerivedData is missing still starts warm when its seed holds a build to copy in.
-  private static func derivedData(
-    _ request: AreaCommandRequest, kind: AreaKind, layout: BrownfieldStateLayout?
-  ) -> GateDerivedData {
-    guard let layout else {
-      return kind == .swiftpm
-        ? GateStepCollector.derivedData(
-          buildDirectories: [
-            URL(filePath: request.workingDirectory, directoryHint: .isDirectory)
-              .appending(path: ".build", directoryHint: .isDirectory)
-          ]) : .none
-    }
-    let directories = XcodeDerivedData.buildDirectories(request, kind: kind, layout: layout)
-    let label = GateStepCollector.derivedData(
-      buildDirectories: directories.map { URL(filePath: $0, directoryHint: .isDirectory) })
-    guard label == .cold, let seed = request.derivedDataSeed else { return label }
-    return GateStepCollector.derivedData(
-      buildDirectories: [
-        URL(filePath: seed.seed, directoryHint: .isDirectory).appending(
-          path: "Build", directoryHint: .isDirectory)
-      ]) == .warm ? .warm : .cold
+        area: area.name, outcomes: outcomes, whole: whole, proofBase: proofBase))
   }
 
   private static func blocked(_ message: String, file: String = ".") -> ChangedTestJudgement {

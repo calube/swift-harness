@@ -1613,7 +1613,7 @@ printed 0.
 `RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
 `RunView/build-run-1` once `report --html` had written its final report, for the live view's
 snapshot test. The test drops `cursor`, a digest of file times. Captured again at the commit that
-adds the view's `evidenceFiles`, from `plugin/gate` after `swift build`:
+adds the view's `cost` and each role's `costUSD`, from `plugin/gate` after `swift build`:
 
 ```sh
 SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
@@ -2761,6 +2761,27 @@ Its creation time in the clone was 03:00:00Z, which the gate-wait tests set agai
 keeps no creation time. `grep -rniE '/Users|/private|/var/folders|caleb|@[a-z]+\.|/tmp'` matched
 nothing in either folder. `home` matches only a task title in send-money-2's `plan.json`.
 
+## Run view: a halt that went on without a task with time left
+
+`RunView/send-money-3/` is the state the third send-money trial left, build run
+`20261005T042439Z-4562bb34` of plan `spec`. Its screens task's return failed `check-return` on
+`build-return.tests-not-run` at 04:34:00Z, 684 s before no new starts, and the orchestrator's
+`question` halt went on without it. Its `send-flow` return was `review-blocked`, checked GREEN, and
+merged with no halt. With 4 tasks ready after the contract and `max_parallel = 3`, the validation
+task took a slot and `amount-input` started 482 s late. `events/build.jsonl` holds the checks,
+the halt and its resume; `ledger-events.jsonl`, `run.json`, `ledger.json` and `returns/` are the
+build run's. With `C` the trial's copied state root and `t=send-money-3`, copied 2026-10-05:
+
+```sh
+P=$C/plans/spec R=$P/build/20261005T042439Z-4562bb34
+S="s#/Users/[^/\"]*/Developer/trials/practice/$t/repo-#../repo-#g"
+mkdir -p events returns
+cp $C/events/build.jsonl events/; sed -E "$S" $P/ledger.json > ledger.json
+cp $R/events.jsonl ledger-events.jsonl; cp $R/run.json run.json; cp $R/returns/*.json returns/
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` matched nothing in the folder.
+
 ## Build returns: GREEN brownfield slice returns
 
 `BuildReturn/memos-3/share-view-limit-{store,web}.json` are the 2 task returns the third brownfield trial on
@@ -3489,6 +3510,60 @@ PY
 Each call's backgrounded output file held only `[killed]`. `grep -niE
 '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
 
+## Brownfield trial: waiting on a gate by process name
+
+In a practice brownfield trial (2026-10-05), 2 build agents ran their slice gate at the Bash tool's
+default 120s timeout, so the tool moved it to the background. Each then waited with
+`while pgrep -f "swiftgate check" >/dev/null; do sleep 5; done`, which matches its own shell, so
+both loops ran to the 600s timeout after the gates had finished. The fix pass then ran
+`pkill -f "pgrep"`, and another call `pkill -f "swift-test|swift-build"`.
+`Hooks/practice-trial-process-match-wait-bash.json` holds those 4 calls with their `timeout`, and
+the tool result of each that timed out. `T` is the trial's copied `transcripts` folder. From the
+repository root:
+
+```sh
+T=<trial transcripts folder> F=plugin/gate/Tests/Fixtures python3 - <<'PY'
+import json, os, re
+T, F = os.environ["T"], os.environ["F"]
+calls = [
+    ("session/subagents/workflows/wf_b7641878-793/agent-aeb18af089741a5fa.jsonl", "toolu_019Sn67CartPsCYePjLdi6LW"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01Cqa4NGuGxn34gkz1qUvkM2"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a2fb01618b546356f.jsonl", "toolu_01YXwHdeLYH914n8Qff9USxD"),
+    ("session/subagents/workflows/wf_9fd8b945-900/agent-a4a821ed2bf56fc5d.jsonl", "toolu_01AR6o1rTni1KPGAZnFf63Wk"),
+]
+scrubs = [
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo-spec-[^/\s;]+", "/WORKTREE"),
+    (r"/Users/[^/]+/Developer/trials/practice/[^/]+/repo(?=[/\s;]|$)", "/CLONE"),
+    (r"/Users/[^/]+/Developer/swift-harness-trial-[^/]+", "/HARNESS"),
+    (r"/private/tmp/claude-\d+/[^\s]+?/tasks/", "/TASKS/"),
+]
+def scrub(text):
+    for pattern, replacement in scrubs:
+        text = re.sub(pattern, replacement, text)
+    return text
+def flat(content):
+    if isinstance(content, str): return content
+    return "".join(part.get("text", "") for part in content if isinstance(part, dict))
+out = []
+for path, use in calls:
+    command = timeout = result = None
+    for line in open(f"{T}/{path}"):
+        entry = json.loads(line)
+        for block in (entry.get("message") or {}).get("content") or []:
+            if not isinstance(block, dict): continue
+            if block.get("id") == use:
+                command = block["input"]["command"]; timeout = block["input"].get("timeout")
+            if block.get("tool_use_id") == use: result = flat(block["content"])
+    call = {"command": scrub(command), "timeout": timeout}
+    if "did not complete within" in result: call["result"] = scrub(result)
+    out.append(call)
+open(f"{F}/Hooks/practice-trial-process-match-wait-bash.json", "w").write(
+    json.dumps(out, indent=2, ensure_ascii=False) + "\n")
+PY
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
 ## Brownfield trial: the warm-up times and time box an area command's bound reads
 
 `BrownfieldTrial/price-tracker-1-warmup.json` is the warm-up times file a brownfield run wrote at its
@@ -3658,3 +3733,117 @@ cp $S/plans/spec/returns/send-money-contract.json $F/send-money-2-contract-retur
 ```
 
 `grep -niE '/Users|/private|/var/folders|caleb'` on the 3 files matched nothing.
+
+## Brownfield trial: a test file emptied to its imports, and a new target's tests at the base
+
+The third send-money trial's send-views task emptied `AppFeatureTests.swift` to a comment and an
+import, as its plan said, and `check-return` refused the return for that file's "unrun" tests. Its
+contract added an `AccountClient` target with 4 tests to the `APIClient` package, and prove read
+them as passing with the source reverted: with `Package.swift` reverted, the target is gone, and
+`swift test --filter` ran 0 tests and exited 0. `$RUNS` is the trials' report folder and `$TRIALS`
+the trial clones' folder. From `plugin/gate/Tests/Fixtures`:
+
+```sh
+R=$TRIALS/send-money-3/repo F=AppFeatureTests.swift P=Packages/AppFeature/Tests/AppCoreTests/$F
+cp $RUNS/send-money-3/state/config.toml BrownfieldTrial/send-money-3-config.toml
+git -C $R show 0eb5b82:$P > BrownfieldTrial/send-money-3-AppFeatureTests-base.swift
+git -C $R show spec/send-views:$P > BrownfieldTrial/send-money-3-AppFeatureTests-emptied.swift
+```
+
+`send-money-3-prove-new-target/` is prove's reverted run of the contract's 4 tests. Its capture
+ran again in a scratch clone of the trial repository (`$SCRATCH/newtarget`), with the contract's
+non-test changes reverted to its merge base, as prove's scratch tree holds them.
+`send-money-3-prove-new-target/head/` is the same command in a second clone (`$SCRATCH/seeded`)
+at the contract commit, where the target exists. Each ran with Apple Swift 6.2 on macOS 26:
+
+```sh
+D=BrownfieldTrial/send-money-3-prove-new-target B=0eb5b8291b6f0ba5c4d9453fa8ff19b28795daae
+git clone -q $R $SCRATCH/newtarget && git -C $SCRATCH/newtarget checkout -q d676ad6
+(cd $SCRATCH/newtarget && git checkout -q $B -- .swiftgate.toml App/InterviewStarterApp.swift \
+  Packages/APIClient/Package.swift Packages/AppFeature/Package.swift &&
+  git rm -q Packages/APIClient/Sources/AccountClient/AccountClient.swift \
+  Packages/AppFeature/Sources/AppCore/{AmountFeature,AmountInput,ConfirmFeature}.swift \
+  Packages/AppFeature/Sources/AppCore/{HarnessScenario,SendMoneyFeature}.swift \
+  Packages/AppFeature/Sources/AppUI/AccessibilityID.swift)
+git clone -q $SCRATCH/newtarget $SCRATCH/seeded && git -C $SCRATCH/seeded checkout -q d676ad6
+T='^AccountClientTests\.AccountClientTests'
+c="swift test --parallel --xunit-output '$SCRATCH/junit/APIClient-prove-1.xml' --filter \
+'($T/seed\(\)|$T/sendDebits\(\)|$T/failingSendKeepsBalance\(\)|$T/overdraftRefused\(\))'"
+for pair in newtarget:$D seeded:$D/head; do
+  tree=${pair%%:*} out=${pair#*:}; mkdir -p $out $SCRATCH/junit
+  (cd $SCRATCH/$tree/Packages/APIClient && rm -rf .build &&
+    /bin/sh -c "$c" > $OLDPWD/$out/stdout 2> $OLDPWD/$out/stderr; echo $? > $OLDPWD/$out/exit)
+  printf '%s\n' "$c" | sed "s#$SCRATCH/junit#<junit>#" > $out/command
+  cp $SCRATCH/junit/APIClient-prove-1.xml $out/junit.xml
+  cp $SCRATCH/junit/APIClient-prove-1-swift-testing.xml $out/junit-swift-testing.xml
+  sed -i '' -e "s#$SCRATCH/$tree#<repo>#g" -e "s#$SCRATCH/junit#<junit>#g" $out/stdout $out/stderr
+done
+git -C $R show d676ad6:Packages/APIClient/Tests/AccountClientTests/AccountClientTests.swift \
+  > $D/AccountClientTests.swift
+git -C $R diff 0eb5b82 d676ad6 -- Packages/APIClient/Package.swift > $D/Package.swift.diff
+```
+
+The reverted run exits 0 and warns that no test case matched, and both of its reports hold
+`tests="0"`; the head run exits 0 with the 4 tests passing in its Swift Testing report. Both
+built the package from no `.build`. `grep -rniE '/Users|/private|/var/folders|caleb'` over
+these files matched nothing.
+
+## Brownfield trial: a task the cutoff abandoned after its merged tree passed every flow
+
+`BrownfieldTrial/price-tracker-2-*` is what a brownfield run's state held when `build cutoff`
+abandoned a gating task with 293 s left, charging 300 s. `price-tracker-2-build-events.jsonl` is the
+build run's `events.jsonl`, with 2 merge gates recorded; `price-tracker-2-gate-runs.jsonl` is every
+`gate.run` line of `events/gate.jsonl`, where those merge gates took 50.9 s and 66.5 s and the fixer's
+own merge-tier gate on its branch tip took 240.0 s; `price-tracker-2-cutoff.json` is the cutoff's
+record. `price-tracker-2-validation.json` is the plan's validation table, and the 2
+`price-tracker-2-qa-*-before-merge.json` files are the `qa run --before-merge --fix` reports the
+fixer and then the orchestrator wrote for the same branch tip on the same plan-branch head, both
+GREEN. From the trial's copied state directory `S`, with `R` the build run's id:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/plans/spec/build/$R/events.jsonl $F/price-tracker-2-build-events.jsonl
+cp $S/plans/spec/build/$R/cutoff.json $F/price-tracker-2-cutoff.json
+grep '"kind":"gate.run"' $S/events/gate.jsonl > $F/price-tracker-2-gate-runs.jsonl
+cp $S/plans/spec/validation.json $F/price-tracker-2-validation.json
+cp $S/runs/20261005T044436Z-15d88b8c/qa/report.json $F/price-tracker-2-qa-fixer-before-merge.json
+cp $S/runs/20261005T045133Z-a9767900/qa/report.json \
+  $F/price-tracker-2-qa-orchestrator-before-merge.json
+```
+
+`grep -niE '/Users|/private|/var/folders|caleb' BrownfieldTrial/price-tracker-2-*` matched nothing.
+
+## Brownfield trial: send-money-3's plan edits, lost evidence, temp-file gate output and cost
+
+The third send-money trial (2026-10-05) moved `req-existing-tests` onto its done contract to get
+past `plan-lint.validation-screen-without-flow`, left a report with 10 damage rows for flow step
+logs no batch wrote, sent a slice gate's JSON to `/tmp/sv.json`, and showed tokens by role with no
+dollars. `T` is the trial folder under the practice-trial runs folder, holding the clone's state
+copied after the run as `state/`, and its orchestrator transcript. From the repository root:
+
+```sh
+F=plugin/gate/Tests/Fixtures S=$T/state P=$S/plans/spec R=$P/build/20261005T042439Z-4562bb34
+scrub() { LC_ALL=C sed -E -e "s#/Users/[^/\"]*/Developer/trials/practice/send-money-3/#/TRIAL/#g" \
+  -e "s#/Users/[^/\"]*/\.agent-device/#/HOME/.agent-device/#g" "$1" > "$2"; }
+/bin/cp -f $P/PLAN.md $F/BrownfieldTrial/send-money-3-PLAN.md
+/bin/cp -f $P/qa/contact-search.flow.json $F/BrownfieldTrial/send-money-3-contact-search.flow.json
+scrub $P/ledger.json $F/BrownfieldTrial/send-money-3-ledger.json
+Q=20261005T042614Z-10957c21 X=$F/RunView/send-money-3-at-base/runs/$Q/qa
+mkdir -p $X && scrub $S/runs/$Q/qa/report.json $X/report.json
+for d in $S/runs/$Q/qa/*.flow; do n=$(basename $d); mkdir -p $X/$n/sim
+  for f in flow.json steps.json batch.json sim/report.json sim/session.json; do scrub $d/$f $X/$n/$f; done
+done
+Y=$F/RunView/send-money-3; mkdir -p $Y/events $Y/returns
+/bin/cp -f $S/events/{gate,span,build,brownfield,usage,judge}.jsonl $S/events/store.json $Y/events/
+scrub $P/clock.json $Y/clock.json; /bin/cp -f $P/plan.json $Y/
+```
+
+`RunView/send-money-3/` adds these stores, `clock.json` and `plan.json` to the build run state that
+"Run view: a halt that went on without a task with time left" captured there. `Hooks/send-money-3-gate-output-bash.json` holds the orchestrator's 4 Bash calls that ran
+`swiftgate` and named a `/tmp/` path, in order, written by a python script over the transcript's
+`tool_use` inputs that replaced the task worktree with `/WORKTREE`, the clone with `/CLONE`, the
+harness checkout with `/HARNESS`, the Claude projects folder with `/PROJECTS/` and the session's
+task folder with `/TASKS/`; only the second sends gate output to `/tmp/sv.json`. The at-base copy
+leaves out each row's `sim/build.log` and result bundle. The send-money-3 clone's `config.toml`
+differs from `send-money-2-config.toml` only in `discovered_at`, so its import tests use that one.
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.

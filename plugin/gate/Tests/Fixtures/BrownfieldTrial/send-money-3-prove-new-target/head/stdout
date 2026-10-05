@@ -1,0 +1,14 @@
+◇ Test run started.
+↳ Testing Library Version: 1501
+↳ Target Platform: arm64e-apple-macos14.0
+◇ Suite AccountClientTests started.
+◇ Test "a failing fake throws and keeps the balance — catches a debit on a failed send" started.
+◇ Test "a send above the balance throws — catches an overdraft" started.
+◇ Test "the fake starts at $250.00 with 8 contacts — catches a wrong seed" started.
+◇ Test "a send lowers the fake's balance by the exact amount — catches float drift and no debit" started.
+✔ Test "the fake starts at $250.00 with 8 contacts — catches a wrong seed" passed after 0.001 seconds.
+✔ Test "a send lowers the fake's balance by the exact amount — catches float drift and no debit" passed after 0.001 seconds.
+✔ Test "a failing fake throws and keeps the balance — catches a debit on a failed send" passed after 0.001 seconds.
+✔ Test "a send above the balance throws — catches an overdraft" passed after 0.001 seconds.
+✔ Suite AccountClientTests passed after 0.001 seconds.
+✔ Test run with 4 tests in 1 suite passed after 0.001 seconds.

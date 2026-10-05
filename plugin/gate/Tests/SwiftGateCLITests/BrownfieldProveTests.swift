@@ -237,6 +237,141 @@ extension BrownfieldProveTests {
   }
 }
 
+/// Replays 1 captured run of a SwiftPM `test_files` command: writes its JUnit reports where the
+/// request's `{junit}` points and answers with its exit status.
+private final class ReplayingRunner: AreaCommandRunning {
+  let captured: String
+  let requests = Mutex<[AreaCommandRequest]>([])
+
+  init(captured: String) { self.captured = captured }
+
+  func run(_ request: AreaCommandRequest) async -> AreaCommandOutcome {
+    requests.withLock { $0.append(request) }
+    if let junit = request.junitPath {
+      let reports = [junit] + JUnitReports.companionPaths(of: junit)
+      for (path, name) in zip(reports, ["junit.xml", "junit-swift-testing.xml"]) {
+        try? Fixture.data("\(captured)/\(name)").write(to: URL(filePath: path))
+      }
+    }
+    let exit = (try? Fixture.text("\(captured)/exit"))
+      .flatMap { Int32($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 1
+    let tail = (try? Fixture.text("\(captured)/stdout")) ?? ""
+    return exit == 0 ? .passed : .failed(exit: exit, tail: tail, junit: nil)
+  }
+}
+
+extension BrownfieldProveTests {
+  /// The send-money trial's contract: `main` holds the APIClient package without the
+  /// AccountClient target; the `task` branch adds the target, its source and its tests.
+  private static func newTargetClone() async throws -> Clone {
+    let base = TestTemporaryDirectory.root.appending(
+      path: "swiftgate-brownfield-prove-\(UUID().uuidString)", directoryHint: .isDirectory
+    )
+    .resolvingSymlinksInPath()
+    let root = base.appending(path: "repo", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    let package = "Packages/APIClient"
+    try await git("init", "-q", "-b", "main", in: root)
+    try write(
+      [
+        "\(package)/Package.swift": "// the package without AccountClient\n",
+        "\(package)/Sources/APIClient/APIClient.swift": "public struct APIClient {}\n",
+      ], in: root)
+    try await git("add", "-A", in: root)
+    try await git("commit", "-q", "-m", "base", in: root)
+    try await git("checkout", "-q", "-b", "task", in: root)
+    try write(
+      [
+        "\(package)/Package.swift": "// the package with AccountClient and its tests\n",
+        "\(package)/Sources/AccountClient/AccountClient.swift": "public struct AccountClient {}\n",
+        "\(package)/Tests/AccountClientTests/AccountClientTests.swift": try Fixture.text(
+          "BrownfieldTrial/send-money-3-prove-new-target/AccountClientTests.swift"),
+      ], in: root)
+    try await git("add", "-A", in: root)
+    try await git("commit", "-q", "-m", "contract", in: root)
+    return Clone(base: base, root: root)
+  }
+
+  @Test(
+    "a contract that adds a SwiftPM target with tests is proven when the reverted run, with the target gone, ran none of them, and not proven when the run ran them and passed — catches the send-money contract's 4 AccountClient tests read as passing with the source reverted",
+    arguments: [
+      ("BrownfieldTrial/send-money-3-prove-new-target", ProveResultOutcome.proven),
+      ("BrownfieldTrial/send-money-3-prove-new-target/head", .passesReverted),
+    ])
+  func newTargetTestsAreProvenWhenTheRevertedRunFindsNone(
+    captured: String, outcome: ProveResultOutcome
+  ) async throws {
+    let clone = try await Self.newTargetClone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+    let area = try #require(config.areas.first { $0.name == "APIClient" })
+    let runner = ReplayingRunner(captured: captured)
+    let proofs = ProveResultCollector()
+    let process = LiveProcessRunner(baseEnvironment: Self.environment)
+
+    let judgement = await BrownfieldProve.run(
+      root: clone.root, base: "main",
+      config: BrownfieldConfig(
+        brownfield: config.brownfield, areas: [area], allow: [], buildPresets: [:]),
+      junitDirectory: clone.base.appending(path: "junit"), proofs: proofs,
+      dependencies: BrownfieldProve.Dependencies(
+        git: LiveGit(runner: process, repositoryRoot: clone.root.path),
+        scratch: LiveScratchWorktrees(
+          runner: process, repositoryRoot: clone.root.path,
+          directory: clone.base.appending(path: "scratch")),
+        runner: runner, deadline: .seconds(60)))
+
+    #expect(
+      proofs.results.map(\.test).sorted() == [
+        "AccountClientTests.AccountClientTests/failingSendKeepsBalance()",
+        "AccountClientTests.AccountClientTests/overdraftRefused()",
+        "AccountClientTests.AccountClientTests/seed()",
+        "AccountClientTests.AccountClientTests/sendDebits()",
+      ])
+    #expect(proofs.results.allSatisfy { $0.outcome == outcome }, "\(proofs.results)")
+    #expect(
+      Self.gating(judgement).isEmpty == (outcome == .proven), "\(judgement.findings)")
+    #expect(
+      runner.requests.withLock { $0.count } == 1,
+      "a run that found none of its tests isn't rerun test by test")
+  }
+
+  @Test(
+    "a reverted run that writes no report isn't read from the report an earlier prove left at the same path — catches a stale run that found no tests proving tests that pass with the source reverted"
+  )
+  func staleReportIsNotRead() async throws {
+    let clone = try await Self.newTargetClone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+    let area = try #require(config.areas.first { $0.name == "APIClient" })
+    let junit = clone.base.appending(path: "junit", directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: junit, withIntermediateDirectories: true)
+    let stale = "BrownfieldTrial/send-money-3-prove-new-target"
+    try Fixture.data("\(stale)/junit.xml").write(to: junit.appending(path: "APIClient-prove-1.xml"))
+    try Fixture.data("\(stale)/junit-swift-testing.xml").write(
+      to: junit.appending(path: "APIClient-prove-1-swift-testing.xml"))
+    let proofs = ProveResultCollector()
+    let process = LiveProcessRunner(baseEnvironment: Self.environment)
+
+    _ = await BrownfieldProve.run(
+      root: clone.root, base: "main",
+      config: BrownfieldConfig(
+        brownfield: config.brownfield, areas: [area], allow: [], buildPresets: [:]),
+      junitDirectory: junit, proofs: proofs,
+      dependencies: BrownfieldProve.Dependencies(
+        git: LiveGit(runner: process, repositoryRoot: clone.root.path),
+        scratch: LiveScratchWorktrees(
+          runner: process, repositoryRoot: clone.root.path,
+          directory: clone.base.appending(path: "scratch")),
+        runner: FakeAreaCommandRunner { _ in .passed }, deadline: .seconds(60)))
+
+    #expect(proofs.results.count == 4)
+    #expect(proofs.results.allSatisfy { $0.outcome == .passesReverted }, "\(proofs.results)")
+  }
+}
+
 private struct ProveTestFailure: Error {
   let detail: String
 }

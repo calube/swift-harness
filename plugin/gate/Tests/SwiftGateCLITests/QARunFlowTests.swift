@@ -214,27 +214,46 @@ struct QARunFlowTests {
   }
 
   @Test(
-    "at the merge base, a captured batch that ran no step lists only evidence files it left, so no sim/steps.ndjson — catches a report naming as not copied a step log that was never written"
+    "the send-money-3 at-base row whose batch stopped at step 2 `wait`, before any capture, is red with sim.no-steps and lists only evidence its run directory holds, so no sim/steps.ndjson — catches the trial's report naming 10 never-written step logs as lost evidence"
   )
-  func batchThatRanNothingListsOnlyItsFiles() async throws {
+  func failureBeforeAnySnapListsNoStepLog() async throws {
     let repo = try await QARepo()
     defer { repo.remove() }
-    try Self.plan(repo)
+    let batch = try Fixture.data(
+      "RunView/send-money-3-at-base/runs/20261005T042614Z-10957c21/qa/"
+        + "02-req-contact-search.flow/batch.json")
+    let device = LiveAgentDevice(
+      runner: FakeProcessRunner { invocation throws(ProcessRunnerError) in
+        guard invocation.arguments.first == "batch" else {
+          return ProcessOutput(status: .exited(0), stdout: "{}")
+        }
+        return ProcessOutput(
+          status: .exited(1), stdout: CapturedStream(bytes: batch), stderr: CapturedStream(bytes: Data()),
+          elapsed: .zero)
+      })
+    let head = try await repo.git("rev-parse", "HEAD")
     let simulator = try FakeFlowSimulator(
-      batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
+      batch: "fail", head: head,
       scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
-      marker: Self.marker(repo),
-      agentDevice: LiveAgentDevice(
-        runner: try CapturedBatch.runner("batch-invalid", directory: "AgentDevice")))
+      agentDevice: device)
+    let run = repo.root.appending(
+      path: ".harness/runs/20261005T042614Z-10957c21", directoryHint: .isDirectory)
+    let relative = "qa/02-req-contact-search.flow"
+    let row = QAFlowRow(
+      row: 2, requirement: "req-contact-search",
+      stepsFile: Fixture.directory.appending(
+        path: "BrownfieldTrial/send-money-3-contact-search.flow.json"),
+      worktree: repo.root, directory: run.appending(path: relative), relativeDirectory: relative,
+      runID: "20261005T042614Z-10957c21-row2", atBase: true)
 
-    let report = await Self.run(repo, simulator, atBase: true)
+    let outcome = await QAFlowRunner(simulator: simulator).run(
+      row, lint: FlowLintReport(files: [], findings: []), state: { _ in })
 
-    let flow = try #require(report.rows.first { $0.layer == .flow })
-    #expect(flow.result == .red, "\(flow.message)")
-    #expect(!flow.evidence.isEmpty)
-    #expect(!flow.evidence.contains { $0.hasSuffix("sim/\(SimStep.logFileName)") })
-    let run = try repo.runDirectory(report)
-    for path in flow.evidence {
+    #expect(outcome.result == .red, "\(outcome.message)")
+    #expect(outcome.message.hasPrefix("step 2 `wait` failed"), "\(outcome.message)")
+    #expect(outcome.message.contains(SimEvidenceRule.noSteps.rawValue), "\(outcome.message)")
+    #expect(!outcome.evidence.isEmpty)
+    for path in outcome.evidence {
       #expect(FileManager.default.fileExists(atPath: run.appending(path: path).path), "\(path)")
     }
   }

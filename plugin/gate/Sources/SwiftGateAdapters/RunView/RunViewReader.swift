@@ -104,11 +104,12 @@ public struct RunViewReader: RunViewReading {
     gateRuns.formUnion(workerGateRuns.keys)
     let events = EventQuery.merge(batches).map(\.event)
     let parents = Parents(events, buildRun: buildRun, gateRuns: gateRuns, prebuild: prebuild)
-    let kept = events.filter {
+    let belonging = events.filter {
       Self.belongs(
         $0, buildRun: buildRun, gateRuns: gateRuns, parents: parents, prebuild: prebuild,
         qaWindow: qaWindow)
     }
+    let kept = Self.withJudgeCalls(belonging, from: events)
     let checkouts =
       runRoots.map { ($0, nil as URL?) }
       + worktrees.map {
@@ -123,6 +124,24 @@ public struct RunViewReader: RunViewReading {
       damage: damage, unwritten: unwritten, briefs: briefs, workerGateRuns: workerGateRuns,
       launchedAt: prebuild.launchedAt, gateReports: reports,
       checkoutRoots: checkoutRoots(worktrees: worktrees), warmupBaselines: baselines, qaRuns: qa)
+  }
+
+  /// `kept`, then each `judge.call` of `events` made between its first and last `agent.usage`
+  /// message: a judge call names no build run, so it belongs to the run whose messages surround
+  /// it.
+  static func withJudgeCalls(_ kept: [HarnessEvent], from events: [HarnessEvent])
+    -> [HarnessEvent]
+  {
+    let times = kept.compactMap { event -> Date? in
+      guard case .agentUsage(let usage) = event.payload else { return nil }
+      return usage.messageTime
+    }
+    guard let first = times.min(), let last = times.max() else { return kept }
+    let calls = events.filter { event in
+      guard case .judgeCall = event.payload else { return false }
+      return first <= event.time && event.time <= last
+    }
+    return kept + calls
   }
 
   /// The `qa run`s whose `qa.check` events a build run keeps: its plan's, from the build run's

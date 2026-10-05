@@ -159,7 +159,10 @@ enum PlanImportRun {
           appAreas: config.areas.filter { $0.kind == .xcode }.map {
             PlanLintValidation.AppArea(name: $0.name, root: $0.root)
           },
-          contractTask: contractTask, clientModules: clientModules)
+          contractTask: contractTask, clientModules: clientModules,
+          requirementTitles: Dictionary(
+            livePlan.requirements.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }
+          ))
       } else {
         findings += try PlanLintValidation.appWithoutFlowFindings(
           table: nil,

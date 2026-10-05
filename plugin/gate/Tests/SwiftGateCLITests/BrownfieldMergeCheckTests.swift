@@ -45,6 +45,7 @@ struct BrownfieldMergeCheckTests {
   private static func run(
     _ clone: Clone, tier: CheckTier, areas: [BrownfieldArea], changed: [String],
     runner: FakeAreaCommandRunner, sliceBuildsOnly: Bool = false,
+    buildsOnly: (@Sendable (BrownfieldArea) -> Bool)? = nil,
     context: GateRun.Context? = nil, areaRunner: (any AreaCommandRunning)? = nil,
     bound:
       (@Sendable (_ area: String, _ step: AreaStep, _ tree: AreaCommandTree) -> AreaCommandBound)? =
@@ -71,7 +72,8 @@ struct BrownfieldMergeCheckTests {
         git: git, scratch: scratch, runner: runner, readFile: { _ in "it('works')\n" },
         deadline: .seconds(5), bound: scratchBound),
       trackedTree: TrackedTreeSnapshot(files: [:]), tree: { _ in "tree0" },
-      sliceBuildsOnly: { _ in sliceBuildsOnly }, deadline: .seconds(5), bound: bound,
+      sliceBuildsOnly: buildsOnly ?? { _ in sliceBuildsOnly }, deadline: .seconds(5),
+      bound: bound,
       reuse: reuse)
     return try await BrownfieldMergeCheck.run(
       root: clone.root, tier: tier, base: "main",
@@ -420,6 +422,54 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "final that reuses a merge's passes still hands the run each reused area's test totals, as the merge's reports counted them and marked with the merge run they came from, beside the totals of the steps it ran — catches the trial's final report counting only the 1 area it ran again"
+  )
+  func finalCarriesReusedAreaTestTotals() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let swiftTest = "swift test --xunit-output {junit}"
+    let areas = [
+      Self.area("web", test: swiftTest, e2e: "e2e --junit {junit}"),
+      Self.area("api", test: swiftTest),
+    ]
+    let reports = try ["APIClient.test.xml", "APIClient.test-swift-testing.xml"].map {
+      try Fixture.data("BrownfieldTrial/send-money-2-junit/\($0)")
+    }
+    let runner = FakeAreaCommandRunner { request in
+      if let junit = request.junitPath {
+        try? FileManager.default.createDirectory(
+          atPath: (junit as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        let companion = JUnitReports.companionPaths(of: junit)[0]
+        FileManager.default.createFile(atPath: junit, contents: reports[0])
+        FileManager.default.createFile(atPath: companion, contents: reports[1])
+      }
+      return .passed
+    }
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+    let merged = GateRun.Context(runID: "merge-run", directory: clone.base)
+    _ = try await Self.run(
+      clone, tier: .merge, areas: areas, changed: ["web/src/lib.js"], runner: runner,
+      context: merged, reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+    let final = GateRun.Context(runID: "final-run", directory: clone.base)
+
+    _ = try await Self.run(
+      clone, tier: .final, areas: areas, changed: ["web/src/lib.js"], runner: runner,
+      context: final, reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+
+    let seven = JUnitCounts(tests: 7, failures: 0, skipped: 0)
+    #expect(merged.areaTests.all == [AreaTestCounts(area: "web", step: .test, counts: seven)])
+    #expect(
+      final.areaTests.all == [
+        AreaTestCounts(area: "api", step: .test, counts: seven),
+        AreaTestCounts(area: "web", step: .test, counts: seven).reused(from: "merge-run"),
+        AreaTestCounts(area: "web", step: .e2e, counts: seven),
+      ])
+  }
+
+  @Test(
     "a dropped step reports area.step-dropped and never gates — catches a missing command read as a pass with no report line, or as a failure"
   )
   func droppedStepIsReportedAndNeverGates() async throws {
@@ -696,7 +746,7 @@ extension BrownfieldMergeCheckTests {
     #expect(second.scratchRuns == 0)
     let summaries = second.parts.findings.filter { $0.ruleID == "prove.summary" }.map(\.message)
     #expect(
-      summaries.contains { $0.hasPrefix("prove: no new or changed tests since") },
+      summaries.contains { $0.hasPrefix("prove: no new or changed tests in Aidoku since") },
       "\(summaries)")
 
     let first = try await Self.trialRun(clone, branch, tier: .merge, at: branch.firstMerge)
@@ -748,6 +798,35 @@ extension BrownfieldMergeCheckTests {
     #expect(
       head.allSatisfy { $0.command.hasPrefix("xcodebuild -derivedDataPath '\(path)' ") },
       "\(head.map(\.command))")
+  }
+}
+
+extension BrownfieldMergeCheckTests {
+  @Test(
+    "the send-money merge that brought AppFeature's reducer tests says merge proves only the build-only area and that slice proved AppFeature's tests, not that the merge has no new tests — catches a merge line that reads as if the merge added no tests"
+  )
+  func mergeSaysWhichAreasSliceProved() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let config = try TOMLConfigDecoder().decodeBrownfield(
+      try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
+
+    let parts = try await Self.run(
+      clone, tier: .merge, areas: config.areas,
+      changed: [
+        "Packages/AppFeature/Sources/AppCore/AmountFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/ConfirmFeature.swift",
+        "Packages/AppFeature/Sources/AppCore/SendMoneyFeature.swift",
+        "Packages/AppFeature/Tests/AppCoreTests/SendMoneyFeatureTests.swift",
+      ],
+      runner: FakeAreaCommandRunner { _ in .passed }, buildsOnly: { !$0.selectsChangedTests })
+
+    let summaries = parts.findings.filter { $0.ruleID == ProofRules.summaryRuleID }.map(\.message)
+    #expect(
+      !summaries.contains { $0.hasPrefix("prove: no new or changed tests since") },
+      "\(summaries)")
+    #expect(
+      summaries.contains { $0.contains("AppFeature") && $0.contains("slice") }, "\(summaries)")
   }
 }
 

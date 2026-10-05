@@ -1,0 +1,144 @@
+{
+  "success": false,
+  "error": {
+    "code": "COMMAND_FAILED",
+    "message": "Batch failed at step 2 (wait): wait timed out for selector: id=\"contacts.row\" label=\"Chloe Kim\". Current surface: Posts, 100 posts available.",
+    "hint": "Retry with --debug and inspect diagnostics log for details.",
+    "diagnosticId": "muur44cz-a6c86f47",
+    "logPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row5/requests/ceddb1ed8048105d.ndjson",
+    "diagnosticsRecord": {
+      "session": "swiftgate-20261005T042614Z-10957c21-row5",
+      "requestId": "ceddb1ed8048105d"
+    },
+    "details": {
+      "reason": "wait_target_absent",
+      "timeoutMs": 10000,
+      "readableCaptures": 11,
+      "captures": 11,
+      "polls": [
+        {
+          "startedMs": 0,
+          "durationMs": 621,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 922,
+          "durationMs": 563,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 1786,
+          "durationMs": 615,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 2701,
+          "durationMs": 515,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 3518,
+          "durationMs": 663,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 4483,
+          "durationMs": 539,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 5326,
+          "durationMs": 634,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 6261,
+          "durationMs": 754,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 7319,
+          "durationMs": 671,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 8292,
+          "durationMs": 602,
+          "outcome": "readable"
+        },
+        {
+          "startedMs": 9197,
+          "durationMs": 786,
+          "outcome": "readable"
+        }
+      ],
+      "waitedMs": 10004,
+      "currentSurface": {
+        "labels": [
+          "Posts",
+          "100 posts available",
+          "InterviewStarter"
+        ]
+      },
+      "step": 2,
+      "command": "wait",
+      "positionals": [
+        "id=\"contacts.row\" label=\"Chloe Kim\"",
+        "10000"
+      ],
+      "executed": 1,
+      "total": 86,
+      "partialResults": [
+        {
+          "step": 1,
+          "command": "open",
+          "ok": true,
+          "data": {
+            "session": "swiftgate-20261005T042614Z-10957c21-row5",
+            "surface": "app",
+            "sessionStateDir": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row5",
+            "runnerLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row5/runner.log",
+            "requestLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row5/requests/ceddb1ed8048105d.ndjson",
+            "eventLogPath": "/HOME/.agent-device/sessions/swiftgate-20261005T042614Z-10957c21-row5/events.ndjson",
+            "sessionReused": true,
+            "selection": {
+              "reason": "existing-session",
+              "source": "session",
+              "candidateCount": 1,
+              "bootOccurred": false
+            },
+            "appName": "com.example.InterviewStarter",
+            "appBundleId": "com.example.InterviewStarter",
+            "startup": {
+              "durationMs": 1760,
+              "measuredAt": "2026-10-05T04:30:07.370Z",
+              "method": "open-command-roundtrip",
+              "appTarget": "com.example.InterviewStarter",
+              "appBundleId": "com.example.InterviewStarter"
+            },
+            "timing": {
+              "runnerDemand": "required",
+              "runnerPrewarmKind": "session",
+              "runnerPrewarmScheduled": true,
+              "openDispatchDurationMs": 628,
+              "launchUrlDurationMs": 0,
+              "runnerPrewarmWaited": false,
+              "postOpenObservation": "observable",
+              "postOpenSettleDurationMs": 1114,
+              "totalDurationMs": 1764
+            },
+            "platform": "ios",
+            "target": "mobile",
+            "device": "swift-harness-3599-842053cf",
+            "id": "D383575E-849D-424A-A6E2-112653AA197A",
+            "kind": "simulator",
+            "device_udid": "D383575E-849D-424A-A6E2-112653AA197A",
+            "ios_simulator_device_set": null,
+            "message": "Opened: com.example.InterviewStarter"
+          },
+          "durationMs": 2032
+        }
+      ]
+    }
+  }
+}

@@ -126,7 +126,7 @@ Serve the report as CSV.
   test doesn't replace it, since only a flow records a video and runs red at the base. A
   requirement no flow can check opens its `Reason` with what stops one, `network:`, `hardware:`,
   `account:`, `data:` or `system:`, then what the simulator lacks, such as `data: needs a source
-  with 50 chapters`. A reason saying unit or acceptance tests cover it excuses nothing. A reason
+  with 50 chapters`. A reason saying unit or acceptance tests cover it excuses nothing. A requirement whose title is about the repository's existing tests, which the gates' own suites prove, gets a reason-only row opening `gate:` and naming the tier, such as `gate: final runs every area's whole suite`, and stays on the task it belongs to. A re-import never changes a done task's `- Covers:`. A reason
   excuses 1 requirement, never the app: each `xcode` area whose screens a task writes has at
   least 1 `flow` row whose `Runs after` or covering task writes in that area.
 - **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
@@ -165,7 +165,7 @@ on these `plan-lint` rules:
 | `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
 | `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
-| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind |
+| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen or a feature, with no `flow` row and no `Reason` opening with an obstacle kind, or with `gate:` on an existing-tests requirement's reason-only row naming `merge` or `final` |
 | `plan-lint.validation-obstacle-fakeable` | such a requirement whose only obstacle is `network:` while its area holds a `…Client` module |
 | `plan-lint.validation-app-without-flow` | an `xcode` area whose screens a task writes, with no `flow` row |
 | `plan-lint.check-missing-dependency` | a task whose own check exercises another task's work without depending on it; see [Dependencies a check needs](#dependencies-a-check-needs) |

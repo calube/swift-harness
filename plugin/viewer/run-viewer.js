@@ -68,8 +68,10 @@
     const taskSpans = spans.filter((s) => s.phase === "task");
     const parallel = taskSpans.reduce((m, s) => Math.max(m, taskSpans.filter((o) => o.start < s.end && s.start < o.end).length), 0);
     const answered = view.halts.filter((h) => h.answer != null).length;
+    const cost = M.costStat(view.cost);
     const stats = [
       [fmtMin(wall), "wall time"],
+      ...(cost ? [cost] : []),
       [fmtTok(roleTok || taskTok), pending ? `tokens, ${plural(pending, "task")} pending` : "tokens"],
       [plural(view.tasks.length, "task"), `${parallel} in parallel at most`],
       [proven + " / " + tests, "tests proven"],
@@ -392,7 +394,7 @@
   }
 
   // tokens
-  function tokRows(items, labelKey, timeFn) {
+  function tokRows(items, labelKey, timeFn, usdFn) {
     const max = Math.max(1, ...items.filter((x) => x.tokens).map((x) => sum(x.tokens)));
     return items.map((x) => {
       const t = x.tokens, w = (n) => (n / max) * 100;
@@ -402,12 +404,22 @@
         </div>`
         : `<div class="tok-bar" title="tokens arrive when the worker's transcript is ingested"></div>`;
       const time = timeFn ? timeFn(x) : "";
-      return `<div class="tok-row"><span class="mono">${esc(x[labelKey])}</span>${bar}<span class="num" style="text-align:right">${fmtTokens(t)}${time ? `<div class="sub" style="color:var(--muted);font-size:11px">${esc(time)}</div>` : ""}</span></div>`;
+      const usd = usdFn ? usdFn(x) : null;
+      return `<div class="tok-row"><span class="mono">${esc(x[labelKey])}</span>${bar}<span class="num" style="text-align:right">${usd ? `${esc(usd)}<div class="sub" style="color:var(--muted);font-size:11px">${fmtTokens(t)}</div>` : fmtTokens(t)}${time ? `<div class="sub" style="color:var(--muted);font-size:11px">${esc(time)}</div>` : ""}</span></div>`;
     }).join("");
+  }
+  // The run's dollars under the roles: the judge's share, which no role holds, and the total.
+  function costLine(cost) {
+    if (!cost) return "";
+    const parts = [];
+    if (cost.judgeCalls) parts.push(`judge ${M.fmtUSD(cost.judgeUSD) || "no cost reported"} over ${plural(cost.judgeCalls, "call")}`);
+    if (cost.unpriced) parts.push(`${plural(cost.unpriced, "message")} unpriced`);
+    parts.push(`total ${M.fmtUSD(cost.usd)}`);
+    return `<p class="sub cost-line">${esc(parts.join(" · "))}</p>`;
   }
   function renderTokens() {
     $("token-rows").innerHTML = tokRows(view.tasks, "id", (t) => { const s = taskSpan(t.id); return s ? M.durationText(s) : ""; });
-    $("roles").innerHTML = tokRows(view.roles, "role");
+    $("roles").innerHTML = tokRows(view.roles, "role", null, (r) => M.fmtUSD(r.costUSD)) + costLine(view.cost);
   }
 
   // gates

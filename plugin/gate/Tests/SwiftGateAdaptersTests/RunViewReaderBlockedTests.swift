@@ -27,6 +27,11 @@ private struct BlockedClone {
   /// handled, app-core's merge was undone at the cutoff and both ended abandoned.
   static let priceTracker1 = Capture(
     fixture: "price-tracker-1", clone: "repo", buildRun: "20261005T025144Z-77b256da")
+  /// The third send-money trial: its run's agents' messages and the judge's calls, whose cost
+  /// `events summary --build-run` printed as $6.1994 over 150 messages and $6.3199 with 9 judge
+  /// calls.
+  static let sendMoney3 = Capture(
+    fixture: "send-money-3", clone: "repo", buildRun: "20261005T042439Z-4562bb34")
   static let plan = "spec"
   static let store = "share-view-limit-store"
   static let web = "share-view-limit-web"
@@ -252,5 +257,28 @@ struct RunViewReaderCutoffTests {
     #expect(budget.first { $0.task == nil }?.answer == .continue)
     let core = try #require(view.tasks.first { $0.id == "app-core" })
     #expect(core.mergedAt == nil)
+  }
+
+  @Test(
+    "the send-money-3 run's view costs $6.32 as events summary did, $6.20 for its 150 priced messages and $0.12 for its 9 judge calls, and each role carries its own dollars, which add up to the agents' — catches a report showing tokens by role with no dollar figure"
+  )
+  func costInDollars() throws {
+    let clone = try BlockedClone(BlockedClone.sendMoney3)
+    defer { clone.remove() }
+    let view = try clone.view()
+
+    let cost = try #require(view.cost)
+    #expect(abs(cost.agentsUSD - 6.1994) < 0.00005, "\(cost.agentsUSD)")
+    #expect(abs(cost.usd - 6.3199) < 0.00005, "\(cost.usd)")
+    #expect(abs(cost.judgeUSD - (cost.usd - cost.agentsUSD)) < 0.000001)
+    #expect(cost.priced == 150)
+    #expect(cost.unpriced == 0)
+    #expect(cost.judgeCalls == 9)
+    #expect(cost.judgeCallsWithoutCost == 0)
+    #expect(view.roles.map(\.role) == [.orchestrator, .buildWorker, .qa])
+    let roles = view.roles.compactMap(\.costUSD)
+    #expect(roles.count == 3)
+    #expect(abs(roles.reduce(0, +) - cost.agentsUSD) < 0.000001)
+    #expect(try RunViewGuard.rejection(of: view) == nil)
   }
 }

@@ -54,8 +54,8 @@ struct RunViewContractTests {
     let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     #expect(
       keys(object) == [
-        "schemaVersion", "cursor", "run", "spec", "tasks", "roles", "spans", "gates", "proofs",
-        "halts", "validation", "damage", "unwritten", "evidenceBase", "evidenceFiles",
+        "schemaVersion", "cursor", "run", "spec", "tasks", "roles", "cost", "spans", "gates",
+        "proofs", "halts", "validation", "damage", "unwritten", "evidenceBase", "evidenceFiles",
         "finalReport",
       ])
     #expect(object["schemaVersion"] as? Int == 1)
@@ -85,7 +85,8 @@ struct RunViewContractTests {
     #expect(task["status"] as? String == "in-progress")
     #expect(
       keys(task["brief"]) == ["title", "why", "designRef", "scope", "acceptance", "outOfScope"])
-    #expect(keys(first(object["roles"])) == ["role", "tokens"])
+    #expect(keys(first(object["roles"])) == ["role", "tokens", "costUSD", "unpriced"])
+    #expect(first(object["roles"])["costUSD"] is NSNull)
     #expect(
       keys((first(object["roles"]))["tokens"]) == ["input", "output", "cacheRead", "cacheWrite"])
 

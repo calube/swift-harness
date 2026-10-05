@@ -27,7 +27,14 @@ enum PreToolUseHook {
       if let violation = ReviewerBashGuard.evaluate(command, agentType: payload.agentType) {
         return deny(violation)
       }
-      if let violation = BashGuard.evaluate(command) { return deny(violation) }
+      if let violation = BashGuard.evaluate(command, inSubagent: payload.agentID != nil) {
+        return deny(violation)
+      }
+      if let violation = await gateOutput(
+        command, payload: payload, root: root, reads: reads, home: home)
+      {
+        return deny(violation, note: reads.note)
+      }
       if let violation = fixerGateCap(command, payload: payload) { return deny(violation) }
       if let brownfield {
         switch DirtyFileRead.read(brownfield.discoverDirty) {
@@ -115,6 +122,28 @@ enum PreToolUseHook {
       else { return [target.path] }
       return [target.path] + target.entries.map { target.path + "/" + $0 }
     }
+  }
+
+  /// A `swiftgate` output file the command names outside the repository's checkouts and its git
+  /// common dir, judged at its canonical path so `/tmp` and `/private/tmp` read alike.
+  private static func gateOutput(
+    _ command: String, payload: HookPayload, root: URL, reads: PlanStateReads, home: String?
+  ) async -> GuardViolation? {
+    let spelled = GateOutputGuard.outputTargets(in: command)
+    guard !spelled.isEmpty else { return nil }
+    let targets = spelled.flatMap { target in
+      ToolPath.resolvedAbsolutes(target, cwd: payload.cwd, home: home).prefix(1)
+    }.map(ToolPath.canonical)
+    let checkouts = await RepositoryCheckouts.of(root: root, reads: reads, around: targets)
+    let common = (try? await reads.commonDirectory()).map(ToolPath.canonical)
+    let plans =
+      common.flatMap { try? PlanStateLayout(commonDirectory: $0).root }
+      ?? "<git common dir>/swift-harness/plans"
+    return GateOutputGuard.evaluate(
+      targets: targets,
+      allowedRoots: [checkouts.main] + checkouts.linkedWorktrees.sorted()
+        + (common.map { [$0] } ?? []),
+      outFolder: plans + "/<plan>/out/")
   }
 
   /// The fixer's full-gate cap, counted in the run history of each worktree the command gates.

@@ -26,6 +26,32 @@ public enum PlanLintValidation {
     return kind
   }
 
+  /// The tag of a reason-only row whose requirement the gates' own suites prove, such as
+  /// `gate: final runs every area's whole suite`. It excuses a requirement about the
+  /// repository's existing tests from a flow row, and nothing else.
+  public static let gateReasonKind = "gate"
+
+  /// The gate tiers a ``gateReasonKind`` reason names as running the whole suites.
+  public static let suiteTiers = ["merge", "final"]
+
+  /// Whether `reason` opens with `gate:` and names a tier of ``suiteTiers`` after it.
+  public static func isGateReason(_ reason: String) -> Bool {
+    let text = reason.trimmingCharacters(in: .whitespaces)
+    guard text.hasPrefix(gateReasonKind + ":") else { return false }
+    return words(text.dropFirst(gateReasonKind.count + 1)).contains { suiteTiers.contains($0) }
+  }
+
+  /// Whether a requirement's title is about the repository's tests, such as "the existing tests
+  /// keep passing".
+  public static func namesTests(_ title: String) -> Bool {
+    words(title).contains { ["test", "tests", "suite", "suites"].contains($0) }
+  }
+
+  /// The lowercased runs of letters in `text`.
+  private static func words(_ text: some StringProtocol) -> [String] {
+    text.lowercased().split { !$0.isLetter }.map(String.init)
+  }
+
   /// Obstacle kinds a dependency client's fake removes: with a client module in the app's area, a
   /// fake chosen at launch serves the failure, the retry or the slow response the flow needs.
   public static let fakeableObstacleKinds = ["network"]
@@ -85,10 +111,13 @@ public enum PlanLintValidation {
   ///   - contractTask: the contract task, whose stub screens carry no behaviour a flow can check.
   ///   - clientModules: the repository's dependency-client modules, from ``clientModules(in:)``;
   ///     1 inside an app's area stops a ``fakeableObstacleKinds`` reason excusing its screens.
+  ///   - requirementTitles: each requirement's title by id, which says whether a
+  ///     ``gateReasonKind`` reason may excuse it.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
     file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
-    appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = []
+    appAreas: [AppArea] = [], contractTask: String? = nil, clientModules: [String] = [],
+    requirementTitles: [String: String] = [:]
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))
@@ -161,7 +190,8 @@ public enum PlanLintValidation {
     let screenTasks = tasks.filter { $0.id != contractTask }
     findings += try screenFindings(
       table: table, requirements: requirements, tasks: screenTasks, appAreas: appAreas,
-      clientModules: clientModules, file: file, rowLines: rowLines, sectionLine: sectionLine)
+      clientModules: clientModules, file: file, rowLines: rowLines, sectionLine: sectionLine,
+      titles: requirementTitles)
     findings += try appFindings(
       table: table, screenTasks: screenTasks, allTasks: tasks, appAreas: appAreas, file: file,
       sectionLine: sectionLine)
@@ -182,10 +212,13 @@ public enum PlanLintValidation {
   /// 1 finding per requirement, in plan order, that a task covers while writing a screen or a
   /// feature of an `xcode` area, with no `flow` row and no reason on any of its rows naming an
   /// obstacle. A ``fakeableObstacleKinds`` obstacle counts only while no client module sits in
-  /// that area; past it the finding is ``obstacleFakeableRuleID``.
+  /// that area; past it the finding is ``obstacleFakeableRuleID``. A requirement with no row but a
+  /// reason-only one, whose title names tests and whose reason is a ``gateReasonKind`` naming a
+  /// tier of ``suiteTiers``, is the gates' own to prove and has no finding.
   private static func screenFindings(
     table: ValidationTable, requirements: [String], tasks: [TaskWrites], appAreas: [AppArea],
-    clientModules: [String], file: String, rowLines: [Int], sectionLine: Int?
+    clientModules: [String], file: String, rowLines: [Int], sectionLine: Int?,
+    titles: [String: String]
   ) throws(ReportContractViolation) -> [Finding] {
     guard !appAreas.isEmpty else { return [] }
     var findings: [Finding] = []
@@ -204,6 +237,10 @@ public enum PlanLintValidation {
           })
           .first
       else { continue }
+      let gateReasons = table.unitOnly.filter { $0.requirement == requirement }.map(\.reason)
+        .filter { $0.trimmingCharacters(in: .whitespaces).hasPrefix(gateReasonKind + ":") }
+      let testsRequirement = titles[requirement].map(namesTests) ?? false
+      if rows.isEmpty, testsRequirement, gateReasons.contains(where: isGateReason) { continue }
       let kinds = reasons.compactMap(obstacle(of:))
       let clients = clientModules.filter { contains(area.root, $0) }
       guard !kinds.contains(where: { clients.isEmpty || !fakeableObstacleKinds.contains($0) })
@@ -228,8 +265,18 @@ public enum PlanLintValidation {
         continue
       }
       let obstacles = obstacleKinds.map { "`\($0):`" }.joined(separator: ", ")
+      let tiers = suiteTiers.map { "`\($0)`" }.joined(separator: " or ")
+      let gate = "`\(gateReasonKind):`"
       let fix =
-        reasons.isEmpty
+        !gateReasons.isEmpty && !testsRequirement
+        ? "\(gate) excuses only a requirement whose title is about the repository's existing "
+          + "tests, which the gates' own suites prove; add a flow row for its journey, or open "
+          + "the Reason with what stops a flow: " + obstacles
+        : !gateReasons.isEmpty
+          ? "a \(gate) Reason excuses it only on its 1 reason-only row and naming the tier "
+            + "that runs the whole suites, \(tiers), such as `\(gateReasonKind): final runs "
+            + "every area's whole suite`"
+        : reasons.isEmpty
         ? "add a flow row for its journey, or open its row's Reason with what stops a flow: "
           + obstacles
         : "its Reason names no obstacle a flow can't pass, and unit or acceptance tests never "

@@ -175,10 +175,43 @@ public struct RunView: Sendable, Equatable, Encodable {
   public struct Role: Sendable, Equatable, Encodable {
     public var role: AgentRole
     public var tokens: Tokens
+    /// The priced messages' cost in US dollars; `nil` when the price table priced none.
+    public var costUSD: Double?
+    /// Messages the price table couldn't price, whose cost ``costUSD`` leaves out.
+    public var unpriced: Int
 
-    public init(role: AgentRole, tokens: Tokens) {
+    public init(role: AgentRole, tokens: Tokens, costUSD: Double? = nil, unpriced: Int = 0) {
       self.role = role
       self.tokens = tokens
+      self.costUSD = costUSD
+      self.unpriced = unpriced
+    }
+  }
+
+  /// What the run cost in US dollars: the agents' priced messages, plus the judge calls made
+  /// between the run's first and last message, since the judge runs apart from every agent.
+  public struct Cost: Sendable, Equatable, Encodable {
+    public var usd: Double
+    public var agentsUSD: Double
+    public var judgeUSD: Double
+    /// The messages priced, and those the price table couldn't price, which ``usd`` leaves out.
+    public var priced: Int
+    public var unpriced: Int
+    /// The judge calls counted, and how many of them reported no cost.
+    public var judgeCalls: Int
+    public var judgeCallsWithoutCost: Int
+
+    public init(
+      usd: Double, agentsUSD: Double, judgeUSD: Double, priced: Int, unpriced: Int,
+      judgeCalls: Int, judgeCallsWithoutCost: Int
+    ) {
+      self.usd = usd
+      self.agentsUSD = agentsUSD
+      self.judgeUSD = judgeUSD
+      self.priced = priced
+      self.unpriced = unpriced
+      self.judgeCalls = judgeCalls
+      self.judgeCallsWithoutCost = judgeCallsWithoutCost
     }
   }
 
@@ -407,6 +440,8 @@ public struct RunView: Sendable, Equatable, Encodable {
   public var spec: [SpecRow]
   public var tasks: [Task]
   public var roles: [Role]
+  /// `nil` when no message of the run was priced and no judge call reported a cost.
+  public var cost: Cost?
   public var spans: [Span]
   public var gates: [Gate]
   public var proofs: [Proof]
@@ -432,15 +467,16 @@ public struct RunView: Sendable, Equatable, Encodable {
 
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
-    spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [], halts: [Halt] = [],
-    validation: RunViewValidation? = nil, damage: [Damage] = [], unwritten: [Damage] = [],
-    evidenceBase: String? = nil
+    cost: Cost? = nil, spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [],
+    halts: [Halt] = [], validation: RunViewValidation? = nil, damage: [Damage] = [],
+    unwritten: [Damage] = [], evidenceBase: String? = nil
   ) {
     self.cursor = cursor
     self.run = run
     self.spec = spec
     self.tasks = tasks
     self.roles = roles
+    self.cost = cost
     self.spans = spans
     self.gates = gates
     self.proofs = proofs
@@ -452,8 +488,8 @@ public struct RunView: Sendable, Equatable, Encodable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, validation
-    case damage, unwritten, evidenceBase, evidenceFiles, finalReport
+    case schemaVersion, cursor, run, spec, tasks, roles, cost, spans, gates, proofs, halts
+    case validation, damage, unwritten, evidenceBase, evidenceFiles, finalReport
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -464,6 +500,7 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(spec, forKey: .spec)
     try c.encode(tasks, forKey: .tasks)
     try c.encode(roles, forKey: .roles)
+    try c.encode(cost, forKey: .cost)
     try c.encode(spans, forKey: .spans)
     try c.encode(gates, forKey: .gates)
     try c.encode(proofs, forKey: .proofs)
@@ -512,6 +549,20 @@ extension RunView.Brief {
     try c.encode(scope, forKey: .scope)
     try c.encode(acceptance, forKey: .acceptance)
     try c.encode(outOfScope, forKey: .outOfScope)
+  }
+}
+
+extension RunView.Role {
+  private enum CodingKeys: String, CodingKey {
+    case role, tokens, costUSD, unpriced
+  }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(role, forKey: .role)
+    try c.encode(tokens, forKey: .tokens)
+    try c.encode(costUSD, forKey: .costUSD)
+    try c.encode(unpriced, forKey: .unpriced)
   }
 }
 
