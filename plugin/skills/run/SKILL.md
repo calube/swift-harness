@@ -279,8 +279,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      with the `<agent>` of the `agentId: <agent>` line its launch printed: each task's completion
      ingest leaves it untagged. An exit 2 that says `telemetry is off` means say nothing, and any
      other non-zero exit prints 1 line for the report and the step goes on. Then:
-     1. From `<checkout>`, `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into
-        `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN adopt is 1 report line.
+     1. From `<checkout>`, `"$SG" qa adopt <worktree> --session <session> --json` copies its
+        `.harness/qa/<slug>/` into `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN
+        adopt is 1 report line. Its `unblocks` names each checked return that waited on this
+        task, with the exact `build merge` command.
      2. `/bin/rm -rf <worktree>/.harness/qa`, then
         `"$SG" ledger set <slug> <task> done --session <session> --json` and
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
@@ -298,6 +300,10 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         return gets the same treatment for the row that needed the name. A row that reads
         `unverified` there has no red run behind it, whatever the worker returned: 1 report line,
         `<requirement> <layer> <check>: no red run, <message>`.
+     4. After every adopt and its `--at-base` run, run
+        `"$SG" build next <slug> --session <session> --json` before ending the turn, and merge the
+        first task in its `readyToMerge` while `merging` is absent, as the adopt's `unblocks`
+        named: the next worker notice may be many minutes away.
 
      An acceptance test in the area's framework is never the validation task's: its row's
      `Writer` is the last `Runs after` task, whose slice gate proves it fails with that task's

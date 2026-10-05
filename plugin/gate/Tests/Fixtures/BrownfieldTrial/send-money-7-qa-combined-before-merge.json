@@ -1,0 +1,237 @@
+{
+  "after" : "amount-entry",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "911192cc1902ae0c43a48089f3e2742fd8f2d35a",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "7 of 10 rows verified (3 reason-only): 7 pass, 0 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/search.flow.json",
+      "evidence" : [
+        "qa/01-req-search.flow/steps.json",
+        "qa/01-req-search.flow/batch.json",
+        "qa/01-req-search.flow/flow.json",
+        "qa/01-req-search.flow/video.mp4",
+        "qa/01-req-search.flow/sheet.png",
+        "qa/01-req-search.flow/sim/steps.ndjson",
+        "qa/01-req-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 10 steps; nit sim.a11y-untargeted: 142 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 47835,
+      "requirement" : "req-search",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/keypad.flow.json",
+      "evidence" : [
+        "qa/02-req-keypad-entry.flow/steps.json",
+        "qa/02-req-keypad-entry.flow/batch.json",
+        "qa/02-req-keypad-entry.flow/flow.json",
+        "qa/02-req-keypad-entry.flow/video.mp4",
+        "qa/02-req-keypad-entry.flow/sheet.png",
+        "qa/02-req-keypad-entry.flow/sim/steps.ndjson",
+        "qa/02-req-keypad-entry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 10 steps; nit sim.a11y-untargeted: 52 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 39590,
+      "requirement" : "req-keypad-entry",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/amount-format.flow.json",
+      "evidence" : [
+        "qa/03-req-amount-format.flow/steps.json",
+        "qa/03-req-amount-format.flow/batch.json",
+        "qa/03-req-amount-format.flow/flow.json",
+        "qa/03-req-amount-format.flow/video.mp4",
+        "qa/03-req-amount-format.flow/sheet.png",
+        "qa/03-req-amount-format.flow/sim/steps.ndjson",
+        "qa/03-req-amount-format.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 6 steps; nit sim.a11y-untargeted: 52 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 26186,
+      "requirement" : "req-amount-format",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/continue.flow.json",
+      "evidence" : [
+        "qa/04-req-continue-rule.flow/steps.json",
+        "qa/04-req-continue-rule.flow/batch.json",
+        "qa/04-req-continue-rule.flow/flow.json",
+        "qa/04-req-continue-rule.flow/video.mp4",
+        "qa/04-req-continue-rule.flow/sheet.png",
+        "qa/04-req-continue-rule.flow/sim/steps.ndjson",
+        "qa/04-req-continue-rule.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 52 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 37742,
+      "requirement" : "req-continue-rule",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/confirm.flow.json",
+      "evidence" : [
+        "qa/05-req-confirm.flow/steps.json",
+        "qa/05-req-confirm.flow/batch.json",
+        "qa/05-req-confirm.flow/flow.json",
+        "qa/05-req-confirm.flow/video.mp4",
+        "qa/05-req-confirm.flow/sheet.png",
+        "qa/05-req-confirm.flow/sim/steps.ndjson",
+        "qa/05-req-confirm.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 52 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 33423,
+      "requirement" : "req-confirm",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/06-req-send-success.flow/steps.json",
+        "qa/06-req-send-success.flow/batch.json",
+        "qa/06-req-send-success.flow/flow.json",
+        "qa/06-req-send-success.flow/video.mp4",
+        "qa/06-req-send-success.flow/sheet.png",
+        "qa/06-req-send-success.flow/sim/steps.ndjson",
+        "qa/06-req-send-success.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 14 steps; nit sim.a11y-untargeted: 208 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 46509,
+      "requirement" : "req-send-success",
+      "result" : "pass",
+      "row" : 6,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/07-req-send-failure.flow/steps.json",
+        "qa/07-req-send-failure.flow/batch.json",
+        "qa/07-req-send-failure.flow/flow.json",
+        "qa/07-req-send-failure.flow/video.mp4",
+        "qa/07-req-send-failure.flow/sheet.png",
+        "qa/07-req-send-failure.flow/sim/steps.ndjson",
+        "qa/07-req-send-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 104 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 38393,
+      "requirement" : "req-send-failure",
+      "result" : "pass",
+      "row" : 7,
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T111401Z-5e6bfd29",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/send-flow",
+        "task" : "send-flow",
+        "tip" : "32a393d1a341f48fb8c4bd67247904f952e4fc76"
+      },
+      {
+        "branch" : "spec/account-fake",
+        "task" : "account-fake",
+        "tip" : "d7994ac950d403fa159ad92c09be76e6b982063f"
+      }
+    ],
+    "base" : "98cd15ceee89378aaab01e4b5a6ba83c5a60a9c0",
+    "branch" : "spec/amount-entry",
+    "conflicts" : [
+
+    ],
+    "tip" : "92188aabf2cc49f9bc9eaa29f154bc1678eeba85"
+  },
+  "verdict" : "GREEN"
+}

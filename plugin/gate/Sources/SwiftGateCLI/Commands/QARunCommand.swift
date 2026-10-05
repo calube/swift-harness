@@ -459,6 +459,13 @@ enum QARunRun {
             "branch \(names.branch) doesn't exist, so there is nothing to merge", plan: slug)
         }
         tip = found
+        let checked =
+          alongsideTasks.isEmpty ? nil : await standingChecks(slug: slug, root: root, git: git)
+        if !alongsideTasks.isEmpty, checked == nil {
+          notes.append(
+            "the plan has no build run whose events read, so each branch alongside is taken at "
+              + "its tip")
+        }
         for task in alongsideTasks {
           let other = try TaskWorktree(
             commonDirectory: common, plan: slug, task: task, profile: profile)
@@ -466,7 +473,23 @@ enum QARunRun {
             return blocked(
               "branch \(other.branch) doesn't exist, so there is nothing to merge", plan: slug)
           }
-          alongside.append(QATrialMerge.Branch(task: task, branch: other.branch, tip: found))
+          // A branch alongside lands only through its own merge, which needs its checked return.
+          var taken = found
+          if let checked {
+            guard let commit = checked.commits[task] else {
+              return blocked(
+                "`\(task)` has no return checked ready to merge that still stands in build run "
+                  + "\(checked.runID): it is still at work, or its return went back to work, so "
+                  + "no trial merge takes \(other.branch); run without it", plan: slug)
+            }
+            if commit != found {
+              notes.append(
+                "\(other.branch) is at \(found.prefix(12)), past the commit its return was checked "
+                  + "at; the trial merge took \(commit.prefix(12))")
+            }
+            taken = commit
+          }
+          alongside.append(QATrialMerge.Branch(task: task, branch: other.branch, tip: taken))
         }
         guard let main = try await git.revision("refs/heads/\(names.baseBranch)") else {
           return blocked("branch \(names.baseBranch) doesn't exist to merge into", plan: slug)
@@ -488,12 +511,14 @@ enum QARunRun {
           treeSetup = Self.treeStep(tree, since: asked)
           var commit = base
           var into = names.baseBranch
-          // Each branch merges on top of the ones before it, so the rows see them all at once.
-          for merging in [names.branch] + alongside.map(\.branch) {
+          // Each branch merges on top of the ones before it, so the rows see them all at once,
+          // each at the commit read above, whatever its branch has moved to since.
+          for (merging, revision) in [(names.branch, tip)] + alongside.map({ ($0.branch, $0.tip) })
+          {
             let outcome: MergeOutcome
             do throws(GitWorkspaceError) {
               outcome = try await merger.merge(
-                merging, message: "Merge: \(merging) before build merge", in: tree.path)
+                revision, message: "Merge: \(merging) before build merge", in: tree.path)
             } catch {
               return .failed("\(error)")
             }
@@ -746,6 +771,26 @@ enum QARunRun {
 
   /// The plan's newest build run's events; `nil`, with a note when reading failed, when it has
   /// none, so only the ledger says what merged.
+  /// The commit each task's standing return check names in the plan's newest build run, as
+  /// ``BuildEventLog/standingCheck(task:retriedAt:)`` reads it with the run's halts answered
+  /// retry; `nil` when the plan has no build run, or its events don't read.
+  static func standingChecks(slug: String, root: URL, git: any Git) async
+    -> (runID: String, commits: [String: String])?
+  {
+    guard let store = try? await BuildRunStore.latest(plan: slug, git: git),
+      let log = try? store.events()
+    else { return nil }
+    let retried = BuildHalts.retried(
+      in: (try? BuildHaltLog(root: root).events()) ?? [], buildRun: store.runID)
+    var commits: [String: String] = [:]
+    for task in Set(log.events.compactMap(\.task)) {
+      if let commit = log.standingCheck(task: task, retriedAt: retried[task])?.commit {
+        commits[task] = commit
+      }
+    }
+    return (store.runID, commits)
+  }
+
   private static func buildEvents(slug: String, git: any Git, notes: inout [String]) async
     -> BuildEventLog?
   {
@@ -1205,7 +1250,8 @@ enum QARunRun {
     guard let reportFile else { return "" }
     return
       "\(command): \(report.verdict.rawValue) \(report.message); run \(report.runID ?? "none"), "
-      + "report \(reportFile)" + (keptReportFile.map { ", kept at \($0) once the checkout is removed" } ?? "")
+      + "report \(reportFile)"
+      + (keptReportFile.map { ", kept at \($0) once the checkout is removed" } ?? "")
   }
 
   /// Writes `report`'s JSON, as `--json` prints it, to `path` alone, relative to `root` unless

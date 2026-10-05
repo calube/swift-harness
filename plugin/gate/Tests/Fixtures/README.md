@@ -4615,6 +4615,25 @@ for x in stdout stderr; do sed "s#$P#/FIXTURE#g" together.$x > $F/prove-together
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
 
+## Brownfield trial: send-money-7's combined run over a task mid-retry
+
+The seventh send-money trial (2026-10-05) halted send-flow's `review-blocked` return and answered
+it `retry`, setting the task back to work. 36 s later `build merge amount-entry` still counted
+send-flow as checked and waiting to merge, and the combined `qa run --before-merge` it named
+(`20261005T111401Z-5e6bfd29`) took `spec/send-flow` at a commit the retry worker had made 8 s
+before, which no gate had passed yet. `T` is the trial's folder under the practice-trial runs, with
+the clone's state copied to `$T/state`:
+
+```sh
+T=<send-money-7 run folder> S=$T/state F=plugin/gate/Tests/Fixtures/BrownfieldTrial
+cp $S/plans/spec/build/20261005T110258Z-f7966a8c/events.jsonl $F/send-money-7-build-events.jsonl
+cp $S/events/build.jsonl $F/send-money-7-build-halts.jsonl
+cp $S/plans/spec/validation.json $F/send-money-7-validation.json
+cp $S/runs/20261005T111401Z-5e6bfd29/qa/report.json $F/send-money-7-qa-combined-before-merge.json
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on these 4 files matched nothing.
+
 ## Brownfield trial: send-money-7's covered activity row and refused test-only calls
 
 The seventh send-money trial's send-success flow passed step 23, `wait selector

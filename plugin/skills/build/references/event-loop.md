@@ -157,8 +157,10 @@ plan, its rows (the `validation.json` rows whose `writer` is the task), its cont
 surface, and says to work in that worktree and follow
 `${CLAUDE_PLUGIN_ROOT}/skills/qa/references/validation-worker.md`. When it returns:
 
-1. `"$SG" qa adopt <worktree> --json` copies its `.harness/qa/<slug>/` into `<plans>/<slug>/qa/`,
-   where `qa run` reads every check. A non-GREEN adopt halts that task.
+1. `"$SG" qa adopt <worktree> --session <session> --json` copies its `.harness/qa/<slug>/` into
+   `<plans>/<slug>/qa/`, where `qa run` reads every check. A non-GREEN adopt halts that task. Its
+   `unblocks` lists each checked return that waited on this task, with the exact `build merge`
+   command as `next`.
 2. `/bin/rm -rf <worktree>/.harness/qa`, then
    `"$SG" ledger set <slug> <task> done --session <session> --json` and
    `"$SG" worktree remove <slug> <task> --session <session> --json`.
@@ -173,6 +175,10 @@ surface, and says to work in that worktree and follow
    tell the change from its absence. Name it in the report, and go on. A row that reads
    `unverified` there has no red run behind it, whatever the worker returned: name it in the
    report as `no red run` with its message.
+4. After every adopt and its `--at-base` run, run
+   `"$SG" build next <slug> --session <session> --json` before ending the turn, and merge the first
+   task in its `readyToMerge` while `merging` is absent, as the adopt's `unblocks` named. The next
+   worker notice may be many minutes away.
 
 Its `missing:` lines name contract names a check needed: each goes in the report, and its row
 reads red until a task adds the name.
@@ -384,8 +390,9 @@ the same tree as an earlier one takes the rows that passed there with byte-ident
 naming that run in `reusedFrom`, so repeating a fixer's passing run costs seconds.
 
 A row whose `Runs after` names tasks that haven't merged doesn't wait for the last of them. Once
-each unmerged task it names has a checked return in `build next`'s `readyToMerge`, it runs before
-the first of them merges, on 1 trial merge of all their branches onto `main`'s tip:
+each unmerged task it names has a checked return in `build next`'s `readyToMerge` that still stands
+at its branch tip, it runs before the first of them merges, on 1 trial merge of all their branches
+onto `main`'s tip, each at its checked commit:
 
 ```
 "$SG" qa run --plan <slug> --after <task>,<other>,… --before-merge --json
@@ -400,12 +407,13 @@ repeats the run in seconds when its merge makes the same tree. A task with a fix
 longer waiting: its rows run again before its fix merges.
 
 While another task such a row waits on has passed its worker's gate at its branch tip and its
-return isn't checked yet, `build merge` defers: it exits 0 with `status: deferred`, `reason:
+return isn't checked yet, or its checked return went back to work (a halt answered `retry`, a
+ledger reset, or a commit past the checked one), `build merge` defers: it exits 0 with `status: deferred`, `reason:
 flows-pending`, `action: wait` and a `waitUntil` time, since that return is minutes away and
 merging first would run the row twice. It is a wait, never a halt or a `gate-red`. Check the return
 when its notice arrives, then run the combined `qa run` the message names. The wait lapses 5
 minutes after that gate, or at `noNewStartsAt`, whichever is first: `waitUntil`. Merge again then
-if no notice came.
+if no notice came. A task back at work waits from the moment it went back.
 
 - RED over several tasks: a red row refuses only the tasks its `Runs after` names. Pick the one
   that owns the red behaviour: the one whose write set holds the screen, state or code each red

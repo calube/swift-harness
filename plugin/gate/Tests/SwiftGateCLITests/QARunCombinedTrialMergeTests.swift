@@ -110,6 +110,78 @@ struct QARunCombinedTrialMergeTests {
     #expect(report.notes.contains { $0.contains(Self.screens) }, "\(report.notes)")
   }
 
+  /// A build run of the plan whose screens task's return was checked GREEN at `commit` with
+  /// `outcome`.
+  static func buildRun(_ repo: QARepo, screensCheckedAt commit: String, outcome: TaskReturn.Outcome)
+    async throws
+  {
+    let at = Date(timeIntervalSince1970: 1_800_000_000)
+    let run = try await BuildRunStore.create(
+      plan: QARepo.slug, presetName: "default",
+      preset: BuildPreset(
+        designTier: .standard, maxParallel: 3, review: .gate, taskGate: .tier(.push),
+        mergeGate: .ready, workerModel: .tagged, timeBudgetMin: 90, stopStartsBeforeMin: 15,
+        onDesignConflict: .block),
+      startedAt: at, git: LiveGit(runner: repo.runner, repositoryRoot: repo.root.path),
+      suffix: 0xabc)
+    try await run.append(
+      .returnCheck(
+        .init(
+          task: screens, fix: false, verdict: .green, commit: commit, checkID: "check-screens",
+          rules: [], at: at, outcome: outcome)))
+  }
+
+  /// Commits 1 more file on the screens branch, as a worker still at work would.
+  static func moveScreens(_ repo: QARepo) async throws -> String {
+    try await repo.git("switch", "-q", "\(QARepo.slug)/\(screens)")
+    try Data("late\n".utf8).write(to: repo.root.appending(path: "late.txt"))
+    try await repo.git("add", "-A")
+    try await repo.git("commit", "-q", "-m", "feat: \(screens) more work")
+    let tip = try await repo.git("rev-parse", "HEAD")
+    try await repo.git("switch", "-q", "main")
+    return tip
+  }
+
+  @Test(
+    "with the build run's screens return checked ready-to-merge at its first commit and its branch moved on since, the combined run merges screens at the checked commit, not the branch head, and records that commit in its trial merge — catches the send-money trial's combined run taking a retry worker's commit no gate had passed"
+  )
+  func alongsideIsTakenAtItsCheckedCommit() async throws {
+    let (repo, logic, screens) = try await Self.repo()
+    defer { repo.remove() }
+    try repo.plan(
+      [
+        validationRow(
+          "req-send", .acceptance, "test -f logic.txt && test -f ui.txt && test ! -f late.txt || exit 4",
+          after: [Self.logic, Self.screens])
+      ],
+      tasks: [Self.logic: .inProgress, Self.screens: .inProgress])
+    try await Self.buildRun(repo, screensCheckedAt: screens, outcome: .readyToMerge)
+    let head = try await Self.moveScreens(repo)
+
+    let report = await repo.run(
+      QARunRun.Options(after: Self.logic, beforeMerge: true, alongside: [Self.screens]))
+
+    #expect(report.rows.map(\.result) == [.pass], "\(report.rows.map(\.message)) \(report.message)")
+    #expect(report.trialMerge?.tip == logic)
+    #expect(report.trialMerge?.alongside.map(\.tip) == [screens], "head \(head)")
+  }
+
+  @Test(
+    "with the build run's screens return checked review-blocked, a combined run naming screens alongside is BLOCKED, runs no row and names the task — catches a task with no standing check taken into a trial merge"
+  )
+  func alongsideWithNoStandingCheckIsBlocked() async throws {
+    let (repo, _, screens) = try await Self.repo()
+    defer { repo.remove() }
+    try await Self.buildRun(repo, screensCheckedAt: screens, outcome: .reviewBlocked)
+
+    let report = await repo.run(
+      QARunRun.Options(after: Self.logic, beforeMerge: true, alongside: [Self.screens]))
+
+    #expect(report.verdict == .blocked, "\(report.message)")
+    #expect(report.rows.isEmpty)
+    #expect(report.message.contains(Self.screens), "\(report.message)")
+  }
+
   @Test(
     "tasks alongside without --before-merge, or naming no ledger task, are BLOCKED and run nothing — catches a combined run with no trial merge"
   )

@@ -1,0 +1,102 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/search.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-search",
+      "runsAfter" : [
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/keypad.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-keypad-entry",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/amount-format.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-amount-format",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/continue.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-continue-rule",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/confirm.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-confirm",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-success",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-send-failure",
+      "runsAfter" : [
+        "amount-entry",
+        "send-flow",
+        "views",
+        "account-fake"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the AccountClient and AmountInput unit tests assert Decimal values; no screen shows the type",
+      "requirement" : "req-decimal-money"
+    },
+    {
+      "reason" : "the account-fake unit tests prove the starting balance, the 8 contacts and the failing send; the flows exercise it through the scenarios",
+      "requirement" : "req-account-fake"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite, APIClient and LogClient included",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

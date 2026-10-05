@@ -765,9 +765,12 @@ public struct BuildMerge: Sendable {
       tip = try await merger.commit(
         of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
       merged = progress.merged(per: log)
+      // A halt answered retry sends a checked return back to work; unreadable halts send none.
+      let retried = BuildHalts.retried(
+        in: (try? halts?.events()) ?? [], buildRun: context.run.runID)
       // A carried branch lands with this merge, so a row over both needs a run that took it.
       let waiting =
-        try await waitingBranches(context, progress: progress, log: log)
+        try await waitingBranches(context, progress: progress, log: log, retried: retried)
         + carried
       reports = beforeMergeReports(context)
       alongside = QAMergeReadiness.alongside(
@@ -781,7 +784,7 @@ public struct BuildMerge: Sendable {
         awaited = QAMergeReadiness.awaited(
           table: table, merged: merged, task: task, waiting: waiting,
           pending: try await pendingReturns(
-            context, progress: progress, log: log, skipping: skipping),
+            context, progress: progress, log: log, retried: retried, skipping: skipping),
           now: clock.now(), noNewStartsAt: noNewStartsAt)
       }
     } catch {
@@ -793,17 +796,23 @@ public struct BuildMerge: Sendable {
       if let noNewStartsAt { lapsesAt = min(lapsesAt, noNewStartsAt) }
       let names = awaited.map(\.task)
       let one = names.count == 1
-      let gates = awaited.map { "run \($0.gateRunID)" }.joined(separator: ", ")
       let together = ([task] + alongside + names).joined(separator: ",")
       let reason = BuildMergeReport.Reason.flowsPending.rawValue
+      let why = awaited.map { pending -> String in
+        guard let gate = pending.gateRunID else {
+          return "`\(pending.task)`'s checked return went back to work at "
+            + "\(pending.gatedAt.formatted(.iso8601)), and its branch holds no checked commit"
+        }
+        return "`\(pending.task)`'s worker's gate passed at its branch tip (run \(gate)) with no "
+          + "checked return since"
+      }
       let message: String =
         "build-merge.\(reason): a validation row runs after `\(task)` and "
-        + "\(names.joined(separator: ", ")), whose \(one ? "worker's gate" : "workers' gates") "
-        + "passed at \(one ? "its branch tip" : "their branch tips") (\(gates)) with no checked "
-        + "return since; check \(one ? "that return" : "those returns") as the completion "
-        + "notices arrive, then run 1 `swiftgate qa run --plan \(plan) --after \(together) "
-        + "--before-merge` over them all. The wait lapses at \(lapsesAt.formatted(.iso8601)), "
-        + "when `\(task)` merges on its own rows. This is a wait, not a red merge: no halt"
+        + "\(names.joined(separator: ", ")): " + why.joined(separator: "; ") + "; check "
+        + "\(one ? "its return" : "their returns") as the completion notices arrive, then run 1 "
+        + "`swiftgate qa run --plan \(plan) --after \(together) --before-merge` over them all. "
+        + "The wait lapses at \(lapsesAt.formatted(.iso8601)), when `\(task)` merges on its own "
+        + "rows. This is a wait, not a red merge: no halt"
       throw Stop(
         report: report(
           command, context, .deferred, .green, reason: .flowsPending, pre: main, action: .wait,
@@ -894,11 +903,14 @@ public struct BuildMerge: Sendable {
       + " as done: run `ledger set` for it"
   }
 
-  /// Every other running task, outside `skipping`, whose worker's own gate passed at its branch's
-  /// tip on a clean tree with no check of its return recorded since: its return is on its way. A
-  /// task with a fixer's branch is set aside, as in ``waitingBranches(_:progress:log:)``.
+  /// Every other running task, outside `skipping`, whose return is on its way: its worker's own
+  /// gate passed at its branch's tip on a clean tree with no check of its return recorded since,
+  /// or else its checked return went back to work, as a halt answered retry or a ledger reset
+  /// sends it, or its branch moved past the commit its return was checked at. A task with a
+  /// fixer's branch is set aside, as in ``waitingBranches(_:progress:log:retried:)``.
   private func pendingReturns(
-    _ context: Context, progress: LedgerProgress, log: BuildEventLog, skipping: Set<String>
+    _ context: Context, progress: LedgerProgress, log: BuildEventLog, retried: [String: Date],
+    skipping: Set<String>
   ) async throws -> [QAPendingReturn] {
     var pending: [QAPendingReturn] = []
     for other in progress.tasks
@@ -915,14 +927,20 @@ public struct BuildMerge: Sendable {
       let path =
         (try? WorktreePool(commonDirectory: context.common, plan: plan).path(holding: names.branch))
         ?? names.path
+      let records =
+        (try? RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
+          .readHistory().records) ?? []
       guard
-        let records = try? RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
-          .readHistory().records,
         let gate = records.last(where: {
           $0.verdict == .green && $0.headCommit == tip && $0.dirty == false
             && TaskReturnEvidence.GateRun.tier(ofCommand: $0.command) != nil
         })
-      else { continue }
+      else {
+        if let back = Self.sentBack(other.id, tip: tip, log: log, retried: retried) {
+          pending.append(QAPendingReturn(task: other.id, gateRunID: nil, gatedAt: back))
+        }
+        continue
+      }
       let checked = log.events.contains { event in
         guard case .returnCheck(let check) = event else { return false }
         return check.task == other.id && !check.fix && check.at >= gate.finishedAt
@@ -990,14 +1008,33 @@ public struct BuildMerge: Sendable {
     ).filter { $0.after == task || $0.trialMerge?.alongside.contains { $0.task == task } == true }
   }
 
-  /// Every other running task whose checked return waits to merge, at its branch's tip, except
-  /// one whose fixer's branch exists: its rows run again before that fix merges.
+  /// When `task`'s checked return went back to work: as ``BuildEventLog/returnSentBack(task:retriedAt:)``
+  /// reads it, or, for a return whose check still stands, when it was checked if its branch has
+  /// since moved past the checked commit to `tip`. `nil` while the check stands at `tip`.
+  static func sentBack(
+    _ task: String, tip: String, log: BuildEventLog, retried: [String: Date]
+  ) -> Date? {
+    if let back = log.returnSentBack(task: task, retriedAt: retried[task]) { return back }
+    guard let check = log.standingCheck(task: task, retriedAt: retried[task]),
+      check.commit != tip
+    else { return nil }
+    return check.at
+  }
+
+  /// Every other running task whose checked return waits to merge and still stands at its
+  /// branch's tip: a GREEN check of a `ready-to-merge` return, with no ledger reset or halt
+  /// answered retry since, at the commit the branch is at. A task whose fixer's branch exists is
+  /// left out: its rows run again before that fix merges.
   private func waitingBranches(
-    _ context: Context, progress: LedgerProgress, log: BuildEventLog
+    _ context: Context, progress: LedgerProgress, log: BuildEventLog, retried: [String: Date]
   ) async throws -> [QATrialMerge.Branch] {
     let running = Set(progress.tasks.filter { $0.status == .inProgress }.map(\.id))
     var waiting: [QATrialMerge.Branch] = []
-    for ready in log.mergeQueue(running: running).ready where !ready.fix && ready.task != task {
+    for ready in log.mergeQueue(running: running, retried: retried).ready
+    where !ready.fix && ready.task != task {
+      guard
+        let checked = log.standingCheck(task: ready.task, retriedAt: retried[ready.task])?.commit
+      else { continue }
       let names = try TaskWorktree(
         commonDirectory: context.common, plan: plan, task: ready.task, profile: profile)
       let fix = try TaskWorktree(
@@ -1007,6 +1044,7 @@ public struct BuildMerge: Sendable {
       else { continue }
       let tip = try await merger.commit(
         of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
+      guard tip == checked else { continue }
       waiting.append(QATrialMerge.Branch(task: ready.task, branch: names.branch, tip: tip))
     }
     return waiting
