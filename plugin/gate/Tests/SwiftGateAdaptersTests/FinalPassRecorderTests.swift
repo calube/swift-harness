@@ -47,10 +47,10 @@ struct FinalPassRecorderTests {
           agentDevice: device, lock: lock(), clock: clock, lockWait: lockWait))
     }
 
-    func record(_ recorder: FinalPassRecorder, device: any AgentDevice) async -> (
-      outcome: BatchFlowOutcome, recording: QAFlowRecording
-    ) {
-      let stepsFile = Fixture.directory.appending(path: "QA/counter.flow.json")
+    func record(
+      _ recorder: FinalPassRecorder, device: any AgentDevice, flow: String = "QA/counter.flow.json"
+    ) async -> (outcome: BatchFlowOutcome, recording: QAFlowRecording) {
+      let stepsFile = Fixture.directory.appending(path: flow)
       let store = store
       let flowDirectory = flowDirectory
       return await recorder.record(
@@ -103,6 +103,34 @@ struct FinalPassRecorderTests {
       #expect(
         call.arguments.contains("--session") && call.arguments.contains(Self.target.session))
     }
+  }
+
+  @Test(
+    "the captured run of a flow that relaunches the app first drives the open before the record start, so the video starts on the fresh launch and its clock starts when that record start ends — catches a flow video that opens on the app's previous launch"
+  )
+  func relaunchingRunRecordsAfterOpen() async throws {
+    let run = try Run()
+    defer { TestTemporaryDirectory.remove(run.root) }
+    let runner = try CapturedFinalPass.runner(batch: "record/relaunched-pass", home: run.home)
+    let device = LiveAgentDevice(runner: runner)
+
+    let (outcome, recording) = await run.record(
+      run.recorder(device), device: device, flow: "AgentDevice/record/relaunched-pass.flow.json")
+
+    #expect(outcome.stop == nil)
+    #expect(outcome.videoStartMs == 2069)
+    #expect(recording.videoStartMs == 2069)
+    #expect(recording.video == "qa/01-req-count.flow/\(FinalPassRecorder.videoFileName)")
+    let calls = runner.invocations
+    let driven = try #require(
+      calls.first?.arguments.firstIndex(of: "--steps-file").map { calls[0].arguments[$0 + 1] })
+    let commands = try #require(
+      try JSONSerialization.jsonObject(with: Data(contentsOf: URL(filePath: driven)))
+        as? [[String: Any]]
+    ).prefix(3).map { $0["command"] as? String }
+    #expect(commands == ["open", "record", "wait"])
+    let record = outcome.record.recorded(recording)
+    #expect(record.steps.map(\.offsetMs) == [0, 0, 1728, 2434, 3994])
   }
 
   @Test(

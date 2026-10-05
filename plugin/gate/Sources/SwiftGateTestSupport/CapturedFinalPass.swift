@@ -133,10 +133,12 @@ public enum CapturedFinalPass {
   }
 
   private static func recordPath(_ steps: [[String: Any]]) -> String? {
-    guard let first = steps.first, first["command"] as? String == "record",
-      let input = first["input"] as? [String: Any], input["action"] as? String == "start"
-    else { return nil }
-    return input["path"] as? String
+    for step in steps where step["command"] as? String == "record" {
+      if let input = step["input"] as? [String: Any], input["action"] as? String == "start" {
+        return input["path"] as? String
+      }
+    }
+    return nil
   }
 
   private static func value(after flag: String, in arguments: [String]) -> String? {

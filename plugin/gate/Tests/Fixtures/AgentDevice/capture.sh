@@ -52,6 +52,7 @@ record snapshot snapshot "${target[@]}"
 record screenshot screenshot "$work/step.png" "${target[@]}"
 record appstate appstate "${target[@]}"
 record session-list session list "${target[@]}"
+record session-state-dir session state-dir --json
 record wait-text-absent wait text "$absent" 2000 "${target[@]}"
 record wait-text-absent-plain wait text "$absent" 2000 --udid "$udid" --session "$session"
 record open-device-in-use open "$bundle" --udid "$udid" --session "$session-other" --json

@@ -261,8 +261,9 @@ public struct SimDown: Sendable {
       .max { $0.runID < $1.runID }
   }
 
-  /// Closes the session and checks `agent-device` no longer lists it. Returns the problem when
-  /// the session may still be open; a session or device already gone counts as closed.
+  /// Closes the session, checks `agent-device` no longer lists it, then deletes the folder it
+  /// kept for the session. Returns the problem when the session may still be open; a session or
+  /// device already gone counts as closed.
   private func close(_ target: AgentDeviceTarget, notes: inout [String]) async -> String? {
     do {
       try await dependencies.agentDevice.close(on: target)
@@ -280,7 +281,12 @@ public struct SimDown: Sendable {
         "could not check that session \(target.session) closed: \(error.message)")
       return nil
     }
-    guard sessions.contains(where: { $0.name == target.session }) else { return nil }
+    guard sessions.contains(where: { $0.name == target.session }) else {
+      if let problem = await dependencies.agentDevice.removeSessionFolder(target.session) {
+        notes.append(problem)
+      }
+      return nil
+    }
     return "agent-device still lists session \(target.session) after close"
   }
 

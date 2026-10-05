@@ -53,6 +53,18 @@ public struct SimSession: Sendable, Equatable {
     "swiftgate-\(runID)"
   }
 
+  /// The folder `agent-device` keeps `session`'s state in under its state directory, for
+  /// removal once the session is closed. `nil` for a session `sim up` didn't name, so no other
+  /// session's folder is ever named.
+  public static func agentDeviceSessionFolder(stateDirectory: String, session: String) -> String? {
+    let prefix = agentDeviceSessionName(runID: "")
+    guard !stateDirectory.isEmpty, session.hasPrefix(prefix), session.count > prefix.count,
+      session.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") })
+    else { return nil }
+    let root = stateDirectory.hasSuffix("/") ? String(stateDirectory.dropLast()) : stateDirectory
+    return "\(root)/sessions/\(session)"
+  }
+
   /// The app's launch arguments for `scenario`; none for live dependencies.
   public static func launchArguments(scenario: String?) -> [String] {
     scenario.map { [scenarioArgument, $0] } ?? []

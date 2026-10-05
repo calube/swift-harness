@@ -118,6 +118,50 @@ struct RecordingRetryTests {
     #expect(decoded == report)
   }
 
+  @Test(
+    "a recorded flow that starts by relaunching the app runs the open first and the record start second, so a failure at the open is the flow's step 1 and one at the record start is the recording's — catches a video whose first frame shows the app's previous launch"
+  )
+  func relaunchingPlanRecordsAfterOpen() throws {
+    let steps = try FlowSteps.parse(
+      try Fixture.data("AgentDevice/record/relaunched-pass.flow.json"))
+
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png"],
+      recordTo: "/SCRATCH/relaunched.mp4")
+
+    #expect(
+      try FlowJSON.parse(plan.drivenJSON())
+        == FlowJSON.parse(try Fixture.data("AgentDevice/record/relaunched-pass.steps.json")))
+    #expect(plan.recordIndex == 2)
+    #expect(plan.evidence.map(\.snapshot) == [4, 9])
+    #expect(plan.stop(atDrivenIndex: 1, command: "open") == .step(n: 1, command: "open"))
+    #expect(plan.stop(atDrivenIndex: 2, command: "record") == .recordStart)
+    #expect(plan.stop(atDrivenIndex: 8, command: "is") == .step(n: 4, command: "is"))
+  }
+
+  @Test(
+    "the captured relaunching batch's video starts when the record start after the open ends, so the open sits at the video's first frame and every later step keeps its place — catches a video clock that leaves out the relaunch's time"
+  )
+  func relaunchingOffsetsOnVideoClock() throws {
+    let steps = try FlowSteps.parse(
+      try Fixture.data("AgentDevice/record/relaunched-pass.flow.json"))
+    let plan = BatchFlowPlan.make(
+      steps: steps, screenshots: ["/SCRATCH/1.png", "/SCRATCH/2.png"],
+      recordTo: "/SCRATCH/relaunched.mp4")
+    let results = try Self.results("relaunched-pass")
+    let batch = plan.record(results: results, failedAt: nil)
+
+    let start = try #require(plan.videoStartMs(results: results))
+    let recorded = batch.recorded(
+      QAFlowRecording(video: "qa/01-req-count.flow/video.mp4", videoStartMs: start))
+
+    #expect(start == 2069)
+    #expect(batch.steps.map(\.offsetMs) == [0, 2069, 3797, 4503, 6063])
+    #expect(recorded.steps.map(\.offsetMs) == [0, 0, 1728, 2434, 3994])
+    #expect(recorded.steps.map(\.n) == [1, 2, 3, 4, 5])
+    #expect(recorded.steps.map(\.ok) == [true, true, true, true, true])
+  }
+
   /// `data.results` of a captured batch under `Fixtures/AgentDevice/record/`.
   static func results(_ name: String) throws -> [BatchStepOutcome] {
     let object = try #require(

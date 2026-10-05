@@ -13,8 +13,8 @@ public struct QAFinalPass: Sendable {
 }
 
 /// Records 1 flow's batch under the 1-slot `sim-record` lock, since the Mac may hold 1 simulator
-/// recording at a time: the batch starts with `record start`, so the video and the steps share
-/// the batch's clock, then `record stop` and `record contact-sheet` over the video.
+/// recording at a time: the batch holds a `record start`, so the video and the steps share the
+/// batch's clock, then `record stop` and `record contact-sheet` over the video.
 public struct FinalPassRecorder: Sendable {
   /// The machine-wide lock's name; its capacity is 1.
   public static let lockName = "sim-record"
@@ -60,13 +60,13 @@ public struct FinalPassRecorder: Sendable {
     return FinalPassRecorder(dependencies: dependencies)
   }
 
-  /// Runs `batch` with a `record start` first, then `record stop` and the contact sheet. A
+  /// Runs `batch` with a `record start` in it, then `record stop` and the contact sheet. A
   /// `record start` the Mac refuses as busy is retried per ``RecordingRetry``; past its bound, or
   /// on any other refusal, `batch` runs without recording and the video reads `unverified`.
   ///
   /// - Parameters:
-  ///   - batch: runs the flow's batch, with a `record start` to the given path first when it
-  ///     isn't `nil`.
+  ///   - batch: runs the flow's batch, with a `record start` to the given path when it isn't
+  ///     `nil`.
   ///   - directory: the flow's folder, which the video and the sheet go in.
   ///   - relativeDirectory: `directory` relative to the run directory.
   public func record(

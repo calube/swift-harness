@@ -22,6 +22,7 @@ public final class FakeAgentDevice: AgentDevice {
     case networkDump(limit: Int, target: AgentDeviceTarget)
     case trace(AgentDeviceTraceAction, path: String, target: AgentDeviceTarget)
     case close(AgentDeviceTarget)
+    case stateDirectory
     case releaseStale(udid: String)
 
     /// The key `Script.failures` is looked up by.
@@ -43,6 +44,7 @@ public final class FakeAgentDevice: AgentDevice {
       case .networkDump: "network dump"
       case .trace(let action, _, _): "trace \(action.rawValue)"
       case .close: "close"
+      case .stateDirectory: "session state-dir"
       case .releaseStale: "device release"
       }
     }
@@ -59,6 +61,8 @@ public final class FakeAgentDevice: AgentDevice {
     public var networkDump: Data
     /// Whether `close` drops the target's session from `sessions`, as the real CLI does.
     public var closeEndsSession: Bool
+    /// What `session state-dir` prints; its `sessions/` folder holds each session's state.
+    public var stateDirectory: String
     public var failures: [String: AgentDeviceError]
 
     public init(
@@ -66,7 +70,8 @@ public final class FakeAgentDevice: AgentDevice {
       appState: AgentDeviceAppState = .runningForeground, sessions: [AgentDeviceSession] = [],
       batch: AgentDeviceBatchResult = AgentDeviceBatchResult(steps: [], json: Data()),
       recordedVideo: String = "", logPath: String = "", networkDump: Data = Data(),
-      closeEndsSession: Bool = true, failures: [String: AgentDeviceError] = [:]
+      closeEndsSession: Bool = true, stateDirectory: String = "/nonexistent/agent-device",
+      failures: [String: AgentDeviceError] = [:]
     ) {
       self.version = version
       self.snapshotJSON = snapshotJSON
@@ -77,6 +82,7 @@ public final class FakeAgentDevice: AgentDevice {
       self.logPath = logPath
       self.networkDump = networkDump
       self.closeEndsSession = closeEndsSession
+      self.stateDirectory = stateDirectory
       self.failures = failures
     }
   }
@@ -193,6 +199,10 @@ public final class FakeAgentDevice: AgentDevice {
         state.script.sessions.removeAll { $0.name == target.session }
       }
     }
+  }
+
+  public func stateDirectory() async throws(AgentDeviceError) -> String {
+    try record(.stateDirectory).stateDirectory
   }
 
   public func releaseStale(udid: String) async throws(AgentDeviceError) {

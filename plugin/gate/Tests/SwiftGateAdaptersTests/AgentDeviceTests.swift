@@ -193,6 +193,15 @@ struct AgentDeviceTests {
   }
 
   @Test(
+    "the captured session state-dir output gives agent-device's state directory, asked for with no device or session — catches session folders looked for where agent-device never keeps them"
+  )
+  func stateDirectoryFromCapture() async throws {
+    let (device, runner) = try Self.device("session-state-dir")
+    #expect(try await device.stateDirectory() == "/HOME/.agent-device")
+    #expect(runner.invocations.map(\.arguments) == [["session", "state-dir", "--json"]])
+  }
+
+  @Test(
     "every device call names the leased device and session — catches a call that lets agent-device pick a device"
   )
   func everyCallCarriesTarget() async throws {

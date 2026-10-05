@@ -176,4 +176,26 @@ struct SimUpFailureTests {
     #expect(early["runID"] is NSNull)
     #expect(failure.text.contains("sim.driver-failed") && failure.text.contains("BLOCKED"))
   }
+
+  @Test(
+    "the session folder a run's own session left is named under the state directory's sessions folder, and a name sim up didn't make, or one that could leave that folder, names none — catches a cleanup that deletes another tool's session or climbs out of agent-device's state"
+  )
+  func sessionFolder() {
+    let row = SimSession.agentDeviceSessionName(runID: "20261005T131142Z-27081eb7-row1")
+    #expect(
+      SimSession.agentDeviceSessionFolder(stateDirectory: "/HOME/.agent-device", session: row)
+        == "/HOME/.agent-device/sessions/swiftgate-20261005T131142Z-27081eb7-row1")
+    #expect(
+      SimSession.agentDeviceSessionFolder(stateDirectory: "/HOME/.agent-device/", session: row)
+        == "/HOME/.agent-device/sessions/swiftgate-20261005T131142Z-27081eb7-row1")
+    for other in [
+      "qa-par-p1", "cwd_9bef56ac4371b83e_ios", "swiftgate-", "swiftgate-a/b", "swiftgate-..",
+      "swiftgate-../../x", "",
+    ] {
+      #expect(
+        SimSession.agentDeviceSessionFolder(stateDirectory: "/HOME/.agent-device", session: other)
+          == nil, "\(other)")
+    }
+    #expect(SimSession.agentDeviceSessionFolder(stateDirectory: "", session: row) == nil)
+  }
 }

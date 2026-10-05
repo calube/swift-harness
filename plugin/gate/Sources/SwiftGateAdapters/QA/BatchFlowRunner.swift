@@ -77,7 +77,7 @@ public struct BatchFlowOutcome: Sendable, Equatable {
     case flowFile(String)
     /// `agent-device` or the machine failed, so the batch says nothing about the app.
     case driver(String)
-    /// The `record start` a final pass puts first failed, so no step of the flow ran.
+    /// The `record start` a final pass adds failed, so no step after the flow's opening `open` ran.
     case recordStart(AgentDeviceFailure)
   }
 
@@ -86,8 +86,8 @@ public struct BatchFlowOutcome: Sendable, Equatable {
   public var record: QAFlowRecord
   /// Absolute paths of the files the batch left, beside the `sim/` steps.
   public var files: [URL]
-  /// How long the batch's `record start` took: when the video's first frame came, on the
-  /// batch's clock. `nil` when the batch recorded nothing.
+  /// When the batch's `record start` ended: when the video's first frame came, on the batch's
+  /// clock. `nil` when the batch recorded nothing.
   public var videoStartMs: Int?
 
   public init(stop: Stop?, record: QAFlowRecord, files: [URL], videoStartMs: Int? = nil) {
@@ -116,7 +116,8 @@ public struct BatchFlowRunner: Sendable {
   ///   - stepsFile: the flow file as written.
   ///   - store: the run's `sim/` folder, whose `session.json` `sim up` wrote.
   ///   - flowDirectory: where the driven steps file and the batch output go.
-  ///   - recordTo: set on a final pass: the batch starts with a `record start` to this path.
+  ///   - recordTo: set on a final pass: the batch holds a `record start` to this path, placed per
+  ///     ``BatchFlowPlan/make(steps:screenshots:recordTo:)``.
   public func run(
     stepsFile: URL, on target: AgentDeviceTarget, store: SimRunStore, flowDirectory: URL,
     recordTo: String? = nil
@@ -165,10 +166,10 @@ public struct BatchFlowRunner: Sendable {
     }
     let results = printed.map(Self.results) ?? []
     commitEvidence(plan, stagings: stagings, results: results, store: store)
-    let recordStep = recordTo == nil ? nil : results.first { $0.outcome.index == 1 }?.outcome
+    let outcomes = results.map(\.outcome)
     return BatchFlowOutcome(
-      stop: stop, record: plan.record(results: results.map(\.outcome), failedAt: failedAt),
-      files: files, videoStartMs: recordStep.flatMap { $0.ok ? $0.durationMs : nil })
+      stop: stop, record: plan.record(results: outcomes, failedAt: failedAt),
+      files: files, videoStartMs: plan.videoStartMs(results: outcomes))
   }
 
   /// A failing step is evidence about the app; a refused steps file is the flow's fault; any
@@ -180,8 +181,8 @@ public struct BatchFlowRunner: Sendable {
       return (error.output, .driver(error.message), nil)
     }
     // A busy recorder refuses the record start, whichever step the refusal names.
-    if plan.recordTo != nil, failure.reason == .appleSimulatorRecordingBusy {
-      return (failure.output, .recordStart(failure), 1)
+    if let recordIndex = plan.recordIndex, failure.reason == .appleSimulatorRecordingBusy {
+      return (failure.output, .recordStart(failure), recordIndex)
     }
     if let step = failure.failedStep {
       if plan.stop(atDrivenIndex: step.index, command: step.command) == .recordStart {
