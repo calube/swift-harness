@@ -227,6 +227,34 @@ struct PlanImportValidationTests {
   }
 
   @Test(
+    "the send-money plan with its Validation section deleted fails the import with 1 app-without-flow naming the InterviewStarter area and the missing section, and writes nothing — catches a screen plan that skips every flow rule by leaving the section out"
+  )
+  func sendMoneyWithoutSectionFailsImport() async throws {
+    let captured = try String(
+      contentsOf: ValidationClone.trial.appending(path: "send-money-1-no-validation-PLAN.md"),
+      encoding: .utf8)
+    #expect(!captured.contains("## Validation"))
+    let clone = try await ValidationClone(plan: captured, config: "send-money-1-config.toml")
+    defer { clone.remove() }
+
+    let report = await PlanImportRun.run(
+      slug: ValidationClone.slug, root: clone.root,
+      git: LiveGit(runner: clone.runner, repositoryRoot: clone.root.path),
+      contract: .init(task: "send-money-contract", runID: "20261005T013039Z-242c4c56"))
+
+    #expect(report.status == .invalid, "\(report.message)")
+    #expect(report.verdict == .red)
+    #expect(
+      report.message.components(separatedBy: PlanLintValidation.appWithoutFlowRuleID).count == 2,
+      "\(report.message)")
+    #expect(report.message.contains("`InterviewStarter`"), "\(report.message)")
+    #expect(report.message.contains("`## Validation`"), "\(report.message)")
+    #expect(!report.message.contains(PlanLintValidation.screenWithoutFlowRuleID))
+    #expect(!clone.exists("ledger.json"))
+    #expect(!clone.exists("validation.json"))
+  }
+
+  @Test(
     "the captured plan's Validation table imports every row into validation.json beside the ledger — catches a row dropped between PLAN.md and the file qa run reads"
   )
   func importsEveryRow() async throws {
