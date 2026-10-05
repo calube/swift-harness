@@ -22,6 +22,7 @@ enum PreToolUseHook {
     let reads = PlanStateReads(root: root, sessionID: payload.sessionID, dependencies: dependencies)
     var writes: [String] = []
     var context: String?
+    var rewrite: RunBashRewrite.Rewrite?
     switch payload.toolName {
     case "Bash"?:
       guard let command = payload.command else { break }
@@ -77,6 +78,7 @@ enum PreToolUseHook {
       if brownfield == nil, BashGuard.isGitCommit(command) {
         context = joined(context, await commitContext(root: root, dependencies: dependencies))
       }
+      if brownfield != nil { rewrite = RunBashRewrite.runSession(payload) }
     case "Monitor"?:
       // A Monitor command is a shell script too: what the Bash guards deny, such as a wait on
       // `pgrep`, it may not run either. Anything else goes to the normal permission flow.
@@ -111,7 +113,12 @@ enum PreToolUseHook {
       return deny(violation, note: reads.note, tool: payload.toolName)
     }
     guard payload.agentID != nil else {
-      return joined(context, reads.note).map { HookOutput.context(.preToolUse, $0) }
+      let notes = joined(joined(context, reads.note), rewrite?.note)
+      if let rewrite {
+        return HookOutput.rewrite(
+          toolInput: RunBashRewrite.updatedInput(payload, rewrite), context: notes)
+      }
+      return notes.map { HookOutput.context(.preToolUse, $0) }
     }
     let resolved = writes.flatMap { ToolPath.resolvedAbsolutes($0, cwd: payload.cwd, home: home) }
     let checkouts = await RepositoryCheckouts.of(root: root, reads: reads, around: resolved)
@@ -120,10 +127,16 @@ enum PreToolUseHook {
     {
       return deny(violation, note: reads.note, tool: payload.toolName)
     }
-    return HookOutput.allow(
-      "swiftgate: a background agent can't answer a permission prompt, so the hook decides",
-      context: joined(context, reads.note))
+    let reason =
+      "swiftgate: a background agent can't answer a permission prompt, so the hook decides"
+    if let rewrite {
+      return HookOutput.rewrite(
+        toolInput: RunBashRewrite.updatedInput(payload, rewrite), allow: reason,
+        context: joined(joined(context, reads.note), rewrite.note))
+    }
+    return HookOutput.allow(reason, context: joined(context, reads.note))
   }
+
 
   /// A write landing in the user's checkout, outside its `.git`, from a session that holds a
   /// plan's lock in a brownfield clone, where that session is a run. A path counts only when

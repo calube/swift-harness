@@ -38,7 +38,15 @@ public enum HookOutput {
   public static func rewrite(
     toolInput: [String: Any], allow: String? = nil, context: String? = nil
   ) -> String {
-    "{}"
+    var output: [String: Any] = [
+      "hookEventName": HookEvent.preToolUse.claudeName, "updatedInput": toolInput,
+    ]
+    if let allow {
+      output["permissionDecision"] = "allow"
+      output["permissionDecisionReason"] = allow
+    }
+    if let context { output["additionalContext"] = context }
+    return encode(["hookSpecificOutput": output])
   }
 
   /// PostToolUse: put `reason` next to the tool result as a problem to fix. Stop: refuse to stop
@@ -53,7 +61,8 @@ public enum HookOutput {
   }
 
   private static func encode(_ object: [String: Any]) -> String {
-    // Only strings and nested string dictionaries reach here, which always serialize.
+    // Only JSON values reach here: strings, numbers, booleans and dictionaries of them, which
+    // always serialize.
     guard
       let data = try? JSONSerialization.data(
         withJSONObject: object, options: [.sortedKeys, .withoutEscapingSlashes])

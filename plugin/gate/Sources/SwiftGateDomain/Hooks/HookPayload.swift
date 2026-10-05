@@ -87,6 +87,7 @@ public struct HookPayload: Sendable, Equatable {
     } catch {
       throw .malformed("\(error)")
     }
+    let rawToolInput = toolInput(data)
     return HookPayload(
       sessionID: wire.sessionID, cwd: wire.cwd, hookEventName: wire.hookEventName,
       toolName: wire.toolName, command: wire.toolInput?.command,
@@ -94,7 +95,31 @@ public struct HookPayload: Sendable, Equatable {
       stopHookActive: wire.stopHookActive ?? false, agentID: wire.agentID, source: wire.source,
       fileWrite: wire.toolInput?.fileWrite, agentType: wire.agentType,
       transcriptPath: wire.transcriptPath, subagentType: wire.toolInput?.subagentType,
-      runInBackground: wire.toolInput?.runInBackground)
+      runInBackground: wire.toolInput?.runInBackground, permissionMode: wire.permissionMode,
+      timeout: rawToolInput.flatMap(timeout), toolInputJSON: rawToolInput.flatMap(encoded))
+  }
+
+  /// `tool_input` read loosely: a field of an unexpected type leaves the rest of the payload
+  /// readable.
+  private static func toolInput(_ data: Data) -> [String: Any]? {
+    let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    return object?["tool_input"] as? [String: Any]
+  }
+
+  /// A whole number of milliseconds, or `nil` for anything else.
+  private static func timeout(_ input: [String: Any]) -> Int? {
+    guard let number = input["timeout"] as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID()
+    else { return nil }
+    let value = number.doubleValue
+    return value.rounded() == value && abs(value) < 1e15 ? Int(value) : nil
+  }
+
+  private static func encoded(_ input: [String: Any]) -> String? {
+    guard
+      let data = try? JSONSerialization.data(
+        withJSONObject: input, options: [.sortedKeys, .withoutEscapingSlashes])
+    else { return nil }
+    return String(decoding: data, as: UTF8.self)
   }
 
   private struct Wire: Decodable {
@@ -160,6 +185,7 @@ public struct HookPayload: Sendable, Equatable {
     let agentType: String?
     let source: String?
     let transcriptPath: String?
+    let permissionMode: String?
 
     enum CodingKeys: String, CodingKey {
       case sessionID = "session_id"
@@ -172,6 +198,7 @@ public struct HookPayload: Sendable, Equatable {
       case agentType = "agent_type"
       case source
       case transcriptPath = "transcript_path"
+      case permissionMode = "permission_mode"
     }
   }
 }
