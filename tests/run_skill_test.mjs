@@ -443,6 +443,44 @@ export function flowRepairProblems(loop, run) {
   return problems
 }
 
+/** Every way the event loop `loop` and the run skill `run` let a fixer's committed but unconfirmed
+ * fix be blocked by hand instead of checked: no `verify` answer for it, no gate and before-merge
+ * `qa run --fix` the orchestrator runs itself, no `check-return --fix` of the result, or a run
+ * skill that lets a task halt or block on time before `build cutoff` decides. */
+export function unconfirmedFixProblems(loop, run) {
+  const problems = []
+  const prose = loop.replace(/\s+/g, ' ')
+  const bullet = prose.split(/ - (?=`outcome`|Anything else)/).find(part => /unconfirmed fix/.test(part)) ?? ''
+  if (!bullet) return ['the build loop has no bullet for an unconfirmed fix']
+  if (!/`haltAdvice\.answer` `verify`/.test(bullet)) problems.push('never takes `haltAdvice.answer` `verify`')
+  const calls = extractInvocations(bullet).map(inv => inv.words.join(' '))
+  if (!calls.some(call => /^check --tier <taskGate> --base /.test(call))) problems.push('never runs the fix\'s own gate in its fix worktree')
+  if (!calls.some(call => call.startsWith('build check-return') && call.includes('--fix'))) problems.push('never checks the verified return with `check-return --fix`')
+  if (!calls.some(call => call.startsWith('qa run --plan <slug> --after <task> --before-merge --fix'))) problems.push('never runs the fix\'s before-merge `qa run --fix`')
+  if (!/`build cutoff`/.test(bullet)) problems.push('never leaves the cutoff to `build cutoff`')
+  if (/set the task `blocked`/.test(bullet)) problems.push('blocks an unconfirmed fix')
+  const step7 = (section(run, '7. ') ?? '').replace(/\s+/g, ' ')
+  if (!/unconfirmed fix/.test(step7)) problems.push('run step 7 never names an unconfirmed fix')
+  if (!/[Nn]ever halt, block or abandon a task on time grounds/.test(step7)) problems.push('run step 7 lets a task halt on time grounds before the cutoff')
+  if (!/`build halt` refuses a `budget` halt before/.test(step7)) problems.push('run step 7 never says `build halt` refuses an early `budget` halt')
+  return problems
+}
+
+/** Every way the run skill `run` and the event loop `loop` let the orchestrator override `build
+ * cutoff`: its `steps` not run as written, a BLOCKED merge gate undone instead of run again, or a
+ * task in `finish` undone or abandoned by hand. */
+export function cutoffOverrideProblems(run, loop) {
+  const problems = []
+  const bullet = (cutoffBullet(run) ?? '').replace(/\s+/g, ' ')
+  if (!/`steps`[^.]*`next`[^.]*as written/.test(bullet)) problems.push('the cutoff\'s `steps` aren\'t run as written')
+  if (!/BLOCKED merge gate[^.]*run again[^.]*never undone/.test(bullet)) problems.push('the cutoff undoes a BLOCKED merge gate')
+  if (!/[Nn]ever undo or abandon a task in `finish`/.test(bullet)) problems.push('a task in `finish` may be undone or abandoned by hand')
+  const table = loop.split('\n').filter(line => line.startsWith('| the merge gate'))
+  if (!table.some(line => /RED/.test(line) && /--undo/.test(line))) problems.push('the merge gate table never undoes a RED gate')
+  if (!table.some(line => /BLOCKED/.test(line) && /again/.test(line))) problems.push('the merge gate table never runs a BLOCKED gate again')
+  return problems
+}
+
 const tests = {
   'worktree creation installs node dependencies, so the run skill says never to prefix an area command with an install, and no skill, agent or workflow chains one — catches orchestrators and workers paying an install on every slice'() {
     const prose = read('skills/run/SKILL.md').split(/\s+/).join(' ')
@@ -728,6 +766,39 @@ const tests = {
 
   'a fixer\'s flow row goes to a repair worker and back through qa adopt --repair once per run, not to a halt — catches a one-shot run stopped by its own flow file'() {
     assert.deepEqual(flowRepairProblems(read('skills/build/references/event-loop.md'), read('skills/run/SKILL.md')), [])
+  },
+
+  'a fixer\'s committed fix that no gate checked is verified by the orchestrator before the cutoff, never blocked on time — catches send-flow blocked 215 s before the cutoff with its fix unchecked'() {
+    assert.deepEqual(unconfirmedFixProblems(read('skills/build/references/event-loop.md'), read('skills/run/SKILL.md')), [])
+  },
+
+  'the unconfirmed-fix check names a loop that blocks the fix and a run skill that halts on time — catches a checker that passes anything'() {
+    const loop = '- Anything else, or a red gate after the fix merge: halt, and set the task `blocked`.'
+    const run = '## 7. Import and build\n\n   - Where it halts and asks, decide yourself.\n'
+    assert.deepEqual(unconfirmedFixProblems(loop, run), ['the build loop has no bullet for an unconfirmed fix'])
+    const blocking = '- `outcome` `gate-red` from an unconfirmed fix: halt, and set the task `blocked`.'
+    assert.deepEqual(unconfirmedFixProblems(blocking, run), [
+      'never takes `haltAdvice.answer` `verify`',
+      'never runs the fix\'s own gate in its fix worktree',
+      'never checks the verified return with `check-return --fix`',
+      'never runs the fix\'s before-merge `qa run --fix`',
+      'never leaves the cutoff to `build cutoff`',
+      'blocks an unconfirmed fix',
+      'run step 7 never names an unconfirmed fix',
+      'run step 7 lets a task halt on time grounds before the cutoff',
+      'run step 7 never says `build halt` refuses an early `budget` halt',
+    ])
+  },
+
+  'the cutoff\'s steps run as written, a BLOCKED merge gate runs again and is never undone, and no task in finish is undone or abandoned by hand — catches price-tracker-4 undoing a task build cutoff said to finish'() {
+    assert.deepEqual(cutoffOverrideProblems(read('skills/run/SKILL.md'), read('skills/build/references/event-loop.md')), [])
+    assert.deepEqual(cutoffOverrideProblems('', '| the merge gate isn\'t GREEN | `build merge --undo` |'), [
+      'the cutoff\'s `steps` aren\'t run as written',
+      'the cutoff undoes a BLOCKED merge gate',
+      'a task in `finish` may be undone or abandoned by hand',
+      'the merge gate table never undoes a RED gate',
+      'the merge gate table never runs a BLOCKED gate again',
+    ])
   },
 
   'the run skill imports its plan with the landed contract and its gate run — catches a contract left pending after import'() {
