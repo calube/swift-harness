@@ -303,7 +303,7 @@ struct WarmupSeedCheckoutTests {
   }
 
   @Test(
-    "the warm-up adds 4 slots at the base, 1 more than the preset's 3 workers since a task waiting to merge still holds its slot, and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, and each swiftpm area there into the checkout's own prove scratch path; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched, as send-money-7's 4th task did in slot-5 (97 s build, 65 s prove build), and each slot's first prove compiling the package's dependencies cold"
+    "the warm-up adds 4 slots at the base, 1 more than the preset's 3 workers since a task waiting to merge still holds its slot, and builds the xcode area in the plan checkout and in each slot, each in that checkout's own seeded DerivedData, and each swiftpm area there into the checkout's own prove scratch path, then builds the app's tests in the plan checkout's kept prove tree; the times and baseline come from the base tree alone — catches a contract's and each task's first slice building the app cold in a checkout no warm-up touched, as send-money-7's 4th task did in slot-5 (97 s build, 65 s prove build), and each slot's first prove compiling the package's dependencies cold, and the first merge's prove building the app cold"
   )
   func warmsThePlanCheckoutAndEachSlot() async throws {
     let (clone, checkout) = try await Self.clone()
@@ -356,9 +356,26 @@ struct WarmupSeedCheckoutTests {
         try await clone.git("-C", slot, "rev-parse", "HEAD").trimmingCharacters(
           in: .whitespacesAndNewlines) == base)
     }
+    // Last, the plan checkout's kept prove tree builds the app's tests where its merges prove.
+    let planGitDir = try await clone.git("-C", planCheckout, "rev-parse", "--absolute-git-dir")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let proveTree = try #require(outcome.seeded.last?.checkout)
+    #expect(proveTree.hasPrefix("\(planGitDir)/swift-harness/scratch/"))
+    let proveBuild = try #require(runner.requests.last)
+    let proveData = "\(planGitDir)/swift-harness/derived-data/prove/InterviewStarter"
+    #expect(proveBuild.area == "InterviewStarter" && proveBuild.step == .build)
+    #expect(
+      proveBuild.command.hasPrefix("xcodebuild -derivedDataPath '\(proveData)' build-for-testing "),
+      "\(proveBuild.command)")
+    #expect(Self.inside(proveBuild.workingDirectory, proveTree))
+    #expect(
+      try await clone.git("-C", proveTree, "rev-parse", "HEAD").trimmingCharacters(
+        in: .whitespacesAndNewlines) == base)
     #expect(
       outcome.seeded.map(\.checkout)
-        == checkouts.flatMap { Array(repeating: $0, count: 1 + Self.packages.count) })
+        == checkouts.flatMap { Array(repeating: $0, count: 1 + Self.packages.count) } + [
+          proveTree
+        ])
     #expect(outcome.seeded.allSatisfy { $0.outcome == .passed })
     let tree = try await clone.tree()
     let times = try WarmupTimesFile.decode(
@@ -366,7 +383,7 @@ struct WarmupSeedCheckoutTests {
     #expect(times.areas["APIClient"]?.steps == [.build: .passed, .test: .passed])
     #expect(
       runner.requests.filter {
-        Self.inside($0.workingDirectory, root)
+        Self.inside($0.workingDirectory, root) && !Self.inside($0.workingDirectory, "\(root)/.git")
       }.count
         == 2 * (Self.packages.count + 1),
       "the base tree's build and test of each area, and nothing more")

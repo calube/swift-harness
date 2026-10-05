@@ -355,6 +355,24 @@ public enum Warmup {
     return AreaBuildPlacement.checkout(prepared.request, kind: area.kind, layout: layout)
   }
 
+  /// An `xcode` `area`'s `test` as `build-for-testing` in `toplevel`, the kept prove tree of a
+  /// checkout whose layout is `layout`, into that checkout's prove DerivedData, as prove would
+  /// run it there: the first prove in that checkout then rebuilds only what changed since. `nil`
+  /// for another kind, a generated project, or a `test` that can't be rewritten.
+  public static func proveTreeRequest(
+    area: BrownfieldArea, toplevel: String, layout: BrownfieldStateLayout, deadline: Duration
+  ) -> AreaCommandRequest? {
+    let generated = area.xcode.map { $0.inclusion == .xcodegen || $0.inclusion == .tuist } ?? false
+    guard !generated, let building = XcodeBuildForTesting.area(area),
+      let prepared = AreaCommandExpansion.prepare(
+        area: building, step: .build, repositoryRoot: toplevel, files: [], tests: [],
+        junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
+        deadline: deadline, environment: [:])
+    else { return nil }
+    return ScratchTreeBuild.request(
+      prepared.request, kind: .xcode, layout: layout, waits: BuildLockWaits())
+  }
+
   /// The seed build's result from what its command came to.
   public static func seedBuild(
     area: String, checkout: String = "", outcome: AreaCommandOutcome, milliseconds: Int
