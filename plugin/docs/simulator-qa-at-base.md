@@ -33,7 +33,7 @@ its standing check names, whatever its branch head is, and is BLOCKED for a task
 
 Each merged run leaves `merged-tree-run.json` beside its report: the merge's tree and each row's
 result with its check's digest. A later run whose trial merge makes the same tree takes, from the
-newest such record, each row that read `pass` with a byte-identical check, naming that run in
+newest such record in any checkout of the clone, each row that read `pass` with a byte-identical check, naming that run in
 `reusedFrom`, so a fixer's passing run isn't repeated before the merge. A row that read `red` there
 runs again.
 

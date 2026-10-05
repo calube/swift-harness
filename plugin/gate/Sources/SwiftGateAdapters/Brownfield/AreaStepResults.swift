@@ -96,10 +96,10 @@ public struct ProveResults: ProveReusing {
   }
 
   /// A file that can't be read is no pass: the prove runs.
-  public func pass(_ key: String) -> ProvePass? { nil }
+  public func pass(_ key: String) -> ProvePass? { files.value(key) }
 
   /// A pass that can't be written is only not reused.
-  public func record(_ pass: ProvePass, key: String) {}
+  public func record(_ pass: ProvePass, key: String) { files.write(pass, key: key) }
 }
 
 /// 1 JSON file per key in `directory`, each written by atomic rename.

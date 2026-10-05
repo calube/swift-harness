@@ -386,8 +386,9 @@ order: acceptance, then flow, then state, on 1 held device. `main` doesn't move.
 its own requirement's later layers, never another requirement's (simulator QA amendment §6).
 `build merge` refuses `flows-unchecked` while a ready row has no such run GREEN at the branch's
 tip on `main`'s commit, so run it again after any commit to either. A run whose trial merge makes
-the same tree as an earlier one takes the rows that passed there with byte-identical checks,
-naming that run in `reusedFrom`, so repeating a fixer's passing run costs seconds.
+the same tree as an earlier one in any checkout, a fixer's slot included, takes the rows that
+passed there with byte-identical checks, naming that run in `reusedFrom`, so repeating a fixer's
+passing run costs seconds.
 
 A row whose `Runs after` names tasks that haven't merged doesn't wait for the last of them. Once
 each unmerged task it names has a checked return in `build next`'s `readyToMerge` that still stands

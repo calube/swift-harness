@@ -116,12 +116,13 @@ enum BrownfieldSliceCheck {
   }
 
   static func run(root: URL, base: String, context: GateRun.Context) async throws -> GateRunParts {
-    let dependencies: Dependencies
+    var dependencies: Dependencies
     do {
       dependencies = try await .live(root: root)
     } catch {
       return try BrownfieldCheck.notRun(.slice, because: error.reason)
     }
+    dependencies.headTree = await BrownfieldMergeCheck.cleanTree(root: root)
     return try await run(root: root, base: base, context: context, dependencies: dependencies)
   }
 
@@ -262,6 +263,13 @@ enum BrownfieldSliceCheck {
       outcome.blocked = outcome.blocked || result.blocked
     }
 
+    if let headTree = dependencies.headTree {
+      await dependencies.baseline.recordPasses(
+        results.flatMap(\.runs).filter { $0.outcome == .passed }.map {
+          BaselineStepKey(
+            area: $0.area.name, step: $0.step, command: $0.template, selection: $0.selection)
+        }, tree: headTree)
+    }
     let failing = results.flatMap(\.runs).filter(\.failing)
     let layout = dependencies.layout
     let queries = failing.compactMap { run -> BaselineQuery? in

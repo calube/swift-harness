@@ -155,7 +155,10 @@ enum BrownfieldMergeCheck {
       dependencies.reuse = AreaStepReuse(
         inputs: inputs, store: AreaStepResults(layout: dependencies.layout),
         runID: context.runID)
+      dependencies.prove.reuse = BrownfieldProve.ProveReuse.live(
+        inputs: inputs, root: root, layout: dependencies.layout, runID: context.runID, tier: tier)
     }
+    dependencies.headTree = await cleanTree(root: root)
     return try await run(
       root: root, tier: tier, base: base, context: context, dependencies: dependencies)
   }
@@ -241,6 +244,13 @@ enum BrownfieldMergeCheck {
     outcome.findings += runs.flatMap(\.findings)
     outcome.blocked = runs.contains(where: \.refused)
     let stepRuns = runs.flatMap(\.runs)
+    if let headTree = dependencies.headTree {
+      await dependencies.baseline.recordPasses(
+        stepRuns.filter { $0.outcome == .passed }.map {
+          BaselineStepKey(
+            area: $0.area.name, step: $0.step, command: $0.template, selection: $0.selection)
+        }, tree: headTree)
+    }
 
     let failing = stepRuns.filter { run in
       switch run.outcome {
@@ -349,6 +359,14 @@ enum BrownfieldMergeCheck {
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
     return outcome
+  }
+
+  /// `HEAD^{tree}` of the checkout at `root` when nothing in it is uncommitted, else `nil`.
+  static func cleanTree(root: URL) async -> String? {
+    guard let state = try? await LiveWorkingTree(runner: LiveProcessRunner(), root: root).state(),
+      !state.dirty
+    else { return nil }
+    return state.treeHash
   }
 
   /// Where `tier`'s prove measures changed tests from and reverts the source to. At `merge` on a

@@ -75,7 +75,15 @@ public enum GateReuse {
     _ inputs: Inputs, mergeBase: String, area: String, command: String, tests: [String],
     copied: [String: String?], renames: [String: String]
   ) -> String {
-    ""
+    var lines = [
+      "prove schema 1", "merge-base \(mergeBase)", "binary \(inputs.sourceHash)",
+      "config \((inputs.stateFiles["config"] ?? nil) ?? "absent")", "area \(area)",
+      "command \(command)",
+    ]
+    lines += tests.sorted().map { "test \($0)" }
+    lines += copied.keys.sorted().map { "copied \($0) \((copied[$0] ?? nil) ?? "absent")" }
+    lines += renames.keys.sorted().map { "renamed \($0) \(renames[$0] ?? "")" }
+    return digest(Data(lines.joined(separator: "\n").utf8))
   }
 
   /// The newest run of `command` recorded with `key` on a clean tree when it is GREEN, else `nil`.

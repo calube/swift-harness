@@ -209,9 +209,10 @@ public struct WarmupSeedBuild: Sendable, Equatable {
 /// end, so the shared caches fill and the times and baseline serve the run that follows.
 public enum Warmup {
   /// How many task slots the warm-up builds in for a preset running `maxParallel` workers at
-  /// once.
+  /// once: 1 more, since a task checked and waiting to merge keeps its slot while the scheduler
+  /// starts another in its place.
   public static func taskSlotCount(maxParallel: Int) -> Int {
-    maxParallel
+    maxParallel + 1
   }
 
   public struct Dependencies: Sendable {

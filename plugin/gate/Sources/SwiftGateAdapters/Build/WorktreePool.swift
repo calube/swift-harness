@@ -60,7 +60,8 @@ public struct WorktreePool: Sendable {
   /// Checks `branch` out new from `base` in a free slot, or in a new slot when none fits, and
   /// records it there. A task that `builds` takes the first free slot an area was built in, else
   /// the first free one; a task that builds no area takes the first free slot nothing was built
-  /// in, else a new one, so it never holds a warm slot a build task could have taken.
+  /// in, else a new one, so it never holds a warm slot a build task could have taken. No task
+  /// takes a slot holding only the qa app's build (``holdsOnlyQAApp(_:)``).
   public func checkOut(
     branch: String, from base: String, builds: Bool = true, workspace: any GitWorkspace
   ) async throws(GitWorkspaceError) -> Checkout {
@@ -73,7 +74,10 @@ public struct WorktreePool: Sendable {
       where slot.branch == nil && !FileManager.default.fileExists(atPath: slot.path) {
         state.drop(slot.path)
       }
-      let free = state.slots.filter { $0.branch == nil }.map(\.path)
+      // The slot holding only the qa app's build stays for qa run's trees.
+      let free = state.slots.filter { $0.branch == nil }.map(\.path).filter {
+        !Self.holdsOnlyQAApp($0)
+      }
       let built = free.filter(Self.hasBuilt)
       let pick = builds ? built.first ?? free.first : free.first { !built.contains($0) }
       if let path = pick {
@@ -136,7 +140,10 @@ public struct WorktreePool: Sendable {
   /// Whether the worktree at `path` holds a build of the app `sim up` installs and no area's
   /// build: the slot a warm-up keeps for `qa run`'s trees.
   static func holdsOnlyQAApp(_ path: String) -> Bool {
-    false
+    let worktree = URL(filePath: path, directoryHint: .isDirectory)
+    let app = StateRootResolver.resolve(worktree: worktree).directory.appending(
+      path: "derived-data/\(SimUp.derivedDataDirectoryName)", directoryHint: .isDirectory)
+    return FileManager.default.fileExists(atPath: app.path) && !hasBuilt(path)
   }
 
   /// The holder a scratch checkout records in its slot: `scratch:<pid>:<token>`. A `:` is never

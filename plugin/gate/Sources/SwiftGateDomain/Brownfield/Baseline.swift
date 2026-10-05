@@ -333,7 +333,13 @@ public enum Baseline {
   public static func implied(
     _ key: BaselineStepKey, by known: [BaselineStepKey: BaselineStepResult]
   ) -> BaselineStepResult? {
-    nil
+    guard key.step == .build, key.selection.isEmpty else { return nil }
+    let implying = known.contains { other, result in
+      result == .passed && other.area == key.area && other.step == .test
+        && other.selection.isEmpty
+        && XcodeBuildForTesting.command(fromTest: other.command) == key.command
+    }
+    return implying ? .passed : nil
   }
 
   public static func compare(

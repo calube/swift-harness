@@ -374,6 +374,14 @@ public enum GitRenames {
   public static func between(
     _ base: String, _ revision: String, runner: any ProcessRunner, directory: String
   ) async -> [String: String]? {
-    nil
+    guard !base.hasPrefix("-"), !revision.hasPrefix("-"),
+      let output = try? await runner.run(
+        ProcessInvocation(
+          executable: "git",
+          arguments: ["--literal-pathspecs"] + arguments(from: base, to: revision),
+          workingDirectory: directory, timeout: .seconds(60))),
+      output.status.isSuccess
+    else { return nil }
+    return parse(output.stdout.text)
   }
 }

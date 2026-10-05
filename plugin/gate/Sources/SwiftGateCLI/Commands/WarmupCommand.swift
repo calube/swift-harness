@@ -105,13 +105,19 @@ struct WarmupCommand: AsyncParsableCommand {
     let generator = XcodeGenerator(runner: process, repositoryRoot: root, layout: layout)
     let notes = Mutex(known.notes)
 
+    let app = qaApp(config: config, areas: areas, root: root)
+    let xcodebuild = dependencies.xcodebuild ?? LiveXcodebuild(runner: process)
     // Started beside the base tree's run, so the checkouts the run builds in are warm sooner.
     async let seeded = seed(
       areas: areas, checkout: seedCheckout,
-      slots: { () async -> (paths: [String], notes: [String]) in
+      slots: { () async -> Slots in
         await prepareSlots(
           plan: plan, config: config, areas: areas, layout: layout, revision: head,
-          process: process)
+          process: process, qa: app != nil)
+      },
+      qaApp: { slot in
+        guard let app else { return nil }
+        return await buildQAApp(app, in: slot, xcodebuild: xcodebuild)
       }, tree: snapshot, deadline: dependencies.deadline, process: process, runner: runner)
     let results = await Warmup.run(
       areas: areas,
@@ -149,7 +155,7 @@ struct WarmupCommand: AsyncParsableCommand {
     let checkouts = await seeded
     return Outcome(
       tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results,
-      seeded: checkouts.builds, slots: checkouts.slots,
+      seeded: checkouts.builds, slots: checkouts.slots, qaSlot: checkouts.qaSlot,
       notes: notes.withLock { $0 } + checkouts.notes)
   }
 
@@ -157,16 +163,80 @@ struct WarmupCommand: AsyncParsableCommand {
   struct Checkouts: Sendable {
     var builds: [WarmupSeedBuild] = []
     var slots: [String] = []
+    var qaSlot: String?
     var notes: [String] = []
+  }
+
+  /// The qa app's build in its slot, or why it didn't run.
+  typealias QAAppBuild = (build: WarmupSeedBuild?, notes: [String])
+
+  /// The slots the warm-up added: those for tasks, and the 1 kept for `qa run`'s trees.
+  struct Slots: Sendable {
+    var tasks: [String] = []
+    var qa: String?
+    var notes: [String] = []
+  }
+
+  /// The app `sim up` builds for `qa run`, when 1 of `areas` is the config's 1 `xcode` area and
+  /// its container is in the checkout at `root`; `nil` otherwise.
+  private static func qaApp(config: BrownfieldConfig, areas: [BrownfieldArea], root: URL)
+    -> SimTarget?
+  {
+    guard areas.contains(where: { $0.xcode != nil }),
+      case .success(let target) = SimTarget.brownfield(config),
+      (try? SimUp.appBuild(target, in: root, derivedDataPath: "", resultBundlePath: "")) != nil
+    else { return nil }
+    return target
+  }
+
+  /// `sim up`'s build of `target` in the slot at `slot`, into the slot's own `sim up`
+  /// DerivedData, so the first `qa run` tree there builds warm.
+  private static func buildQAApp(_ target: SimTarget, in slot: String, xcodebuild: any Xcodebuild)
+    async -> QAAppBuild
+  {
+    let worktree = URL(filePath: slot, directoryHint: .isDirectory)
+    let derived = SimUpCommand.derivedDataDirectory(root: worktree)
+    let folder = derived.deletingLastPathComponent()
+    let name = "\(SimUp.derivedDataDirectoryName)-warmup"
+    let bundle = folder.appending(path: "\(name).xcresult", directoryHint: .isDirectory)
+    let log = folder.appending(path: "\(name).log", directoryHint: .notDirectory)
+    // `xcodebuild` refuses a result bundle path that already exists.
+    try? FileManager.default.removeItem(at: bundle)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let request: AppBuild.Request
+    do {
+      // The path as `sim up` passes it, so both builds name 1 DerivedData.
+      request = try SimUp.appBuild(
+        target, in: worktree, derivedDataPath: derived.path, resultBundlePath: bundle.path)
+    } catch {
+      return (nil, ["warmup: the qa app not built in \(slot): \(error.message)"])
+    }
+    let started = ContinuousClock.now
+    let outcome: AreaCommandOutcome
+    do {
+      switch try await xcodebuild.build(request, logPath: log.path) {
+      case .exited(0): outcome = .passed
+      case .exited(let code), .signaled(let code):
+        outcome = .failed(exit: code, tail: "read \(log.path)", junit: nil)
+      }
+    } catch {
+      outcome = .failed(exit: 1, tail: error.message, junit: nil)
+    }
+    return (
+      Warmup.seedBuild(
+        area: target.scheme, checkout: slot, outcome: outcome,
+        milliseconds: milliseconds(ContinuousClock.now - started)), []
+    )
   }
 
   /// Each xcode area's build in `checkout`, and each swiftpm area's into its prove scratch path,
   /// then the same in each slot `slots` adds, those all at once: the plan checkout takes the
   /// contract's build before any task takes a slot.
   private static func seed(
-    areas: [BrownfieldArea], checkout: URL?,
-    slots: @Sendable () async -> (paths: [String], notes: [String]), tree: TrackedTreeSnapshot,
-    deadline: Duration, process: any ProcessRunner, runner: any AreaCommandRunning
+    areas: [BrownfieldArea], checkout: URL?, slots: @Sendable () async -> Slots,
+    qaApp: @escaping @Sendable (_ slot: String) async -> QAAppBuild?,
+    tree: TrackedTreeSnapshot, deadline: Duration, process: any ProcessRunner,
+    runner: any AreaCommandRunning
   ) async -> Checkouts {
     var checkouts = Checkouts()
     if let checkout {
@@ -179,13 +249,22 @@ struct WarmupCommand: AsyncParsableCommand {
       checkouts.notes += notes
     }
     let added = await slots()
-    checkouts.slots = added.paths
+    checkouts.slots = added.tasks
+    checkouts.qaSlot = added.qa
     checkouts.notes += added.notes
+    async let app: QAAppBuild? = {
+      guard let slot = added.qa else { return nil }
+      return await qaApp(slot)
+    }()
     let (builds, notes) = await build(
-      areas: areas, in: added.paths, tree: tree, deadline: deadline, process: process,
+      areas: areas, in: added.tasks, tree: tree, deadline: deadline, process: process,
       runner: runner)
     checkouts.builds += builds
     checkouts.notes += notes
+    if let built = await app {
+      checkouts.builds += built.build.map { [$0] } ?? []
+      checkouts.notes += built.notes
+    }
     return checkouts
   }
 
@@ -236,27 +315,31 @@ struct WarmupCommand: AsyncParsableCommand {
     return (built.sorted { $0.0 < $1.0 }.map(\.1), notes)
   }
 
-  /// Adds `plan`'s slots up to the preset's `max_parallel` at `revision`; none without a plan,
-  /// a preset, or an xcode or swiftpm area a slot's own build would warm.
+  /// Adds `plan`'s slots at `revision`: ``Warmup/taskSlotCount(maxParallel:)`` for the preset's
+  /// `max_parallel`, then, with `qa`, 1 more kept for `qa run`'s trees. None without a plan, a
+  /// preset, or an xcode or swiftpm area a slot's own build would warm.
   private static func prepareSlots(
     plan: String?, config: BrownfieldConfig, areas: [BrownfieldArea],
-    layout: BrownfieldStateLayout, revision: String, process: any ProcessRunner
-  ) async -> (paths: [String], notes: [String]) {
+    layout: BrownfieldStateLayout, revision: String, process: any ProcessRunner, qa: Bool
+  ) async -> Slots {
     guard let plan,
       let count = config.buildPresets[BrownfieldConfigSchema.profileName]?.maxParallel,
       areas.contains(where: { $0.kind == .xcode || $0.kind == .swiftpm })
-    else { return ([], []) }
+    else { return Slots() }
+    let tasks = Warmup.taskSlotCount(maxParallel: count)
     let common = layout.commonDir.path(percentEncoded: false)
     let pool = WorktreePool(commonDirectory: common, plan: plan)
     do throws(GitWorkspaceError) {
       let main = try TaskWorktree.mainCheckout(commonDirectory: common)
-      return (
-        try await pool.prepare(
-          count: count, revision: revision,
-          workspace: LiveGitWorkspace(runner: process, repositoryRoot: main)), []
-      )
+      let added = try await pool.prepare(
+        count: tasks + (qa ? 1 : 0), revision: revision,
+        workspace: LiveGitWorkspace(runner: process, repositoryRoot: main))
+      // Only a pool this warm-up filled from empty has its last slot free for the qa app.
+      let all = try pool.state().slots.map(\.path)
+      let kept = qa && all.count == tasks + 1 && added.last == all.last ? added.last : nil
+      return Slots(tasks: added.filter { $0 != kept }, qa: kept)
     } catch {
-      return ([], ["warmup: \(plan)'s slots not added: \(error)"])
+      return Slots(notes: ["warmup: \(plan)'s slots not added: \(error)"])
     }
   }
 
@@ -400,6 +483,7 @@ struct WarmupCommand: AsyncParsableCommand {
       }
     }
     for slot in outcome.slots { lines.append("added slot \(slot)") }
+    if let slot = outcome.qaSlot { lines.append("added slot \(slot) for qa run's trees") }
     for build in outcome.seeded {
       lines.append(
         "\(build.area) build in \(build.checkout): \(build.outcome.rawValue), "
