@@ -69,6 +69,23 @@ public struct LiveProcessRunner: ProcessRunner {
     return try result.get()
   }
 
+  /// Runs `invocation` on the calling thread, for a synchronous caller such as the run view's
+  /// reader; the same spawn, timeout and process-group handling as ``run(_:)``.
+  public func runBlocking(_ invocation: ProcessInvocation) -> Result<
+    ProcessOutput, ProcessRunnerError
+  > {
+    let environment = effectiveEnvironment(overlay: invocation.environmentOverlay)
+    return Result { () throws(ProcessRunnerError) -> String in
+      try resolveExecutable(invocation.executable, environment: environment)
+    }.flatMap { path in
+      SpawnRequest(
+        path: path, invocation: invocation, environment: environment,
+        terminationGracePeriod: terminationGracePeriod, postExitDrainLimit: postExitDrainLimit,
+        now: now
+      ).execute(cancellation: CancellationSignal())
+    }
+  }
+
   private func effectiveEnvironment(overlay: [String: String?]) -> [String: String] {
     var environment = baseEnvironment
     for (key, value) in overlay {

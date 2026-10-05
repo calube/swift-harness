@@ -20,6 +20,17 @@ public struct LiveBranchCommits: BranchCommitReading {
   }
 
   public func exclusiveCommits(of branches: [String]) -> Set<String>? {
-    nil
+    guard !branches.isEmpty, branches.allSatisfy({ !$0.isEmpty && !$0.hasPrefix("-") }) else {
+      return nil
+    }
+    let invocation = ProcessInvocation(
+      executable: "git",
+      arguments: ["--git-dir=\(commonDirectory.path)", "rev-list", "--ignore-missing"]
+        + branches.map { "refs/heads/\($0)" } + ["--not"] + branches.map { "--exclude=\($0)" }
+        + ["--branches"],
+      timeout: .seconds(30))
+    guard case .success(let output) = runner.runBlocking(invocation), output.status.isSuccess
+    else { return nil }
+    return Set(output.stdout.text.split(separator: "\n").map(String.init))
   }
 }

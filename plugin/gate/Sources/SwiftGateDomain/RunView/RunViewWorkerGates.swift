@@ -51,6 +51,88 @@ public enum RunViewWorkerGates {
     _ runs: [Run], events: [BuildEvent], holders: [String: String] = [:],
     returns: [String: TaskReturn] = [:], branchCommits: [String: Set<String>] = [:]
   ) -> Attribution {
-    Attribution()
+    let windows = Windows(events)
+    let checked = events.compactMap { event -> (task: String, commit: String)? in
+      guard case .returnCheck(let check) = event, let commit = check.commit else { return nil }
+      return (check.task, commit)
+    }
+    var attribution = Attribution()
+    for run in runs {
+      if let holder = holders[run.runID] {
+        attribution.tasks[run.runID] = holder
+        continue
+      }
+      var owners = Set<String>()
+      if let head = run.head {
+        for (task, commits) in branchCommits where commits.contains(head) { owners.insert(task) }
+        for check in checked where same(check.commit, head) { owners.insert(check.task) }
+        for (task, taskReturn) in returns where taskReturn.commits.contains(where: { same($0, head) })
+        {
+          owners.insert(task)
+        }
+      }
+      let fixing = windows.holding(windows.fixes, run.started)
+      let holding = fixing.isEmpty ? windows.holding(windows.tasks, run.started) : fixing
+      let open = Set(windows.holding(windows.fixes + windows.tasks, run.started).map(\.task))
+      if owners.count == 1, let owner = owners.first, open.contains(owner) {
+        attribution.tasks[run.runID] = owner
+      } else if owners.isEmpty, holding.count == 1, let window = holding.first {
+        attribution.tasks[run.runID] = window.task
+      } else if !owners.isEmpty || !open.isEmpty {
+        attribution.unattributed.insert(run.runID)
+      }
+    }
+    return attribution
+  }
+
+  /// Whether 2 shas name the same commit: equal, or 1 abbreviates the other by at least
+  /// ``minimumShaLength`` characters.
+  static func same(_ one: String, _ other: String) -> Bool {
+    let (short, long) = one.count <= other.count ? (one, other) : (other, one)
+    return short.count >= minimumShaLength && long.lowercased().hasPrefix(short.lowercased())
+  }
+
+  /// Each task's window and each fix window, read from the run's ledger events.
+  struct Windows {
+    struct Window {
+      let task: String
+      let start: Date
+      var end: Date?
+    }
+
+    var tasks: [Window] = []
+    var fixes: [Window] = []
+
+    init(_ events: [BuildEvent]) {
+      for event in events {
+        switch event {
+        case .transition(let move):
+          if move.to == .inProgress, !tasks.contains(where: { $0.task == move.task }) {
+            tasks.append(Window(task: move.task, start: move.at))
+          } else if move.to == .done || move.to == .abandoned,
+            let index = tasks.firstIndex(where: { $0.task == move.task && $0.end == nil })
+          {
+            tasks[index].end = move.at
+          }
+          if move.to == .done || move.to == .abandoned,
+            let index = fixes.firstIndex(where: { $0.task == move.task && $0.end == nil })
+          {
+            fixes[index].end = move.at
+          }
+        case .undo(let undo):
+          fixes.append(Window(task: undo.task, start: undo.at))
+        case .merge(let merge):
+          if let index = fixes.firstIndex(where: { $0.task == merge.task && $0.end == nil }) {
+            fixes[index].end = merge.at
+          }
+        case .gate, .returnCheck, .finish:
+          continue
+        }
+      }
+    }
+
+    func holding(_ windows: [Window], _ time: Date) -> [Window] {
+      windows.filter { $0.start <= time && $0.end.map { time <= $0 } ?? true }
+    }
   }
 }
