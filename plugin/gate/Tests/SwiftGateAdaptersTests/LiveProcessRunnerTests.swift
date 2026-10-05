@@ -6,8 +6,12 @@ import SwiftGateTestSupport
 import Synchronization
 import Testing
 
-@Suite("LiveProcessRunner")
+@Suite("LiveProcessRunner", .timeLimit(.minutes(5)))
 struct LiveProcessRunnerTests {
+  /// Long enough that no child a test expects to finish runs out of it on a loaded machine; a
+  /// child that hangs is ended by the suite's time limit instead.
+  static let ample = Duration.seconds(3600)
+
   let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"])
 
   @Test("nonzero exit returns output, not an error — catches a failing tool being classed BLOCKED")
@@ -15,7 +19,7 @@ struct LiveProcessRunnerTests {
     let output = try await runner.run(
       ProcessInvocation(
         executable: "/bin/sh", arguments: ["-c", "printf out; printf err >&2; exit 3"],
-        timeout: .seconds(10)))
+        timeout: Self.ample))
     #expect(output.status == .exited(3))
     #expect(output.stdout.text == "out")
     #expect(output.stderr.text == "err")
@@ -30,7 +34,7 @@ struct LiveProcessRunnerTests {
     let output = try await runner.run(
       ProcessInvocation(
         executable: "/usr/bin/wc", arguments: ["-l"], standardInput: Data(lines.utf8),
-        timeout: .seconds(10)))
+        timeout: Self.ample))
     #expect(output.stdout.text.trimmingCharacters(in: .whitespaces) == "5000\n")
   }
 
@@ -38,7 +42,7 @@ struct LiveProcessRunnerTests {
   func argumentsAreNotShellInterpreted() async throws {
     let hostile = "$(echo pwned); `id` | cat > x"
     let output = try await runner.run(
-      ProcessInvocation(executable: "/bin/echo", arguments: [hostile], timeout: .seconds(10)))
+      ProcessInvocation(executable: "/bin/echo", arguments: [hostile], timeout: Self.ample))
     #expect(output.stdout.text == hostile + "\n")
   }
 
@@ -46,7 +50,7 @@ struct LiveProcessRunnerTests {
   func missingExecutableIsLaunchFailure() async {
     await #expect {
       _ = try await runner.run(
-        ProcessInvocation(executable: "/nonexistent/tool", timeout: .seconds(10)))
+        ProcessInvocation(executable: "/nonexistent/tool", timeout: Self.ample))
     } throws: { error in
       guard case .launchFailed(let executable, _) = error as? ProcessRunnerError else {
         return false
@@ -57,12 +61,12 @@ struct LiveProcessRunnerTests {
 
   @Test("bare names resolve on the effective PATH, not the parent's — catches env overlay bypass")
   func bareNameUsesEffectivePath() async throws {
-    let found = try await runner.run(ProcessInvocation(executable: "env", timeout: .seconds(10)))
+    let found = try await runner.run(ProcessInvocation(executable: "env", timeout: Self.ample))
     #expect(found.status == .exited(0))
 
     let restricted = LiveProcessRunner(baseEnvironment: ["PATH": "/nonexistent"])
     await #expect {
-      _ = try await restricted.run(ProcessInvocation(executable: "env", timeout: .seconds(10)))
+      _ = try await restricted.run(ProcessInvocation(executable: "env", timeout: Self.ample))
     } throws: { error in
       if case .launchFailed = error as? ProcessRunnerError { return true }
       return false
@@ -77,7 +81,7 @@ struct LiveProcessRunnerTests {
     let restricted = LiveProcessRunner(baseEnvironment: ["PATH": path])
 
     await #expect {
-      _ = try await restricted.run(ProcessInvocation(executable: "claude", timeout: .seconds(10)))
+      _ = try await restricted.run(ProcessInvocation(executable: "claude", timeout: Self.ample))
     } throws: { error in
       guard case .launchFailed(let executable, let reason) = error as? ProcessRunnerError else {
         return false
@@ -97,7 +101,7 @@ struct LiveProcessRunnerTests {
       ProcessInvocation(
         executable: "/usr/bin/env",
         environmentOverlay: ["SNAPSHOT_TESTING_RECORD": "never", "DROP_ME": nil],
-        timeout: .seconds(10)))
+        timeout: Self.ample))
     let lines = Set(output.stdout.text.split(separator: "\n").map(String.init))
     #expect(lines.contains("SNAPSHOT_TESTING_RECORD=never"))
     #expect(!lines.contains("SNAPSHOT_TESTING_RECORD=all"))
@@ -114,7 +118,7 @@ struct LiveProcessRunnerTests {
       "CPATH": "/usr/local/include", "LIBRARY_PATH": "/usr/local/lib", "KEEP": "1",
     ])
     let output = try await runner.run(
-      ProcessInvocation(executable: "/usr/bin/env", timeout: .seconds(10)))
+      ProcessInvocation(executable: "/usr/bin/env", timeout: Self.ample))
     let names = Set(
       output.stdout.text.split(separator: "\n").map { String($0.prefix { $0 != "=" }) })
     #expect(names.isDisjoint(with: ["SDKROOT", "CPATH", "LIBRARY_PATH"]))
@@ -131,7 +135,7 @@ struct LiveProcessRunnerTests {
     let output = try await runner.run(
       ProcessInvocation(
         executable: "git", arguments: ["--version"], environmentOverlay: ["xcrun_verbose": "1"],
-        timeout: .seconds(30)))
+        timeout: Self.ample))
 
     #expect(output.status.isSuccess, "\(output.stderr.text)")
     #expect(output.stdout.text.hasPrefix("git version"))
@@ -154,7 +158,7 @@ struct LiveProcessRunnerTests {
     let output = try await runner.run(
       ProcessInvocation(
         executable: "git", arguments: ["--version"],
-        environmentOverlay: ["DEVELOPER_DIR": developer.path], timeout: .seconds(30)))
+        environmentOverlay: ["DEVELOPER_DIR": developer.path], timeout: Self.ample))
 
     #expect(output.stdout.text == "selected git --version\n", "\(output.stderr.text)")
   }
@@ -162,7 +166,7 @@ struct LiveProcessRunnerTests {
   @Test("working directory is applied — catches tools running against the wrong package")
   func workingDirectory() async throws {
     let output = try await runner.run(
-      ProcessInvocation(executable: "/bin/pwd", workingDirectory: "/usr", timeout: .seconds(10)))
+      ProcessInvocation(executable: "/bin/pwd", workingDirectory: "/usr", timeout: Self.ample))
     #expect(output.stdout.text == "/usr\n")
   }
 
@@ -171,7 +175,7 @@ struct LiveProcessRunnerTests {
     await #expect {
       _ = try await runner.run(
         ProcessInvocation(
-          executable: "/bin/pwd", workingDirectory: "/nonexistent-dir", timeout: .seconds(10)))
+          executable: "/bin/pwd", workingDirectory: "/nonexistent-dir", timeout: Self.ample))
     } throws: { error in
       if case .launchFailed = error as? ProcessRunnerError { return true }
       return false
@@ -255,7 +259,6 @@ struct LiveProcessRunnerTests {
     let clock = ShiftableClock()
     let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"], now: clock.now)
     let timeout = Duration.seconds(3600)
-    let start = ContinuousClock.now
     let run = Task {
       await Self.outcome(
         runner,
@@ -266,6 +269,8 @@ struct LiveProcessRunnerTests {
     }
     let grandchildren = try await Self.awaitTree(&lines, grandchildren: 1)
     defer { for pid in grandchildren { kill(pid, SIGKILL) } }
+    // Timed from the tree being up: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     clock.advance(by: timeout)
 
     let result = await run.value
@@ -294,7 +299,6 @@ struct LiveProcessRunnerTests {
       baseEnvironment: ["PATH": "/usr/bin:/bin"], terminationGracePeriod: .seconds(1),
       postExitDrainLimit: .seconds(3600), now: clock.now)
     let timeout = Duration.seconds(3600)
-    let start = ContinuousClock.now
     let stubborn = [
       Grandchild(ownGroup: false, ignoresTerm: true), Grandchild(ownGroup: true, ignoresTerm: true),
     ]
@@ -307,6 +311,8 @@ struct LiveProcessRunnerTests {
     }
     let grandchildren = try await Self.awaitTree(&lines, grandchildren: stubborn.count)
     defer { for pid in grandchildren { kill(pid, SIGKILL) } }
+    // Timed from the tree being up: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     clock.advance(by: timeout)
 
     let result = await run.value
@@ -325,7 +331,6 @@ struct LiveProcessRunnerTests {
     let held = try HeldPipe()
     defer { held.remove() }
     var lines = held.lines().makeAsyncIterator()
-    let start = ContinuousClock.now
     let task = Task {
       try await runner.run(
         ProcessInvocation(
@@ -334,6 +339,8 @@ struct LiveProcessRunnerTests {
     }
     let grandchildren = try await Self.awaitTree(&lines, grandchildren: 1)
     defer { for pid in grandchildren { kill(pid, SIGKILL) } }
+    // Timed from the tree being up: a slow start on a loaded machine is not time to the kill.
+    let start = ContinuousClock.now
     task.cancel()
 
     let result = await task.result
@@ -360,7 +367,7 @@ struct LiveProcessRunnerTests {
     let output = try await runner.run(
       ProcessInvocation(
         executable: "/bin/sh", arguments: ["-c", "head -c 200000 /dev/zero"],
-        timeout: .seconds(10), maxCapturedBytesPerStream: 1000))
+        timeout: Self.ample, maxCapturedBytesPerStream: 1000))
     #expect(output.status == .exited(0))
     #expect(output.stdout.bytes.count == 1000)
     #expect(output.stdout.truncated)
@@ -371,7 +378,7 @@ struct LiveProcessRunnerTests {
   func signaledChild() async throws {
     let output = try await runner.run(
       ProcessInvocation(
-        executable: "/bin/sh", arguments: ["-c", "kill -9 $$"], timeout: .seconds(10))
+        executable: "/bin/sh", arguments: ["-c", "kill -9 $$"], timeout: Self.ample)
     )
     #expect(output.status == .signaled(9))
     #expect(!output.status.isSuccess)
@@ -382,7 +389,7 @@ struct LiveProcessRunnerTests {
   )
   func absentStandardInputIsDevNull() async throws {
     let output = try await runner.run(
-      ProcessInvocation(executable: "/bin/cat", timeout: .seconds(10)))
+      ProcessInvocation(executable: "/bin/cat", timeout: Self.ample))
 
     #expect(output.status == .exited(0), "\(output.stderr.text)")
     #expect(output.stdout.bytes.isEmpty)
@@ -397,7 +404,7 @@ struct LiveProcessRunnerTests {
     await #expect(processExitsWith: .success) {
       let runner = LiveProcessRunner(baseEnvironment: ["PATH": "/usr/bin:/bin"])
       let invocation = ProcessInvocation(
-        executable: "/bin/cat", standardInput: Data("echo".utf8), timeout: .seconds(10))
+        executable: "/bin/cat", standardInput: Data("echo".utf8), timeout: Self.ample)
       // The first run opens the runner's process-wide signal pipe, which stays open by design.
       _ = try await runner.run(invocation)
       let runs = 20
@@ -417,12 +424,15 @@ struct LiveProcessRunnerTests {
     "a run returns once the child exits and its output closes, not after the drain limit — catches the parent holding a pipe's write end so every run waits out the limit"
   )
   func runReturnsWhenOutputCloses() async throws {
-    let drainLimit = Duration.seconds(30)
+    // Half the limit is a minute: far more than a loaded machine adds to starting `echo`, and a
+    // runner that waits out the limit still fails rather than hangs. The runner's drain loop
+    // doesn't end on cancellation, so a clock that never moves would hang the suite instead.
+    let drainLimit = Duration.seconds(120)
     let patient = LiveProcessRunner(
       baseEnvironment: ["PATH": "/usr/bin:/bin"], postExitDrainLimit: drainLimit)
 
     let output = try await patient.run(
-      ProcessInvocation(executable: "/bin/echo", arguments: ["done"], timeout: .seconds(60)))
+      ProcessInvocation(executable: "/bin/echo", arguments: ["done"], timeout: Self.ample))
 
     #expect(output.stdout.text == "done\n")
     #expect(output.elapsed < drainLimit / 2, "the run took \(output.elapsed)")
@@ -437,7 +447,7 @@ struct LiveProcessRunnerTests {
         ProcessInvocation(
           executable: "/bin/sh",
           arguments: ["-c", "/usr/bin/stat -L -f %HT /dev/stdin; /usr/bin/wc -c | tr -d ' '"],
-          standardInput: Data(repeating: 0x61, count: size), timeout: .seconds(30)))
+          standardInput: Data(repeating: 0x61, count: size), timeout: Self.ample))
 
       #expect(output.status == .exited(0), "\(output.stderr.text)")
       #expect(output.stdout.text == "Fifo File\n\(size)\n", "\(size) bytes")
@@ -445,7 +455,7 @@ struct LiveProcessRunnerTests {
     let unread = try await runner.run(
       ProcessInvocation(
         executable: "/usr/bin/true", standardInput: Data(repeating: 0x61, count: 4 << 20),
-        timeout: .seconds(30)))
+        timeout: Self.ample))
     #expect(unread.status == .exited(0))
   }
 
@@ -455,7 +465,7 @@ struct LiveProcessRunnerTests {
   func outputAtCapIsNotTruncated() async throws {
     let output = try await runner.run(
       ProcessInvocation(
-        executable: "/usr/bin/printf", arguments: ["12345"], timeout: .seconds(10),
+        executable: "/usr/bin/printf", arguments: ["12345"], timeout: Self.ample,
         maxCapturedBytesPerStream: 5))
 
     #expect(output.stdout.text == "12345")
@@ -470,10 +480,10 @@ struct LiveProcessRunnerTests {
 }
 
 /// A clock that runs with the real one until a test moves it forward, so a timeout fires exactly
-/// when the test says the child is ready, never because the machine was slow. Kept in this file
-/// (not test support) so `prove` reverting production source can never make a test that uses it
-/// stop compiling: the merge base doesn't need to have known about it.
-private final class ShiftableClock: Sendable {
+/// when the test says the child is ready, never because the machine was slow. Kept in this test
+/// target (not test support) so `prove` reverting production source can never make a test that
+/// uses it stop compiling: the merge base doesn't need to have known about it.
+final class ShiftableClock: Sendable {
   private let offsetNanoseconds = Atomic<Int64>(0)
 
   var now: @Sendable () -> ContinuousClock.Instant {
@@ -492,8 +502,8 @@ private final class ShiftableClock: Sendable {
 /// A named pipe every process in a test's tree writes one line to once it is running and then
 /// holds open for life, so a test can move a ``ShiftableClock`` past a timeout only once there is
 /// something to time out, and can tell afterwards whether any of the tree survived. Kept in this
-/// file for the same reason as ``ShiftableClock``.
-private struct HeldPipe {
+/// test target for the same reason as ``ShiftableClock``.
+struct HeldPipe {
   let path: String
   private let directory: URL
 
