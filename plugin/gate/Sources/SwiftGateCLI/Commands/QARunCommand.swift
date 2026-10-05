@@ -341,8 +341,10 @@ enum QARunRun {
     // whose event couldn't be written goes again with the run's last events.
     let written = Mutex<Set<Int>>([])
     let rowEnded: @Sendable (QARow, String?) -> Void = {
-      [newEventID = dependencies.newEventID, now = dependencies.now, atBase = options.atBase]
-      row, head in
+      [
+        newEventID = dependencies.newEventID, now = dependencies.now, atBase = options.atBase,
+        repairProof = options.preparedBy != nil && options.requirement != nil
+      ] row, head in
       guard let events else { return }
       do {
         try events.append(
@@ -350,7 +352,8 @@ enum QARunRun {
             HarnessEvent(
               eventID: newEventID(), time: now(), runID: runID, head: head,
               source: HarnessEventSource(route: nil),
-              payload: .qaCheck(QACheckEvent(plan: slug, row: row, atBase: atBase)))
+              payload: .qaCheck(
+                QACheckEvent(plan: slug, row: row, atBase: atBase, repairProof: repairProof)))
           ])
         written.withLock { _ = $0.insert(row.row) }
       } catch {
