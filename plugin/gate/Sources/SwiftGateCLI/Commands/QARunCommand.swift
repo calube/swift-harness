@@ -41,6 +41,9 @@ enum QARunRun {
     var finalPass: QAFinalPass?
     /// Reads the result bundle an `xcode` area's `test:` row writes.
     var xcresults: any XcresultReader = LiveXcresultReader(runner: LiveProcessRunner())
+    /// Clones of the simulator a `test:` row's `xcodebuild test` names; `nil` runs the command on
+    /// the device as written.
+    var testDevices: (any TestDeviceLeasing)?
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
