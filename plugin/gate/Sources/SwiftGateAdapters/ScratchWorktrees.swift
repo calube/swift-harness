@@ -62,26 +62,35 @@ public protocol ScratchWorktrees: Sendable {
 ///
 /// Beside the repository rather than in the system temporary directory so a scratch build shares
 /// the repository's volume and its orphans are found by name next to it.
+///
+/// A kept tree, `.<repo>-swiftgate-prove-kept`, outlives each use and is brought to the next
+/// request in place, so a file the request doesn't change keeps its timestamp and a build tool
+/// that keys its incremental build by source path and timestamp, as Xcode does, rebuilds only
+/// what changed. 1 use holds it at a time; a use that finds it held gets a throwaway tree.
 public struct LiveScratchWorktrees: ScratchWorktrees {
   static let nameMarker = "-swiftgate-prove-"
+  static let keptMarker = "kept"
 
   private let runner: any ProcessRunner
   private let repositoryRoot: String
   private let directory: URL?
   private let timeout: Duration
+  private let keepsTree: Bool
 
   /// - Parameters:
   ///   - repositoryRoot: any directory inside the repository.
   ///   - directory: where scratch trees are made; `nil` for beside the repository's toplevel, or
   ///     the state root's `scratch/` when that root is under the git dir.
+  ///   - keepsTree: whether each use takes the kept tree when it is free.
   public init(
     runner: any ProcessRunner, repositoryRoot: String, directory: URL? = nil,
-    timeout: Duration = .seconds(300)
+    timeout: Duration = .seconds(300), keepsTree: Bool = false
   ) {
     self.runner = runner
     self.repositoryRoot = repositoryRoot
     self.directory = directory?.standardizedFileURL
     self.timeout = timeout
+    self.keepsTree = keepsTree
   }
 
   public func withScratchTree<T: Sendable>(
