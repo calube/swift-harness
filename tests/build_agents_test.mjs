@@ -7,7 +7,8 @@
 // command the PreToolUse guard denies, so the worker burns a turn on a denial; a worker that loses
 // the `task-status.json` design-conflict report, test-first or the foreground rule; an agent never
 // told to run its gates at the 600000 timeout, so a gate is backgrounded and watched by a `pgrep -f`
-// loop that matches its own shell; a fixer that may commit to `main` or merge.
+// loop that matches its own shell; a fixer that may commit to `main` or merge; a fixer that spends
+// its 1 attempt probing why 1 flow row stays red instead of returning that row's evidence.
 //
 // `checkBuildAgentText(fileName, text)` is exported so the checks run against edited copies too.
 import assert from 'node:assert/strict'
@@ -238,6 +239,35 @@ const failsWith = (fileName, text, fragment) => {
   )
 }
 
+/**
+ * Where a fixer's text lets it sink its 1 attempt into 1 red flow row: after 2 red `qa run`s of
+ * the same row it stops and returns `gate-red` with that row's evidence, the requirement, the
+ * failing step and its message, and both run ids, and it never reads `agent-device`'s source or
+ * writes probe tests to learn why a step fails. A fixer that probed a refresh gesture the flow
+ * couldn't drive held the critical path for 14 minutes, and the row stayed red.
+ */
+export function rowCapProblems(text) {
+  const prose = text.replace(/\s+/g, ' ')
+  const problems = []
+  if (!/\b2 red `qa run`s\b[^.]*same (flow )?row/.test(prose)) problems.push('no cap of 2 red `qa run`s on the same flow row')
+  if (!/same (flow )?row[^]*?`gate-red`[^.]*evidence/.test(prose)) problems.push('a capped row never returns `gate-red` with its evidence')
+  for (const part of ['requirement', 'failing step', 'run ids']) {
+    if (!new RegExp(`evidence[^.]*\\b${part}\\b`).test(prose)) problems.push(`the row's evidence never names its ${part}`)
+  }
+  if (!/\bnever\b[^.]*`agent-device`[^.]*source/i.test(prose)) problems.push('never forbids reading `agent-device`\'s source')
+  if (!/\bnever\b[^.]*probe tests?/i.test(prose)) problems.push('never forbids probe tests')
+  return problems
+}
+
+/** The orchestrator's brief to a fixer: event-loop.md from the fixer's launch to its wait. */
+function fixerBrief() {
+  const text = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8')
+  const start = text.indexOf('Launch `swift-harness:build-fixer`')
+  const end = text.indexOf('Go on with other tasks', start)
+  if (start < 0 || end < 0) throw new Error('event-loop.md has no fixer launch brief')
+  return text.slice(start, end)
+}
+
 const tests = {
   'the key lists are read from the Swift types — catches this test checking a stale copy of the return shape'() {
     assert.deepEqual(RETURN_KEYS, [
@@ -331,6 +361,22 @@ const tests = {
     const loop = /\*\*Confirm with your gate tier\.\*\*[^]*?(?=\n- \*\*)/.exec(body)?.[0].replace(/\s+/g, ' ') ?? ''
     assert.match(loop, /In an owned project that's the merge gate: `swiftgate check --tier <merge gate>` when the prompt names no surface, or `swiftgate check --tier <merge gate> --base <surfaceCommit>` when the prompt gives that sha/)
     assert.match(loop, /In a brownfield clone it's `swiftgate check --tier slice`, with the same `--base <surfaceCommit>` when the prompt gives that sha/)
+  },
+
+  'the fixer and its launch brief cap 1 red flow row at 2 qa runs, then return its evidence — catches a fixer probing a step agent-device cannot drive until the cutoff'() {
+    assert.deepEqual(rowCapProblems(parseFrontmatter(agentText('build-fixer')).body), [])
+    assert.deepEqual(rowCapProblems(fixerBrief()), [])
+  },
+
+  'the row cap check names a missing cap, return, evidence part and each ban — catches a check that passes anything'() {
+    const good = 'After 2 red `qa run`s of the same flow row, stop and return `gate-red` with the row\'s evidence: its requirement, the failing step and its message, and both run ids. Never read `agent-device`\'s source, and never write probe tests.'
+    assert.deepEqual(rowCapProblems(good), [])
+    assert.match(rowCapProblems(good.replace('2 red', '3 red')).join('\n'), /no cap of 2/)
+    assert.match(rowCapProblems(good.replace('`gate-red`', '`ready-to-merge`')).join('\n'), /never returns `gate-red`/)
+    assert.match(rowCapProblems(good.replace('failing step', 'step')).join('\n'), /failing step/)
+    assert.match(rowCapProblems(good.replace('run ids', 'runs')).join('\n'), /run ids/)
+    assert.match(rowCapProblems(good.replace("Never read `agent-device`'s source, and n", 'N')).join('\n'), /`agent-device`'s source/)
+    assert.match(rowCapProblems(good.replace('probe tests', 'tests')).join('\n'), /probe tests/)
   },
 
   'every verb the guard denies to a subagent is in the forbidden list — catches a guard verb added without the prompt learning it'() {
