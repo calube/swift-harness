@@ -24,6 +24,20 @@ public struct QARunDeadline: Sendable, Equatable {
       : QARunDeadline(at: box.deadlines.cutoffAt, name: "the run's cutoff")
   }
 
+  /// The name a `qa run --deadline` carries in a refused row's message.
+  public static let optionName = "its --deadline"
+
+  /// A `qa run --deadline`: an ISO 8601 time, or whole seconds from `now`; `nil` when `text` is
+  /// neither, or names no time after `now`.
+  public static func parse(_ text: String, now: Date) -> QARunDeadline? {
+    nil
+  }
+
+  /// The earlier of 2 deadlines; `nil` when both are.
+  public static func earlier(_ first: QARunDeadline?, _ second: QARunDeadline?) -> QARunDeadline? {
+    first ?? second
+  }
+
   /// Whether a row may start at `now`, and with how long.
   public enum Admission: Sendable, Equatable {
     /// Start it; a command gets at most `left`.

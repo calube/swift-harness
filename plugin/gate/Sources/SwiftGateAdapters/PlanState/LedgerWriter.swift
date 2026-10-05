@@ -8,6 +8,10 @@ public enum LedgerEdit: Sendable, Equatable {
   case status(TaskStatus)
   /// Records the task's worktree branch.
   case branch(String)
+  /// Marks the task `done` because another task's merge, named here, landed its unmerged
+  /// branch: a fixer's branch that took it in. Allowed from any status but `done`, `abandoned`
+  /// included, since its commits are on the plan branch whatever the ledger said.
+  case landedWith(String)
 }
 
 /// Every case means `ledger.json` was left exactly as it was.
@@ -102,6 +106,11 @@ public struct LedgerWriter: Sendable {
       status = target
     case .branch(let name):
       branch = name
+    case .landedWith:
+      if case .refused(let reason) = LedgerTransition.check(from: task.status, to: .done) {
+        throw .refusedTransition(task: task.id, reason: reason)
+      }
+      status = .done
     }
     return LedgerTask(
       id: task.id, deps: task.deps, writeSet: task.writeSet, gate: task.gate, tests: task.tests,

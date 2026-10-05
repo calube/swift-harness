@@ -35,6 +35,7 @@ public enum BashGuard {
   public static let bareStdinReaderRuleID = "guard.bare-stdin-reader"
   public static let processMatchWaitRuleID = "guard.process-match-wait"
   public static let qaRunTruncatedRuleID = "guard.qa-run-truncated"
+  public static let qaRunTimeoutRuleID = "guard.qa-run-timeout"
 
   /// - Parameter inSubagent: whether a subagent runs the command. Waiting on `pgrep` is denied
   ///   only there: a background agent improvises the wait, while a main session's documented

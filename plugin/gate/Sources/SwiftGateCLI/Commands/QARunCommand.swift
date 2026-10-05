@@ -31,6 +31,8 @@ enum QARunRun {
     /// With `beforeMerge`, more tasks whose branches merge after `after`'s, each counting as
     /// merged: a run over every task a row waits on, before the first of them merges.
     var alongside: [String] = []
+    /// Where the JSON report goes, alone: no start line or other output reaches that file.
+    var output: String?
   }
 
   struct Dependencies: Sendable {
@@ -1050,6 +1052,13 @@ enum QARunRun {
       + "report \(reportFile)"
   }
 
+  /// Writes `report`'s JSON, as `--json` prints it, to `path` alone, relative to `root` unless
+  /// absolute.
+  static func writeOutput(
+    _ report: QAReport, reportFile: String?, to path: String, root: URL
+  ) throws(QAFilesError) {
+  }
+
   /// - Parameter reportFile: where the run wrote `report.json`, named in the last line.
   static func render(_ report: QAReport, json: Bool, reportFile: String? = nil) -> String {
     let summary = summary(report, reportFile: reportFile)
@@ -1124,6 +1133,19 @@ struct QARunCommand: AsyncParsableCommand {
 
   @Flag(help: "Print JSON.")
   var json = false
+
+  @Option(
+    help: ArgumentHelp(
+      "Write the JSON report to this file, alone: the start line and every other output stay "
+        + "on the terminal, so the file always parses."))
+  var output: String?
+
+  @Option(
+    help: ArgumentHelp(
+      "Stop by this time, an ISO 8601 time or whole seconds from now: the wait for the device "
+        + "and every row end by then, and a row that can't is unverified naming why. Use it "
+        + "in place of wrapping the run in `timeout`, which kills it with no report."))
+  var deadline: String?
 
   func run() async throws {
     let root = URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory)

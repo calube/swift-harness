@@ -159,6 +159,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case conflicted
     /// `main` isn't where a merge may happen, or there's nothing to undo; nothing changed.
     case refused
+    /// Nothing changed yet, and the merge isn't refused: it waits on another task's return that
+    /// is on its way, and goes ahead once that return is checked or by ``BuildMergeReport/waitUntil``.
+    case deferred
     /// The lock is free or another session holds it; nothing changed.
     case notHeld = "not-held"
     case blocked
@@ -207,6 +210,13 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case fixCarriesUnmerged = "fix-carries-unmerged"
   }
 
+  /// What the caller does next with a `deferred` report.
+  public enum Action: String, Sendable, Encodable {
+    /// Check the returns the message names as their notices arrive, then merge again; with no
+    /// notice by ``BuildMergeReport/waitUntil``, merge again then.
+    case wait
+  }
+
   /// Whether `main` was checked against the run's last merge.
   public enum MainCheck: String, Sendable, Encodable {
     /// `main` was where the run's newest merge or undo event left it.
@@ -239,6 +249,13 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   /// The branches `--undo` kept the work it took off `main` on, or an earlier fix branch it set
   /// aside before cutting the new one, as `<plan>/fix-<task>-<n>`; `nil` when it kept none.
   public let keptBranches: [String]?
+  /// What to do next with a `deferred` report.
+  public let action: Action?
+  /// When a `deferred` merge stops waiting, ISO 8601.
+  public let waitUntil: String?
+  /// The other tasks' unmerged branches a fixer's branch landed with this merge, each now
+  /// merged and `done`.
+  public let carried: [String]?
   public let message: String
 
   public init(
@@ -247,7 +264,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
     conflictedFiles: [String]? = nil, gateRunId: String? = nil, keptBranches: [String]? = nil,
-    message: String
+    action: Action? = nil, waitUntil: String? = nil, carried: [String]? = nil, message: String
   ) {
     self.command = command
     self.plan = plan
@@ -267,6 +284,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.conflictedFiles = conflictedFiles
     self.gateRunId = gateRunId
     self.keptBranches = keptBranches
+    self.action = action
+    self.waitUntil = waitUntil
+    self.carried = carried
     self.message = message
   }
 }
