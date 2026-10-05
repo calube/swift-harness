@@ -149,6 +149,8 @@ extra key.
 - `"gate"`: your last `swiftgate check --tier` run in the fix worktree. `"tier"` is the tier your prompt names,
   `"verdict"` is `GREEN`, `RED` or `BLOCKED` as the run printed it, and `"runId"` is that run's `runID`
   in the fix worktree's `.harness/runs/history.jsonl`. Quote only a run from the fix worktree.
+  When no gate ran on your last commit, such as at the cutoff, `"gate"` is `null`: never a
+  `"runId"` of `null`, which no return check reads.
 - `"review"`: always `null`. A fix gets no review stage, so there's no `"mode"` or `"findings"` to report.
 - `"testsAdded"`: the `test-…` ids of any test you added, or `[]`.
 - `"notes"`: how you resolved it, and any contract from either task's notes that changed shape, with
