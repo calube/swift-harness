@@ -132,6 +132,24 @@ const lastPassView = view({
   },
 })
 
+// A flow row whose flow a repair rewrote after 2 red runs, from its qa.repair.
+const REPAIRED = '20261003T144500Z-0000ffff'
+const REPAIR_NOTE = `flow repaired (flow-side) after qa runs ${QA}, ${BASE} read red at step 6 \`wait\`: \`scroll\` replaced by \`gesture\`; red at the base again in qa run ${REPAIRED}`
+const repairView = view({
+  validation: {
+    plan: 'sample-notes',
+    counts: { pass: 0, red: 1, unverified: 0, waiting: 0, abandoned: 0, atBase: 0 },
+    rows: [
+      row(1, 'flow', 'red', ['list'], {
+        check: 'refresh.flow.json', ms: 5000, message: 'step 6 `wait` failed',
+        history: [attempt(QA, 'after', 'red', { after: 'list', ms: 5000, message: 'step 6 `wait` failed' })],
+        repairs: [{ atBaseRun: REPAIRED, at: at(35), cause: 'flow-side', redRuns: [QA, BASE], failingStep: 6, failingCommand: 'wait', removed: ['scroll'], added: ['gesture'], note: REPAIR_NOTE }],
+      }),
+    ],
+    keptFlows: [],
+  },
+})
+
 const dirs = []
 function writePage(data) {
   const dir = mkdtempSync(join(tmpdir(), 'run-viewer-validation-'))
@@ -178,6 +196,7 @@ const withoutRows = writePage(view({ validation: null }))
 const withFlows = writePage(flowView)
 const withHistory = writePage(historyView)
 const withLastPass = writePage(lastPassView)
+const withRepair = writePage(repairView)
 const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
   const r = document.querySelector('.qa-group:not(.qa-kept) .qa-row[data-row="${n}"]')
   return { steps: [...r.querySelectorAll('.qa-step')].map((li) => ({ n: li.dataset.n, ok: li.dataset.ok, mark: li.querySelector('.qa-mark').getAttribute('aria-label'), href: li.querySelector('a')?.getAttribute('href') ?? null, text: li.innerText })),
@@ -185,6 +204,18 @@ const FLOW = (n) => `(() => { document.querySelector('[role=tab][data-tab="valid
     why: r.querySelector('.qa-why')?.innerText ?? null, text: r.innerText, media: document.querySelectorAll('img, video').length, errors: document.body.dataset.errors } })()`
 
 const tests = {
+  async 'a repaired flow row shows its repair note, with the qa run that proved it red at the base again — catches a rewritten flow the report never mentions'() {
+    await page.load(withRepair)
+    const got = await page.evaluate(`(() => { document.querySelector('[role=tab][data-tab="validation"]').click()
+      const r = document.querySelector('.qa-row[data-row="1"]')
+      const notes = [...r.querySelectorAll('.qa-repair')]
+      return { notes: notes.map((n) => n.innerText), runs: notes.map((n) => n.dataset.run), errors: document.body.dataset.errors } })()`)
+    assert.deepEqual(got.runs, [REPAIRED])
+    assert.equal(got.notes.length, 1)
+    assert.ok(got.notes[0].includes(REPAIR_NOTE.replace(/`/g, '')), JSON.stringify(got.notes))
+    assert.ok(!got.errors, got.errors)
+  },
+
   async 'a run with validation rows shows the Validation tab last, its badges and strip carry the counts, and rows group by task with each group\'s waiting rows last — catches a shared check shown under 1 task or a count that drifts'() {
     await page.load(withRows)
     await page.evaluate(`document.querySelector('[role=tab][data-tab="validation"]').click()`)

@@ -8,7 +8,7 @@ import Testing
 @testable import SwiftGateCLI
 
 /// Runs each check through the real runner and records which ran.
-private final class CountingChecks: QACheckRunning {
+final class CountingChecks: QACheckRunning {
   private let inner: QACommandRunner
   private let ran = Mutex<[String]>([])
 

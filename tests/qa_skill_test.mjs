@@ -278,6 +278,28 @@ function realHelp() {
 
 const skillFiles = () => ({ [SKILL]: read(SKILL), [WORKER]: read(WORKER) })
 
+/**
+ * Where a validation worker's repair mode could weaken a check or rewrite more than its row: the
+ * `## Repair mode` section proves the rewrite red with a `--prepared-by --requirement` run, keeps
+ * every `wait` and `is` step, changes only that requirement's files, reads the gestures doc, and
+ * returns a `repaired:` or `no repair:` line.
+ */
+export function repairModeProblems(worker) {
+  const part = section(worker, 'Repair mode').replace(/\s+/g, ' ')
+  if (!part) return ['no `## Repair mode` section']
+  const problems = []
+  if (!part.includes('"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json')) {
+    problems.push('no `qa run --at-base --prepared-by <writer> --requirement <requirement>` red run')
+  }
+  if (!/\bonly\b[^.]*requirement's (check )?files/.test(part)) problems.push('never limits the rewrite to the requirement\'s files')
+  if (!/\bkeeps? every `wait` and `is` step\b/i.test(part)) problems.push('never keeps every `wait` and `is` step')
+  if (!/simulator-qa-flow-gestures\.md/.test(part)) problems.push('never reads the gestures doc')
+  if (!/a `wait` or `is` step/.test(part)) problems.push('never says the red at the base must fail on a `wait` or `is` step')
+  if (!part.includes('repaired: <requirement> <path>: red: <message> (qa run <run id>)')) problems.push('no `repaired:` return line')
+  if (!part.includes('no repair: <requirement>: <why>')) problems.push('no `no repair:` return line')
+  return problems
+}
+
 const tests = {
   'the QA skill names every sim and qa command it drives, each with flags the real CLI has — catches a skill step drifting from the CLI'() {
     const help = realHelp()
@@ -433,6 +455,23 @@ const tests = {
     assert.match(refreshProblems(good.replace('id=\\"a\\"', '@e3'), captured).join('\n'), /`source` is no `id=`/)
     assert.match(refreshProblems(good.replace('"kind": "drag"', '"kind": "pan"'), captured).join('\n'), /kind is `pan`/)
     assert.match(refreshProblems(good.replace('never', 'may'), captured).join('\n'), /never pulls to refresh/)
+  },
+
+  'the validation worker\'s repair mode rewrites 1 requirement\'s flow, keeps its assertions and proves it red at the base again — catches a repair that weakens a check to pass'() {
+    assert.deepEqual(repairModeProblems(read(WORKER)), [])
+  },
+
+  'the repair mode check names a missing run, scope, assertion rule, gestures doc, red reason and each return line — catches a check that passes anything'() {
+    const good = `\n## Repair mode\n\nChange only the requirement's files. Keep every \`wait\` and \`is\` step. Read simulator-qa-flow-gestures.md. The red must fail on a \`wait\` or \`is\` step: \`"$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json\`. Return \`repaired: <requirement> <path>: red: <message> (qa run <run id>)\` or \`no repair: <requirement>: <why>\`.\n`
+    assert.deepEqual(repairModeProblems(good), [])
+    assert.deepEqual(repairModeProblems(good.replace('## Repair mode', '## Other')), ['no `## Repair mode` section'])
+    assert.match(repairModeProblems(good.replace(' --requirement <requirement>', '')).join('\n'), /--requirement/)
+    assert.match(repairModeProblems(good.replace('Change only', 'Change')).join('\n'), /requirement's files/)
+    assert.match(repairModeProblems(good.replace('Keep every', 'Keep a')).join('\n'), /every `wait` and `is`/)
+    assert.match(repairModeProblems(good.replace('Read simulator-qa-flow-gestures.md', 'Read')).join('\n'), /gestures doc/)
+    assert.match(repairModeProblems(good.replace('fail on a', 'fail at')).join('\n'), /must fail on/)
+    assert.match(repairModeProblems(good.replace('repaired: <requirement>', 'done: <requirement>')).join('\n'), /`repaired:`/)
+    assert.match(repairModeProblems(good.replace('no repair:', 'none:')).join('\n'), /`no repair:`/)
   },
 
   'the docs router sends a reader running simulator QA to the QA skill — catches a skill no doc reaches'() {

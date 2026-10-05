@@ -259,6 +259,26 @@ export function rowCapProblems(text) {
   return problems
 }
 
+/**
+ * Where a fixer's capped flow row can't reach the orchestrator's flow repair: its `gate-red` notes
+ * carry 1 `flow row:` line per capped row, naming the requirement, the check, the failing step and
+ * both run ids, with `flow-side: yes` or `no` judged against the gestures doc, and the fixer never
+ * edits the plan's flow files, which only a validation worker in repair mode rewrites.
+ */
+export const FLOW_ROW_LINE =
+  'flow row: <requirement> <check>: step <n> <command>: <message> (qa runs <run id>, <run id>); flow-side: yes|no: <why>'
+export function flowRowLineProblems(text) {
+  const prose = text.replace(/\s+/g, ' ')
+  const problems = []
+  if (!prose.includes(FLOW_ROW_LINE)) problems.push('no `flow row:` line shape for a capped row')
+  if (!/`flow-side: yes`[^.]*simulator-qa-flow-gestures\.md|simulator-qa-flow-gestures\.md[^.]*`flow-side: yes`/.test(prose)) {
+    problems.push('`flow-side: yes` is never judged against the gestures doc')
+  }
+  if (!/\bnever\b[^.]*\bflow files?\b/i.test(prose)) problems.push('never forbids editing the plan\'s flow files')
+  if (!/\brepair mode\b/.test(prose)) problems.push('never says who rewrites a flow-side row')
+  return problems
+}
+
 /** The orchestrator's brief to a fixer: event-loop.md from the fixer's launch to its wait. */
 function fixerBrief() {
   const text = readFileSync(join(root, 'skills/build/references/event-loop.md'), 'utf8')
@@ -366,6 +386,20 @@ const tests = {
   'the fixer and its launch brief cap 1 red flow row at 2 qa runs, then return its evidence — catches a fixer probing a step agent-device cannot drive until the cutoff'() {
     assert.deepEqual(rowCapProblems(parseFrontmatter(agentText('build-fixer')).body), [])
     assert.deepEqual(rowCapProblems(fixerBrief()), [])
+  },
+
+  'the fixer and its launch brief end a capped flow row\'s notes with 1 flow row line judged flow-side or not — catches a red row the orchestrator can only halt on'() {
+    assert.deepEqual(flowRowLineProblems(parseFrontmatter(agentText('build-fixer')).body), [])
+    assert.match(fixerBrief().replace(/\s+/g, ' '), /`flow row:` line/, 'the launch brief never asks for the `flow row:` line')
+  },
+
+  'the flow row line check names a missing line, gestures judgement, flow file ban and repair mode — catches a check that passes anything'() {
+    const good = `Write \`${FLOW_ROW_LINE}\`. Say \`flow-side: yes\` when the step breaks simulator-qa-flow-gestures.md. Never edit a flow file: a validation worker in repair mode rewrites it.`
+    assert.deepEqual(flowRowLineProblems(good), [])
+    assert.match(flowRowLineProblems(good.replace('flow row:', 'row:')).join('\n'), /no `flow row:` line/)
+    assert.match(flowRowLineProblems(good.replace('simulator-qa-flow-gestures.md', 'the docs')).join('\n'), /gestures doc/)
+    assert.match(flowRowLineProblems(good.replace('Never edit', 'Edit')).join('\n'), /flow files/)
+    assert.match(flowRowLineProblems(good.replace('in repair mode ', '')).join('\n'), /who rewrites/)
   },
 
   'the row cap check names a missing cap, return, evidence part and each ban — catches a check that passes anything'() {

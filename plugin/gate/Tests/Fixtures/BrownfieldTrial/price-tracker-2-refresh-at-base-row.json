@@ -1,0 +1,21 @@
+{
+  "check": "qa/refresh.flow.json",
+  "evidence": [
+    "qa/03-req-refresh.flow/steps.json",
+    "qa/03-req-refresh.flow/batch.json",
+    "qa/03-req-refresh.flow/sim/steps.ndjson",
+    "qa/03-req-refresh.flow/sim/report.json"
+  ],
+  "exitStatus": null,
+  "layer": "flow",
+  "message": "the flow file doesn't run: agent-device batch failed (INVALID_ARGS): Batch step 15 gesture input is invalid: Expected preset to be one of: left, right, left-edge, right-edge.",
+  "ms": 11753,
+  "requirement": "req-refresh",
+  "result": "red",
+  "row": 3,
+  "runsAfter": [
+    "features",
+    "ui"
+  ],
+  "waitingOn": []
+}

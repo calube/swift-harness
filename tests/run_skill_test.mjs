@@ -415,6 +415,34 @@ function installPrefixes(files) {
     text.split('\n').filter(line => INSTALL_PREFIX.test(line)).map(line => `${path}: ${line.trim()}`))
 }
 
+/**
+ * Where a red flow row the fixer returns can only halt the one-shot run: the build loop's
+ * `## Flow repair` sends a row the fixer's `flow row:` line names to a validation worker in repair
+ * mode, re-adopts that row alone through `qa adopt --repair` with the build run, the cause, the
+ * reason and both red runs, caps it at 1 repair per row per run, launches the fixer again, and
+ * halts as before when the adopt isn't GREEN; the run skill's step 7 takes that path and records 1
+ * assumption naming the repaired row.
+ */
+export function flowRepairProblems(loop, run) {
+  const problems = []
+  const part = (loop.split('\n## ').find(p => p.startsWith('Flow repair')) ?? '').replace(/\s+/g, ' ')
+  if (!part) return ['event-loop.md has no `## Flow repair` section']
+  if (!loop.includes('- [Flow repair](#flow-repair)')) problems.push('the contents never list `Flow repair`')
+  if (!part.includes('`flow row:` line')) problems.push('never starts from the fixer\'s `flow row:` line')
+  if (!/repair mode[^.]*validation-worker\.md|validation-worker\.md[^.]*repair mode/.test(part)) problems.push('never sends the row to the validation worker\'s repair mode')
+  if (!part.includes('"$SG" qa adopt <fixWorktree> --repair <requirement> --build-run <run> --cause <cause> --reason "<why>" --red-run <run id> --red-run <run id> --json')) {
+    problems.push('no `qa adopt --repair` of the row alone')
+  }
+  if (!/\b1 repair per row per run\b/.test(part)) problems.push('no cap of 1 repair per row per run')
+  if (!/`still-red`/.test(part) || !/`flow-side`/.test(part)) problems.push('never picks the cause `flow-side` or `still-red`')
+  if (!/launch the fixer again/.test(part)) problems.push('never launches the fixer again after the repair')
+  if (!/not GREEN[^.]*halt|halt[^.]*not GREEN/.test(part)) problems.push('a refused repair never halts as before')
+  const step7 = (run.split('\n## ').find(p => p.startsWith('7. ')) ?? '').replace(/\s+/g, ' ')
+  if (!step7.includes('(../build/references/event-loop.md#flow-repair)')) problems.push('run step 7 never takes the flow repair path')
+  if (!/1 assumption naming the repaired row/.test(step7)) problems.push('run step 7 never records the repair as an assumption')
+  return problems
+}
+
 const tests = {
   'worktree creation installs node dependencies, so the run skill says never to prefix an area command with an install, and no skill, agent or workflow chains one — catches orchestrators and workers paying an install on every slice'() {
     const prose = read('skills/run/SKILL.md').split(/\s+/).join(' ')
@@ -681,6 +709,10 @@ const tests = {
     const problems = designConflictProblems(`- A design conflict follows the build skill:\n${block.replace(/^\d+\. /gm, '  ')}`)
     assert.ok(problems.includes('a design conflict recommends stop'), problems.join('\n'))
     assert.ok(problems.includes('a design conflict never recommends a retry with a widened write set'), problems.join('\n'))
+  },
+
+  'a fixer\'s flow row goes to a repair worker and back through qa adopt --repair once per run, not to a halt — catches a one-shot run stopped by its own flow file'() {
+    assert.deepEqual(flowRepairProblems(read('skills/build/references/event-loop.md'), read('skills/run/SKILL.md')), [])
   },
 
   'the run skill imports its plan with the landed contract and its gate run — catches a contract left pending after import'() {

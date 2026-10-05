@@ -3972,7 +3972,16 @@ cp $S/plans/spec/qa/watchlist-refresh.flow.json $S/plans/spec/qa/at-base-run.jso
 for r in 20261005T061106Z-6b7b7d78 20261005T061625Z-cef9b62a; do cp $S/runs/$r/qa/report.json $F/report-$r.json; done
 ```
 
-`grep -rniE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+`BrownfieldTrial/price-tracker-2-refresh-at-base-row.json` is the refresh row of the second
+price-tracker trial's `--at-base` run `20261005T042513Z-facc80b5`: red, but only because the flow
+file didn't run (a `gesture` `swipe` the pinned tool refused), the red a repair must not stand on.
+With `S2` that trial's copied state directory:
+
+```sh
+jq '.rows[] | select(.requirement == "req-refresh")' $S2/runs/20261005T042513Z-facc80b5/qa/report.json > plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-2-refresh-at-base-row.json
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the folder and the file matched nothing.
 
 ## Brownfield trial: a changed test that spins, and the warm-up its bounds read
 
