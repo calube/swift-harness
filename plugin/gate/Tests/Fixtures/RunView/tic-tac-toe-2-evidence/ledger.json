@@ -1,0 +1,118 @@
+{
+  "maxParallel" : 3,
+  "resume" : "planned; 4 tasks in 2 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "tasks" : [
+    {
+      "covers" : [
+        "req-rules-unit-tests"
+      ],
+      "deps" : [
+
+      ],
+      "estLines" : 120,
+      "gate" : "slice",
+      "id" : "ttt-contract",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-contract",
+      "writeSet" : [
+        "Packages/AppFeature/Package.swift",
+        "Packages/AppFeature/Sources/GameCore/",
+        "Packages/AppFeature/Tests/GameCoreTests/",
+        "Packages/AppFeature/Sources/AppCore/GameFeature.swift",
+        "Packages/AppFeature/Sources/AppUI/AccessibilityID.swift",
+        "InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme"
+      ]
+    },
+    {
+      "branch" : "spec/ttt-rules",
+      "covers" : [
+        "req-alternate-turns",
+        "req-win-lines",
+        "req-draw",
+        "req-rules-unit-tests"
+      ],
+      "deps" : [
+        "ttt-contract"
+      ],
+      "estLines" : 160,
+      "gate" : "slice",
+      "id" : "ttt-rules",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-rules",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/GameCore/",
+        "Packages/AppFeature/Tests/GameCoreTests/"
+      ]
+    },
+    {
+      "branch" : "spec/ttt-screen",
+      "covers" : [
+        "req-launch-empty-board",
+        "req-alternate-turns",
+        "req-win-lines",
+        "req-draw",
+        "req-new-game",
+        "req-existing-tests"
+      ],
+      "deps" : [
+        "ttt-contract"
+      ],
+      "estLines" : 220,
+      "gate" : "slice",
+      "id" : "ttt-screen",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-ttt-screen",
+      "writeSet" : [
+        "Packages/AppFeature/Sources/AppCore/",
+        "Packages/AppFeature/Sources/AppUI/",
+        "Packages/AppFeature/Tests/AppCoreTests/",
+        "UITests/",
+        "App/"
+      ]
+    },
+    {
+      "branch" : "spec/spec-validation",
+      "covers" : [
+        "req-launch-empty-board",
+        "req-alternate-turns",
+        "req-win-lines",
+        "req-draw",
+        "req-new-game"
+      ],
+      "deps" : [
+        "ttt-contract"
+      ],
+      "estLines" : 80,
+      "gate" : "slice",
+      "id" : "spec-validation",
+      "status" : "done",
+      "tests" : [
+
+      ],
+      "worktree" : "/TRIAL/repo-spec-spec-validation",
+      "writeSet" : [
+        ".harness/qa/spec/"
+      ]
+    }
+  ],
+  "waves" : [
+    [
+      "ttt-contract"
+    ],
+    [
+      "spec-validation",
+      "ttt-rules",
+      "ttt-screen"
+    ]
+  ]
+}

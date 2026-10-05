@@ -8,6 +8,14 @@ public struct QAReport: Sendable, Equatable {
   public static let directory = "qa"
   public static let fileName = "report.json"
 
+  /// The small file beside a result bundle holding its `xcresulttool get test-results tests`
+  /// JSON, `<name>.tests.json` for `<name>.xcresult`: what a report links in the bundle's place.
+  /// `nil` for a path that isn't a result bundle.
+  public static func testSummary(ofBundle path: String) -> String? {
+    guard path.hasSuffix(".xcresult") else { return nil }
+    return path.dropLast(".xcresult".count) + ".tests.json"
+  }
+
   public static let checkFailedRuleID = "qa.check-failed"
   public static let checkUnverifiedRuleID = "qa.check-unverified"
   public static let checkPassesAtBaseRuleID = "qa.check-passes-at-base"

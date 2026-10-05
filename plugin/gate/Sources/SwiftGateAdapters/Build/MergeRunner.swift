@@ -395,7 +395,7 @@ public struct BuildMerge: Sendable {
       _ = try await checkMain(command, context, expected: lastMerge.postCommit)
       try await checkFixIsFree(command, context)
       let main = context.names.mainCheckout
-      let gate = await recordMergeGate(context, at: lastMerge.postCommit, log: log)
+      let gate = await recordMergeGate(context, at: lastMerge.postCommit)
       try await step(command, context, "resetting \(main)") {
         () async throws(GitWorkspaceError) in
         try await merger.resetHard(to: lastMerge.preCommit, in: main)
@@ -429,7 +429,7 @@ public struct BuildMerge: Sendable {
   /// Appends the newest `check --tier` run that started on the main checkout at `commit`, the
   /// merge gate that sent this undo, as the task's merge gate, unless the log already holds it.
   /// A gate that can't be found or recorded never stops the undo; the note says why.
-  private func recordMergeGate(_ context: Context, at commit: String, log: BuildEventLog) async
+  private func recordMergeGate(_ context: Context, at commit: String) async
     -> (runID: String?, note: String)
   {
     let runs = RunStore(
@@ -446,17 +446,18 @@ public struct BuildMerge: Sendable {
       }),
       let tier = TaskReturnEvidence.GateRun.tier(ofCommand: record.command)
     else { return (nil, "") }
-    let recorded = log.events.contains {
-      if case .gate(let gate) = $0 { return gate.runID == record.runID }
-      return false
-    }
-    guard !recorded else { return (nil, "") }
+    let runID = record.runID
     do throws(BuildRunStoreError) {
-      try await context.run.append(
+      let appended = try await context.run.append(
         .gate(
           .init(
-            stage: .merge(task: task), tier: tier, verdict: record.verdict, runID: record.runID,
-            at: clock.now())))
+            stage: .merge(task: task), tier: tier, verdict: record.verdict, runID: runID,
+            at: clock.now()))
+      ) { held in
+        if case .gate(let gate) = held { return gate.runID == runID }
+        return false
+      }
+      guard appended else { return (nil, "") }
     } catch {
       return (nil, " Its merge gate \(record.runID) wasn't recorded: \(error).")
     }

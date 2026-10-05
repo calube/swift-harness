@@ -639,8 +639,8 @@ enum RunViewValidationFold {
 
 extension RunViewValidation {
   /// Each video and contact sheet a flow links, a row's earlier runs' included, as
-  /// `<run id>/<run-relative path>`: the only files a live page may fetch from a run directory.
-  public var linkedFiles: Set<String> {
+  /// `<run id>/<run-relative path>`: the files a report carries first.
+  public var flowFiles: Set<String> {
     let flows =
       rows.compactMap(\.flow) + rows.flatMap { $0.history.compactMap(\.flow) }
       + keptFlows.map(\.flow)
@@ -648,5 +648,16 @@ extension RunViewValidation {
       flows.flatMap { flow in
         [flow.video, flow.sheet].compactMap { $0.map { "\(flow.run)/\($0)" } }
       })
+  }
+
+  /// Every run file the page may link, as `<run id>/<run-relative path>`: each flow's video and
+  /// contact sheet, and each evidence path a row or 1 of its earlier runs lists. These are the
+  /// only files a live page may fetch from a run directory.
+  public var linkedFiles: Set<String> {
+    let attempts = rows.flatMap { row in
+      [(row.qaRun, row.evidence)] + row.history.map { ($0.qaRun, $0.evidence) }
+    }
+    return flowFiles.union(
+      attempts.flatMap { run, evidence in evidence.map { "\(run)/\($0)" } })
   }
 }

@@ -633,6 +633,40 @@ struct BuildLoopCommandTests {
   }
 
   @Test(
+    "record-gate run twice, or twice at once, for 1 gate run records it once and says the second was already recorded — catches 1 merge gate counted twice in the build log"
+  )
+  func recordGateOncePerRun() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try await mergedRun(scenario, events: [Self.merge("a", "m1")], surfaces: ["a": nil])
+    let runID = "20260927T190000Z-0000beef"
+    let root = try checkout(runID: runID, command: "check push", verdict: .green)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let record = { @Sendable in
+      await BuildRecordGateRun.run(
+        slug: BuildScenario.plan, stage: .merge(task: "a"), runID: runID,
+        session: BuildScenario.alice, root: root, git: scenario.git,
+        clock: FixedClock(date: BuildScenario.startedAt))
+    }
+
+    async let first = record()
+    async let second = record()
+    let racing = await [first, second]
+    let again = await record()
+
+    #expect(racing.map(\.verdict) == [.green, .green])
+    #expect(again.verdict == .green)
+    #expect(again.message.contains("already recorded"), "\(again.message)")
+    let store = try #require(
+      try await BuildRunStore.latest(plan: BuildScenario.plan, git: scenario.git))
+    let gates = try store.events().events.filter {
+      if case .gate(let gate) = $0 { return gate.runID == runID }
+      return false
+    }
+    #expect(gates.count == 1)
+  }
+
+  @Test(
     "record-gate is BLOCKED for a run the checkout never recorded, or one that wasn't a check — catches a ledger page citing a gate that never ran"
   )
   func recordGateNeedsACheckRun() async throws {

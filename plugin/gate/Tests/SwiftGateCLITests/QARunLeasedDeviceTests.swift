@@ -153,7 +153,10 @@ struct QARunLeasedDeviceTests {
     for row in report.rows {
       #expect(
         row.evidence
-          == ["qa/01-req-board.acceptance.txt", "qa/01-req-board.acceptance.xcresult"],
+          == [
+            "qa/01-req-board.acceptance.txt", "qa/01-req-board.acceptance.xcresult",
+            "qa/01-req-board.acceptance.tests.json",
+          ],
         "row \(row.row)")
     }
   }

@@ -1,0 +1,124 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "commit" : "bce654ab78aff08e9341095597f8bb04bd80dfbc",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "5 of 5 rows verified: 0 pass, 5 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "5 rows (1, 2, 3, 4, 5) reused from qa run 20261005T014356Z-f0377466 by spec-validation: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "qa/launch-empty-board.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T014356Z-f0377466 by spec-validation at bce654ab78af: step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-launch-empty-board",
+      "result" : "red",
+      "reusedFrom" : "20261005T014356Z-f0377466",
+      "row" : 1,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/alternate-turns.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T014356Z-f0377466 by spec-validation at bce654ab78af: step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-alternate-turns",
+      "result" : "red",
+      "reusedFrom" : "20261005T014356Z-f0377466",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/win-lines.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T014356Z-f0377466 by spec-validation at bce654ab78af: step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\"; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-win-lines",
+      "result" : "red",
+      "reusedFrom" : "20261005T014356Z-f0377466",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/draw.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T014356Z-f0377466 by spec-validation at bce654ab78af: step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-draw",
+      "result" : "red",
+      "reusedFrom" : "20261005T014356Z-f0377466",
+      "row" : 4,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/new-game.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T014356Z-f0377466 by spec-validation at bce654ab78af: step 1 `wait` failed: Batch failed at step 1 (wait): wait timed out for selector: id=\"game.status\". Current surface: Posts, 100 posts available.; sim verify RED: sim.no-steps: run 20261005T014356Z-f0377466-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-new-game",
+      "result" : "red",
+      "reusedFrom" : "20261005T014356Z-f0377466",
+      "row" : 5,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T015149Z-c448796d",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

@@ -102,7 +102,7 @@ struct QARunXcodeTestCountTests {
   }
 
   @Test(
-    "a `test:` row in an xcode area whose captured bundle ran 1 passing test passes, says 1 test passed and lists the bundle beside its output as evidence — catches a row read as running nothing, and a pass whose only evidence is `exit 0`"
+    "a `test:` row in an xcode area whose captured bundle ran 1 passing test passes, says 1 test passed and lists the bundle and its saved test summary beside its output as evidence — catches a row read as running nothing, a pass whose only evidence is `exit 0`, and a report with nothing small to link in the bundle's place"
   )
   func oneTestPasses() async throws {
     let repo = try await Self.repo()
@@ -116,7 +116,15 @@ struct QARunXcodeTestCountTests {
     #expect(report.rows.first?.message == "exit 0, 1 test passed")
     #expect(
       report.rows.first?.evidence
-        == ["qa/01-req-reset.acceptance.txt", "qa/01-req-reset.acceptance.xcresult"])
+        == [
+          "qa/01-req-reset.acceptance.txt", "qa/01-req-reset.acceptance.xcresult",
+          "qa/01-req-reset.acceptance.tests.json",
+        ])
+    let summary = repo.root.appending(
+      path:
+        ".git/swift-harness/runs/\(try #require(report.runID))/qa/01-req-reset.acceptance.tests.json"
+    )
+    #expect(try Data(contentsOf: summary) == (try Fixture.data("Xcresult/one-test.tests.json")))
   }
 
   @Test(

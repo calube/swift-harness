@@ -1,0 +1,100 @@
+{
+  "after" : "ttt-rules",
+  "atBase" : false,
+  "commit" : "7571ad58e9688be1ddee8473f7ac7357f61ca7d3",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "0 of 4 rows verified: 0 pass, 0 red, 0 unverified, 4 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "qa/alternate-turns.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ttt-screen",
+      "ms" : 0,
+      "requirement" : "req-alternate-turns",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+        "ttt-screen"
+      ]
+    },
+    {
+      "check" : "qa/win-lines.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ttt-screen",
+      "ms" : 0,
+      "requirement" : "req-win-lines",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+        "ttt-screen"
+      ]
+    },
+    {
+      "check" : "qa/draw.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ttt-screen",
+      "ms" : 0,
+      "requirement" : "req-draw",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+        "ttt-screen"
+      ]
+    },
+    {
+      "check" : "qa/new-game.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ttt-screen",
+      "ms" : 0,
+      "requirement" : "req-new-game",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+        "ttt-screen"
+      ]
+    }
+  ],
+  "runID" : "20261005T015317Z-4e200469",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

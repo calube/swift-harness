@@ -1,0 +1,174 @@
+{
+  "after" : null,
+  "atBase" : false,
+  "commit" : "df9ccd51a33f64984c61485eaf201cbb5c3d925d",
+  "final" : true,
+  "findings" : [
+
+  ],
+  "message" : "5 of 5 rows verified: 5 pass, 0 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "rows" : [
+    {
+      "check" : "qa/launch-empty-board.flow.json",
+      "evidence" : [
+        "qa/01-req-launch-empty-board.flow/steps.json",
+        "qa/01-req-launch-empty-board.flow/batch.json",
+        "qa/01-req-launch-empty-board.flow/flow.json",
+        "qa/01-req-launch-empty-board.flow/video.mp4",
+        "qa/01-req-launch-empty-board.flow/sheet.png",
+        "qa/logs/01-req-launch-empty-board/app.log",
+        "qa/logs/01-req-launch-empty-board/network.json",
+        "qa/logs/01-req-launch-empty-board/trace.log",
+        "qa/logs/01-req-launch-empty-board/os.log",
+        "qa/logs/01-req-launch-empty-board/container",
+        "qa/01-req-launch-empty-board.flow/sim/steps.ndjson",
+        "qa/01-req-launch-empty-board.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps",
+      "ms" : 66164,
+      "requirement" : "req-launch-empty-board",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/alternate-turns.flow.json",
+      "evidence" : [
+        "qa/02-req-alternate-turns.flow/steps.json",
+        "qa/02-req-alternate-turns.flow/batch.json",
+        "qa/02-req-alternate-turns.flow/flow.json",
+        "qa/02-req-alternate-turns.flow/video.mp4",
+        "qa/02-req-alternate-turns.flow/sheet.png",
+        "qa/logs/02-req-alternate-turns/app.log",
+        "qa/logs/02-req-alternate-turns/network.json",
+        "qa/logs/02-req-alternate-turns/trace.log",
+        "qa/logs/02-req-alternate-turns/os.log",
+        "qa/logs/02-req-alternate-turns/container",
+        "qa/02-req-alternate-turns.flow/sim/steps.ndjson",
+        "qa/02-req-alternate-turns.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 8 steps",
+      "ms" : 55109,
+      "requirement" : "req-alternate-turns",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/win-lines.flow.json",
+      "evidence" : [
+        "qa/03-req-win-lines.flow/steps.json",
+        "qa/03-req-win-lines.flow/batch.json",
+        "qa/03-req-win-lines.flow/flow.json",
+        "qa/03-req-win-lines.flow/video.mp4",
+        "qa/03-req-win-lines.flow/sheet.png",
+        "qa/logs/03-req-win-lines/app.log",
+        "qa/logs/03-req-win-lines/network.json",
+        "qa/logs/03-req-win-lines/trace.log",
+        "qa/logs/03-req-win-lines/os.log",
+        "qa/logs/03-req-win-lines/container",
+        "qa/03-req-win-lines.flow/sim/steps.ndjson",
+        "qa/03-req-win-lines.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 12 steps",
+      "ms" : 70937,
+      "requirement" : "req-win-lines",
+      "result" : "pass",
+      "row" : 3,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/draw.flow.json",
+      "evidence" : [
+        "qa/04-req-draw.flow/steps.json",
+        "qa/04-req-draw.flow/batch.json",
+        "qa/04-req-draw.flow/flow.json",
+        "qa/04-req-draw.flow/video.mp4",
+        "qa/04-req-draw.flow/sheet.png",
+        "qa/logs/04-req-draw/app.log",
+        "qa/logs/04-req-draw/network.json",
+        "qa/logs/04-req-draw/trace.log",
+        "qa/logs/04-req-draw/os.log",
+        "qa/logs/04-req-draw/container",
+        "qa/04-req-draw.flow/sim/steps.ndjson",
+        "qa/04-req-draw.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps",
+      "ms" : 67503,
+      "requirement" : "req-draw",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/new-game.flow.json",
+      "evidence" : [
+        "qa/05-req-new-game.flow/steps.json",
+        "qa/05-req-new-game.flow/batch.json",
+        "qa/05-req-new-game.flow/flow.json",
+        "qa/05-req-new-game.flow/video.mp4",
+        "qa/05-req-new-game.flow/sheet.png",
+        "qa/logs/05-req-new-game/app.log",
+        "qa/logs/05-req-new-game/network.json",
+        "qa/logs/05-req-new-game/trace.log",
+        "qa/logs/05-req-new-game/os.log",
+        "qa/logs/05-req-new-game/container",
+        "qa/05-req-new-game.flow/sim/steps.ndjson",
+        "qa/05-req-new-game.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 16 steps",
+      "ms" : 67026,
+      "requirement" : "req-new-game",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "ttt-rules",
+        "ttt-screen"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T020215Z-2bdf5cdb",
+  "schemaVersion" : 1,
+  "settled" : true,
+  "verdict" : "GREEN"
+}

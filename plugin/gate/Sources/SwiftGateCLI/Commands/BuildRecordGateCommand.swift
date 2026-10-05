@@ -16,7 +16,8 @@ struct BuildRecordGateReport: Sendable, Equatable, Encodable {
 }
 
 /// Records a gate the orchestrator ran on `main` in the build run's event log, so the ledger page
-/// can show it. The tier and verdict come from the gate run's own history line, never the caller.
+/// can show it, once per gate run however often it is asked. The tier and verdict come from the
+/// gate run's own history line, never the caller.
 enum BuildRecordGateRun {
   static func run(
     slug: String, stage: BuildEvent.Gate.Stage, runID: String, session: String?, root: URL,
@@ -46,6 +47,7 @@ enum BuildRecordGateRun {
     let gate = BuildEvent.Gate(
       stage: stage, tier: tier, verdict: record.verdict, runID: runID, at: clock.now())
     let store: BuildRunStore
+    let appended: Bool
     do throws(BuildRunStoreError) {
       guard let latest = try await BuildRunStore.latest(plan: slug, git: git) else {
         return .blocked(command, slug, "plan `\(slug)` has no build run to record the gate in")
@@ -59,7 +61,10 @@ enum BuildRecordGateRun {
             + "\(tier.profile.rawValue) profile, but build run \(store.runID) runs under the "
             + "\(profile.rawValue) profile; record a gate of its own tiers")
       }
-      try await store.append(.gate(gate))
+      appended = try await store.append(.gate(gate)) { held in
+        if case .gate(let recorded) = held { return recorded.runID == runID }
+        return false
+      }
     } catch {
       return .blocked(command, slug, "recording the gate: \(error)")
     }
@@ -76,7 +81,10 @@ enum BuildRecordGateRun {
         stage: task == nil ? "final" : "merge", task: task, tier: tier, verdict: record.verdict,
         runId: runID),
       holder: nil,
-      message: "recorded the \(label): \(tier.rawValue) \(record.verdict.rawValue), run \(runID)")
+      message: appended
+        ? "recorded the \(label): \(tier.rawValue) \(record.verdict.rawValue), run \(runID)"
+        : "run \(runID) is already recorded in build run \(store.runID); the log keeps 1 line for it"
+    )
   }
 
   static func render(_ result: BuildLoopResult<BuildRecordGateReport>, format: OutputFormat)

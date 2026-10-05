@@ -410,6 +410,13 @@
     return offsetMs == null ? href : href + "#t=" + Math.max(0, offsetMs) / 1000;
   }
 
+  // Whether the page may link a run's file: a report links only the files its folder holds, as
+  // its view's `evidenceFiles` lists them; a live page, whose view has none, links every one.
+  function carries(view, run, path) {
+    const files = view && view.evidenceFiles;
+    return files == null || files.includes(run + "/" + path);
+  }
+
   // Why a final pass or a kept XCUITest left no video or no contact sheet.
   const GAP_TEXT = {
     recorderBusy: "a recording outside the harness held the simulator past the 5-minute retry bound",
@@ -436,7 +443,7 @@
   }
 
   root.RunViewModel = {
-    validationGroups, validationBadges, evidenceHref, gapText, keptFlowGroups,
+    validationGroups, validationBadges, evidenceHref, carries, gapText, keptFlowGroups,
     latestGate, tabBadges, stalls, openHalts, workers, failureOf, failureReason, location, clip, normalize, lanes, scale, labelFits, blocks, activity, waveOf, toolSummary, durationText, timeBoxText, snapshotText,
     lastEventMs, gateTier, sum, fmtTok, fmtTokens, fmtMin, fmtMs, shortRun
   };
