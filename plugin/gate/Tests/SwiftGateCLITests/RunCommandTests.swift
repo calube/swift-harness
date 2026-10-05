@@ -461,7 +461,7 @@ struct RunCommandTests {
     let expected = try TaskWorktree.planCheckout(
       commonDirectory: clone.layout.commonDir.path(percentEncoded: false), plan: prepared.slug)
     #expect(prepared.checkout == expected)
-    #expect(warmup.seedCheckouts.map { $0.checkout?.path(percentEncoded: false) } == [expected])
+    #expect(warmup.seedCheckouts.map { $0.checkout?.path } == [expected])
     #expect(warmup.seedCheckouts.map(\.existed) == [true])
     let output = try await clone.runner.run(
       ProcessInvocation(

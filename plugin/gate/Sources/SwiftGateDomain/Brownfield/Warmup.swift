@@ -304,7 +304,23 @@ public enum Warmup {
     area: BrownfieldArea, checkout: String, layout: BrownfieldStateLayout,
     tree: TrackedTreeSnapshot, deadline: Duration
   ) -> AreaCommandRequest? {
-    nil
+    guard area.kind == .swiftpm else { return nil }
+    return AreaCommandExpansion.prepare(
+      area: area, step: .build, repositoryRoot: checkout, files: [], tests: [],
+      junitPath: AreaCommandExpansion.junitPath(layout: layout, area: area.name, step: .build),
+      deadline: deadline,
+      environment: AreaCacheEnvironment.make(area: area, layout: layout, tree: tree).variables
+    )?.request
+  }
+
+  /// The seed build's result from what its command came to.
+  public static func seedBuild(
+    area: String, outcome: AreaCommandOutcome, milliseconds: Int
+  ) -> WarmupSeedBuild {
+    WarmupSeedBuild(
+      area: area, milliseconds: milliseconds,
+      outcome: outcome == .passed ? .passed : outcome.toolNotInstalled ? .notInstalled : .failed,
+      detail: detail(outcome))
   }
 
   /// Whether the repository commits `xcode`'s generated project, so generating it in place would

@@ -89,6 +89,10 @@ struct WarmupCommand: AsyncParsableCommand {
     let generator = XcodeGenerator(runner: process, repositoryRoot: root, layout: layout)
     let notes = Mutex(known.notes)
 
+    // Started beside the base tree's run, so the checkout the run builds in is warm sooner.
+    async let seeded = seed(
+      areas: areas, checkout: seedCheckout, layout: layout, tree: snapshot,
+      deadline: dependencies.deadline, runner: runner)
     let results = await Warmup.run(
       areas: areas,
       dependencies: Warmup.Dependencies(
@@ -123,8 +127,39 @@ struct WarmupCommand: AsyncParsableCommand {
           notes.withLock { $0 += lines }
         }))
     return Outcome(
-      tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results, seeded: [],
-      notes: notes.withLock { $0 })
+      tree: tree, timesFile: layout.warmup(tree: tree).path, areas: results,
+      seeded: await seeded, notes: notes.withLock { $0 })
+  }
+
+  /// Each SwiftPM area's build in `checkout`, all at once; none without a checkout.
+  private static func seed(
+    areas: [BrownfieldArea], checkout: URL?, layout: BrownfieldStateLayout,
+    tree: TrackedTreeSnapshot, deadline: Duration, runner: any AreaCommandRunning
+  ) async -> [WarmupSeedBuild] {
+    guard let checkout else { return [] }
+    let requests = areas.compactMap { area in
+      Warmup.seedRequest(
+        area: area, checkout: checkout.path, layout: layout, tree: tree,
+        deadline: deadline)
+    }
+    let built = await withTaskGroup(of: (Int, WarmupSeedBuild).self) { group in
+      for (index, request) in requests.enumerated() {
+        group.addTask {
+          let started = ContinuousClock.now
+          let outcome = await runner.run(request)
+          return (
+            index,
+            Warmup.seedBuild(
+              area: request.area, outcome: outcome,
+              milliseconds: milliseconds(ContinuousClock.now - started))
+          )
+        }
+      }
+      var built: [(Int, WarmupSeedBuild)] = []
+      for await result in group { built.append(result) }
+      return built
+    }
+    return built.sorted { $0.0 < $1.0 }.map(\.1)
   }
 
   /// A generator's outcome as the warm-up records it.
@@ -236,7 +271,10 @@ struct WarmupCommand: AsyncParsableCommand {
     }
     let outcome: Outcome
     do {
-      outcome = try await Self.warm(directory: directory, areaNames: names, dependencies: .init())
+      outcome = try await Self.warm(
+        directory: directory, areaNames: names,
+        seedCheckout: seedCheckout.map { URL(filePath: $0, directoryHint: .isDirectory) },
+        dependencies: .init())
     } catch {
       FileHandle.standardError.write(Data("warmup: \(error.message)\n".utf8))
       throw ExitCode(Verdict.blocked.exitCode)
@@ -261,6 +299,14 @@ struct WarmupCommand: AsyncParsableCommand {
             "  \($0)"
           }
         }
+      }
+    }
+    for build in outcome.seeded {
+      lines.append(
+        "\(build.area) build in \(seedCheckout ?? ""): \(build.outcome.rawValue), "
+          + "\(build.milliseconds) ms")
+      if build.outcome != .passed, let detail = build.detail {
+        lines += detail.split(separator: "\n", omittingEmptySubsequences: false).map { "  \($0)" }
       }
     }
     Console.write(lines.joined(separator: "\n"))

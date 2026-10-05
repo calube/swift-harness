@@ -130,7 +130,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 ## 4. Fix the commands before planning ends
 
 The warm-up started when discovery finished and runs every area's `generate`, `build` and `test`
-at `<base>`, in parallel, to the end. It waits for nothing and you don't wait for it either; read
+at `<base>`, in parallel, to the end. It also runs each `swiftpm` area's `build` in `<checkout>`,
+which `swiftgate run` checked out at launch, so your first builds there start warm; SwiftPM makes
+a build of yours there wait for its build of that package. It waits for nothing and you don't wait for it either; read
 what it has recorded so far with `"$SG" events list --kind warmup.run`. Each event names an
 `area`, a `step`, its `ms`, `cache` and `outcome` (`passed`, `failed`, `dropped`,
 `not-installed`).
@@ -196,8 +198,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
 
 Open the phase: `"$SG" events span start --phase contract --build-run <slug>`, kept as `<span>`.
 
-1. `"$SG" run checkout create <slug> --session <session> --json` from the user's checkout. Its
-   `worktree` is `<checkout>`; work only there. Never add or remove a worktree with git itself:
+1. `"$SG" run checkout create <slug> --session <session> --json` from the user's checkout. It
+   takes the checkout `swiftgate run` made at launch. Its `worktree` is `<checkout>`; work only
+   there. Never add or remove a worktree with git itself:
    only `swiftgate` keeps the gate reports a checkout holds when it goes.
    `run checkout create` and `worktree create` install each node area's dependencies once, frozen
    to its lockfile, and list each install in the JSON's `installs`. Never prefix an area command
