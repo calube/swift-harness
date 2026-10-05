@@ -296,6 +296,7 @@ public actor QAFlowRunner {
 
   private let simulator: any QAFlowSimulating
   private let finalPass: QAFinalPass?
+  private let recorder: FinalPassRecorder?
   private let hold: QAFlowDeviceHold?
   /// The tree whose rows have asked for the shared device, once 1 has.
   private var heldIn: URL?
@@ -304,13 +305,17 @@ public actor QAFlowRunner {
 
   /// - Parameters:
   ///   - finalPass: set for `qa run --final`, which records each batch and saves its logs.
+  ///   - recorder: without `finalPass`, records each batch's video and contact sheet and saves
+  ///     no logs; a recording it can't make leaves no gap, since only a final pass owes one.
   ///   - hold: the device every row borrows in turn, held until ``finish()``; `nil` brings a
   ///     device up for each row.
   public init(
-    simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil, hold: QAFlowDeviceHold? = nil
+    simulator: any QAFlowSimulating, finalPass: QAFinalPass? = nil,
+    recorder: FinalPassRecorder? = nil, hold: QAFlowDeviceHold? = nil
   ) {
     self.simulator = simulator
     self.finalPass = finalPass
+    self.recorder = recorder
     self.hold = hold
   }
 
@@ -392,6 +397,22 @@ public actor QAFlowRunner {
       batch = recorded.outcome
       record = recorded.record
       finalFiles = recorded.files
+    } else if let recorder {
+      let stepsFile = row.stepsFile
+      let directory = row.directory
+      let (outcome, recording) = await recorder.record(
+        on: target, directory: directory, relativeDirectory: row.relativeDirectory
+      ) { recordTo in
+        await runner.run(
+          stepsFile: stepsFile, on: target, store: store, flowDirectory: directory,
+          recordTo: recordTo)
+      }
+      batch = outcome
+      var made = recording
+      made.videoGap = nil
+      made.sheetGap = nil
+      record = outcome.record.recorded(made)
+      finalFiles = Self.paths(made)
     } else {
       batch = await runner.run(
         stepsFile: row.stepsFile, on: target, store: store, flowDirectory: row.directory)

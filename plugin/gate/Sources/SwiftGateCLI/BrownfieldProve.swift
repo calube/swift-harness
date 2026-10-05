@@ -72,19 +72,44 @@ enum BrownfieldProve {
     root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
     proofs: ProveResultCollector, dependencies: Dependencies
   ) async -> ChangedTestJudgement {
+    await prove(
+      root: root, base: base, config: config, junitDirectory: junitDirectory, proofs: proofs,
+      dependencies: dependencies
+    ).judgement
+  }
+
+  /// What a prove decided, and how its reverted runs built: `none` when it ran none.
+  struct Outcome: Sendable, Equatable {
+    let judgement: ChangedTestJudgement
+    let derivedData: GateDerivedData
+  }
+
+  /// ``run(root:base:config:junitDirectory:proofs:dependencies:)``, labelled by the scratch-tree
+  /// build directories of the areas whose changed tests it runs, read before they run, and `none`
+  /// when it runs none.
+  ///
+  /// - Parameter layout: the clone's state the label reads; `nil` reads `dependencies`'.
+  static func prove(
+    root: URL, base: String, config: BrownfieldConfig, junitDirectory: URL,
+    proofs: ProveResultCollector, dependencies: Dependencies, layout: BrownfieldStateLayout? = nil
+  ) async -> Outcome {
+    func unbuilt(_ judgement: ChangedTestJudgement) -> Outcome {
+      Outcome(judgement: judgement, derivedData: .none)
+    }
     let git = dependencies.git
     let mergeBase: String
     let changed: [String]
     let added: [AddedLines]
     do throws(GitError) {
       guard let found = try await git.mergeBase("HEAD", base) else {
-        return blocked("HEAD and \(base) share no history, so there is no tree to revert to")
+        return unbuilt(
+          blocked("HEAD and \(base) share no history, so there is no tree to revert to"))
       }
       mergeBase = found
       changed = try await git.changedFiles(since: mergeBase)
       added = try await git.addedLines(since: mergeBase)
     } catch {
-      return blocked("git: \(error)")
+      return unbuilt(blocked("git: \(error)"))
     }
     let tests = changed.filter { path in
       config.areas.contains { ChangedTestIDs.isTestFile(path, of: $0) }
@@ -110,8 +135,8 @@ enum BrownfieldProve {
     }
     guard !plans.isEmpty else {
       let names = config.areas.map(\.name).joined(separator: ", ")
-      return judgement.merged(
-        with: note("prove: no new or changed tests in \(names) since \(base)"))
+      return unbuilt(
+        judgement.merged(with: note("prove: no new or changed tests in \(names) since \(base)")))
     }
     // A plan whose run the box leaves too little time isn't started: it would only be killed.
     plans = plans.filter { plan in
@@ -125,14 +150,18 @@ enum BrownfieldProve {
           file: plan.ids.first?.file ?? "."))
       return false
     }
-    guard !plans.isEmpty else { return judgement }
+    guard !plans.isEmpty else { return unbuilt(judgement) }
     let reverted = changed.filter { !tests.contains($0) }
     guard !reverted.isEmpty else {
-      return judgement.merged(
-        with: note("prove: only tests changed since \(base), so there is nothing to revert"))
+      return unbuilt(
+        judgement.merged(
+          with: note("prove: only tests changed since \(base), so there is nothing to revert")))
     }
     let request = ScratchTreeRequest(
       revision: "HEAD", revertTo: mergeBase, copiedPaths: tests, revertedPaths: reverted)
+    let built =
+      (layout ?? dependencies.layout).map { Self.derivedData(plans.map(\.area), layout: $0) }
+      ?? .none
     let ran: AreaRun
     do throws(ScratchWorktreeError) {
       ran = try await dependencies.scratch.withScratchTree(request) { toplevel in
@@ -146,13 +175,15 @@ enum BrownfieldProve {
         return total
       }
     } catch {
-      return judgement.merged(with: blocked("scratch worktree: \(error)"))
+      return unbuilt(judgement.merged(with: blocked("scratch worktree: \(error)")))
     }
     proofs.record(ran.proved)
-    return judgement.merged(with: ran.judgement).merged(
-      with: note(
-        "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
-          + "reverted"))
+    return Outcome(
+      judgement: judgement.merged(with: ran.judgement).merged(
+        with: note(
+          "prove: \(ran.proven) of \(ran.total) changed tests fail with the change's source "
+            + "reverted")),
+      derivedData: built)
   }
 
   /// How 1 area's changed tests run.

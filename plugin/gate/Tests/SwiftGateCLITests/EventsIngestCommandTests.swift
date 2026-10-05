@@ -542,7 +542,7 @@ struct EventsIngestCommandTests {
   }
 
   @Test(
-    "replaying the run's ingests: a Workflow completion leaves the session's own Agent-tool subagent untagged, its own ingest then tags it with its role and task, and the end-of-run ingest files only the session's messages as orchestrator, with the total equal to the envelope — catches a validation worker's cost filed as the orchestrator's"
+    "replaying the run's ingests: a Workflow completion leaves the session's own Agent-tool subagent unstored, its own ingest then stores it with its role and task, and the end-of-run ingest files only the session's messages as orchestrator, with the total equal to the envelope — catches a validation worker's cost filed as the orchestrator's"
   )
   func runIngestsTagEachAgentOnce() throws {
     let scenario = try Scenario()
@@ -554,15 +554,13 @@ struct EventsIngestCommandTests {
         Self.runSession, workflow: workflows.appending(path: workflow).path, task: task)
       #expect(output.status == 0, "\(output.stderr)")
     }
-    let early = scenario.usages.filter { $0.agentID == "a9f3bfd905ad90faa" }
-    #expect(early.count == 16)
-    #expect(early.allSatisfy { $0.role == nil }, "\(Set(early.map(\.role)))")
+    #expect(scenario.usages.filter { $0.agentID == "a9f3bfd905ad90faa" }.isEmpty)
 
     let validation = scenario.ingest(
       Self.runSession, role: .qa, task: "validation", buildRun: Self.buildRun,
       agentID: "a9f3bfd905ad90faa")
     #expect(validation.status == 0, "\(validation.stderr)")
-    #expect(validation.stdout.contains("16 retagged"), "\(validation.stdout)")
+    #expect(validation.stdout.contains("16 new, 0 retagged"), "\(validation.stdout)")
     #expect(scenario.shipIngest(Self.runSession).status == 0)
 
     let metrics = try scenario.costMetrics(buildRun: Self.buildRun)
@@ -577,5 +575,34 @@ struct EventsIngestCommandTests {
     #expect(Self.tokens(metrics[["total"]]) == envelope.tokens)
     let total = try #require(metrics[["total"]]?["cost-usd"]?.value)
     #expect(abs(total - envelope.cost) <= 0.01 * envelope.cost, "\(total) vs \(envelope.cost)")
+  }
+
+  @Test(
+    "replaying the run's ingests writes 1 agent.usage line per message to the raw store: a Workflow completion stores neither another Workflow's agents nor the session's Agent-tool subagent, which their own ingests store tagged — catches a retagged agent's cost written twice to usage.jsonl"
+  )
+  func runIngestsWriteEachMessageOnce() throws {
+    let scenario = try Scenario()
+    defer { scenario.remove() }
+    let workflows = scenario.transcripts.appending(
+      path: "\(Self.runSession)/subagents/workflows", directoryHint: .isDirectory)
+    for (workflow, task) in [("wf_a08f0c62-a44", "first"), ("wf_23bb023d-80d", "second")] {
+      let output = scenario.buildIngest(
+        Self.runSession, workflow: workflows.appending(path: workflow).path, task: task)
+      #expect(output.status == 0, "\(output.stderr)")
+      #expect(output.stdout.contains(" 0 retagged"), "\(output.stdout)")
+    }
+    let validation = scenario.ingest(
+      Self.runSession, role: .qa, task: "validation", buildRun: Self.buildRun,
+      agentID: "a9f3bfd905ad90faa")
+    #expect(validation.stdout.contains(" 0 retagged"), "\(validation.stdout)")
+    let ship = scenario.shipIngest(Self.runSession)
+    #expect(ship.stdout.contains(" 0 retagged"), "\(ship.stdout)")
+
+    let lines = try scenario.storeText().split(separator: "\n")
+      .filter { $0.contains("\"kind\":\"agent.usage\"") }
+    #expect(lines.count == 96, "1 line per message of the session and its agents")
+    #expect(scenario.usages.count == 96)
+    #expect(Set(scenario.usages.map(\.messageID)).count == 96)
+    #expect(scenario.usages.allSatisfy { $0.role != nil })
   }
 }

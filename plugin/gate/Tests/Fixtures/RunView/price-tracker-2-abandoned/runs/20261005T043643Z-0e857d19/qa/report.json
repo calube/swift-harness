@@ -1,0 +1,170 @@
+{
+  "after" : "features",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "c2b35545dee363bafc3f76e0c2ec9582bf430903",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "0 of 9 rows verified (2 reason-only): 0 pass, 0 red, 0 unverified, 7 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 2,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-rows.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-watchlist-rows",
+      "result" : "waiting",
+      "row" : 1,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-first-load-spinner",
+      "result" : "waiting",
+      "row" : 2,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-refresh",
+      "result" : "waiting",
+      "row" : 3,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/last-updated.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-last-updated",
+      "result" : "waiting",
+      "row" : 4,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/load-error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-load-error-retry",
+      "result" : "waiting",
+      "row" : 5,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-detail-chart",
+      "result" : "waiting",
+      "row" : 6,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    },
+    {
+      "check" : "qa/chart-failure-keeps-price.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "waiting on ui",
+      "ms" : 0,
+      "requirement" : "req-chart-failure-keeps-price",
+      "result" : "waiting",
+      "row" : 7,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+        "ui"
+      ]
+    }
+  ],
+  "runID" : "20261005T043643Z-0e857d19",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "base" : "9682ed3d0ecb61d589ba085d928bea7748f8e6a6",
+    "branch" : "spec/features",
+    "conflicts" : [
+
+    ],
+    "tip" : "e767b5610deaeee17fd63bc60ca191acfd27e280"
+  },
+  "verdict" : "GREEN"
+}

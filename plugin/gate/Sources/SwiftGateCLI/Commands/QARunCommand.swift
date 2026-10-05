@@ -250,8 +250,12 @@ enum QARunRun {
       areas: testAreas(root: root, common: common, table: table),
       testDevices: dependencies.testDevices.map(HeldTestDevices.init(leases:)),
       flows: dependencies.flows.map { simulator in
+        // An --after run's flows pass or fail before a merge or cutoff the final pass may not
+        // reach, so each is recorded too, when the recorder is free at once.
         QAFlowRunner(
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil,
+          recorder: options.after != nil && !options.atBase
+            ? dependencies.finalPass?.recorder.withoutWaiting() : nil,
           hold: QAFlowDeviceHold(
             runID: "\(runID)-device",
             directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory)))
@@ -903,7 +907,10 @@ struct QARunCommand: AsyncParsableCommand {
   @Option(help: "The plan's slug; defaults to the 1 plan holding a validation.json.")
   var plan: String?
 
-  @Option(help: "Run only the rows that name this task in Runs after, taking it as merged.")
+  @Option(
+    help: ArgumentHelp(
+      "Run only the rows that name this task in Runs after, taking it as merged, recording each "
+        + "flow when the recorder is free."))
   var after: String?
 
   @Flag(help: "Run every row at the merge base in a scratch worktree and record why each fails.")

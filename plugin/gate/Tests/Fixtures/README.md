@@ -3375,6 +3375,49 @@ worktree paths. The copy leaves out the acceptance rows' saved output, which hol
 and the flow rows' device evidence. The trial kept no `run.json`.
 `grep -rniE '/Users|/private|/var/folders|caleb' RunView/aidoku-validation-3` matched nothing.
 
+## Run view: a row's last passing run
+
+`RunView/price-tracker-2-abandoned/` is the second price-tracker brownfield trial's validation
+history, build run `20261005T042342Z-fb6cdcd4` of plan `spec`. Its 7 flow rows passed before merge
+on a trial merge of `spec/fix-ui` (`20261005T045133Z-a9767900`), then `ui` was abandoned at the
+cutoff and the final run (`20261005T045449Z-29875c87`) read every flow row `abandoned`. `S` is the
+trial folder. From the repository root:
+
+```sh
+S=<trial folder> Y=plugin/gate/Tests/Fixtures/RunView/price-tracker-2-abandoned
+mkdir -p $Y/events && cp $S/state/events/qa.jsonl $Y/events/qa.jsonl
+for d in $S/state/runs/*/qa/report.json; do r=$(basename $(dirname $(dirname $d))); mkdir -p $Y/runs/$r/qa
+  sed -E "s#/Users/[^/]*/Developer/trials/#/TRIAL/#g" $d > $Y/runs/$r/qa/report.json; done
+```
+
+The `qa.jsonl` holds the run's 63 `qa.check` and 41 `qa.flow` lines unedited. The `sed` replaces the
+trial folder in the 2 at-base reports' `atBaseRecord`, and changes nothing else.
+`grep -rniE '/Users|/private|/var/folders|caleb' RunView/price-tracker-2-abandoned` matched nothing.
+
+## Run view: flows recorded on --after runs
+
+`RunView/price-tracker-2-after-videos/` holds 4 `qa run --after ui --before-merge --fix` runs on an
+APFS copy of the same trial's clone, made to measure what recording costs an `--after` run. A
+binary that records nothing ran `20261005T052106Z-01aa4588` and `20261005T052707Z-dfc88e3e`; one
+that records each flow ran `20261005T052346Z-0f1b2bf2` and `20261005T052917Z-e9e67dca`. Each passed
+all 7 flow rows on its own simulator. `C` is the clone. From the repository root:
+
+```sh
+C=<clone> R=$C/.git/swift-harness Y=plugin/gate/Tests/Fixtures/RunView/price-tracker-2-after-videos
+IDS='20261005T052106Z-01aa4588 20261005T052346Z-0f1b2bf2 20261005T052707Z-dfc88e3e 20261005T052917Z-e9e67dca'
+cd $C && for b in control recorded control recorded; do swiftgate-$b qa run --after ui --before-merge --fix; done; cd -
+mkdir -p $Y/events
+jq -c --arg ids "$IDS" 'select((.runID // "") as $r | $ids | split(" ") | index($r))
+  | select(.kind=="qa.check" or .kind=="qa.flow")' $R/events/qa.jsonl > $Y/events/qa.jsonl
+for r in $IDS; do mkdir -p $Y/runs/$r/qa; cp $R/runs/$r/qa/report.json $Y/runs/$r/qa/; done
+```
+
+`swiftgate-control` is this branch's binary built with `qa run` passing no recorder, and
+`swiftgate-recorded` the same binary with it. The `jq` keeps the 4 runs' 28 `qa.check` and 28
+`qa.flow` lines unedited. The videos and contact sheets stay behind; the view reads their paths.
+`grep -rniE '/Users|/private|/var/folders|caleb' RunView/price-tracker-2-after-videos` matched
+nothing.
+
 ## Brownfield trial: a foreground fixer, a fixer's generated files and a duplicate merge gate
 
 A brownfield one-shot trial on an iOS starter app (2026-10-05) launched its first merge fixer with

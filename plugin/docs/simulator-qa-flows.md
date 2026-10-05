@@ -47,7 +47,7 @@ The record is also 1 qa.flow event: `{plan, row, requirement, atBase, source, st
 videoUnverified, sheetUnverified}`. `source` is `batch`, and each step that ran is
 `{n, label, offsetMs, ok}`, with `n` in the flow file's numbering. `offsetMs` counts from the
 video's first frame when `video` is present, else from the batch's start. The failing step is the last
-one, with `ok` false. The last 4 keys appear only after a final pass.
+one, with `ok` false. The last 4 keys appear only after a recording.
 
 ## The final pass
 
@@ -67,3 +67,7 @@ minutes. Past that, after any other refusal, or with the lock held 10 minutes, t
 unrecorded. `videoUnverified` then names `recorderBusy`, `recordLockTimedOut` or `recordFailed`, and
 a failed sheet names `sheetFailed`. Each missing video is a `qa.video-unverified` nit, and each
 missing log a `qa.evidence-unsaved` nit. The row still passes or fails on its assertions.
+
+An `--after` run records each flow the same way when the lock is free at once, saving no logs. A
+busy lock or recorder runs the flow unrecorded at once, with no nit. The report shows each row's
+newest passing run with its video, labelled with that run, when the row's newest run didn't pass.

@@ -479,6 +479,17 @@ const tests = {
     assert.match(skill, /<plan-branch>/, 'the run skill never names the plan branch its commits land on')
   },
 
+  'the explore span opens only when explorers launch, and a run that reads the code itself times that reading under the plan span — catches an 84 s explore bar with no explorer behind it'() {
+    const skill = read('skills/run/SKILL.md')
+    const section = skill.slice(skill.indexOf('## 3. '), skill.indexOf('## 4. '))
+    const explore = section.indexOf('span start --phase explore')
+    const launch = section.indexOf('swift-harness:brownfield-explorer')
+    assert.ok(explore > launch && launch >= 0, 'step 3 opens the explore span before deciding to launch explorers')
+    assert.match(section, /span start --phase plan/, 'reading the code yourself is timed under no plan span')
+    const plan = skill.slice(skill.indexOf('## 5. '), skill.indexOf('## 6. '))
+    assert.match(plan, /already open/, 'step 5 opens a second plan span after a run that read the code itself')
+  },
+
   'every way a run can stop its build still runs final and build finish, then the report — catches a run that abandons a build skipping final'() {
     assert.deepEqual(finalSkips(read('skills/run/SKILL.md')), [])
   },

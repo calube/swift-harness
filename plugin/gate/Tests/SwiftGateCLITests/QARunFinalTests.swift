@@ -142,6 +142,67 @@ struct QARunFinalTests {
   }
 
   @Test(
+    "a qa run --after records the captured flow it drives: the row passes, its record and qa.flow event name the video and the contact sheet, and no logs are saved; with the Mac's recorder busy the flow runs at once unrecorded, with no gap reported — catches flows that pass before merge leaving no video, or an --after run that waits on the recorder"
+  )
+  func afterRunRecordsWhenFree() async throws {
+    let repo = try await QARepo()
+    defer { repo.remove() }
+    try QARunFlowTests.plan(repo)
+    let runner = try CapturedFinalPass.runner(
+      batch: "record/recorded-pass", home: repo.root.appending(path: ".harness/home"))
+    let device = LiveAgentDevice(runner: runner)
+    let simulator = try FakeFlowSimulator(
+      batch: "pass", head: try await repo.git("rev-parse", "HEAD"),
+      scratch: repo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: QARunFlowTests.marker(repo), agentDevice: device)
+    let events = MemoryEventLog()
+
+    let report = await Self.run(
+      repo, simulator, finalPass: Self.finalPass(repo, device: device, runner: runner),
+      options: QARunRun.Options(after: "count-ui"), events: events)
+
+    #expect(report.verdict == .green, "\(report.message) \(report.rows.map(\.message))")
+    #expect(!report.final)
+    #expect(report.findings.isEmpty, "\(report.findings.map(\.message))")
+    let flow = try #require(report.rows.first { $0.layer == .flow })
+    let folder = "qa/02-req-count.flow"
+    let event = try #require(Self.flowEvents(events).first)
+    #expect(event.video == "\(folder)/\(FinalPassRecorder.videoFileName)")
+    #expect(event.sheet == "\(folder)/\(FinalPassRecorder.sheetFileName)")
+    let runDirectory = try repo.runDirectory(report)
+    for path in [event.video, event.sheet].compactMap({ $0 }) {
+      #expect(flow.evidence.contains(path))
+      #expect(FileManager.default.fileExists(atPath: runDirectory.appending(path: path).path))
+    }
+    #expect(!flow.evidence.contains { $0.hasPrefix("qa/\(EvidenceCollector.directory)/") })
+
+    let busyRepo = try await QARepo()
+    defer { busyRepo.remove() }
+    try QARunFlowTests.plan(busyRepo)
+    let busyRunner = try CapturedFinalPass.runner(
+      batch: "batch/pass", home: busyRepo.root.appending(path: ".harness/home"))
+    let busy = BusyRecorderDevice(device: LiveAgentDevice(runner: busyRunner))
+    let busySimulator = try FakeFlowSimulator(
+      batch: "pass", head: try await busyRepo.git("rev-parse", "HEAD"),
+      scratch: busyRepo.root.appending(path: ".harness/fake-sim", directoryHint: .isDirectory),
+      marker: QARunFlowTests.marker(busyRepo), agentDevice: busy)
+    let clock = VirtualRecordClock()
+    let busyEvents = MemoryEventLog()
+
+    let unrecorded = await Self.run(
+      busyRepo, busySimulator,
+      finalPass: Self.finalPass(busyRepo, device: busy, runner: busyRunner, clock: clock.clock),
+      options: QARunRun.Options(after: "count-ui"), events: busyEvents)
+
+    #expect(unrecorded.verdict == .green, "\(unrecorded.rows.map(\.message))")
+    #expect(clock.now == .zero)
+    #expect(unrecorded.findings.isEmpty, "\(unrecorded.findings.map(\.message))")
+    let busyEvent = try #require(Self.flowEvents(busyEvents).first)
+    #expect(busyEvent.video == nil)
+    #expect(busyEvent.videoUnverified == nil)
+  }
+
+  @Test(
     "--final with --at-base or --after is BLOCKED before any row runs — catches a final pass that records the merge base or a single merge's rows"
   )
   func finalStandsAlone() async throws {

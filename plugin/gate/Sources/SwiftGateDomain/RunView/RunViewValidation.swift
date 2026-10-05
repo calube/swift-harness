@@ -84,6 +84,21 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     }
   }
 
+  /// The newest passing check of a row whose own newest check didn't pass or recorded no video:
+  /// a passing run's flow, from the newest one that recorded a video when any did.
+  public struct LastPass: Sendable, Equatable, Encodable {
+    public var qaRun: String
+    /// Which run passed and how, and, when the row's newest check didn't pass, what it read.
+    public var label: String
+    public var flow: RunViewFlow?
+
+    public init(qaRun: String, label: String, flow: RunViewFlow? = nil) {
+      self.qaRun = qaRun
+      self.label = label
+      self.flow = flow
+    }
+  }
+
   /// 1 validation row as its newest `qa.check` left it, joined to its `qa/report.json` row.
   public struct Row: Sendable, Equatable, Encodable {
     /// 1-based position in the plan's `validation.json`.
@@ -118,13 +133,15 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
     public var atBase: Bool
     /// Every kept `qa run`'s check of the row, newest first, the merge base's included.
     public var history: [Attempt]
+    /// `nil` when the newest check passed with a video, or no check of the row passed.
+    public var lastPass: LastPass?
 
     public init(
       row: Int, requirement: String, layer: ValidationLayer, check: String? = nil,
       runsAfter: [String] = [], result: QAResult, message: String? = nil, exitStatus: Int? = nil,
       milliseconds: Int = 0, evidence: [String] = [], waitingOn: [String] = [], qaRun: String,
       at: Date, output: [String] = [], outputCut: Bool = false, flow: RunViewFlow? = nil,
-      atBase: Bool = false, history: [Attempt] = []
+      atBase: Bool = false, history: [Attempt] = [], lastPass: LastPass? = nil
     ) {
       self.row = row
       self.requirement = requirement
@@ -144,6 +161,7 @@ public struct RunViewValidation: Sendable, Equatable, Encodable {
       self.flow = flow
       self.atBase = atBase
       self.history = history
+      self.lastPass = lastPass
     }
   }
 
@@ -281,7 +299,7 @@ extension RunViewKeptFlow {
 extension RunViewValidation.Row {
   private enum CodingKeys: String, CodingKey {
     case row, requirement, layer, check, runsAfter, result, message, exitStatus, evidence
-    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history
+    case waitingOn, qaRun, at, output, outputCut, flow, atBase, history, lastPass
     case milliseconds = "ms"
   }
 
@@ -305,6 +323,18 @@ extension RunViewValidation.Row {
     try c.encode(flow, forKey: .flow)
     try c.encode(atBase, forKey: .atBase)
     try c.encode(history, forKey: .history)
+    try c.encode(lastPass, forKey: .lastPass)
+  }
+}
+
+extension RunViewValidation.LastPass {
+  private enum CodingKeys: String, CodingKey { case qaRun, label, flow }
+
+  public func encode(to encoder: any Encoder) throws {
+    var c = encoder.container(keyedBy: CodingKeys.self)
+    try c.encode(qaRun, forKey: .qaRun)
+    try c.encode(label, forKey: .label)
+    try c.encode(flow, forKey: .flow)
   }
 }
 
@@ -404,9 +434,12 @@ enum RunViewValidationFold {
       }
       guard let index = entries.firstIndex(where: { !$0.check.atBase }) ?? entries.indices.first
       else { return nil }
-      return row(
+      var shown = row(
         entries[index].check, shown: history[index], history: history,
         read: qaRuns[history[index].qaRun], damage: &damage)
+      shown.lastPass = lastPass(
+        shown: history[index], history: history, qaRuns: qaRuns, damage: &damage)
+      return shown
     }
     var counts = RunViewValidation.Counts()
     for row in rows {
@@ -614,6 +647,51 @@ enum RunViewValidationFold {
       milliseconds: shown.milliseconds, evidence: shown.evidence, waitingOn: shown.waitingOn,
       qaRun: shown.qaRun, at: shown.at, output: shown.output, outputCut: shown.outputCut,
       flow: shown.flow, atBase: check.atBase, history: history)
+  }
+
+  /// The newest passing check with a video, or, for a row whose shown check didn't pass, the
+  /// newest passing check; `nil` when that is the shown check itself, or none passed. At-base
+  /// checks never count: they ran the merge base, not the change.
+  private static func lastPass(
+    shown: RunViewValidation.Attempt, history: [RunViewValidation.Attempt],
+    qaRuns: [String: RunViewQARun], damage: inout [RunView.Damage]
+  ) -> RunViewValidation.LastPass? {
+    let passes = history.filter { $0.result == .pass && $0.stage != .atBase }
+    guard
+      let pass = passes.first(where: { $0.flow?.video != nil })
+        ?? (shown.result == .pass ? nil : passes.first),
+      pass.qaRun != shown.qaRun
+    else { return nil }
+    let branch = qaRuns[pass.qaRun]?.report?.trialMerge.flatMap { merge -> String? in
+      let branch = merge.branch
+      guard let reason = EventPayloadGuard.rejection(inJSON: branch) else { return branch }
+      damage.append(
+        RunView.Damage(
+          source: "qa run \(pass.qaRun)", reason: "trialMerge.branch: \(reason.rawValue)"))
+      return nil
+    }
+    let how =
+      switch pass.stage {
+      case .after:
+        branch.map { "before merge of \($0)" } ?? pass.after.map { "after \($0)" }
+          ?? "after a task"
+      case .final: "in the final pass"
+      case .run, .atBase: "in a qa run"
+      }
+    var label = "passed \(how), qa run \(pass.qaRun)"
+    if shown.result != .pass {
+      let stage =
+        switch shown.stage {
+        case .atBase: "at-base"
+        case .after: "after"
+        case .final: "final"
+        case .run: "later"
+        }
+      label +=
+        "; \(stage) qa run \(shown.qaRun) read \(shown.result.rawValue)"
+        + (shown.message.map { ": \($0)" } ?? "")
+    }
+    return RunViewValidation.LastPass(qaRun: pass.qaRun, label: label, flow: pass.flow)
   }
 
   /// A check that answered, `pass` or `red`, as a span ending at its event; `nil` for a row that

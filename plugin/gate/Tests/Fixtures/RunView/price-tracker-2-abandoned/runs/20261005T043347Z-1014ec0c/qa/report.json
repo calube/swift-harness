@@ -1,0 +1,169 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : null,
+  "commit" : "9682ed3d0ecb61d589ba085d928bea7748f8e6a6",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "7 of 9 rows verified (2 reason-only): 0 pass, 7 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "7 rows (1, 2, 3, 4, 5, 6, 7) reused from qa run 20261005T042940Z-658bfb8e by spec-validation: each check is byte-identical to the one it ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 2,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-rows.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-watchlist-rows",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 1,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/first-load-spinner.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.loading\"; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row2 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-first-load-spinner",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 2,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/refresh.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\". Current surface: Posts, 0 posts available.; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row3 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-refresh",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 3,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/last-updated.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.lastUpdated\"; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row4 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-last-updated",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 4,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/load-error-retry.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.error\". Current surface: Posts, 0 posts available.; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row5 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-load-error-retry",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 5,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row6 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-detail-chart",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 6,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/chart-failure-keeps-price.flow.json",
+      "evidence" : [
+
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "reused from qa run 20261005T042940Z-658bfb8e by spec-validation at 9682ed3d0ecb: step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T042940Z-658bfb8e-row7 recorded no step: run sim snap at each checked point",
+      "ms" : 0,
+      "requirement" : "req-chart-failure-keeps-price",
+      "result" : "red",
+      "reusedFrom" : "20261005T042940Z-658bfb8e",
+      "row" : 7,
+      "runsAfter" : [
+        "features",
+        "ui"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T043347Z-1014ec0c",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}

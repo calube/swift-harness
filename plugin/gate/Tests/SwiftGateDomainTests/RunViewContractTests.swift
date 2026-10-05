@@ -194,9 +194,10 @@ struct RunViewContractTests {
       keys(row) == [
         "row", "requirement", "layer", "check", "runsAfter", "result", "message", "exitStatus",
         "ms", "evidence", "waitingOn", "qaRun", "at", "output", "outputCut", "flow", "atBase",
-        "history",
+        "history", "lastPass",
       ])
     #expect(row["flow"] is NSNull)
+    #expect(row["lastPass"] is NSNull)
     let attempt = first(row["history"])
     #expect(
       keys(attempt) == [

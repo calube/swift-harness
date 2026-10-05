@@ -308,17 +308,17 @@ enum BrownfieldMergeCheck {
         brownfield: dependencies.config.brownfield, areas: proved,
         allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
         judge: dependencies.config.judge)
-      let derivedData = BrownfieldProve.derivedData(proved, layout: dependencies.layout)
-      let (judgement, milliseconds) = await GateRun.timed {
-        await BrownfieldProve.run(
+      let (ran, milliseconds) = await GateRun.timed {
+        await BrownfieldProve.prove(
           root: root, base: proofBase, config: config,
           junitDirectory: dependencies.layout.worktreeRoot.appending(
             path: "junit", directoryHint: .isDirectory),
-          proofs: context.proofs, dependencies: dependencies.prove)
+          proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout)
       }
+      let judgement = ran.judgement
       context.steps.record(
         .prove, tier: nil, milliseconds: milliseconds, verdict: judgement.verdict,
-        derivedData: derivedData)
+        derivedData: ran.derivedData)
       outcome.findings += judgement.findings
       outcome.blocked = outcome.blocked || judgement.verdict == .blocked
     }
@@ -413,7 +413,8 @@ enum BrownfieldMergeCheck {
       }
       if let key, let pass = dependencies.reuse?.store.pass(key) {
         context.steps.record(
-          gateStep(step), tier: nil, milliseconds: 0, verdict: .green, area: area.name)
+          gateStep(step), tier: nil, milliseconds: 0, verdict: .green, derivedData: .reused,
+          area: area.name)
         if let tests = pass.tests { context.areaTests.record(tests.reused(from: pass.runID)) }
         if let note = reused(area, step: step, pass: pass) { result.findings.append(note) }
         continue

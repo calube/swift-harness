@@ -247,6 +247,55 @@ struct BrownfieldMergeCheckTests {
   }
 
   @Test(
+    "each gate step is labelled by what it built: final's reused area steps read reused, a prove that ran nothing reads none, and a prove whose reverted SwiftPM run builds in a fresh scratch tree reads cold — catches 0 s steps labelled cold or none, which skew warm and cold gate times"
+  )
+  func stepsAreLabelledByWhatTheyBuilt() async throws {
+    let clone = try Clone()
+    defer { try? FileManager.default.removeItem(at: clone.base) }
+    let areas = [Self.area("web"), Self.area("api")]
+    let store = MemoryAreaSteps()
+    let inputs = GateReuse.Inputs(
+      tier: .merge, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
+      stateFiles: ["config": "c1"])
+    _ = try await Self.run(
+      clone, tier: .merge, areas: areas, changed: ["web/src/lib.js"],
+      runner: FakeAreaCommandRunner { _ in .passed },
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
+    let finalContext = GateRun.Context(runID: "final", directory: clone.base)
+    _ = try await Self.run(
+      clone, tier: .final, areas: areas, changed: ["web/src/lib.js"],
+      runner: FakeAreaCommandRunner { _ in .passed }, context: finalContext,
+      reuse: AreaStepReuse(inputs: inputs, store: store, runID: "final-run"))
+    let reused = finalContext.steps.steps.filter { $0.area == "web" && $0.milliseconds == 0 }
+    #expect(reused.count == 3, "web build, test and lint")
+    #expect(reused.allSatisfy { $0.derivedData == .reused }, "\(reused.map(\.derivedData))")
+
+    let app = BrownfieldArea(
+      name: "app", root: "app", language: .swift, kind: .xcode, test: "test-all",
+      testFiles: "check {files}", lint: nil, build: "build", e2e: nil,
+      testGlobs: ["app/tests/**"], packs: [], xcode: nil)
+    let nothing = GateRun.Context(runID: "nothing", directory: clone.base)
+    _ = try await Self.run(
+      clone, tier: .merge, areas: [app], changed: ["app/src/a.swift"],
+      runner: FakeAreaCommandRunner { _ in .passed }, sliceBuildsOnly: true, context: nothing)
+    let idle = try #require(nothing.steps.steps.first { $0.step == .prove })
+    #expect(idle.derivedData == .none)
+
+    let package = BrownfieldArea(
+      name: "kit", root: "kit", language: .swift, kind: .swiftpm, test: "swift test",
+      testFiles: "check {files}", lint: nil, build: "swift build", e2e: nil,
+      testGlobs: ["kit/tests/**"], packs: [], xcode: nil)
+    let proving = GateRun.Context(runID: "proving", directory: clone.base)
+    let runner = FakeAreaCommandRunner { _ in .passed }
+    _ = try await Self.run(
+      clone, tier: .merge, areas: [package], changed: ["kit/src/a.swift", "kit/tests/a.swift"],
+      runner: runner, sliceBuildsOnly: true, context: proving)
+    #expect(runner.requests.contains { clone.inScratch($0) }, "prove ran in a scratch tree")
+    let built = try #require(proving.steps.steps.first { $0.step == .prove })
+    #expect(built.derivedData == .cold)
+  }
+
+  @Test(
     "a prove run the box leaves less time than its measured cold run isn't started and the tier is BLOCKED — catches a prove started at the cutoff only to be killed"
   )
   func proveThatCannotFinishIsNotStarted() async throws {

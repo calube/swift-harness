@@ -650,17 +650,17 @@ enum BrownfieldSliceCheck {
       brownfield: dependencies.config.brownfield, areas: [area],
       allow: dependencies.config.allow, buildPresets: dependencies.config.buildPresets,
       judge: dependencies.config.judge)
-    let proveDerivedData = BrownfieldProve.derivedData([area], layout: dependencies.layout)
-    let (judgement, proveMilliseconds) = await GateRun.timed {
-      await BrownfieldProve.run(
+    let (proved, proveMilliseconds) = await GateRun.timed {
+      await BrownfieldProve.prove(
         root: root, base: base, config: config,
         junitDirectory: dependencies.layout.worktreeRoot.appending(
           path: "junit/\(area.name)", directoryHint: .isDirectory),
-        proofs: context.proofs, dependencies: dependencies.prove)
+        proofs: context.proofs, dependencies: dependencies.prove, layout: dependencies.layout)
     }
+    let judgement = proved.judgement
     context.steps.record(
       .prove, tier: nil, milliseconds: proveMilliseconds, verdict: judgement.verdict,
-      derivedData: proveDerivedData, area: area.name)
+      derivedData: proved.derivedData, area: area.name)
     result.findings += judgement.findings
     result.blocked = result.blocked || judgement.verdict == .blocked
     return result
