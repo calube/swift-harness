@@ -50,6 +50,14 @@ fix is the app's: give the content room above the bar, such as a bottom `.conten
 `.safeAreaPadding`. Or, when the list scrolls, the flow scrolls the element into view before the
 check. An absence check (`wait` `absent`, `is absent`, `is hidden`) names no target.
 
+## A state that ends on its own
+
+A `wait` polls the screen, so a state the app shows for 300 ms, such as a sending label while a
+fake's call runs, can come and go between polls. `qa lint` warns `qa.flow-transient-state`, and
+never gates, when a flow sees a selector appear and then go with only `wait`, `is`, `get`,
+`snapshot` or `screenshot` steps between, under a `-harness-scenario` whose name lacks the word
+`held`. Run such a flow under the contract's `held` scenario, whose call holds the state.
+
 ## What `qa lint` refuses
 
 `qa.flow-kind-key` refuses a `wait` whose target key isn't the 1 its `kind` reads, a `wait` with no

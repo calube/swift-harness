@@ -4991,3 +4991,60 @@ PY
 ```
 
 `grep -aE '/Users|/private|/var/folders|caleb'` on the fixture matched nothing.
+
+## qa lint: a flow that waits for a state the fake ends on its own
+
+`QA/transient-state/` holds the 5 flows a brownfield trial's validation worker wrote, taken from
+the trial repository's plan qa folder (`.git/swift-harness/plans/<plan>/qa/`). Every flow runs
+against a fake client whose calls answer after a fixed 300 ms. `flow-5.flow.json` waits for a
+status label that shows while a save is in flight (step 8, timeout 2000 ms), then for that
+label's absence (step 10), under `scenario-1`, which holds nothing. In the trial's before-merge
+runs step 8 timed out on a correct app: the contact sheet showed the in-flight label and the
+final label about 260 ms apart. The other 4 flows wait for no state that goes by itself: each
+absence check either follows a `press` or names an element no earlier step waited for. From the
+repository root, with `S` the trial repository's plan qa folder:
+
+```sh
+python3 scrub.py $S plugin/gate/Tests/Fixtures/QA/transient-state
+```
+
+where `scrub.py` is:
+
+```python
+import json, os, re, sys
+src, dst = sys.argv[1], sys.argv[2]
+maps = {"id": {}, "text": {}, "scenario": {}}
+def name(kind, value, prefix):
+    m = maps[kind]
+    if value not in m:
+        m[value] = f"{prefix}{len(m) + 1}"
+    return m[value]
+def selector(s):
+    return re.sub(r'(\w+)="([^"]*)"', lambda m: f'{m.group(1)}="'
+        + (name("id", m.group(2), "el") if m.group(1) == "id" else name("text", m.group(2), "text"))
+        + '"', s)
+def walk(v, key=None):
+    if isinstance(v, dict):
+        return {k: walk(x, k) for k, x in v.items()}
+    if isinstance(v, list):
+        if key == "launchArgs":
+            return [a if i == 0 or v[i - 1] != "-harness-scenario" else name("scenario", a, "scenario-")
+                    for i, a in enumerate(v)]
+        return [walk(x, key) for x in v]
+    if isinstance(v, str):
+        if key == "app": return "com.example.App"
+        if key in ("text", "value"): return name("text", v, "text")
+        if key in ("selector", "absent", "source", "destination"): return selector(v)
+    return v
+files = sorted(f for f in os.listdir(src) if f.endswith(".flow.json"))
+os.makedirs(dst, exist_ok=True)
+for n, f in enumerate(files, 1):
+    steps = json.load(open(os.path.join(src, f)))
+    with open(os.path.join(dst, f"flow-{n}.flow.json"), "w") as out:
+        out.write("[\n" + ",\n".join("  " + json.dumps(walk(s)) for s in steps) + "\n]\n")
+```
+
+It numbers the flows in their source names' sorted order, and renames the bundle id, each
+identifier, each label and typed text, and each scenario name to a generic name, the same value
+to the same name in every file. No step's command, key, kind, timeout or order changes.
+`grep -rniE '/Users|/private|/var/folders|caleb' QA/transient-state` matched nothing.

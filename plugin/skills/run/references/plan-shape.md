@@ -151,6 +151,12 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   load. A refresh scenario's first load answers the seed and every later load the same refreshed
   data, such as a new price, never a value that counts calls. A long drag may load twice, and
   the flow still reads 1 refresh.
+- A state shown only while a call runs, such as a loading, sending or saving label a requirement
+  names, gets its own scenario whose call answers after a fixed 5 s, not 300 ms. Its name
+  carries the word `held` on its own, such as `save-held`. Its flow waits for the state, then
+  for its end with a `timeoutMs` of at least 15000. At 300 ms the state ends before a `wait`
+  polls, and the row reads red on a correct app; `qa lint` warns `qa.flow-transient-state` on a
+  flow that sees a state come and go under a scenario without that word.
 - A refresh journey's flow drags from the list's top row to a 1 pt id pinned to the bottom of the
   screen's safe area, so a list of 3 rows refreshes as a long one does. The contract places that
   bottom id in the stub of each screen a refresh row drives, not just declares it. It goes after
