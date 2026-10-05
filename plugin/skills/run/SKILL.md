@@ -170,6 +170,12 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   stored or sent. `flow` rows exist only for screens of an `xcode` area; a repository with none
   checks at the boundary instead. A plan with any `flow` or `state` row, or any acceptance script,
   adds the validation task the reference shows, which writes those checks beside the first wave.
+- A requirement whose task writes a screen of an `xcode` area has at least 1 `flow` row, even
+  when an acceptance UI test also checks it, so its journey is recorded and proved red first. A
+  task writes a screen when a `Writes` path inside the area's root has a folder or file named
+  `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or is a
+  `.storyboard` or `.xib`. A requirement no flow can check gives the reason in its row's `Reason`.
+  The import fails naming each requirement that has neither.
 
 Close the phase: `"$SG" events span end <span> --outcome ok`.
 
@@ -336,8 +342,9 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
 1. In `<checkout>`, `"$SG" check --tier final --base <base> --json`. It runs every area's `test`,
    `lint` and `build` against the baseline, plus each area's `e2e`.
 2. Record it: `"$SG" build record-gate <slug> --kind final --run-id <its run id> --session <session> --json`.
-3. `"$SG" qa run --plan <slug> --json` in `<checkout>` runs every validation row whose tasks
-   merged, flows included. Keep its `runID` and rows for step 9. A RED verdict with a `red` row
+3. `"$SG" qa run --plan <slug> --final --json` in `<checkout>` runs every validation row whose
+   tasks merged, and records each flow with a video. Read its verdict, and keep its `runID` and
+   rows for item 5 and step 9. A RED verdict with a `red` row
    counts as a red `final` in item 4, whose fix task owns the files the red rows' checks exercise,
    and item 4's second `final` runs this item again. After `final` a row that never verified,
    `unverified` or `abandoned`, is RED too; with no `red` row no fix task makes it run, so it
@@ -348,7 +355,10 @@ Open the phase: `"$SG" events span start --phase final --build-run <run>`, kept 
    span with `"$SG" events span end <span> --outcome red`, goes on to item 5 and ends the run RED;
    the report quotes its findings as `rule: message`. Past the cutoff a fix task doesn't fit in
    the box: a red `final` then goes straight to item 5 and ends the run RED.
-5. `"$SG" build finish <slug> --session <session> --json`, then close the phase:
+5. `"$SG" build finish <slug> --session <session> --qa-run <runID> --json`, naming item 3's
+   newest `runID`. A plan with a validation table can't finish without the newest `qa run
+   --final` and its id: `build finish` refuses, naming that run and its verdict. It records the
+   verdict, and a RED one ends the run RED. Then close the phase:
    `"$SG" events span end <span> --outcome ok`.
 6. `"$SG" run checkout remove <slug> --session <session> --json`. It keeps the checkout's gate
    reports in the user's checkout, and `<plan-branch>` holds every commit.

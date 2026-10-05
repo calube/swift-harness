@@ -115,7 +115,12 @@ Serve the report as CSV.
 
   With more than 1 area that runs tests, name the area: `test <area>: <id>`. A bare test file
   path in `Check` fails the import, and a raw `xcodebuild` line bypasses swiftgate.
-- **flow** drives a user journey in the running app. It runs for `xcode` areas only.
+- **flow** drives a user journey in the running app. It runs for `xcode` areas only. Every
+  requirement a task covers while writing a screen needs 1: a `Writes` path inside an `xcode`
+  area's root with a folder or file named `…View`, `…Views`, `…Screen`, `…Screens`,
+  `…ViewController`, `…UI` or `…UITests`, or a `.storyboard` or `.xib`. An acceptance UI test
+  doesn't replace it, since only a flow records a video and runs red at the base. A requirement no
+  flow can check states why in its row's `Reason`.
 - **state** is a script that exits non-zero when the stored or sent result is wrong. It runs
   straight after a `flow` row for the same requirement and `Runs after` tasks; in a repository
   with no `xcode` area, an `acceptance` row takes the flow's place.
@@ -135,6 +140,7 @@ on these `plan-lint` rules:
 | `plan-lint.validation-state-without-flow` | a `state` row with no `flow` row for the same requirement and `Runs after` |
 | `plan-lint.validation-flow-without-ios` | a `flow` row in a repository with no `xcode` area |
 | `plan-lint.validation-check-source-file` | an `acceptance` row whose `Check` is a test source file, such as `AppTests/ExportTests.swift` |
+| `plan-lint.validation-screen-without-flow` | a requirement whose task writes a screen, with no `flow` row and no row `Reason` |
 
 ```markdown
 ## Validation

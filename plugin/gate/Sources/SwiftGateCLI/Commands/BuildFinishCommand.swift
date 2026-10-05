@@ -20,15 +20,24 @@ struct BuildFinishReport: Sendable, Equatable, Encodable {
   var runReport: String? = nil
   /// Why no run report page was written, or `nil` when one was.
   var runReportNote: String? = nil
+  /// The `qa run --final` the finish read; `nil` for a plan with no validation table.
+  var validation: Validation? = nil
+
+  struct Validation: Sendable, Equatable, Encodable {
+    let runID: String
+    let verdict: Verdict
+    let message: String
+  }
 }
 
 enum BuildFinishRun {
   /// - Parameters:
   ///   - root: the checkout whose state root holds the report; `nil` writes no report.
   ///   - pluginRoot: where `viewer/` lives.
+  ///   - qaRun: the `qa run --final` id the caller read, from `--qa-run`.
   static func run(
     slug: String, session: String?, git: any Git, clock: any BuildClock = LiveBuildClock(),
-    root: URL? = nil, pluginRoot: URL? = nil
+    root: URL? = nil, pluginRoot: URL? = nil, qaRun: String? = nil
   ) async
     -> BuildLoopResult<BuildFinishReport>
   {
@@ -138,6 +147,12 @@ struct BuildFinishCommand: AsyncParsableCommand {
   @Option(help: "The session id holding the plan's lock (from the SessionStart context).")
   var session: String?
 
+  @Option(
+    help: ArgumentHelp(
+      "The newest `qa run --final` id, whose verdict you read; a brownfield plan with a "
+        + "validation table needs it."))
+  var qaRun: String?
+
   @OptionGroup var output: OutputOptions
 
   func run() async throws {
@@ -146,7 +161,7 @@ struct BuildFinishCommand: AsyncParsableCommand {
       root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory),
       pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
         URL(filePath: $0, directoryHint: .isDirectory)
-      })
+      }, qaRun: qaRun)
     Console.write(BuildFinishRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

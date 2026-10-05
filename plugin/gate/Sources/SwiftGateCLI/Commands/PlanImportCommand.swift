@@ -144,7 +144,13 @@ enum PlanImportRun {
           table: validation.table, requirements: livePlan.requirements.map(\.id),
           taskIDs: Set(livePlan.tasks.map(\.id)),
           hasIOSArea: config.areas.contains { $0.kind == .xcode }, file: livePath,
-          rowLines: validation.rowLines, sectionLine: validation.headingLine)
+          rowLines: validation.rowLines, sectionLine: validation.headingLine,
+          tasks: livePlan.tasks.map {
+            PlanLintValidation.TaskWrites(id: $0.id, covers: $0.covers, writes: $0.writes)
+          },
+          appAreas: config.areas.filter { $0.kind == .xcode }.map {
+            PlanLintValidation.AppArea(name: $0.name, root: $0.root)
+          })
       } catch {
         report.message = "linting the `## Validation` table of \(livePath): \(error)"
         return report

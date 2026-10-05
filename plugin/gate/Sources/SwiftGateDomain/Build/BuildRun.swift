@@ -257,9 +257,16 @@ public enum BuildEvent: Sendable, Equatable {
   /// `build finish` closed the run. A ledger event after it means the build resumed.
   public struct Finish: Sendable, Equatable {
     public let at: Date
+    /// The `qa run --final` whose verdict the finish read; `nil` for a plan with no validation
+    /// table.
+    public let qaRun: String?
+    /// That run's verdict.
+    public let validation: Verdict?
 
-    public init(at: Date) {
+    public init(at: Date, qaRun: String? = nil, validation: Verdict? = nil) {
       self.at = at
+      self.qaRun = qaRun
+      self.validation = validation
     }
   }
 

@@ -6,6 +6,33 @@ public enum PlanLintValidation {
   public static let stateWithoutFlowRuleID = "plan-lint.validation-state-without-flow"
   public static let flowWithoutIOSRuleID = "plan-lint.validation-flow-without-ios"
   public static let checkSourceFileRuleID = "plan-lint.validation-check-source-file"
+  public static let screenWithoutFlowRuleID = "plan-lint.validation-screen-without-flow"
+
+  /// A task as the screen check reads it: the requirements it covers and the paths it writes.
+  public struct TaskWrites: Sendable, Equatable {
+    public let id: String
+    public let covers: [String]
+    /// Repository-relative paths; a path ending in `/` is a prefix.
+    public let writes: [String]
+
+    public init(id: String, covers: [String], writes: [String]) {
+      self.id = id
+      self.covers = covers
+      self.writes = writes
+    }
+  }
+
+  /// An `xcode` area: an app whose screens a flow row can drive.
+  public struct AppArea: Sendable, Equatable {
+    public let name: String
+    /// Repository-relative; `.` is the repository root.
+    public let root: String
+
+    public init(name: String, root: String) {
+      self.name = name
+      self.root = root
+    }
+  }
 
   /// Every finding, each `major`: uncovered requirements in plan order, then each row's findings
   /// in table order.
@@ -17,9 +44,12 @@ public enum PlanLintValidation {
   ///   - file: the file findings name: `PLAN.md` or `validation.json`.
   ///   - rowLines: the line of each of `table.rows`, when the table came from markdown.
   ///   - sectionLine: the line the table starts on, when it came from markdown.
+  ///   - tasks: each task's covers and writes, for the screen check; empty skips it.
+  ///   - appAreas: the repository's `xcode` areas, whose screens a task can touch.
   public static func findings(
     table: ValidationTable, requirements: [String], taskIDs: Set<String>, hasIOSArea: Bool,
-    file: String, rowLines: [Int] = [], sectionLine: Int? = nil
+    file: String, rowLines: [Int] = [], sectionLine: Int? = nil, tasks: [TaskWrites] = [],
+    appAreas: [AppArea] = []
   ) throws(ReportContractViolation) -> [Finding] {
     var findings: [Finding] = []
     let checked = Set(table.rows.map(\.requirement) + table.unitOnly.map(\.requirement))
