@@ -180,6 +180,11 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     case returnNotGreen = "return-not-green"
     /// The newest GREEN `build check-return` covered another commit than the branch tip.
     case returnStale = "return-stale"
+    /// A validation row runs after this task with every other task it waits on merged, and no
+    /// `qa run --before-merge` of the branch at its tip on `main`'s commit is GREEN or conflicted.
+    case flowsUnchecked = "flows-unchecked"
+    /// The newest `qa run --before-merge` of the branch at its tip on `main`'s commit is RED.
+    case flowsRed = "flows-red"
   }
 
   /// Whether `main` was checked against the run's last merge.

@@ -20,6 +20,11 @@ enum QARunRun {
     /// With `atBase`, only the rows this task writes, read from the checkout's prepared
     /// `.harness/qa/<plan>/` folder before `qa adopt` copies it into plan state.
     var preparedBy: String?
+    /// With `after`, run its rows in a scratch tree where the task's branch is merged into main's
+    /// tip, before `build merge` lands it.
+    var beforeMerge = false
+    /// With `beforeMerge`, merge the task's fixer's branch in place of the task's.
+    var fix = false
   }
 
   struct Dependencies: Sendable {
@@ -44,6 +49,8 @@ enum QARunRun {
     /// Clones of the simulator a `test:` row's `xcodebuild test` names; `nil` runs the command on
     /// the device as written.
     var testDevices: (any TestDeviceLeasing)?
+    /// Merges the branch a `--before-merge` run checks into its scratch tree.
+    var merger: any MergeRunner = LiveMergeRunner(runner: LiveProcessRunner())
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -715,8 +722,8 @@ enum QARunRun {
   }
 }
 
-/// `swiftgate qa run [--plan <slug>] [--after <task>] [--at-base [--prepared-by <task>]] [--final]
-/// [--json]`.
+/// `swiftgate qa run [--plan <slug>] [--after <task> [--before-merge [--fix]]]
+/// [--at-base [--prepared-by <task>]] [--final] [--json]`.
 struct QARunCommand: AsyncParsableCommand {
   static let configuration = CommandConfiguration(
     commandName: "run",
@@ -739,6 +746,15 @@ struct QARunCommand: AsyncParsableCommand {
       "With --at-base, run only the rows this task writes, from this checkout's .harness/qa/<plan>/.")
   var preparedBy: String?
 
+  @Flag(
+    help: ArgumentHelp(
+      "With --after, run its rows where the task's branch is merged into main's tip in a scratch "
+        + "worktree, before build merge lands it."))
+  var beforeMerge = false
+
+  @Flag(help: "With --before-merge, merge the task's fixer's branch in place of the task's.")
+  var fix = false
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -748,7 +764,8 @@ struct QARunCommand: AsyncParsableCommand {
     let agentDevice = LiveAgentDevice(runner: runner)
     let report = await QARunRun.run(
       root: root, options: QARunRun.Options(
-        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy),
+        plan: plan, after: after, atBase: atBase, final: final, preparedBy: preparedBy,
+        beforeMerge: beforeMerge, fix: fix),
       git: LiveGit(runner: runner, repositoryRoot: root.path),
       dependencies: QARunRun.Dependencies(
         checks: QACommandRunner(runner: runner), ports: LiveQAPorts(), scratch: nil, events: nil,
