@@ -135,10 +135,12 @@ extension RunCommand {
       left += disposal.failures.map { "a slot: \($0)" }
     }
     if let checkout = prepared.checkout {
-      let removed = try? await git(
-        ["worktree", "remove", "--force", "--force", "--", checkout], root: prepared.root,
-        runner: dependencies.runner)
-      if removed == nil { left.append("the plan checkout \(checkout)") }
+      do throws(GitWorkspaceError) {
+        try await LiveGitWorkspace(runner: dependencies.runner, repositoryRoot: prepared.root)
+          .removeWorktree(at: checkout, force: true)
+      } catch {
+        left.append("the plan checkout \(checkout)")
+      }
     }
     let branch = prepared.clock.planBranch
     let deleted = try? await git(
@@ -298,9 +300,8 @@ extension RunCommand {
         seedCheckout: URL(filePath: checkout, directoryHint: .isDirectory), plan: slug)
     } catch {
       if checkedOut {
-        _ = try? await git(
-          ["worktree", "remove", "--force", "--force", "--", checkout], root: rootPath,
-          runner: runner)
+        try? await LiveGitWorkspace(runner: runner, repositoryRoot: rootPath)
+          .removeWorktree(at: checkout, force: true)
       }
       if branched {
         _ = try? await git(
