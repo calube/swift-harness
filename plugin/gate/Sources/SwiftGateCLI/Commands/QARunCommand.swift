@@ -219,9 +219,19 @@ enum QARunRun {
         }
       }
     }
+    // A task alongside that merged since the run was asked for is already on the branch the
+    // trial merge starts from, and `build merge` deleted its branch.
+    var alongsideTasks = options.alongside
+    if let merged {
+      let landed = alongsideTasks.filter { merged.contains($0) }
+      alongsideTasks.removeAll { landed.contains($0) }
+      for task in landed {
+        notes.append(
+          "`\(task)` has merged, so the trial merge starts from a branch that already holds it")
+      }
+    }
     var runPlan = QARunPlan.make(
-      table: table, merged: merged, after: options.after, ended: ended,
-      alongside: options.alongside)
+      table: table, merged: merged, after: options.after, ended: ended, alongside: alongsideTasks)
     var prepared: String?
     if let writer = options.preparedBy {
       let relative = "\(QAAdoptRun.preparedDirectory)/\(slug)"
@@ -397,7 +407,7 @@ enum QARunRun {
             "branch \(names.branch) doesn't exist, so there is nothing to merge", plan: slug)
         }
         tip = found
-        for task in options.alongside {
+        for task in alongsideTasks {
           let other = try TaskWorktree(
             commonDirectory: common, plan: slug, task: task, profile: profile)
           guard let found = try await git.revision("refs/heads/\(other.branch)") else {
@@ -593,7 +603,10 @@ enum QARunRun {
             HarnessEvent(
               eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
               source: HarnessEventSource(route: nil),
-              payload: .qaCheck(QACheckEvent(plan: slug, row: row, atBase: options.atBase)))
+              payload: .qaCheck(
+                QACheckEvent(
+                  plan: slug, row: row, atBase: options.atBase,
+                  repairProof: options.preparedBy != nil && options.requirement != nil)))
           }
             + rows.compactMap { row in
               flowRecords[row.row].map { record in

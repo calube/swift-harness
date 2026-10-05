@@ -322,10 +322,13 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      caused the red.
    - **Flow repair before any halt.** A fixer's `flow row:` line, or a flow row red again after its
      fix, takes [the build loop's flow repair](../build/references/event-loop.md#flow-repair). A
-     validation worker in repair mode rewrites that row alone, `qa adopt --repair` takes it back
-     at most once per row per run, and the fixer runs again. Add 1 assumption naming the repaired
-     row, its cause and the reason the adopt recorded. A refused repair halts as the build loop
-     says, decided as the next bullet says.
+     validation worker in repair mode rewrites that row alone, 1 requirement per folder, and
+     proves it red at the base itself. `qa adopt --repair` takes it back, a second time only
+     before `noNewStartsAt`, and the fixer runs again. Add 1 assumption naming the repaired row,
+     its cause and the reason the adopt recorded. A refused repair is never a reason to stop the
+     build while time remains: before `cutoffAt`, send the row back to the repair worker with the
+     refusal's messages, which say what would pass, and adopt again. Only a `no repair:` return
+     halts, decided as the next bullet says.
    - Where it halts and asks, decide yourself: take the option it marks recommended, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks

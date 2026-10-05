@@ -1258,4 +1258,40 @@ struct BuildMergeFlowsTests {
     #expect(merged.status == .merged, "\(merged.message)")
     #expect(try scenario.merges().map(\.task) == ["t1"])
   }
+
+  @Test(
+    "with the price-tracker trial's table, detail merging while its 2 rows still wait on the unmerged watchlist says no validation row verified it and names those rows and the task they wait on, while client-live, which no row runs after, says nothing of rows — catches the trial's detail merged on its own rows when it had none"
+  )
+  func mergeWithNoVerifiedRowSaysSo() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")
+      .plan(MergeScenario.plan)
+    let directory = URL(filePath: plan.directory, directoryHint: .isDirectory)
+    try Fixture.data("RunView/price-tracker-5/validation.json").write(
+      to: directory.appending(path: ValidationTable.fileName))
+    let tasks = ["spec-client-live", "spec-watchlist", "spec-detail"]
+    try LedgerJSON.encode(
+      Ledger(
+        schemaVersion: 1, resume: "", maxParallel: 3,
+        tasks: tasks.map { id in
+          LedgerTask(
+            id: id, deps: [], writeSet: [], gate: .push, tests: [], covers: [], estLines: 10,
+            status: .inProgress, worktree: scenario.checkout.path + "-search-\(id)")
+        }, waves: [tasks])
+    ).write(to: directory.appending(path: "ledger.json"))
+    try await scenario.taskBranch("spec-client-live", "Live.swift", "live\n")
+    try await scenario.taskBranch("spec-watchlist", "Watchlist.swift", "watchlist\n")
+    try await scenario.taskBranch("spec-detail", "Detail.swift", "detail\n")
+
+    let client = await scenario.merge("spec-client-live")
+    let detail = await scenario.merge("spec-detail")
+
+    #expect(client.status == .merged, "\(client.message)")
+    #expect(!client.message.contains("validation row"), "\(client.message)")
+    #expect(detail.status == .merged, "\(detail.message)")
+    #expect(detail.message.contains("no validation row verified"), "\(detail.message)")
+    #expect(detail.message.contains("4, 5"), "\(detail.message)")
+    #expect(detail.message.contains("spec-watchlist"), "\(detail.message)")
+  }
 }

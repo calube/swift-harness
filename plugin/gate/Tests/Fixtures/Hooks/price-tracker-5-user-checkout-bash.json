@@ -1,0 +1,4 @@
+{
+  "cwd": "/CLONE",
+  "command": "SG=\"/HARNESS/plugin/bin/swiftgate\"; S=8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9; R=20261005T093318Z-fe5b2db8; cd /CLONE-spec; mkdir -p .harness/build/$R; cp ../repo/.harness/build/$R/spec-client-live.json .harness/build/$R/; rm -rf ../repo/.harness/build; rmdir ../repo/.harness 2>/dev/null; \"$SG\" build check-return .harness/build/$R/spec-client-live.json --plan spec --session $S --json | grep -E 'verdict|rule|message'; git status --short"
+}

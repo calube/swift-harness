@@ -20,14 +20,17 @@ plan state, which only `qa adopt` writes.
 ## The repair worker's red run
 
 The worker rewrites only that requirement's check files in its checkout's `.harness/qa/<plan>/`,
-which the orchestrator fills with the adopted copies first, and proves them red at the merge base:
+which the orchestrator fills with that requirement's adopted copies alone, and proves them red at
+the merge base itself. The build loop repairs several rows 1 requirement at a time, each in its
+own folder:
 
 ```bash
 "$SG" qa run --plan <plan> --at-base --prepared-by <writer> --requirement <requirement> --json
 ```
 
 `--requirement` needs `--prepared-by`, and runs only the rows of that requirement the writer
-writes. Its `at-base-run.json` holds those rows alone.
+writes. Its `at-base-run.json` holds those rows alone. Its `qa.check` events carry
+`repairProof`, so a row's history leaves the run out until a repair adopts it.
 
 ## What `qa adopt --repair` checks
 
@@ -41,12 +44,16 @@ state, the worktree's prepared folder and record, each red run's `qa/report.json
 worktree's runs or the main checkout's, and plan state's `qa/repairs.json`. It copies nothing when
 any rule fails, and exits 1 naming each finding:
 
-- `qa.repair-cap`: a repair of the requirement already landed in this build run. A row gets 1 repair per
-  run; a row still red after it goes to the user.
-- `qa.repair-outside-row`: the prepared folder holds a file no row of the requirement checks.
+- `qa.repair-cap`: 2 repairs of the requirement already landed in this build run, or 1 did and
+  the run's no-new-starts time has passed, or the run has no box. A row still red then goes to
+  the user.
+- `qa.repair-outside-row`: the prepared folder holds a file no row of the requirement checks. The
+  message names the files the folder may hold.
 - `qa.repair-weakens-check`: a `wait` or `is` step of the adopted flow is gone, out of order, or
   has a shorter `timeoutMs`. A repair may change, add or drop any other step, and may lengthen a
-  timeout.
+  timeout. A `wait` whose target moves to the key its `kind` reads
+  ([`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md)) keeps its check; an `is` never
+  keeps a `wait`. The message quotes the step that would pass.
 - `qa.repair-unchanged`: every check is byte-identical to the adopted one.
 - `qa.repair-not-red`: a check has no row in the prepared record, changed after that run, or read
   `pass` or `unverified` there.
@@ -68,9 +75,8 @@ of the steps it took out and put in.
 
 It writes 1 `qa.repair` event under the prepared run's id, with ids, row numbers and commands only;
 the reason stays in `qa/repairs.json`. The run viewer reads it with the build run's `qa.check`
-events and shows each repaired row's note in its history. A note reads like `flow repaired
-(flow-side) after qa runs <id>, <id> read red at step 6 wait: scroll replaced by gesture; red at
-the base again in qa run <id>`.
+events and shows each repaired row's note in its history, naming the cause, the red runs, their
+failing step, the commands replaced and the run that proved it.
 
 The JSON names `repaired`, the record it appended, and `findings`; `adopted` names the plan and
 how many check files it copied.

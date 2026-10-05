@@ -1,0 +1,66 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/watchlist-launch.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-watchlist",
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/watchlist-refresh.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-refresh",
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/watchlist-retry.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-error-retry",
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-detail-chart",
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/detail-chart-failure.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-chart-failure",
+      "runsAfter" : [
+        "spec-watchlist",
+        "spec-detail"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "system: the simulator UI can't observe whether an in-flight chart request was cancelled; AssetDetailFeatureTests checks it",
+      "requirement" : "req-detail-cancel"
+    },
+    {
+      "reason" : "the recorded-JSON tests in spec-client-live prove decoding and errors with no network",
+      "requirement" : "req-client"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

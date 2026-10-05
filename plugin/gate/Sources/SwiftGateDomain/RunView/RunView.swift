@@ -398,8 +398,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var at: Date
     public var answer: BuildResumeAnswer?
     public var waitMs: Int?
-    /// The RED gate run a `gate-red` halt stopped on; `nil` for another reason, or when no
-    /// RED gate run of the halt's task came before it.
+    /// The RED gate run, or the `qa run` with a red row after the task, that a `gate-red` halt
+    /// stopped on; `nil` for another reason, or when no such run of the halt's task came before it.
     public var gateRun: String?
 
     public init(

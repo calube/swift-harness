@@ -212,7 +212,16 @@ enum PlanImportRun {
         needsScenarioSeam: ContractLanding.needsScenarioSeam(
           planText: String(decoding: liveData, as: UTF8.self),
           hasFlowRows: livePlan.validation?.table.rows.contains { $0.layer == .flow } ?? false),
-        appRoots: config.areas.filter { $0.kind == .xcode }.map(\.root))
+        appRoots: config.areas.filter { $0.kind == .xcode }.map(\.root),
+        refreshRequirements: ContractLanding.refreshRequirements(
+          flowRequirements: livePlan.validation?.table.rows.filter { $0.layer == .flow }
+            .map(\.requirement) ?? [],
+          titles: Dictionary(
+            livePlan.requirements.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first }
+          )),
+        viewRoots: config.areas.filter { $0.kind == .xcode }.flatMap {
+          [$0.root] + ($0.xcode?.packages ?? [])
+        })
     }
 
     let link = root.appending(path: PlanFile.LivePlanSource.fileName).path
@@ -391,7 +400,8 @@ enum PlanImportRun {
   /// contract just stays pending, saying why.
   private static func contractLanding(
     _ contract: Contract, slug: String, common: String, git: any Git, writes: [String],
-    needsScenarioSeam: Bool, appRoots: [String]
+    needsScenarioSeam: Bool, appRoots: [String], refreshRequirements: [String],
+    viewRoots: [String]
   ) async -> ContractLanding.Outcome {
     let branch = BrownfieldRunReport.planBranch(slug: slug)
     let tip: String?
@@ -423,7 +433,7 @@ enum PlanImportRun {
     do throws(GitError) {
       commit = try await contractCommit(
         tip: tip, base: base, git: git, needsScenarioSeam: needsScenarioSeam,
-        appRoots: appRoots)
+        appRoots: appRoots, refreshRequirements: refreshRequirements, viewRoots: viewRoots)
     } catch {
       return .pending(reason: "reading what the contract commit \(tip) changed: \(error)")
     }
@@ -431,11 +441,12 @@ enum PlanImportRun {
   }
 
   /// Sources are read a batch at a time, the changed ones first, so a large app stops at the
-  /// first batch that reads the scenario argument.
+  /// first batch that reads the scenario argument or pins the refresh drag's bottom marker.
   private static let sourceBatch = 200
 
   private static func contractCommit(
-    tip: String, base: String, git: any Git, needsScenarioSeam: Bool, appRoots: [String]
+    tip: String, base: String, git: any Git, needsScenarioSeam: Bool, appRoots: [String],
+    refreshRequirements: [String] = [], viewRoots: [String] = []
   ) async throws(GitError) -> ContractLanding.Commit {
     let changed = try await git.changedFiles(from: base, to: tip)
     let files = Array(Set(try await git.trackedFiles()).union(changed)).sorted()
@@ -457,8 +468,25 @@ enum PlanImportRun {
       }
       sources = read
     }
+    var refresh: ContractLanding.Refresh?
+    if !refreshRequirements.isEmpty {
+      let changedSet = Set(changed)
+      let views = files.filter { ContractLanding.isAppSource($0, appRoots: viewRoots) }
+      var read: [String: String] = [:]
+      var remaining =
+        views.filter { changedSet.contains($0) } + views.filter { !changedSet.contains($0) }
+      while !remaining.isEmpty {
+        let batch = Array(remaining.prefix(sourceBatch))
+        remaining.removeFirst(batch.count)
+        let contents = try await git.contents(of: batch, at: tip)
+        read.merge(contents) { _, new in new }
+        if ContractLanding.pinsBottomMarker(contents) { break }
+      }
+      refresh = ContractLanding.Refresh(requirements: refreshRequirements, sources: read)
+    }
     return ContractLanding.Commit(
-      tip: tip, base: base, changedFiles: changed, files: files, appSources: sources)
+      tip: tip, base: base, changedFiles: changed, files: files, appSources: sources,
+      refresh: refresh)
   }
 
   /// The contract an earlier import landed, for an import without `--contract`: the 1 task of

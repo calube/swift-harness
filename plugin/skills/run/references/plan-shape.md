@@ -148,11 +148,15 @@ the import fails such a reason as `plan-lint.validation-obstacle-fakeable`.
   `load-failure` and `detail-failure`, each with fixed data. Every flow row's `Runs after` names
   that task.
 - A refresh journey's flow drags from the list's top row to a 1 pt id pinned to the bottom of the
-  screen's safe area, so a list of 3 rows refreshes as a long one does. The contract adds that
-  bottom id for each screen a refresh row drives, after any identifier on the list itself:
-  `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`,
-  and the flow's step is `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top
-  row>\"", "destination": "id=\"<bottom id>\""}}`.
+  screen's safe area, so a list of 3 rows refreshes as a long one does. The contract places that
+  bottom id in the stub of each screen a refresh row drives, not just declares it. It goes after
+  any identifier on the list itself:
+  `.safeAreaInset(edge: .bottom, spacing: 0) { Color.clear.frame(height: 1).accessibilityElement().accessibilityIdentifier(<bottom id>) }`.
+  The flow's step is `{"command": "gesture", "input": {"kind": "drag", "source": "id=\"<top
+  row>\"", "destination": "id=\"<bottom id>\""}}`. As a list row the id scrolls with the rows,
+  and the drag pulls nothing. A requirement titled with a refresh, on a `flow` row, keeps the
+  contract pending at `plan import` as `plan-import.refresh-marker-unplaced` until an app source
+  pins an identified element that way.
 - Each flow's first step relaunches the app in its scenario: `{"command": "open", "input":
   {"app": "<bundle id>", "relaunch": true, "launchArgs": ["-harness-scenario", "<name>"]}}`.
 

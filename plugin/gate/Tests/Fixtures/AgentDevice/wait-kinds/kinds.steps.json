@@ -1,0 +1,9 @@
+[
+  {"command": "open", "input": {"app": "com.example.WaitProbe", "relaunch": true}},
+  {"command": "wait", "input": {"kind": "absent", "absent": "id=\"probe.loading\"", "timeoutMs": 15000}},
+  {"command": "wait", "input": {"kind": "selector", "selector": "id=\"probe.done\"", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "text", "text": "Done", "timeoutMs": 5000}},
+  {"command": "wait", "input": {"kind": "duration", "durationMs": 500}},
+  {"command": "wait", "input": {"kind": "stable", "stable": true, "quietMs": 500, "timeoutMs": 5000}},
+  {"command": "is", "input": {"predicate": "absent", "selector": "id=\"probe.loading\""}}
+]

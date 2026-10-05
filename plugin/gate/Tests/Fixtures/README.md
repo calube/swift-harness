@@ -457,6 +457,28 @@ time, also from a `NavigationLink` row (no navigation followed) and under an inl
 refreshed. A `scroll up` refreshed only sometimes: 3 of 4 with `pixels: 500`, 3 of 4 with
 `amount: 0.5`, 0 of 4 with `pixels: 600`, which starts at y 137, and never with `amount: 0.8`.
 
+### AgentDevice/wait-kinds
+
+Each `wait` kind in the input key `agent-device` reads it from, and a `kind: absent` wait whose
+target sits under `selector`, captured on 2026-10-05 with `agent-device` 0.21.18, Xcode 26.2 and
+the iOS 26.2 runtime. The fifth price-tracker trial left 3 flow rows red on that last shape: the
+tool drops `kind` and runs whichever target key is present, so the step waited for the element to
+appear. The app is `WaitProbe.swift` with `Info.plist`: `Loading` with the id `probe.loading` for
+4 s, then `Done` with the id `probe.done`. From anywhere:
+
+```
+plugin/gate/Tests/Fixtures/AgentDevice/wait-kinds/capture.sh
+```
+
+The script works as `AgentDevice/pull-to-refresh`'s does, on its own `agent-device-capture-<pid>`
+device, and deletes it on exit. Each batch relaunches the app first.
+
+| Files | Batch |
+|---|---|
+| `kinds.{steps.json,stdout,stderr,status}` | a `kind: absent` wait with its target under `absent` (waited 2114 ms for `probe.loading` to go), then `selector`, `text`, `duration` and `stable` waits, then `is absent`. Exits 0 |
+| `absent-in-selector.{steps.json,stdout,stderr,status}` | waits for `probe.done`, then a `kind: absent` wait with its target under `selector`: exits 1, `details.step` 3, `wait_deadline_exceeded`, "wait timed out for selector", the trial's message |
+| `absent-in-selector-while-loading.{steps.json,stdout,stderr,status}` | the same wait while `Loading` shows: it returns in 399 ms, and the `is absent` after it fails, `details.step` 3, `predicate_failed`, "1 match found" |
+
 ### AgentDevice/record
 
 What `qa run --final` calls around 1 flow, captured on 2026-10-04 with `agent-device` 0.21.18 and
@@ -4006,6 +4028,32 @@ jq '.rows[] | select(.requirement == "req-refresh")' $S2/runs/20261005T042513Z-f
 
 `grep -rniE '/Users|/private|/var/folders|caleb'` on the folder and the file matched nothing.
 
+## Brownfield trial: price-tracker-5's `wait absent` rows and the repair refused
+
+`BrownfieldTrial/price-tracker-5-repair/` holds what the fifth price-tracker trial (2026-10-05) left
+for its 3 rows whose `wait` put a `kind: absent` target under `selector`: plan state's
+`watchlist-launch.flow.json` (step 21), `watchlist-retry.flow.json` (step 7) and
+`detail-chart.flow.json` (step 6), with `detail-chart-failure.flow.json`, whose `is absent` passed,
+plan state's `at-base-run.json` and `validation.json`, the `qa/report.json` of the 2 runs that read
+the launch row red (`20261005T094133Z-a656b868`, `20261005T094737Z-871120b2`), and the at-base proof
+of the repair `qa adopt --repair` refused (`20261005T095338Z-888ef8b3`): its `qa/report.json`, its
+`events/qa.jsonl` and its row's driven `steps.json`, from which the tests read back the candidate
+flow by dropping the `snapshot` and `screenshot` steps `qa run` adds. The candidate swapped step 21
+for an `is absent`. `S` is the run's copied state directory under the practice-trial runs folder,
+and `T` the trial's folder that holds its checkouts, whose paths are cut to `/trial`:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial/price-tracker-5-repair; mkdir -p $F
+for f in watchlist-launch watchlist-retry detail-chart detail-chart-failure; do cp $S/plans/spec/qa/$f.flow.json $F/; done
+cp $S/plans/spec/qa/at-base-run.json $S/plans/spec/validation.json $F/
+cut="s#$T#/trial#g"
+for r in 20261005T094133Z-a656b868 20261005T094737Z-871120b2 20261005T095338Z-888ef8b3; do sed -e "$cut" $S/runs/$r/qa/report.json > $F/report-$r.json; done
+sed -e "$cut" $S/runs/20261005T095338Z-888ef8b3/qa/01-req-watchlist.flow/steps.json > $F/steps-20261005T095338Z-888ef8b3.json
+sed -e "$cut" $S/runs/20261005T095338Z-888ef8b3/events/qa.jsonl > $F/qa-20261005T095338Z-888ef8b3.jsonl
+```
+
+`grep -rniE '/Users|/private|/var/folders|caleb'` on the folder matched nothing.
+
 ## Brownfield trial: a changed test that spins, and the warm-up its bounds read
 
 `BrownfieldTrial/price-tracker-3-DetailFeatureTests-spin.swift` is the detail test file a
@@ -4295,6 +4343,51 @@ for f in "$P"/906f7d75-4c8b-4434-bedd-0e8173d509ba/workflows/wf_*.json; do
 ```
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` matched nothing in either folder.
+
+## Brownfield trial: price-tracker-5's refresh marker, user-checkout writes and halts
+
+The fifth price-tracker trial (2026-10-05) declared its refresh drag's bottom marker in the
+contract without placing it; the watchlist worker added it as the last `List` row, and the fixer
+moved it into `.safeAreaInset(edge: .bottom)`. `BrownfieldTrial/price-tracker-5-PLAN.md` is the
+run's `PLAN.md`, and `BrownfieldTrial/price-tracker-5-watchlist/{contract,worker,fixer}/` holds
+`WatchlistView.swift` at the contract commit, the worker's commit and the fixer's commit.
+`RunView/price-tracker-5/` holds the run's `build`, `gate`, `span` and `qa` event streams, the
+`qa/report.json` of the combined `qa run --before-merge` and of the fixer's `qa run --fix`, and the
+plan's `validation.json`. `Hooks/price-tracker-5-user-checkout-bash.json` is the orchestrator's Bash
+call that moved a return it had written into the user's checkout over to the plan checkout, with
+the session's `cwd`, the clone replaced with `/CLONE` and the harness checkout with `/HARNESS`.
+With `T` the trial folder, `S=$T/state` and `R` the trial's repository:
+
+```sh
+F=plugin/gate/Tests/Fixtures/BrownfieldTrial; V=Packages/AppFeature/Sources/AppUI/WatchlistView.swift
+cp $T/PLAN.md $F/price-tracker-5-PLAN.md
+for pair in contract:c414b67 worker:f14b834 fixer:e500035; do d=${pair%%:*}; c=${pair##*:}
+  mkdir -p $F/price-tracker-5-watchlist/$d/$(dirname $V)
+  git -C $R show $c:$V > $F/price-tracker-5-watchlist/$d/$V; done
+G=plugin/gate/Tests/Fixtures/RunView/price-tracker-5; mkdir -p $G/events
+for e in build gate span qa; do cp $S/events/$e.jsonl $G/events/$e.jsonl; done
+for r in 20261005T094133Z-a656b868 20261005T094737Z-871120b2; do
+  mkdir -p $G/runs/$r/qa; cp $S/runs/$r/qa/report.json $G/runs/$r/qa/report.json; done
+cp $S/plans/spec/validation.json $G/validation.json
+python3 - $T/transcripts/8b1b9c02-5a4b-4f13-ad39-2c160dc5b9e9.jsonl \
+  > plugin/gate/Tests/Fixtures/Hooks/price-tracker-5-user-checkout-bash.json <<'PY'
+import json,sys,re
+def scrub(c):
+    c=re.sub(r'/Users/[^/]+/Developer/trials/practice/price-tracker-5/repo','/CLONE',c)
+    return re.sub(r'/Users/[^/]+/Developer/swift-harness-trial-price-tracker-5','/HARNESS',c)
+for l in open(sys.argv[1]):
+    d=json.loads(l)
+    c=d.get('message',{}).get('content')
+    if not isinstance(c,list): continue
+    for b in c:
+        if b.get('type')!='tool_use': continue
+        cmd=b.get('input',{}).get('command','')
+        if 'rm -rf ../repo/.harness/build' in cmd:
+            json.dump({"cwd":scrub(d.get('cwd','')),"command":scrub(cmd)},sys.stdout,indent=2); print(); sys.exit()
+PY
+```
+
+`grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
 
 ## Brownfield trial: price-tracker-5's device wait, prove runs and raw swift builds
 

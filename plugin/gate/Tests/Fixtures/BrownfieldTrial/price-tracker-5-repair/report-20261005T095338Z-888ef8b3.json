@@ -1,0 +1,44 @@
+{
+  "after" : null,
+  "atBase" : true,
+  "atBaseRecord" : "/trial/repo-spec.slot-3/.harness/qa/spec/at-base-run.json",
+  "commit" : "5e61a9a398feca6c404f22183d13e9a2bfeff22e",
+  "final" : false,
+  "findings" : [
+
+  ],
+  "message" : "1 of 4 rows verified (3 reason-only): 0 pass, 1 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+    "checks read from .harness/qa/spec/ before qa adopt: only the 1 rows `spec-validation` writes for `req-watchlist` ran"
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/watchlist-launch.flow.json",
+      "evidence" : [
+        "qa/01-req-watchlist.flow/steps.json",
+        "qa/01-req-watchlist.flow/batch.json",
+        "qa/01-req-watchlist.flow/flow.json",
+        "qa/01-req-watchlist.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.list\"; sim verify RED: sim.no-steps: run 20261005T095338Z-888ef8b3-row1 recorded no step: run sim snap at each checked point",
+      "ms" : 28727,
+      "requirement" : "req-watchlist",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "spec-watchlist"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T095338Z-888ef8b3",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "verdict" : "GREEN"
+}
