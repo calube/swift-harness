@@ -1,0 +1,13 @@
+{"at":"2026-10-05T07:47:13Z","from":"pending","kind":"transition","task":"spec-validation","to":"in-progress"}
+{"at":"2026-10-05T07:47:14Z","from":"pending","kind":"transition","task":"tracker-watchlist","to":"in-progress"}
+{"at":"2026-10-05T07:47:14Z","from":"pending","kind":"transition","task":"tracker-detail","to":"in-progress"}
+{"at":"2026-10-05T07:47:14Z","from":"pending","kind":"transition","task":"tracker-client-live","to":"in-progress"}
+{"at":"2026-10-05T07:53:28Z","checkId":"019A0DA1-2406-4811-822C-06331E5A8634","commit":"627df63133b284b2e6cc2488868a4c200ce67532","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"tracker-client-live","verdict":"GREEN"}
+{"at":"2026-10-05T07:53:35Z","kind":"merge","postCommit":"5be7fd5d87fa23131e06bb2f398da9d80e0f1590","preCommit":"562e50679a13e8781b45ee72889cfaad310a3f4e","task":"tracker-client-live"}
+{"at":"2026-10-05T07:55:59Z","from":"in-progress","kind":"transition","task":"spec-validation","to":"done"}
+{"at":"2026-10-05T08:03:07Z","checkId":"E92DCCC9-45AE-4B9F-BB75-98D111BC3575","commit":"c818dd3614f4eda70166c998092ec335bcf8fabe","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"tracker-watchlist","verdict":"GREEN"}
+{"at":"2026-10-05T08:05:30Z","checkId":"9F7A48D9-AF1C-4E48-8715-3F1B241B9EBC","commit":"17bf2e743011e4b80351372588b552c8a42ac99a","fix":false,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"tracker-detail","verdict":"GREEN"}
+{"at":"2026-10-05T08:07:57Z","fromCommit":"5be7fd5d87fa23131e06bb2f398da9d80e0f1590","kind":"undo","task":"tracker-client-live","toCommit":"562e50679a13e8781b45ee72889cfaad310a3f4e"}
+{"at":"2026-10-05T08:10:57Z","checkId":"EB4C3AA1-12C1-4AC7-BD14-6BA3B2D702B5","commit":"aa2c4af0912018cf15acc0dc2680de000812874c","fix":true,"kind":"return-check","outcome":"ready-to-merge","rules":[],"task":"tracker-client-live","verdict":"GREEN"}
+{"at":"2026-10-05T08:13:02Z","kind":"merge","postCommit":"d6ca63eb064c0ad19db52749174653198e731418","preCommit":"562e50679a13e8781b45ee72889cfaad310a3f4e","task":"tracker-watchlist"}
+{"at":"2026-10-05T08:13:45Z","gate":"merge","kind":"gate","runId":"20261005T081306Z-627d944b","task":"tracker-watchlist","tier":"merge","verdict":"BLOCKED"}
