@@ -1,0 +1,191 @@
+{
+  "after" : "account-client",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "98230692088f0844a48d5280ef096d283d74d2c5",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 1 (req-contact-search, flow) `qa/contact-search.flow.json`: step 13 `fill` failed: Batch failed at step 44 (fill): no text input found at the provided coordinates to clear",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-continue-rule, flow) `qa/continue-rule.flow.json`: step 11 `is` failed: Batch failed at step 30 (is): is text failed for selector id=\"amount.balance\": expected=\"$250.00\" actual=\"Balance $250.00\"",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 9 rows verified (4 reason-only): 3 pass, 2 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 4,
+  "rows" : [
+    {
+      "check" : "qa/contact-search.flow.json",
+      "evidence" : [
+        "qa/01-req-contact-search.flow/steps.json",
+        "qa/01-req-contact-search.flow/batch.json",
+        "qa/01-req-contact-search.flow/flow.json",
+        "qa/01-req-contact-search.flow/video.mp4",
+        "qa/01-req-contact-search.flow/sheet.png",
+        "qa/01-req-contact-search.flow/sim/steps.ndjson",
+        "qa/01-req-contact-search.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 13 `fill` failed: Batch failed at step 44 (fill): no text input found at the provided coordinates to clear",
+      "ms" : 47404,
+      "requirement" : "req-contact-search",
+      "result" : "red",
+      "row" : 1,
+      "runsAfter" : [
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/keypad.flow.json",
+      "evidence" : [
+        "qa/02-req-keypad-input.flow/steps.json",
+        "qa/02-req-keypad-input.flow/batch.json",
+        "qa/02-req-keypad-input.flow/flow.json",
+        "qa/02-req-keypad-input.flow/video.mp4",
+        "qa/02-req-keypad-input.flow/sheet.png",
+        "qa/02-req-keypad-input.flow/sim/steps.ndjson",
+        "qa/02-req-keypad-input.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 8 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 50921,
+      "requirement" : "req-keypad-input",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/continue-rule.flow.json",
+      "evidence" : [
+        "qa/03-req-continue-rule.flow/steps.json",
+        "qa/03-req-continue-rule.flow/batch.json",
+        "qa/03-req-continue-rule.flow/flow.json",
+        "qa/03-req-continue-rule.flow/video.mp4",
+        "qa/03-req-continue-rule.flow/sheet.png",
+        "qa/03-req-continue-rule.flow/sim/steps.ndjson",
+        "qa/03-req-continue-rule.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 11 `is` failed: Batch failed at step 30 (is): is text failed for selector id=\"amount.balance\": expected=\"$250.00\" actual=\"Balance $250.00\"",
+      "ms" : 24410,
+      "requirement" : "req-continue-rule",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-success.flow.json",
+      "evidence" : [
+        "qa/04-req-send-success.flow/steps.json",
+        "qa/04-req-send-success.flow/batch.json",
+        "qa/04-req-send-success.flow/flow.json",
+        "qa/04-req-send-success.flow/video.mp4",
+        "qa/04-req-send-success.flow/sheet.png",
+        "qa/04-req-send-success.flow/sim/steps.ndjson",
+        "qa/04-req-send-success.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 12 steps; nit sim.a11y-untargeted: 24 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 39910,
+      "requirement" : "req-send-success",
+      "result" : "pass",
+      "row" : 4,
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure.flow.json",
+      "evidence" : [
+        "qa/05-req-send-failure.flow/steps.json",
+        "qa/05-req-send-failure.flow/batch.json",
+        "qa/05-req-send-failure.flow/flow.json",
+        "qa/05-req-send-failure.flow/video.mp4",
+        "qa/05-req-send-failure.flow/sheet.png",
+        "qa/05-req-send-failure.flow/sim/steps.ndjson",
+        "qa/05-req-send-failure.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 13 steps; nit sim.a11y-untargeted: 16 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 44611,
+      "requirement" : "req-send-failure",
+      "result" : "pass",
+      "row" : 5,
+      "runsAfter" : [
+        "amount-feature",
+        "contacts-feature",
+        "send-flow",
+        "account-client"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T094736Z-1149c44c",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/amount-feature",
+        "task" : "amount-feature",
+        "tip" : "99251182784ee0ff9c7c5e797e421c7919092a48"
+      }
+    ],
+    "base" : "2f921663f457b2620825956bdc587913adaae5d7",
+    "branch" : "spec/account-client",
+    "conflicts" : [
+
+    ],
+    "tip" : "c90930ce5cdb2d7c38ccfc6960866b7a9a875f87"
+  },
+  "verdict" : "RED"
+}

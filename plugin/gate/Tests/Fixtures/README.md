@@ -4364,6 +4364,8 @@ cp $S/plans/spec/qa/{keypad,continue-rule,send-success,send-failure,contact-sear
 cp $S/runs/20261005T095459Z-322909d3/qa/merged-tree-run.json $F/send-money-6-merged-tree-run-fixer.json
 cp $S/runs/20261005T095459Z-322909d3/qa/report.json $F/send-money-6-qa-fixer-before-merge.json
 cp $S/runs/20261005T100135Z-b753ffc4/qa/report.json $F/send-money-6-qa-final.json
+cp $S/runs/20261005T094736Z-1149c44c/qa/report.json $F/send-money-6-qa-combined-before-merge.json
+(cd <the trial's repo> && git diff --name-only 879ea73^ 879ea73) > $F/send-money-6-fix-account-client-files.txt
 python3 - $T/transcripts/<session>/subagents/*.jsonl > Hooks/send-money-6-qa-run-bash.json <<'PY'
 import json,sys,re
 def scrub(c):
@@ -4387,6 +4389,9 @@ The plan's `qa/` flows are the ones adopted at the end: the contact-search flow 
 the fixer's run, so only its digest differs from the merged-tree record's. The tests rebuild the
 trial's branch shape in a throwaway repository and write the merged-tree record with its `tree` set
 to that repository's final tree, the one field a trial tree can't carry over.
+`send-money-6-fix-account-client-files.txt` is the file account-client's fixer changed, the
+contacts screen contacts-feature had merged, after the combined run over account-client and
+amount-feature was RED.
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on every file named here matched nothing.
 
 ## Brownfield trial: price-tracker-5's refresh marker, user-checkout writes and halts
