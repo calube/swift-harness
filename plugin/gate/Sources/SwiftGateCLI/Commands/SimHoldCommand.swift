@@ -21,7 +21,18 @@ struct SimHoldCommand: AsyncParsableCommand {
     help: "Give the device back once this process exits: a qa run holding 1 device for its rows.")
   var ownerPID: Int32?
 
+  @Option(
+    name: .customLong("timeout-minutes"),
+    help: "Give the device back after this many minutes unreleased: a build run's shared device.")
+  var timeoutMinutesOption: Int?
+
   func validate() throws {
+    if let minutes = timeoutMinutesOption,
+      !QAConfig.sessionTimeoutMinutesRange.contains(minutes)
+    {
+      throw ValidationError(
+        "--timeout-minutes \(minutes) is outside \(QAConfig.sessionTimeoutMinutesRange)")
+    }
     guard SimLease.isValidRunID(runID) else {
       throw ValidationError(
         "--run \"\(runID)\" is not a run id: use letters, digits, '-', '_' and '.', not leading '.'"
@@ -69,8 +80,11 @@ struct SimHoldCommand: AsyncParsableCommand {
 
   /// A hold with an owner lasts while its owner runs, which a `qa run` over many flow rows may
   /// take longer than 1 session's timeout to finish, so its timeout is only the longest allowed.
+  /// A build run's hold lasts the minutes it was given.
   func timeoutMinutes(_ target: SimTarget) -> Int {
-    ownerPID == nil ? target.sessionTimeoutMinutes : QAConfig.sessionTimeoutMinutesRange.upperBound
+    if let timeoutMinutesOption { return timeoutMinutesOption }
+    return ownerPID == nil
+      ? target.sessionTimeoutMinutes : QAConfig.sessionTimeoutMinutesRange.upperBound
   }
 
   /// Frees what killed holders left before taking a device, logging each run and problem.

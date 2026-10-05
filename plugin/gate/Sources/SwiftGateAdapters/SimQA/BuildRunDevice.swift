@@ -41,14 +41,41 @@ public enum BuildRunDevice {
     "\(buildRunID)-run-device"
   }
 
+  /// Where the hold's holder logs: `<common>/swift-harness/run-device/<build run id>/`, outside
+  /// plan state and every worktree, so it outlives the trees the hold's rows ran in.
+  public static func logDirectory(commonDirectory: String, buildRunID: String) -> URL {
+    URL(filePath: commonDirectory, directoryHint: .isDirectory)
+      .appending(
+        path: "\(RunLayout.gitDirDirectory)/run-device/\(buildRunID)", directoryHint: .isDirectory)
+  }
+
   /// The lock 1 `qa run` holds while it borrows the device; `nil` when another run has it.
   public static func borrow(buildRunID: String, lockDirectory: URL) async -> LockLease? {
-    nil
+    let lock = FileCountingLock(
+      directory: lockDirectory, name: "\(holdRunID(buildRunID: buildRunID)).borrow", capacity: 1,
+      pollInterval: .milliseconds(5))
+    return try? await lock.acquire(timeout: .milliseconds(200))
   }
 
   /// Ends the hold by removing its lease, which its holder watches: the holder then deletes the
   /// device and exits.
   public static func release(buildRunID: String, leases: SimLeaseStore) -> Release {
-    .notHeld
+    let runID = holdRunID(buildRunID: buildRunID)
+    do throws(SimLeaseStoreError) {
+      guard let lease = try leases.read(runID: runID) else { return .notHeld }
+      try leases.remove(runID: runID)
+      return .released(udid: lease.udid)
+    } catch {
+      return .failed(error.message)
+    }
+  }
+
+  /// A sentence for a report, or `nil` when no device was held.
+  public static func note(_ release: Release) -> String? {
+    switch release {
+    case .released(let udid): "released the build run's shared device \(udid)"
+    case .notHeld: nil
+    case .failed(let reason): "the build run's shared device wasn't released: \(reason)"
+    }
   }
 }

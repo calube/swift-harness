@@ -383,7 +383,7 @@ struct SimUpTests {
     #expect(
       try store.read(runID: Self.rowRunIDs[1])
         == SimLease(
-          runID: Self.rowRunIDs[1], worktree: worktree.path, udid: Self.udid,
+          runID: Self.rowRunIDs[1], worktree: CanonicalPath.of(worktree), udid: Self.udid,
           holderPID: FakeHolderLauncher.pid,
           session: SimSession.agentDeviceSessionName(runID: Self.rowRunIDs[1])))
     #expect(try store.read(runID: hold.runID)?.session == nil)

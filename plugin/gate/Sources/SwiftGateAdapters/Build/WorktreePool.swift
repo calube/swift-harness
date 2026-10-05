@@ -77,16 +77,7 @@ public struct WorktreePool: Sendable {
         try write(state)
         return Checkout(path: free.path, reused: true)
       }
-      var number = 1
-      var path = try TaskWorktree.slotPath(
-        commonDirectory: commonDirectory, plan: plan, number: number)
-      while state.slots.contains(where: { $0.path == path })
-        || FileManager.default.fileExists(atPath: path)
-      {
-        number += 1
-        path = try TaskWorktree.slotPath(
-          commonDirectory: commonDirectory, plan: plan, number: number)
-      }
+      let path = try newSlotPath(state)
       try await workspace.addWorktree(at: path, branch: branch, from: base)
       state.assign(branch, to: path)
       try write(state)
@@ -109,7 +100,59 @@ public struct WorktreePool: Sendable {
     revision: String, holder: String, prefer: @Sendable (String) -> Bool = { _ in false },
     isAlive: @Sendable (Int32) -> Bool, workspace: any GitWorkspace
   ) async throws(GitWorkspaceError) -> Checkout {
-    throw .pool(path: file.path, detail: "not available")
+    try await locked { () async throws(GitWorkspaceError) -> Checkout in
+      var state = try state()
+      if let held = state.path(holding: holder) {
+        throw .pool(path: held, detail: "\(holder) already holds this slot")
+      }
+      for slot in state.slots {
+        guard let pid = slot.branch.flatMap(Self.scratchPID), !isAlive(pid) else { continue }
+        if FileManager.default.fileExists(atPath: slot.path) {
+          try await workspace.resetWorktree(at: slot.path)
+          try emptyState(of: slot.path)
+        }
+        state.free(slot.branch ?? "")
+      }
+      for slot in state.slots
+      where slot.branch == nil && !FileManager.default.fileExists(atPath: slot.path) {
+        state.drop(slot.path)
+      }
+      let free = state.slots.filter { $0.branch == nil }.map(\.path)
+      if let path = free.first(where: prefer) ?? free.first {
+        try await workspace.detachWorktree(at: path, revision: revision)
+        state.assign(holder, to: path)
+        try write(state)
+        return Checkout(path: path, reused: true)
+      }
+      let path = try newSlotPath(state)
+      try await workspace.addDetachedWorktree(at: path, revision: revision)
+      state.assign(holder, to: path)
+      try write(state)
+      return Checkout(path: path, reused: false)
+    }
+  }
+
+  /// The process a scratch holder names, or `nil` for a branch.
+  static func scratchPID(_ holder: String) -> Int32? {
+    guard holder.hasPrefix(scratchPrefix) else { return nil }
+    return holder.dropFirst(scratchPrefix.count).split(separator: ":").first.flatMap {
+      Int32($0)
+    }
+  }
+
+  /// The first `<repo>-<plan>.slot-<n>` neither the pool nor the disk has.
+  private func newSlotPath(_ state: WorktreePoolState) throws(GitWorkspaceError) -> String {
+    var number = 1
+    while true {
+      let path = try TaskWorktree.slotPath(
+        commonDirectory: commonDirectory, plan: plan, number: number)
+      if !state.slots.contains(where: { $0.path == path })
+        && !FileManager.default.fileExists(atPath: path)
+      {
+        return path
+      }
+      number += 1
+    }
   }
 
   /// Returns the slot `branch` is checked out in: refuses one with uncommitted work unless

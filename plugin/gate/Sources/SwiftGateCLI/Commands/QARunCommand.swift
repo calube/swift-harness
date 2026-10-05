@@ -57,11 +57,34 @@ enum QARunRun {
     var devices: (any QADeviceLending)?
   }
 
+  /// How long the scratch tree `tree` took since `asked`, and whether its app build is warm.
+  static func treeStep(_ tree: URL, since asked: ContinuousClock.Instant) -> QASetupStep {
+    let elapsed = ContinuousClock.now - asked
+    return QASetupStep(
+      step: .tree,
+      milliseconds: Int(elapsed.components.seconds * 1000)
+        + Int(elapsed.components.attoseconds / 1_000_000_000_000_000),
+      reused: FileManager.default.fileExists(
+        atPath: SimUpCommand.derivedDataDirectory(root: tree).path))
+  }
+
   /// The trees a trial merge and the merge-base rows run in: pooled slots in a brownfield clone,
   /// where the app `sim up` builds stays warm from run to run, else throwaway trees beside the
   /// repository, as `prove` makes.
   static func scratchTrees(root: URL, common: String, plan: String) -> any ScratchWorktrees {
-    LiveScratchWorktrees(runner: LiveProcessRunner(), repositoryRoot: root.path)
+    let runner = LiveProcessRunner()
+    let throwaway = LiveScratchWorktrees(runner: runner, repositoryRoot: root.path)
+    guard BuildPresetCatalog.profile(root: root) == .brownfield else { return throwaway }
+    return PooledScratchWorktrees(
+      pool: WorktreePool(commonDirectory: common, plan: plan),
+      workspace: LiveGitWorkspace(runner: runner, repositoryRoot: root.path),
+      fallback: throwaway,
+      prefer: { slot in
+        FileManager.default.fileExists(
+          atPath: SimUpCommand.derivedDataDirectory(
+            root: URL(filePath: slot, directoryHint: .isDirectory)
+          ).path)
+      }, isAlive: SimulatorClones.processIsAlive)
   }
 
   /// Reads the plan's `validation.json` and ledger from the git common dir, runs the rows the
@@ -252,6 +275,15 @@ enum QARunRun {
     } catch {
       return blocked("making the run directory for \(runID): \(error)", plan: slug)
     }
+    // A build run's device stays booted across its qa runs; a run that can't borrow it, or runs
+    // outside a build, holds its own for its rows.
+    let borrowed = dependencies.flows == nil ? nil : await dependencies.devices?.borrow(plan: slug)
+    defer { borrowed?.release() }
+    let hold =
+      borrowed?.hold
+      ?? QAFlowDeviceHold(
+        runID: "\(runID)-device",
+        directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory))
     let checks = Checks(
       planDirectory: plan.directory, preparedDirectory: prepared, qaDirectory: qaDirectory,
       dependencies: dependencies,
@@ -265,15 +297,15 @@ enum QARunRun {
           simulator: simulator, finalPass: options.final ? dependencies.finalPass : nil,
           recorder: options.after != nil && !options.atBase
             ? dependencies.finalPass?.recorder.withoutWaiting() : nil,
-          hold: QAFlowDeviceHold(
-            runID: "\(runID)-device",
-            directory: qaDirectory.appending(path: "device", directoryHint: .isDirectory)))
+          hold: hold)
       })
 
     let rows: [QARow]
     let commit: String?
     var atBaseRecord: String?
     var trialMerge: QATrialMerge?
+    /// The scratch tree's setup, when the rows ran in one.
+    var treeSetup: QASetupStep?
     if options.beforeMerge, let after = options.after {
       let names: TaskWorktree
       let tip: String
@@ -298,11 +330,13 @@ enum QARunRun {
         dependencies.scratch ?? scratchTrees(root: root, common: common, plan: slug)
       let merger = dependencies.merger
       let ran: TrialMergeRun
+      let asked = ContinuousClock.now
       do throws(ScratchWorktreeError) {
         // The rows' shared device goes back while the tree its holder runs in still exists.
         ran = try await scratch.withScratchTree(
           ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
         ) { tree in
+          treeSetup = Self.treeStep(tree, since: asked)
           let outcome: MergeOutcome
           do throws(GitWorkspaceError) {
             outcome = try await merger.merge(
@@ -395,11 +429,13 @@ enum QARunRun {
       if runPlan.entries.allSatisfy({ reused[$0.row] != nil || !$0.waitingOn.isEmpty }) {
         rows = await runPlan.execute(atBase: true) { await checks.run($0, in: root.path) }
       } else {
+        let asked = ContinuousClock.now
         do throws(ScratchWorktreeError) {
           // The rows' shared device goes back while the tree its holder runs in still exists.
           let ran = try await scratch.withScratchTree(
             ScratchTreeRequest(revision: base, revertTo: base, copiedPaths: [], revertedPaths: [])
           ) { tree in
+            treeSetup = Self.treeStep(tree, since: asked)
             let rows = await runPlan.execute(atBase: true) { await checks.run($0, in: tree.path) }
             return (rows: rows, released: await checks.finishFlows())
           }
@@ -442,6 +478,15 @@ enum QARunRun {
     await checks.testDevices?.releaseAll()
     let flowRecords = await checks.flowRecords()
     let gaps = await checks.gaps()
+    let rowSetup = await checks.setupSteps()
+    let setupEvents: [QASetupEvent] =
+      (treeSetup.map { [QASetupEvent(plan: slug, row: nil, atBase: options.atBase, setup: $0)] }
+        ?? [])
+      + rows.flatMap { row -> [QASetupEvent] in
+        (rowSetup[row.row] ?? []).map {
+          QASetupEvent(plan: slug, row: row.row, atBase: options.atBase, setup: $0)
+        }
+      }
 
     let events = dependencies.events ?? TelemetryOptIn.writer(root: root)
     if let events {
@@ -464,9 +509,14 @@ enum QARunRun {
                       plan: slug, row: row.row, requirement: row.requirement,
                       atBase: options.atBase, record: record)))
               }
+            }
+            + setupEvents.map { event in
+              HarnessEvent(
+                eventID: dependencies.newEventID(), time: time, runID: runID, head: commit,
+                source: HarnessEventSource(route: nil), payload: .qaSetup(event))
             })
       } catch {
-        notes.append("qa.check and qa.flow events not written: \(error)")
+        notes.append("qa.check, qa.flow and qa.setup events not written: \(error)")
       }
     } else {
       notes.append("qa.check events not written: \(root.path) has no config that loads")
@@ -627,6 +677,10 @@ enum QARunRun {
 
     func flowRecords() async -> [Int: QAFlowRecord] {
       await flows?.records ?? [:]
+    }
+
+    func setupSteps() async -> [Int: [QASetupStep]] {
+      await flows?.setup ?? [:]
     }
 
     func gaps() async -> [QAEvidenceGap] {
@@ -974,9 +1028,42 @@ struct QARunCommand: AsyncParsableCommand {
               clock: .continuous())),
           evidence: EvidenceCollector(agentDevice: agentDevice, runner: runner)),
         testDevices: LiveTestDeviceLeases(runner: runner),
-        deadline: await QARunRun.deadline(root: root, runner: runner, final: final)))
+        deadline: await QARunRun.deadline(root: root, runner: runner, final: final),
+        devices: LiveQADeviceLender(
+          root: root, git: LiveGit(runner: runner, repositoryRoot: root.path))))
     Console.write(QARunRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }
+  }
+}
+
+/// Lends a brownfield `qa run` the device of the time-boxed build run going on for its plan. Its
+/// holder lasts to the box's end, at least the default session timeout, unless `build finish` or
+/// `run checkout remove` releases it first.
+struct LiveQADeviceLender: QADeviceLending {
+  let root: URL
+  let git: any Git
+
+  func borrow(plan: String) async -> BorrowedDevice? {
+    guard BuildPresetCatalog.profile(root: root) == .brownfield,
+      let store = try? await BuildRunStore.latest(plan: plan, git: git),
+      let box = try? store.record().timeBox,
+      let common = try? await git.commonDirectory()
+    else { return nil }
+    let now = Date()  // swiftgate:allow det.date-init — the CLI edge reads the clock
+    let left = box.deadlines.endsAt.timeIntervalSince(now) / 60
+    let minutes = min(
+      QAConfig.sessionTimeoutMinutesRange.upperBound,
+      max(QAConfig.defaultSessionTimeoutMinutes, Int(left.rounded(.up)) + 5))
+    guard
+      let lease = await BuildRunDevice.borrow(
+        buildRunID: store.runID, lockDirectory: FileCountingLock.defaultDirectory())
+    else { return nil }
+    return BorrowedDevice(
+      hold: QAFlowDeviceHold(
+        runID: BuildRunDevice.holdRunID(buildRunID: store.runID),
+        directory: BuildRunDevice.logDirectory(commonDirectory: common, buildRunID: store.runID),
+        keptAfterRun: true, timeoutMinutes: minutes),
+      lease: lease)
   }
 }
 
@@ -1011,8 +1098,9 @@ struct LiveQAFlowSimulator: QAFlowSimulating {
       request.hold.map { hold in
         .shared(
           SimSharedHold(
-            runID: hold.runID, ownerPID: getpid(),
-            logFile: hold.directory.appending(path: SimSession.logFileName)))
+            runID: hold.runID, ownerPID: hold.keptAfterRun ? nil : getpid(),
+            logFile: hold.directory.appending(path: SimSession.logFileName),
+            timeoutMinutes: hold.timeoutMinutes))
       } ?? .own
     let dependencies = SimUp.Dependencies(
       agentDevice: agentDevice,

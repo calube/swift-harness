@@ -34,6 +34,13 @@ row or once the run exits. Each row borrows it under a lease of its own. Its `si
 the app and resets the keychain before installing, so no row starts on another's data, and builds
 the app while the device comes up. A row's state rows run before the next row's reset.
 
+In a brownfield build run, every `qa run` borrows the build run's own device instead, so only the
+first flow row of the run waits for a clone to boot. Its holder has no owner process and lasts to
+the time box's end; `build finish` and `run checkout remove` release it. 1 `qa run` borrows it at a
+time; another holds its own as above. A brownfield `qa run`'s trial merge or merge-base tree is a
+pooled worktree slot, the same slots task worktrees use, so the app `sim up` builds there stays
+warm for the next run in that slot.
+
 ## A runner that never launched
 
 When `xcodebuild` exits non-zero saying "Failed to install or launch the test runner" or

@@ -91,6 +91,9 @@ enum RunCheckoutRun {
     guard FileManager.default.fileExists(atPath: context.path) else {
       return context.report(.refused, .red, "no plan checkout at \(context.path)")
     }
+    // The build run's shared device first, while the tree its holder started in still exists; its
+    // holder deletes it once its lease goes.
+    let device = await releaseDevice(slug: slug, root: root, runner: runner, leases: leases)
     let main: String
     do throws(GitWorkspaceError) {
       main = try TaskWorktree.mainCheckout(commonDirectory: context.common)
@@ -114,7 +117,7 @@ enum RunCheckoutRun {
     var report = context.report(
       left.verdict == .green ? .removed : .blocked, left.verdict,
       "removed \(context.path); \(context.branch) stays" + keeping.message + events.message
-        + left.message)
+        + left.message + (device.map { "; \($0)" } ?? ""))
     report.keptRuns = keeping.kept + left.keptRuns
     let unkept = keeping.unkept + left.unkeptRuns
     report.unkeptRuns = unkept.isEmpty ? nil : unkept
@@ -122,7 +125,19 @@ enum RunCheckoutRun {
     report.unkeptEvents = events.unkept
     report.discarded = left.discarded
     report.keptBranches = left.keptBranches
+    report.device = device
     return report
+  }
+
+  /// Releases the plan's newest build run's shared device; `nil` when none was held.
+  private static func releaseDevice(
+    slug: String, root: URL, runner: any ProcessRunner, leases: SimLeaseStore
+  ) async -> String? {
+    let git = LiveGit(runner: runner, repositoryRoot: root.path)
+    guard let run = try? await BuildRunStore.latest(plan: slug, git: git) else {
+      return nil
+    }
+    return BuildRunDevice.note(BuildRunDevice.release(buildRunID: run.runID, leases: leases))
   }
 
   /// What the removal did with the task and fix worktrees the run left.

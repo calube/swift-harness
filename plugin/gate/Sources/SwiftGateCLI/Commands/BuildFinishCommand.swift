@@ -95,11 +95,15 @@ enum BuildFinishRun {
         command: command, plan: slug, indexStatus: status, counts: counts,
         unfinished: unfinished, resume: resume)
       report.validation = validation
+      if let leases, let run {
+        report.device = BuildRunDevice.note(
+          BuildRunDevice.release(buildRunID: run.runID, leases: leases))
+      }
       let message =
         resume
         + (validation.map {
           "; validation \($0.verdict.rawValue) in qa run \($0.runID): \($0.message)"
-        } ?? "")
+        } ?? "") + (report.device.map { "; \($0)" } ?? "")
       if let root {
         (report.runReport, report.runReportNote) = await writeRunReport(
           run: run?.layout.runID, root: root, pluginRoot: pluginRoot, git: git, now: clock.now())
@@ -226,7 +230,7 @@ struct BuildFinishCommand: AsyncParsableCommand {
       root: URL(filePath: FileManager.default.currentDirectoryPath, directoryHint: .isDirectory),
       pluginRoot: ProcessInfo.processInfo.environment["SWIFTGATE_HARNESS_ROOT"].map {
         URL(filePath: $0, directoryHint: .isDirectory)
-      }, qaRun: qaRun)
+      }, qaRun: qaRun, leases: SimLeaseStore(directory: SimLeaseStore.defaultDirectory()))
     Console.write(BuildFinishRun.render(result, format: output.format))
     try BuildLoop.exit(result)
   }

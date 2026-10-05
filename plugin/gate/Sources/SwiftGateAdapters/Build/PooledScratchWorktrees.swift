@@ -29,6 +29,26 @@ public struct PooledScratchWorktrees: ScratchWorktrees {
   public func withScratchTree<T: Sendable>(
     _ request: ScratchTreeRequest, _ body: (URL) async -> T
   ) async throws(ScratchWorktreeError) -> T {
-    try await fallback.withScratchTree(request, body)
+    guard request.copiedPaths.isEmpty, request.revertedPaths.isEmpty,
+      request.seededBuildDirectories.isEmpty, request.revertTo == request.revision
+    else {
+      return try await fallback.withScratchTree(request, body)
+    }
+    let token = UInt32.random(in: .min ... .max)  // swiftgate:allow det.random — unique holder
+    let holder = WorktreePool.scratchHolder(
+      pid: ProcessInfo.processInfo.processIdentifier, token: String(token, radix: 16))
+    let slot: WorktreePool.Checkout
+    do throws(GitWorkspaceError) {
+      slot = try await pool.checkOutDetached(
+        revision: request.revision, holder: holder, prefer: prefer, isAlive: isAlive,
+        workspace: workspace)
+    } catch {
+      return try await fallback.withScratchTree(request, body)
+    }
+    let result = await body(URL(filePath: slot.path, directoryHint: .isDirectory))
+    // Whatever the run left goes. A slot that won't reset stays held until this process exits;
+    // the next checkout then reclaims it.
+    _ = try? await pool.release(branch: holder, discard: true, workspace: workspace)
+    return result
   }
 }
