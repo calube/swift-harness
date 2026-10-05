@@ -63,15 +63,16 @@ public struct QACheckJudgement: Sendable, Equatable {
     case unread(String)
   }
 
-  /// Exit 0 passes unless the check wrote a report showing no test ran, which is the expected red
-  /// run at the merge base and `unverified` after the merge. Any other end keeps its exit-status
-  /// result, and a red one names its first meaningful failure line.
+  /// Exit 0 passes, counting the tests a report or result bundle shows passed, unless it shows no
+  /// test ran, which is the expected red run at the merge base and `unverified` after the merge.
+  /// Any other end keeps its exit-status result, and a red one names its first meaningful failure
+  /// line.
   public static func judge(_ input: Input) -> QACheckJudgement {
     let status: String
     switch input.end {
     case .exited(0):
       guard let why = noTestRan(input) else {
-        return QACheckJudgement(result: .pass, message: "exit 0")
+        return QACheckJudgement(result: .pass, message: "exit 0" + passedCount(input))
       }
       return input.atBase
         ? QACheckJudgement(result: .red, message: "exit 0, but \(why)")
@@ -108,6 +109,18 @@ public struct QACheckJudgement: Sendable, Equatable {
     return cases.isEmpty
       ? "no test matched `\(input.reference)`"
       : "all \(cases.count) tests `\(input.reference)` matched were skipped"
+  }
+
+  /// `, N tests passed` and any `, K skipped` from the result bundle or report; empty when there
+  /// is neither.
+  private static func passedCount(_ input: Input) -> String {
+    guard let cases = bundleCases(input) ?? input.report.flatMap(JUnitReports.cases) else {
+      return ""
+    }
+    let passed = cases.filter { $0.outcome == .passed }.count
+    let skipped = cases.filter { !$0.isExecuted }.count
+    return ", \(passed) \(passed == 1 ? "test" : "tests") passed"
+      + (skipped > 0 ? ", \(skipped) skipped" : "")
   }
 
   /// The report's first failure message, the first failing case when every message is XCTest's

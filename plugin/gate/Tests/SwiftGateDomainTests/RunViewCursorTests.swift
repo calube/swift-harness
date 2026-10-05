@@ -152,4 +152,30 @@ struct RunViewCursorTests {
     if case .changes = evicted { Issue.record("an evicted cursor still got changes") }
     if case .full = kept { Issue.record("the newest cursor got the whole view") }
   }
+
+  @Test(
+    "a damage row or an unwritten file that cleared sends the whole list, empty, so the page drops it — catches a live footer that keeps a healed torn line forever"
+  )
+  func clearedRowsSendTheWholeList() {
+    var old = Self.view(cursor: "c1-old")
+    old.damage = [RunView.Damage(source: ".harness/events/gate.jsonl:4", reason: "torn last line")]
+    old.unwritten = [
+      RunView.Damage(source: "plans/p/build/r/events.jsonl", reason: "not written yet")
+    ]
+    let new = Self.view(cursor: "c1-new")
+
+    let changes = RunViewChanges.between(old, new)
+    #expect(changes.damage == [])
+    #expect(changes.unwritten == [])
+
+    var kept = new
+    kept.damage = [
+      RunView.Damage(source: "a", reason: "b"), RunView.Damage(source: "c", reason: "d"),
+    ]
+    var grown = kept
+    grown.damage.append(RunView.Damage(source: "e", reason: "f"))
+    #expect(RunViewChanges.between(kept, grown).damage == grown.damage)
+    #expect(RunViewChanges.between(kept, kept).damage == nil)
+    #expect(RunViewChanges.between(kept, kept).unwritten == nil)
+  }
 }

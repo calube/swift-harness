@@ -120,10 +120,15 @@ private struct BuildScenario {
       root: repository)
   }
 
-  func finish(session: String? = Self.alice, plan: String = Self.plan) async
+  func finish(
+    session: String? = Self.alice, plan: String = Self.plan, at: Date = Self.startedAt,
+    report: Bool = false
+  ) async
     -> BuildLoopResult<BuildFinishReport>
   {
-    await BuildFinishRun.run(slug: plan, session: session, git: git)
+    await BuildFinishRun.run(
+      slug: plan, session: session, git: git, clock: FixedClock(date: at),
+      root: report ? repository : nil, pluginRoot: report ? Fixture.checkoutRoot : nil)
   }
 }
 
@@ -224,7 +229,9 @@ struct BuildLoopCommandTests {
     let object = try #require(
       try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any])
     #expect(
-      Set(object.keys) == ["runId", "phase", "toStart", "running", "refused", "required"])
+      Set(object.keys) == [
+        "runId", "phase", "toStart", "running", "refused", "required", "stallMin",
+      ])
     #expect(object["phase"] as? String == "cutoff")
   }
 
@@ -290,6 +297,75 @@ struct BuildLoopCommandTests {
     #expect(report.runId == newer.runID)
     #expect(report.runId != older.runID)
     #expect(report.phase == .normal)
+  }
+
+  @Test(
+    "next reports the stall watch's 15 minutes for a preset that names no stall_min — catches a stall watch and a run view that disagree"
+  )
+  func nextReportsTheDefaultStall() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.writeLedger([("a", .pending)])
+    _ = try await BuildRunStore.create(
+      plan: BuildScenario.plan, presetName: "default", preset: BuildScenario.preset,
+      startedAt: BuildScenario.startedAt, git: scenario.git, suffix: 0x001)
+    try scenario.claim()
+
+    let report = try #require(await scenario.next(minutesIn: 1).report)
+
+    #expect(BuildScenario.preset.stallMin == nil)
+    #expect(report.stallMin == BuildPreset.defaultStallMin)
+  }
+
+  @Test(
+    "finish records its end as the run's newest ledger event and writes the final report, which reads done — catches a finished run whose report stays running"
+  )
+  func finishRecordsTheEndAndWritesTheReport() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.writeRepository()
+    try scenario.claim()
+    try scenario.setIndex(.planned)
+    try scenario.writeLedger([("a", .done)])
+    let runID = try #require(await scenario.start().report?.runId)
+    try scenario.setIndex(.building)
+    let finishedAt = BuildScenario.startedAt.addingTimeInterval(3_600)
+
+    let result = await scenario.finish(at: finishedAt, report: true)
+
+    let report = try #require(result.report, "\(result.message)")
+    let events = try await BuildRunStore.open(
+      plan: BuildScenario.plan, runID: runID, git: scenario.git
+    ).events().events
+    #expect(events.last == .finish(.init(at: finishedAt)))
+    let page = try #require(report.runReport, "\(report.runReportNote ?? "no note")")
+    #expect(page == ".harness/reports/\(runID)/index.html")
+    let html = try String(
+      contentsOf: scenario.repository.appending(path: page), encoding: .utf8)
+    let data = try ReportCommandTests.dataBlock(html)
+    let view = try #require(
+      JSONSerialization.jsonObject(with: Data(data.utf8)) as? [String: Any])
+    #expect((view["run"] as? [String: Any])?["state"] as? String == "done")
+  }
+
+  @Test(
+    "finish with no build run records nothing and says why no report was written — catches a silent skip"
+  )
+  func finishWithoutRunNamesTheMissingReport() async throws {
+    let scenario = BuildScenario()
+    defer { scenario.shared.remove() }
+    try scenario.writeRepository()
+    try scenario.claim()
+    try scenario.setIndex(.building)
+    try scenario.writeLedger([("a", .done)])
+
+    let result = await scenario.finish(report: true)
+
+    let report = try #require(result.report, "\(result.message)")
+    #expect(result.verdict == .green)
+    #expect(report.runReport == nil)
+    #expect(
+      report.runReportNote?.contains("no build run") == true, "\(report.runReportNote ?? "nil")")
   }
 
   @Test("next with no build run exits 2 — catches a budget measured from no start time")

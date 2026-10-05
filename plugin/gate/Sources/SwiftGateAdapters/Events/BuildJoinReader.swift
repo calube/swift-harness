@@ -15,6 +15,9 @@ public struct BuildJoinReader: Sendable {
 
   /// The plans directory, relative to the git common dir.
   public static let plansDirectory = "swift-harness/plans"
+  /// A run's `events.jsonl` doesn't exist: `BuildRunStore` creates it with the run's first
+  /// ledger event.
+  public static let missingLogReason = "missing build log"
 
   /// Every build run of every plan, or only `buildRunID` when given.
   public func read(buildRunID: String?) -> BuildJoin {
@@ -71,7 +74,7 @@ public struct BuildJoinReader: Sendable {
         }
       }
     } else {
-      damage.append(BuildJoinDamage(path: logPath, reason: "missing build log"))
+      damage.append(BuildJoinDamage(path: logPath, reason: Self.missingLogReason))
     }
     var record: BuildRunRecord?
     let recordPath = "\(runPath)/run.json"

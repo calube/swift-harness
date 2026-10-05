@@ -36,15 +36,19 @@ public struct RunView: Sendable, Equatable, Encodable {
     public var startedAt: Date?
     public var endedAt: Date?
     public var state: RunState
-    /// Minutes a worker may go quiet before the page flags it; `nil` when the preset doesn't say.
+    /// Minutes a worker may go quiet before the page flags it, as the stall watch counts them;
+    /// `nil` when `run.json` didn't read.
     public var stallMin: Int?
     /// A `swiftgate run`'s time box; `nil` for a run without one.
     public var timeBox: TimeBox?
+    /// When a report was written of a run that hadn't ended; `nil` for a live page and a final
+    /// report.
+    public var snapshotAt: Date?
 
     public init(
       id: String, plan: String? = nil, preset: String? = nil, startedAt: Date? = nil,
       endedAt: Date? = nil, state: RunState = .running, stallMin: Int? = nil,
-      timeBox: TimeBox? = nil
+      timeBox: TimeBox? = nil, snapshotAt: Date? = nil
     ) {
       self.id = id
       self.plan = plan
@@ -54,6 +58,7 @@ public struct RunView: Sendable, Equatable, Encodable {
       self.state = state
       self.stallMin = stallMin
       self.timeBox = timeBox
+      self.snapshotAt = snapshotAt
     }
   }
 
@@ -388,6 +393,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     }
   }
 
+  /// What an ``unwritten`` row reads.
+  public static let notWrittenYet = "not written yet"
   /// A requirement title's cap.
   public static let maxTitleBytes = 120
   /// A brief string's cap.
@@ -408,11 +415,19 @@ public struct RunView: Sendable, Equatable, Encodable {
   /// during the run.
   public var validation: RunViewValidation?
   public var damage: [Damage]
+  /// Files a run writes as it goes that it hasn't written yet; only a run that hasn't ended has
+  /// any, and each reads "not written yet".
+  public var unwritten: [Damage]
+  /// Where the page reaches the run files its flows link, relative to itself: a report's own
+  /// folder holds copies under `runs/`. `nil` for a live page, which reaches them through
+  /// `../runs/`.
+  public var evidenceBase: String?
 
   public init(
     cursor: String? = nil, run: Run, spec: [SpecRow] = [], tasks: [Task] = [], roles: [Role] = [],
     spans: [Span] = [], gates: [Gate] = [], proofs: [Proof] = [], halts: [Halt] = [],
-    validation: RunViewValidation? = nil, damage: [Damage] = []
+    validation: RunViewValidation? = nil, damage: [Damage] = [], unwritten: [Damage] = [],
+    evidenceBase: String? = nil
   ) {
     self.cursor = cursor
     self.run = run
@@ -425,11 +440,13 @@ public struct RunView: Sendable, Equatable, Encodable {
     self.halts = halts
     self.validation = validation
     self.damage = damage
+    self.unwritten = unwritten
+    self.evidenceBase = evidenceBase
   }
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, cursor, run, spec, tasks, roles, spans, gates, proofs, halts, validation
-    case damage
+    case damage, unwritten, evidenceBase
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -446,6 +463,8 @@ public struct RunView: Sendable, Equatable, Encodable {
     try c.encode(halts, forKey: .halts)
     try c.encode(validation, forKey: .validation)
     try c.encode(damage, forKey: .damage)
+    try c.encode(unwritten, forKey: .unwritten)
+    try c.encode(evidenceBase, forKey: .evidenceBase)
   }
 }
 
@@ -454,7 +473,7 @@ public struct RunView: Sendable, Equatable, Encodable {
 
 extension RunView.Run {
   private enum CodingKeys: String, CodingKey {
-    case id, plan, preset, startedAt, endedAt, state, stallMin, timeBox
+    case id, plan, preset, startedAt, endedAt, state, stallMin, timeBox, snapshotAt
   }
 
   public func encode(to encoder: any Encoder) throws {
@@ -467,6 +486,7 @@ extension RunView.Run {
     try c.encode(state, forKey: .state)
     try c.encode(stallMin, forKey: .stallMin)
     try c.encode(timeBox, forKey: .timeBox)
+    try c.encode(snapshotAt, forKey: .snapshotAt)
   }
 }
 

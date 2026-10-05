@@ -196,6 +196,9 @@ td .sub { color: var(--muted); font-size: 12px; }
 
 footer { color: var(--muted); font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px 16px; }
 footer .damage-line { color: var(--bad); flex-basis: 100%; overflow-wrap: anywhere; }
+footer .unwritten-line { color: var(--muted); flex-basis: 100%; overflow-wrap: anywhere; }
+.snapshot { margin: 6px 0 0; color: var(--warn); background: var(--warn-soft); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 13px; font-weight: 600; }
+.snapshot[hidden] { display: none; }
 
 /* task drawer: a ticket view that slides in from the right; a full-height sheet at phone width */
 html.drawer-open { overflow: hidden; }

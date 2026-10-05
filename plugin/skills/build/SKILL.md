@@ -200,7 +200,8 @@ When `build next` reports nothing to start and nothing running, or at the cutoff
 
 ## Report
 
-The ledger page link, then: tasks done, and the unfinished ones with their status from `build finish`;
+The ledger page link and the run report page `build finish` names in `runReport` (or its
+`runReportNote`), then: tasks done, and the unfinished ones with their status from `build finish`;
 each halt and the user's answer; each failed `events ingest` or `events span` line; the green-main baseline taken without asking, as
 `rule: file` per finding; the `ready` verdict and run id; wall time against the budget;
 `resume` when the index stays `building`. Then the `validate` stage: its `qa run` id and verdict
