@@ -805,6 +805,10 @@ struct RunCommandTests {
       prepared.notes.contains { $0.contains(Config.fileName) && $0.contains("set aside") },
       "\(prepared.notes)")
 
+    func canonical(_ root: StateRoot) -> String {
+      guard case .gitDir(let directory) = root else { return "the tree \(root)" }
+      return directory.resolvingSymlinksInPath().standardizedFileURL.path
+    }
     let worktree = clone.base.appending(path: "plan-worktree", directoryHint: .isDirectory)
     try await clone.git("worktree", "add", "-q", worktree.path, prepared.clock.planBranch)
     for checkout in [clone.root, worktree] {
@@ -815,16 +819,13 @@ struct RunCommandTests {
       #expect(try ConfigLoader().load(repositoryRoot: checkout) == nil)
       #expect(StateRootResolver.profile(worktree: checkout) == .brownfield)
       #expect(
-        StateRootResolver.eventStore(worktree: checkout)
-          == StateRootResolver.eventStore(worktree: clone.root))
+        canonical(StateRootResolver.eventStore(worktree: checkout))
+          == canonical(.gitDir(clone.root.appending(path: ".git", directoryHint: .isDirectory))))
       guard case .brownfield? = ProjectRoot.locateProfile(from: checkout) else {
         Issue.record("a hook in \(checkout.path) ran the owned profile")
         continue
       }
     }
-    #expect(
-      StateRootResolver.resolve(worktree: clone.root)
-        == .gitDir(clone.root.appending(path: ".git", directoryHint: .isDirectory)))
 
     let outcome = await BrownfieldRunReportRun.write(
       slug: prepared.slug, planBranch: nil, base: prepared.clock.base, root: clone.root,

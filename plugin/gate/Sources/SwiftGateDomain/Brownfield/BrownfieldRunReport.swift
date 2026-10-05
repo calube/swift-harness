@@ -256,7 +256,19 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
       reviewFallbacks: Self.reviewFallbacks(inputs.build),
       unfinishedTasks: Self.unfinishedTasks(inputs.ledger),
       reviewDepths: Self.reviewDepths(inputs.build), timeBox: Self.timeBox(inputs.build),
-      validation: validation, validationNote: validationNote)
+      validation: validation, validationNote: validationNote,
+      committedConfig: Self.committedConfig(inputs.setAside))
+  }
+
+  private static func committedConfig(_ input: RunReportInput<CommittedConfigSetAside>?)
+    -> Section<String>?
+  {
+    guard let input else { return nil }
+    switch input {
+    case .missing: return nil
+    case .read(let record): return Section(items: [record.reportLine], note: nil)
+    case .unreadable: return Section(items: [], note: describe(input, what: "the set-aside record"))
+    }
   }
 
   private static func validation(_ input: RunReportInput<QAReport>?) -> (Validation?, String?) {
@@ -640,6 +652,7 @@ public struct BrownfieldRunReport: Sendable, Equatable, Encodable {
     }
     out += render("Unfinished tasks", unfinishedTasks) { "\($0.id): \($0.status.rawValue)" }
     if let timeBox { out += render("Time box", timeBox) { $0 } }
+    if let committedConfig { out += render("Committed config", committedConfig) { $0 } }
     out += render("Assumptions", assumptions) { $0 }
     out += render("Baseline failures", baselineFailures) {
       "\($0.area) \($0.step.rawValue): " + ($0.test ?? "the whole step")

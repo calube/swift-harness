@@ -3,7 +3,8 @@ import SwiftGateDomain
 
 /// Picks a worktree's ``StateRoot`` by file existence alone: a committed `.swiftgate.toml` keeps
 /// state in the tree, the git common dir's `swift-harness/config.toml` moves it under the
-/// worktree's own git dir, and anything else keeps the tree.
+/// worktree's own git dir, and anything else keeps the tree. A clone that set its committed
+/// config aside runs the brownfield profile, so every worktree's state is under its git dir.
 ///
 /// It parses no config, so a broken one still gets the right root and its own error from the
 /// loader. The only files it reads are git's own pointers: a linked worktree's `.git` file and its
@@ -26,11 +27,10 @@ public enum StateRootResolver {
 
   public static func resolve(worktree: URL) -> StateRoot {
     let files = FileManager.default
-    if files.fileExists(atPath: worktree.appending(path: Config.fileName).path) {
-      return .tree(worktree)
-    }
+    let owned = files.fileExists(atPath: worktree.appending(path: Config.fileName).path)
     guard let gitDir = gitDirectory(enclosing: worktree) else { return .tree(worktree) }
     let common = commonDirectory(of: gitDir)
+    if owned, !setsAsideCommittedConfig(commonDir: common) { return .tree(worktree) }
     guard files.fileExists(atPath: common.appending(path: commonConfigFile).path) else {
       return .tree(worktree)
     }
