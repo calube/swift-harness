@@ -63,7 +63,7 @@ struct ViewCommandTests {
   }
 
   static let stallHalt = HarnessEvent(
-    eventID: "live-halt-1", time: Date(timeIntervalSince1970: 1_791_000_000),
+    eventID: "live-halt-1", time: Date(timeIntervalSince1970: 1_791_100_000),
     source: HarnessEventSource(route: nil),
     payload: .buildHalt(
       BuildHaltEvent(
@@ -397,7 +397,7 @@ struct ViewCommandTests {
   }
 
   @Test(
-    "the watch's observation is active after a request or a run change and quiet otherwise, and sees the final report once written — catches an idle exit while a page polls, or a server that never sees its run end"
+    "the watch's observation is active after a request or a run change and quiet otherwise, sees the final report once written, and stops seeing it once a ledger line comes after it — catches an idle exit while a page polls, a server that never sees its run end, or one that exits under a resumed build"
   )
   func observationFollowsRequestsAndTheRun() throws {
     let repository = try Repository()
@@ -408,13 +408,23 @@ struct ViewCommandTests {
     _ = view.respond(to: Self.get("/view.json"))
     #expect(view.observe().active)
     #expect(!view.observe().active)
-    try HarnessEventFiles(root: repository.root).append(Self.stallHalt)
-    #expect(view.observe().active)
     guard case .wrote = repository.run(.html) else {
       Issue.record("report --html wrote nothing")
       return
     }
-    #expect(view.observe().finalExists)
+    #expect(view.observe() == .init(active: true, finalExists: true))
+    #expect(view.observe() == .init(active: false, finalExists: true))
+    let log = repository.planDirectory.appending(
+      path: "build/\(ReportCommandTests.buildRun)/events.jsonl")
+    let handle = try FileHandle(forWritingTo: log)
+    try handle.seekToEnd()
+    try handle.write(
+      contentsOf: Data(
+        "{\"at\":\"2026-10-04T05:30:00Z\",\"from\":\"abandoned\",\"kind\":\"transition\",\"task\":\"counter-ui-reset-button-snapshot\",\"to\":\"in-progress\"}\n"
+          .utf8))
+    try handle.close()
+    #expect(view.observe() == .init(active: true, finalExists: false))
+    #expect(view.respond(to: Self.get("/final")).status == 404)
   }
 
   @Test(

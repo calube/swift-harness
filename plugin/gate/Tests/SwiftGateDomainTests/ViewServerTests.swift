@@ -119,18 +119,23 @@ struct ViewServerTests {
   }
 
   @Test(
-    "the event window starts at the earliest of the build run, its gate runs and the plan's launch — catches a reader that scans all history, or one that drops a contract gate from before build start"
+    "the event window starts at the earliest of a day before the build run, its gate runs and the plan's launch — catches a reader that scans all history, or one that drops the usage before build start or an older contract gate"
   )
   func eventWindow() throws {
     let run = "20261004T045528Z-58d28c78"
     let runStart = try #require(RunViewEventWindow.startTime(of: run))
     #expect(runStart == Date(timeIntervalSince1970: 1_791_089_728))
-    #expect(RunViewEventWindow.since(buildRun: run, gateRuns: [], launchedAt: nil) == runStart)
-    let contract = "20261004T043000Z-0badc0de"
+    let dayBefore = runStart.addingTimeInterval(-86_400)
+    #expect(RunViewEventWindow.since(buildRun: run, gateRuns: [], launchedAt: nil) == dayBefore)
+    #expect(
+      RunViewEventWindow.since(
+        buildRun: run, gateRuns: ["20261004T043000Z-0badc0de"],
+        launchedAt: runStart.addingTimeInterval(-3_600)) == dayBefore)
+    let contract = "20261002T043000Z-0badc0de"
     #expect(
       RunViewEventWindow.since(buildRun: run, gateRuns: [contract, "20261004T050310Z-ed998508"], launchedAt: nil)
         == RunViewEventWindow.startTime(of: contract))
-    let launched = runStart.addingTimeInterval(-3_600)
+    let launched = runStart.addingTimeInterval(-3 * 86_400)
     #expect(
       RunViewEventWindow.since(buildRun: run, gateRuns: [contract], launchedAt: launched)
         == launched)

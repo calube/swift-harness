@@ -41,7 +41,9 @@ public enum ViewServerSwitch {
 
   /// Whether `value`, the variable's value, turns the live viewer off.
   public static func isOff(_ value: String?) -> Bool {
-    false
+    guard let value else { return false }
+    let word = value.trimmingCharacters(in: .whitespaces).lowercased()
+    return ["off", "0", "false", "no"].contains(word)
   }
 }
 
@@ -58,7 +60,9 @@ public enum ViewEnsureDecision: Sendable, Equatable {
   public static func decide(
     switchValue: String?, record: ViewServerRecord?, answering: Bool
   ) -> ViewEnsureDecision {
-    .start(preferredPort: nil)
+    if ViewServerSwitch.isOff(switchValue) { return .off }
+    if let record, answering { return .reuse(record) }
+    return .start(preferredPort: record?.port)
   }
 }
 
@@ -82,15 +86,25 @@ public struct ViewServerLifetime: Sendable, Equatable {
     lastActivity = startedAt
   }
 
-  public mutating func noteActivity(at time: Date) {}
+  public mutating func noteActivity(at time: Date) {
+    lastActivity = max(lastActivity, time)
+  }
 
   /// Records whether the final report exists at `time`; a report that went away, as when a
   /// resumed build makes the run running again, clears it.
-  public mutating func noteFinal(_ exists: Bool, at time: Date) {}
+  public mutating func noteFinal(_ exists: Bool, at time: Date) {
+    if !exists {
+      finalSince = nil
+    } else if finalSince == nil {
+      finalSince = time
+    }
+  }
 
   /// Why the server should exit at `now`; `nil` while it should keep serving.
   public func exitReason(at now: Date) -> ExitReason? {
-    nil
+    if let finalSince, now.timeIntervalSince(finalSince) >= Self.afterFinal { return .finished }
+    if now.timeIntervalSince(lastActivity) >= Self.idleLimit { return .idle }
+    return nil
   }
 }
 
@@ -120,6 +134,14 @@ public struct ViewServerWatch: Sendable {
     wait: @Sendable (Duration) async throws -> Void,
     observe: @Sendable () -> Observation
   ) async throws -> ViewServerLifetime.ExitReason {
-    .idle
+    var lifetime = ViewServerLifetime(startedAt: now())
+    while true {
+      try await wait(Self.tick)
+      let time = now()
+      let seen = observe()
+      if seen.active { lifetime.noteActivity(at: time) }
+      lifetime.noteFinal(seen.finalExists, at: time)
+      if let reason = lifetime.exitReason(at: time) { return reason }
+    }
   }
 }

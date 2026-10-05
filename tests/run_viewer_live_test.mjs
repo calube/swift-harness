@@ -1,6 +1,6 @@
 // Starts the real `swiftgate view --ensure` on a scratch repository holding the captured build run
-// with its last ledger lines held back, so the run is still going, and drives the live page in
-// headless Chrome: a ledger line appended to the run's log reaches the page on its next poll, and
+// with its final gate held back, so the run is still going, and drives the live page in headless
+// Chrome: the final gate appended to the run's ledger log reaches the page on its next poll, and
 // once the run's `finish` lands and its final report is written, the page shows the end banner
 // linking `/final`, which serves that report. A second `--ensure` gets the same URL and server, and
 // `SWIFTGATE_VIEW=off` starts nothing and prints no URL.
@@ -21,7 +21,6 @@ const plugin = join(dirname(fileURLToPath(import.meta.url)), '..', 'plugin')
 const captured = join(plugin, 'gate/Tests/Fixtures/RunView/build-run-1')
 const BUILD_RUN = '20261004T045528Z-58d28c78'
 const PLAN = '2026-10-03-counter-reset-and-floor'
-const SNAPSHOT_TASK = 'counter-ui-reset-button-snapshot'
 
 function swiftgateBinary() {
   if (process.env.SWIFTGATE_BIN) return process.env.SWIFTGATE_BIN
@@ -34,8 +33,7 @@ if (!findChrome()) {
   process.exit(0)
 }
 
-// The captured run's plan state and stores, its ledger log without its last 2 lines: the snapshot
-// task's abandonment and the final gate.
+// The captured run's plan state and stores, its ledger log without its last line, the final gate.
 const dir = mkdtempSync(join(tmpdir(), 'run-viewer-live-'))
 execFileSync(gitPath, ['init', '-q'], { cwd: dir })
 writeFileSync(join(dir, '.swiftgate.toml'), '')
@@ -53,11 +51,10 @@ for (const [from, to] of [
   ['runs', join(dir, '.harness/runs')],
 ]) cpSync(join(captured, from), to, { recursive: true })
 const ledgerLines = readFileSync(join(captured, 'ledger-events.jsonl'), 'utf8').split('\n').filter(Boolean)
-const [abandoned, finalGate] = ledgerLines.slice(-2)
-assert.match(abandoned, new RegExp(`"to":"abandoned"`), 'the capture no longer ends with the abandonment')
+const finalGate = ledgerLines[ledgerLines.length - 1]
 assert.match(finalGate, /"gate":"final"/, 'the capture no longer ends with the final gate')
 const ledgerLog = join(runDir, 'events.jsonl')
-writeFileSync(ledgerLog, ledgerLines.slice(0, -2).map((l) => l + '\n').join(''))
+writeFileSync(ledgerLog, ledgerLines.slice(0, -1).map((l) => l + '\n').join(''))
 
 const env = { ...process.env, SWIFTGATE_HARNESS_ROOT: plugin, LLVM_PROFILE_FILE: join(dir, 'profile-%p.profraw') }
 delete env.SWIFTGATE_VIEW
@@ -75,7 +72,7 @@ const until = (condition, ms = 15000) => `new Promise((resolve, reject) => {
   observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true })
   check()
 })`
-const statusOf = (task) => `(() => { const b = document.querySelector('button.task-link[data-task="${task}"]'); return b ? b.closest('tr').querySelector('.chip').textContent : null })()`
+const gateRows = `document.querySelectorAll('#gate-list .gate').length`
 
 let server = null
 let failed = 0
@@ -102,18 +99,19 @@ const tests = {
     assert.equal(record().pid, server.pid)
   },
 
-  async 'the live page draws the running run, shows an appended ledger line on its next poll, and once the run finishes and its report is written shows the end banner whose link serves the final report — catches a live page that misses a change or never says its run ended'() {
+  async 'the live page draws the running run, shows the appended final gate on its next poll, and once the run finishes and its report is written shows the end banner whose link serves the final report — catches a live page that misses a change or never says its run ended'() {
     const { page, close } = await launch({ deadlineMs: 60000 })
     try {
       await page.load(server.url)
       await page.evaluate(until(`document.getElementById('state').textContent === 'running'`))
-      assert.equal(await page.evaluate(statusOf(SNAPSHOT_TASK)), 'blocked')
+      const before = await page.evaluate(gateRows)
       assert.equal(await page.evaluate("document.getElementById('end-banner')?.hidden ?? true"), true)
 
-      appendFileSync(ledgerLog, abandoned + '\n')
-      await page.evaluate(until(`${statusOf(SNAPSHOT_TASK)} === 'abandoned'`))
+      appendFileSync(ledgerLog, finalGate + '\n')
+      await page.evaluate(until(`document.getElementById('state').textContent === 'done' && ${gateRows} === ${before + 1}`))
+      assert.equal(await page.evaluate("document.getElementById('end-banner').hidden"), true, 'the banner shows before the final report exists')
 
-      appendFileSync(ledgerLog, finalGate + '\n' + JSON.stringify({ at: '2026-10-04T05:19:40Z', kind: 'finish' }) + '\n')
+      appendFileSync(ledgerLog, JSON.stringify({ at: '2026-10-04T05:19:40Z', kind: 'finish' }) + '\n')
       const report = swiftgate(['report', '--html', BUILD_RUN])
       assert.equal(report.status, 0, report.stdout + report.stderr)
       const banner = await page.evaluate(until("(() => { const b = document.getElementById('end-banner'); return b && !b.hidden && b.textContent })()"))
@@ -125,7 +123,8 @@ const tests = {
       assert.equal(final.status, 200)
       assert.equal(await final.text(), readFileSync(join(dir, '.harness/reports', BUILD_RUN, 'index.html'), 'utf8'))
       assert.equal(await page.evaluate('document.body.dataset.errors'), '0')
-      assert.deepEqual(page.errors, [])
+      // The browser asks for a favicon, which the server 404s.
+      assert.deepEqual(page.errors.filter((e) => !/status of 404/.test(e)), [])
     } finally {
       await close()
     }

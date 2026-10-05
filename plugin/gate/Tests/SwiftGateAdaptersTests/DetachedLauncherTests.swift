@@ -72,4 +72,29 @@ struct DetachedLauncherTests {
           logPath: directory.appending(path: "log").path))
     }
   }
+
+  @Test(
+    "a process launched from a thread that blocks SIGTERM still ends on SIGTERM — catches a detached server, started from a concurrency thread, that no kill but SIGKILL stops"
+  )
+  func endsOnSigtermFromABlockingThread() async throws {
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let log = directory.appending(path: "log").path
+    let workingDirectory = directory.path
+    let pid = try await OffPool.run { () throws -> Int32 in
+      var blocked = sigset_t()
+      sigemptyset(&blocked)
+      sigaddset(&blocked, SIGTERM)
+      var before = sigset_t()
+      pthread_sigmask(SIG_BLOCK, &blocked, &before)
+      defer { pthread_sigmask(SIG_SETMASK, &before, nil) }
+      return try DetachedLauncher().launch(
+        DetachedLaunch(
+          executable: "/bin/sleep", arguments: ["30"], workingDirectory: workingDirectory,
+          logPath: log))
+    }
+    kill(pid, SIGTERM)
+    let status = await Self.reap(pid)
+    #expect(status & 0x7f == SIGTERM, "exit status \(status)")
+  }
 }

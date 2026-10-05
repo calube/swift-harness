@@ -1574,6 +1574,29 @@ cp .harness/events/span.jsonl <fixtures>/RunView/span-sequence/span.jsonl
 The file holds the 4 lines written, unedited. `grep -ciE '/Users|/private|/var/folders|/tmp|caleb|swift-harness' RunView/span-sequence/span.jsonl`
 printed 0.
 
+`RunView/view-json/build-run-1-final.json` is what a real `swiftgate view` answered at `/view.json` for
+`RunView/build-run-1` once its final report was written, for the live view's snapshot test. The test
+drops `cursor`, a digest of file times. Captured at the commit that adds `/final`, from `plugin/gate`
+after `swift build`:
+
+```sh
+SG=$PWD/.build/debug/swiftgate F=$PWD/Tests/Fixtures/RunView/build-run-1 T=$(mktemp -d)
+export SWIFTGATE_HARNESS_ROOT=$PWD/.. LLVM_PROFILE_FILE=$T/%p.profraw
+mkdir $T/app && cd $T/app && git init -q && : > .swiftgate.toml
+RUN=20261004T045528Z-58d28c78 P=.git/swift-harness/plans/2026-10-03-counter-reset-and-floor
+mkdir -p $P/build/$RUN .harness
+cp $F/ledger.json $F/plan.json $P/ && cp $F/plan.md $P/spec-page.md && cp $F/run.json $P/build/$RUN/
+cp $F/ledger-events.jsonl $P/build/$RUN/events.jsonl && cp -R $F/returns $P/build/$RUN/returns
+cp -R $F/events .harness/events && cp -R $F/runs .harness/runs
+$SG report --html $RUN                                  # wrote .harness/reports/<run>/index.html
+$SG view --build-run $RUN --port 58431 &
+curl -sf -o $T/view.json http://127.0.0.1:58431/view.json && kill %1
+cp $T/view.json <fixtures>/RunView/view-json/build-run-1-final.json
+```
+
+The file is the answer as served, unedited. `grep -ciE '/Users|/private|/var/folders|/tmp|caleb|swift-harness' RunView/view-json/build-run-1-final.json`
+printed 0.
+
 ## GateRun
 
 `GateRun/report.json` is the `report.json` of a real push-tier run on the sample app, so a test can

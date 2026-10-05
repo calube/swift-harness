@@ -61,15 +61,20 @@ public struct RunViewReader: RunViewReading {
         plan: join.plan, from: buildRun, until: try nextBuildRun(plan: join.plan, after: buildRun))
     }
 
+    var gateRuns = join.map(Self.gateRuns(of:)) ?? []
+    // Every kept event comes at or after this, so sealed segments of older history stay shut.
+    let query = EventQuery(
+      since: RunViewEventWindow.since(
+        buildRun: buildRun, gateRuns: gateRuns, launchedAt: prebuild.launchedAt))
     var batches: [[StoredEvent]] = []
-    let main = EventStoreReader(files: StateRootEventFiles(state: stateRoot)).read(EventQuery())
+    let main = EventStoreReader(files: StateRootEventFiles(state: stateRoot)).read(query)
     batches.append(main.events)
     damage += main.damage.map { Self.damage($0, in: nil) }
     // The main checkout's own files, without the worktree stores copied into it; their damage
     // is already counted above.
     let mainOwn = Set(
       EventStoreReader(files: StateRootEventFiles(state: stateRoot, includeCopies: false))
-        .read(EventQuery()).events.map(\.event.eventID))
+        .read(query).events.map(\.event.eventID))
     // Every worktree of a brownfield clone writes to the main store, so a worker's gate runs are
     // among its own events there.
     var workerEvents = main.events.map(\.event).filter {
@@ -83,14 +88,13 @@ public struct RunViewReader: RunViewReading {
       for worktree in worktrees {
         let read = EventStoreReader(
           files: StateRootEventFiles(state: StateRootResolver.resolve(worktree: worktree))
-        ).read(EventQuery())
+        ).read(query)
         batches.append(read.events)
         workerEvents += read.events.map(\.event)
         damage += read.damage.map { Self.damage($0, in: worktree.lastPathComponent) }
       }
     }
 
-    var gateRuns = join.map(Self.gateRuns(of:)) ?? []
     let workerGateRuns =
       join.map {
         Self.workerGateRuns(workerEvents, events: $0.events, named: gateRuns, holders: holders)
@@ -405,7 +409,15 @@ public struct RunViewReader: RunViewReading {
   /// The newest build run of any plan by its directory name alone, without reading its state:
   /// cheap enough to ask on every poll. `nil` when there is none.
   public func newestBuildRunName() -> String? {
-    nil
+    guard let layout = try? PlanStateLayout(commonDirectory: commonDirectory.path) else {
+      return nil
+    }
+    let plans = (try? FileManager.default.contentsOfDirectory(atPath: layout.root)) ?? []
+    return plans.compactMap { plan -> String? in
+      guard let directory = try? layout.plan(plan).directory else { return nil }
+      let runs = (try? FileManager.default.contentsOfDirectory(atPath: directory + "/build")) ?? []
+      return runs.filter(RunID.isValid).max()
+    }.max()
   }
 
   /// Where `report --html` writes `buildRun`'s report folder in this checkout.
@@ -415,10 +427,27 @@ public struct RunViewReader: RunViewReading {
         "\(RunLayout.reportsDirectory)/\(buildRun)", directoryHint: .isDirectory))
   }
 
+  /// The run's report folder when it holds the final report and no ledger line came after it, as
+  /// one does when a build resumes after `build finish`; `nil` otherwise.
+  public func finalReport(buildRun: String) -> RunReportFolder? {
+    let folder = reportFolder(buildRun: buildRun)
+    guard folder.isFinal else { return nil }
+    func modified(_ url: URL) -> Date? {
+      (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+    guard let layout = try? PlanStateLayout(commonDirectory: commonDirectory.path),
+      let plan = plan(of: buildRun, under: layout),
+      let log = try? layout.plan(plan).buildRun(buildRun).eventsFile,
+      let logged = modified(URL(filePath: log)),
+      let written = modified(folder.directory.appending(path: RunReportFolder.viewName))
+    else { return folder }
+    return logged > written ? nil : folder
+  }
+
   /// What every file ``read(buildRun:)`` reads holds now: each event store's files, each
   /// `qa/report.json` of a run since the build run started, the run's ledger log, returns and
-  /// `run.json`, and the plan's ledger. Taken before a read, a moved
-  /// snapshot means the next read differs.
+  /// `run.json`, the plan's ledger, and the run's report page and view. Taken before a read, a
+  /// moved snapshot means the next read differs.
   public func snapshot(buildRun: String) -> RunViewSnapshot {
     var files: [String: RunViewSnapshot.Stamp] = [:]
     Self.stamp(
@@ -430,6 +459,11 @@ public struct RunViewReader: RunViewReading {
         atPath: stateRoot.url(RunLayout.runsDirectory).path)) ?? []
     for runID in runs where RunID.isValid(runID) && runID >= buildRun {
       let path = RunLayout.runDirectory(for: runID) + QAReport.directory + "/" + QAReport.fileName
+      Self.stamp(stateRoot.url(path), as: stateRoot.displayPath(path), into: &files)
+    }
+    // The final report's page and view, so a live page learns its link once they're written.
+    for name in [RunReportFolder.pageName, RunReportFolder.viewName] {
+      let path = "\(RunLayout.reportsDirectory)/\(buildRun)/\(name)"
       Self.stamp(stateRoot.url(path), as: stateRoot.displayPath(path), into: &files)
     }
     guard let layout = try? PlanStateLayout(commonDirectory: commonDirectory.path),

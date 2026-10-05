@@ -627,11 +627,6 @@ public enum RunViewJSON {
     try encoder.encode(view)
   }
 
-  /// A live poll's answer, in the same spelling as a whole view.
-  public static func encode(_ changes: RunViewChanges) throws -> Data {
-    try encoder.encode(changes)
-  }
-
   private static var encoder: JSONEncoder {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]

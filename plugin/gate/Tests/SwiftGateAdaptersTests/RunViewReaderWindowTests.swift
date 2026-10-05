@@ -11,7 +11,7 @@ struct RunViewReaderWindowTests {
   typealias Repository = RunViewReaderTests.Repository
 
   @Test(
-    "a halt naming the build run from a day before it started isn't read, while the run's own halts are — catches a reader that keeps scanning every past event"
+    "a halt naming the build run from 2 days before it started isn't read, while the run's own halts are — catches a reader that keeps scanning every past event"
   )
   func eventBeforeTheRunIsNotRead() throws {
     let repository = try Repository()
@@ -19,15 +19,15 @@ struct RunViewReaderWindowTests {
     let file = repository.events.appending(path: "build.jsonl")
     try repository.write(try RunViewReaderTests.lines("events/build.jsonl"), to: file)
     let before = try #require(
-      RunViewEventWindow.startTime(of: RunViewReaderTests.buildRun)?.addingTimeInterval(-86_400))
+      RunViewEventWindow.startTime(of: RunViewReaderTests.buildRun)?.addingTimeInterval(-2 * 86_400))
     try HarnessEventFiles(root: repository.checkout).append(
       HarnessEvent(
-        eventID: "halt-a-day-early", time: before, source: HarnessEventSource(route: nil),
+        eventID: "halt-2-days-early", time: before, source: HarnessEventSource(route: nil),
         payload: .buildHalt(
           BuildHaltEvent(buildRun: RunViewReaderTests.buildRun, task: nil, reason: .stall))))
 
     let ids = Set(try repository.read().events.map(\.eventID))
-    #expect(!ids.contains("halt-a-day-early"))
+    #expect(!ids.contains("halt-2-days-early"))
     #expect(ids.contains("5F0836DD-38FC-465D-8B06-ED54F3D05CB0"))
   }
 

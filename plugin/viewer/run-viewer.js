@@ -52,6 +52,11 @@
     const snapshot = M.snapshotText(r);
     $("snapshot").textContent = snapshot || "";
     $("snapshot").hidden = !snapshot;
+    // A live page whose run ended points at the final report once the server has it.
+    const banner = $("end-banner");
+    const ended = liveMode && r.state === "done" && view.finalReport;
+    banner.hidden = !ended;
+    banner.innerHTML = ended ? `Run finished. <a href="${esc(view.finalReport)}">Open the final report</a>` : "";
     const box = M.timeBoxText(r);
     $("meta").innerHTML = [`run ${esc(r.id)}`, `plan ${esc(r.plan)}`, `preset ${esc(r.preset)}`, `started ${esc(r.startedAt.replace("T", " ").replace("Z", " UTC"))}`].concat(box ? [esc(box)] : []).map((x) => `<span>${x}</span>`).join("");
     const roleTok = view.roles.filter((x) => x.tokens).reduce((a, x) => a + sum(x.tokens), 0);
@@ -803,6 +808,9 @@
   function renderNow() {
     if (!liveMode) return;
     ensureStrip();
+    // A finished run has nothing running; its spans left open read "never ended" instead.
+    strip.hidden = view.run.state === "done";
+    if (strip.hidden) return;
     const now = Date.now();
     // Without the preset's stall_min there is nothing to measure a stall against, so the strip says so.
     const stallMin = typeof view.run.stallMin === "number" ? view.run.stallMin : null;
@@ -831,11 +839,11 @@
     paintTabs();
   }
 
-  // Merges a partial RunView by id and redraws; live mode calls this on each poll.
+  // Replaces the view with a whole one and redraws; live mode calls this on each changed poll.
   // A redraw keeps what the reader had: the open span popover, the focused bar, and the drawer's
   // focus and folds, so a 1 s poll never pulls them away.
-  function apply(partial) {
-    view = M.apply(view, partial);
+  function replace(next) {
+    view = next;
     const active = document.activeElement;
     const popSpan = openAnchor && openAnchor.classList.contains("bar") ? openAnchor.dataset.id : null;
     const popFocus = pop.contains(active);
@@ -865,12 +873,18 @@
     }
   }
 
-  // live mode: fetch the whole view once, then merge each change set polled after its cursor
+  // live mode: each poll names the token of the view it holds; the server answers 204 when the
+  // run hasn't changed, or the whole view
   const POLL_MS = 1000;
   let polls = 0, pollFailures = 0;
-  async function fetchJSON(path) {
+  async function fetchView(token) {
+    const path = "/view.json" + (token ? "?after=" + encodeURIComponent(token) : "");
     const response = await fetch(path, { cache: "no-store" });
-    if (!response.ok) throw new Error(`${path.split("?")[0]} answered ${response.status}`);
+    if (response.status === 204) return null;
+    if (!response.ok) {
+      const why = response.status === 503 ? (await response.text()).trim().replace(/^view: /, "") : "";
+      throw new Error(`/view.json answered ${response.status}${why ? ": " + why : ""}`);
+    }
     return response.json();
   }
   function showLiveError(message) {
@@ -888,11 +902,12 @@
   async function poll() {
     try {
       if (!view) {
-        view = await fetchJSON("/view.json");
+        view = await fetchView(null);
         render();
         modules.forEach((_, name) => runModule(name, "render"));
       } else {
-        apply(await fetchJSON("/changes?after=" + encodeURIComponent(view.cursor)));
+        const next = await fetchView(view.cursor);
+        if (next) replace(next);
       }
       polls++;
       document.body.dataset.polls = String(polls);
@@ -914,7 +929,7 @@
     // The element the open popover is anchored to; `null` when none is open.
     popoverAnchor: () => openAnchor,
     openTaskDrawer,
-    apply
+    replace
   };
 
   // The core draws once every module script has run, so Overview can read the board's lanes.
