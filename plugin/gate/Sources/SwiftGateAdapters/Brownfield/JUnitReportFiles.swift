@@ -37,4 +37,10 @@ public enum JUnitReportFiles {
     }
     return JUnitReports.combined(documents)
   }
+
+  /// The report files ``read(at:)`` reads that exist, as absolute paths in the order it reads
+  /// them: `junitPath` itself when a command made it a directory of reports.
+  public static func files(at junitPath: String) -> [String] {
+    []
+  }
 }

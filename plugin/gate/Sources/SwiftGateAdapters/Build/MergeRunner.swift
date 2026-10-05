@@ -206,6 +206,9 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
   public let fixWorktree: String?
   public let fixBranch: String?
   public let conflictedFiles: [String]?
+  /// The merge gate run `--undo` recorded in the build run's log for the commit it undid; `nil`
+  /// when the log already held it or no `check` run started at that commit.
+  public let gateRunId: String?
   public let message: String
 
   public init(
@@ -213,7 +216,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     verdict: Verdict, holder: String? = nil, runId: String? = nil, branch: String? = nil,
     mainCheckout: String? = nil, mainCheck: MainCheck? = nil, preCommit: String? = nil,
     postCommit: String? = nil, fixWorktree: String? = nil, fixBranch: String? = nil,
-    conflictedFiles: [String]? = nil, message: String
+    conflictedFiles: [String]? = nil, gateRunId: String? = nil, message: String
   ) {
     self.command = command
     self.plan = plan
@@ -231,6 +234,7 @@ public struct BuildMergeReport: Sendable, Equatable, Encodable {
     self.fixWorktree = fixWorktree
     self.fixBranch = fixBranch
     self.conflictedFiles = conflictedFiles
+    self.gateRunId = gateRunId
     self.message = message
   }
 }
