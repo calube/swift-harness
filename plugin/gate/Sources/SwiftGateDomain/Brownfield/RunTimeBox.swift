@@ -197,7 +197,29 @@ public enum CutoffQA: Sendable, Equatable {
     reports: [QAReport], branch: String, tip: String, base: String,
     latestCheck: BuildEvent.ReturnCheck?
   ) -> CutoffQA {
-    .notNeeded
+    let own = reports.filter { report in
+      report.after == task || report.trialMerge?.alongside.contains { $0.task == task } == true
+    }
+    func owed() -> CutoffQA {
+      let newest = own.max { ($0.runID ?? "") < ($1.runID ?? "") }
+      let milliseconds =
+        newest?.rows.filter { $0.runsAfter.contains(task) }.reduce(0) { $0 + $1.milliseconds }
+        ?? 0
+      return .owed(seconds: (milliseconds + 999) / 1000)
+    }
+    switch QAMergeReadiness.of(
+      table: table, merged: merged, plan: plan, task: task, reports: own, branch: branch,
+      tip: tip, base: base)
+    {
+    case .notNeeded: return .notNeeded
+    case .checked(let runID): return .green(runID: runID)
+    case .red(let runID, _):
+      guard let latestCheck, latestCheck.fix, latestCheck.outcome == .gateRed else {
+        return owed()
+      }
+      return .redAfterFix(runID: runID)
+    case .unchecked, .conflicts: return owed()
+    }
   }
 }
 
@@ -211,6 +233,12 @@ public struct CutoffTask: Sendable, Equatable {
   public var beforeMergeQASeconds: Int {
     if case .owed(let seconds) = qa { return seconds }
     return 0
+  }
+
+  /// Whether a `qa run --before-merge` still has to run before its merge.
+  public var owesQA: Bool {
+    if case .owed = qa { return true }
+    return false
   }
 
   public init(id: String, stage: CutoffTaskStage, qa: CutoffQA = .notNeeded) {
@@ -389,8 +417,21 @@ public enum CutoffRule {
       case .gating:
         let available = left - merging
         let qa = task.beforeMergeQASeconds
+        let standing: String
+        switch task.qa {
+        case .notNeeded: standing = "no validation row runs before its merge, "
+        case .green(let runID): standing = "its before-merge qa already GREEN in run \(runID), "
+        case .owed(let seconds) where seconds > 0:
+          standing = "its before-merge qa run (\(seconds) s), "
+        case .owed: standing = "its before-merge qa run (none measured yet), "
+        case .redAfterFix(let runID):
+          return CutoffDecision(
+            task: task.id, action: .abandon,
+            reason: "its rows are RED in before-merge qa run \(runID) and its fixer returned "
+              + "gate-red, so no run is left that could land it")
+        }
         let cost =
-          (qa > 0 ? "its before-merge qa run (\(qa) s), " : "its before-merge qa already GREEN, ")
+          standing
           + "its merge gate (\(gate) s) plus final and the report (\(tail) s), "
           + costs.described
         guard qa + gate + tail <= available else {

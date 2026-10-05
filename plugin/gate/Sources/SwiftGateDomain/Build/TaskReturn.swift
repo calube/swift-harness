@@ -3,7 +3,8 @@ import Foundation
 /// What a build worker hands back for one task (spec §5.3), checked by `build check-return`
 /// against git and the run store before anything is merged. Every key is required, `gate`,
 /// `review` and `designConflict` may be `null`, and an unknown key or value fails decoding: a
-/// worker can't claim anything the type doesn't name.
+/// worker can't claim anything the type doesn't name. A `BLOCKED` gate whose `runId` is `null`
+/// names no run, so it reads as a `null` gate.
 public struct TaskReturn: Sendable, Equatable {
   public enum Outcome: String, Sendable, Equatable, Codable, CaseIterable {
     case readyToMerge = "ready-to-merge"
@@ -42,7 +43,8 @@ public struct TaskReturn: Sendable, Equatable {
   public let task: String
   public let outcome: Outcome
   public let commits: [String]
-  /// `nil` when no gate ran, which only a `design-conflict` return may say.
+  /// `nil` when no gate ran, which only a `design-conflict` return, or a fixer's `gate-red` one
+  /// whose fix no gate checked, may say.
   public let gate: Gate?
   /// `nil` when no review ran.
   public let review: Review?
@@ -122,6 +124,26 @@ extension TaskReturn.Gate: Codable {
   }
 }
 
+/// A gate that never reached a verdict on the return's commits: `BLOCKED` with a `null` run id,
+/// as a fixer stopped by the cutoff writes it. It decodes as no gate at all.
+private struct UnrunGate: Decodable {
+  private enum CodingKeys: String, CodingKey, CaseIterable {
+    case tier, verdict
+    case runID = "runId"
+  }
+
+  init(from decoder: any Decoder) throws {
+    try StrictKeys.check(decoder, expected: CodingKeys.allCases.map(\.stringValue))
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    _ = try c.decode(CheckTier.self, forKey: .tier)
+    guard try c.decode(Verdict.self, forKey: .verdict) == .blocked, try c.decodeNil(forKey: .runID)
+    else {
+      throw DecodingError.dataCorruptedError(
+        forKey: .runID, in: c, debugDescription: "not a BLOCKED gate with no run")
+    }
+  }
+}
+
 extension TaskReturn.Review: Codable {
   private enum CodingKeys: String, CodingKey, CaseIterable {
     case mode, findings
@@ -148,7 +170,8 @@ extension TaskReturn: Codable {
       task: try c.decode(String.self, forKey: .task),
       outcome: try c.decode(Outcome.self, forKey: .outcome),
       commits: try c.decode([String].self, forKey: .commits),
-      gate: try c.decodeIfPresent(Gate.self, forKey: .gate),
+      gate: (try? c.decode(UnrunGate.self, forKey: .gate)) != nil
+        ? nil : try c.decodeIfPresent(Gate.self, forKey: .gate),
       review: try c.decodeIfPresent(Review.self, forKey: .review),
       testsAdded: try c.decode([String].self, forKey: .testsAdded),
       notes: try c.decode(String.self, forKey: .notes),
@@ -336,6 +359,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   /// A fixer resolves a collision with another task's files, so a file its notes name is allowed;
   /// a worker gets no such allowance.
   public let explainedEditsAllowed: Bool
+  /// A fixer's `gate-red` return may name no gate: the box ran out before one checked its fix.
+  public let unrunGateAllowed: Bool
   /// A worker's green gate must prove and mutate its change; a fixer's merge gate need not.
   public let proofRequired: Bool
   /// A worker's green return must carry its review; a fixer's never does, since no review stage
@@ -359,7 +384,8 @@ public struct TaskReturnEvidence: Sendable, Equatable {
   public init(
     branch: String, branchExists: Bool, commits: [String: CommitState], gateRun: GateRun?,
     taskGate: CheckTier, taskStatus: TaskStatusReport?, filesOutsideWriteSet: [String] = [],
-    changedFiles: [String] = [], explainedEditsAllowed: Bool = false, proofRequired: Bool = false,
+    changedFiles: [String] = [], explainedEditsAllowed: Bool = false,
+    unrunGateAllowed: Bool = false, proofRequired: Bool = false,
     surfaceCommit: CommitState? = nil, reviewRequired: Bool = true,
     taskGateStepsRequired: Bool, planSurface: PlanSurfaceManifests? = nil,
     testBuild: ProofBaseTestBuild? = nil, lastCommit: String? = nil,
@@ -375,6 +401,7 @@ public struct TaskReturnEvidence: Sendable, Equatable {
     self.filesOutsideWriteSet = filesOutsideWriteSet
     self.changedFiles = changedFiles
     self.explainedEditsAllowed = explainedEditsAllowed
+    self.unrunGateAllowed = unrunGateAllowed
     self.proofRequired = proofRequired
     self.reviewRequired = reviewRequired
     self.surfaceCommit = surfaceCommit
@@ -648,6 +675,7 @@ public enum TaskReturnCheck {
   {
     guard let gate = taskReturn.gate else {
       if taskReturn.outcome == .designConflict { return [] }
+      if taskReturn.outcome == .gateRed, evidence.unrunGateAllowed { return [] }
       return [
         .init(
           rule: .gateMissing,

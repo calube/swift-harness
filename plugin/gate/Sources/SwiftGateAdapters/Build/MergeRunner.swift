@@ -351,6 +351,7 @@ public struct BuildMerge: Sendable {
           reason: .alreadyMerged)
       }
       try await checkReturn(command, context)
+      try await checkCarried(command, context)
       try await checkFlows(command, context, main: pre)
       let outcome = try await step(command, context, "merging in \(main)") {
         () async throws(GitWorkspaceError) in
@@ -678,20 +679,26 @@ public struct BuildMerge: Sendable {
   }
 
   /// Refuses while a validation row runs after this task with every other task it waits on
-  /// merged, unless the newest `qa run --after <task> --before-merge` of the branch at its tip on
-  /// `main`'s commit is GREEN, or conflicted, which the merge then shows. A row whose other
-  /// unmerged tasks all have a checked return waiting to merge, and no fixer's branch, needs that
-  /// run over all their branches at once, before the first of them lands. A RED one cuts the fix
-  /// worktree, as a conflict does, unless this merges the fixer's branch, whose worktree exists;
-  /// that fixer's branch sets the task aside, so the other tasks' merges no longer wait on it.
-  /// A plan with no table, or one whose state doesn't read, needs no run here: `qa run` itself
-  /// reports that table.
+  /// merged, unless the newest `qa run --before-merge` that took the branch at its tip on `main`'s
+  /// commit passed it, or conflicted, which the merge then shows. A row whose other unmerged
+  /// tasks all have a checked return waiting to merge, and no fixer's branch, needs a run that
+  /// took all their branches at their tips too, in any order, before the first of them lands;
+  /// while another such task's worker has passed its gate and its return is on its way, the
+  /// merge waits for it. Only rows that run after this task count: a row RED there refuses it and
+  /// cuts the fix worktree with the branches that row's other tasks were run at, as a conflict
+  /// does, unless this merges the fixer's branch, whose worktree exists; that fixer's branch sets
+  /// the task aside, so the other tasks' merges no longer wait on it. A plan with no table, or one
+  /// whose state doesn't read, needs no run here: `qa run` itself reports that table.
   private func checkFlows(_ command: String, _ context: Context, main: String)
     async throws(Stop)
   {
     let readiness: QAMergeReadiness
     let tip: String
     let alongside: [String]
+    let merged: Set<String>
+    let reports: [QAReport]
+    var awaited: [QAPendingReturn] = []
+    var noNewStartsAt: Date?
     do {
       let plan = try PlanStateLayout(commonDirectory: context.common).plan(self.plan)
       guard
@@ -703,16 +710,43 @@ public struct BuildMerge: Sendable {
       let log = try context.run.events()
       tip = try await merger.commit(
         of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
-      let merged = progress.merged(per: log)
+      merged = progress.merged(per: log)
       let waiting = try await waitingBranches(context, progress: progress, log: log)
+      reports = beforeMergeReports(context)
       alongside = QAMergeReadiness.alongside(
         table: table, merged: merged, task: task, waiting: waiting)
       readiness = QAMergeReadiness.of(
-        table: table, merged: merged, plan: self.plan, task: task,
-        reports: beforeMergeReports(context), branch: context.branch, tip: tip, base: main,
-        waiting: waiting)
+        table: table, merged: merged, plan: self.plan, task: task, reports: reports,
+        branch: context.branch, tip: tip, base: main, waiting: waiting)
+      if !fix {
+        noNewStartsAt = (try? context.run.record())?.timeBox?.deadlines.noNewStartsAt
+        awaited = QAMergeReadiness.awaited(
+          table: table, merged: merged, task: task, waiting: waiting,
+          pending: try await pendingReturns(
+            context, progress: progress, log: log, skipping: Set(waiting.map(\.task)).union(merged)),
+          now: clock.now(), noNewStartsAt: noNewStartsAt)
+      }
     } catch {
       return
+    }
+    if !awaited.isEmpty {
+      let gatedAt = awaited.map(\.gatedAt).max() ?? clock.now()
+      var lapsesAt = gatedAt.addingTimeInterval(QAMergeReadiness.returnWait)
+      if let noNewStartsAt { lapsesAt = min(lapsesAt, noNewStartsAt) }
+      let names = awaited.map(\.task)
+      let one = names.count == 1
+      let gates = awaited.map { "run \($0.gateRunID)" }.joined(separator: ", ")
+      let together = ([task] + alongside + names).joined(separator: ",")
+      let reason = BuildMergeReport.Reason.flowsPending.rawValue
+      let message: String =
+        "build-merge.\(reason): a validation row runs after `\(task)` and "
+        + "\(names.joined(separator: ", ")), whose \(one ? "worker's gate" : "workers' gates") "
+        + "passed at \(one ? "its branch tip" : "their branch tips") (\(gates)) with no checked "
+        + "return since; check \(one ? "that return" : "those returns") as the completion "
+        + "notices arrive, then run 1 `swiftgate qa run --plan \(plan) --after \(together) "
+        + "--before-merge` over them all. The wait lapses at \(lapsesAt.formatted(.iso8601)), "
+        + "when `\(task)` merges on its own rows"
+      throw stop(command, context, .refused, message, reason: .flowsPending)
     }
     let tasks = ([task] + alongside).joined(separator: ",")
     let run =
@@ -747,11 +781,98 @@ public struct BuildMerge: Sendable {
           command, context, .refused, red + " Fix it in \(context.fix.path) and run it again.",
           reason: .flowsRed)
       }
-      let (_, detail) = try await cutFix(command, context)
+      let owners = Set(rows.flatMap(\.runsAfter))
+      var carried: [QATrialMerge.Branch] = []
+      if let red = reports.first(where: { $0.runID == runID }), let after = red.after,
+        let merge = red.trialMerge
+      {
+        let taken = [QATrialMerge.Branch(task: after, branch: merge.branch, tip: merge.tip)]
+          + merge.alongside
+        carried = taken.filter {
+          $0.task != task && owners.contains($0.task) && !merged.contains($0.task)
+        }
+      }
+      let (_, detail) = try await cutFix(command, context, carrying: carried)
       throw Stop(
         report: report(
           command, context, .refused, .red, reason: .flowsRed, pre: main, cut: true,
           message: red + " " + detail))
+    }
+  }
+
+  /// Every other running task, outside `skipping`, whose worker's own gate passed at its branch's
+  /// tip on a clean tree with no check of its return recorded since: its return is on its way. A
+  /// task with a fixer's branch is set aside, as in ``waitingBranches(_:progress:log:)``.
+  private func pendingReturns(
+    _ context: Context, progress: LedgerProgress, log: BuildEventLog, skipping: Set<String>
+  ) async throws -> [QAPendingReturn] {
+    var pending: [QAPendingReturn] = []
+    for other in progress.tasks
+    where other.status == .inProgress && other.id != task && !skipping.contains(other.id) {
+      let names = try TaskWorktree(
+        commonDirectory: context.common, plan: plan, task: other.id, profile: profile)
+      let fixNames = try TaskWorktree(
+        commonDirectory: context.common, plan: plan, task: "fix-\(other.id)", profile: profile)
+      guard try await workspace.branchExists(names.branch),
+        try await !workspace.branchExists(fixNames.branch)
+      else { continue }
+      let tip = try await merger.commit(
+        of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
+      let path =
+        (try? WorktreePool(commonDirectory: context.common, plan: plan).path(holding: names.branch))
+        ?? names.path
+      guard
+        let records = try? RunStore(worktreeRoot: URL(filePath: path, directoryHint: .isDirectory))
+          .readHistory().records,
+        let gate = records.last(where: {
+          $0.verdict == .green && $0.headCommit == tip && $0.dirty == false
+            && TaskReturnEvidence.GateRun.tier(ofCommand: $0.command) != nil
+        })
+      else { continue }
+      let checked = log.events.contains { event in
+        guard case .returnCheck(let check) = event else { return false }
+        return check.task == other.id && !check.fix && check.at >= gate.finishedAt
+      }
+      guard !checked else { continue }
+      pending.append(
+        QAPendingReturn(task: other.id, gateRunID: gate.runID, gatedAt: gate.finishedAt))
+    }
+    return pending
+  }
+
+  /// Refuses a fixer's branch that holds another running task's branch tip not yet merged into
+  /// `main`: a fix worktree cut for a RED run over several tasks took their branches in, and
+  /// merging it would land their work under this task's merge, with no merge of their own.
+  private func checkCarried(_ command: String, _ context: Context) async throws(Stop) {
+    guard fix,
+      let plan = try? PlanStateLayout(commonDirectory: context.common).plan(self.plan),
+      let progress = try? PlanStateStore(plan: plan).ledgerProgress()
+    else { return }
+    var carried: [String] = []
+    do {
+      let fixTip = try await merger.commit(
+        of: "refs/heads/\(context.branch)", in: context.names.mainCheckout)
+      for other in progress.tasks where other.id != task && other.status == .inProgress {
+        let names = try TaskWorktree(
+          commonDirectory: context.common, plan: self.plan, task: other.id, profile: profile)
+        guard try await workspace.branchExists(names.branch),
+          try await !workspace.isMerged(names.branch, into: context.names.baseBranch)
+        else { continue }
+        let otherTip = try await merger.commit(
+          of: "refs/heads/\(names.branch)", in: context.names.mainCheckout)
+        if try await git.isAncestor(otherTip, of: fixTip) { carried.append(other.id) }
+      }
+    } catch {
+      throw stop(command, context, .blocked, "reading the tasks \(context.branch) holds: \(error)")
+    }
+    guard carried.isEmpty else {
+      throw stop(
+        command, context, .refused,
+        "build-merge.\(BuildMergeReport.Reason.fixCarriesUnmerged.rawValue): \(context.branch) "
+          + "holds the unmerged branch of \(carried.map { "`\($0)`" }.joined(separator: ", ")), "
+          + "which its fix worktree took in for a RED run over them; merge "
+          + (carried.count == 1 ? "that task" : "those tasks") + " first, then this fix",
+        reason: .fixCarriesUnmerged)
     }
   }
 
@@ -921,11 +1042,12 @@ public struct BuildMerge: Sendable {
     }
   }
 
-  /// Cuts the fix worktree from `main` and merges the task branch into it, leaving any conflict.
+  /// Cuts the fix worktree from `main` and merges the task branch into it, then each of
+  /// `carrying` at its tip, leaving any conflict and merging nothing after it.
   /// - Returns: the fix worktree's conflicted files, and a sentence for the message.
-  private func cutFix(_ command: String, _ context: Context) async throws(Stop)
-    -> ([String], String)
-  {
+  private func cutFix(
+    _ command: String, _ context: Context, carrying: [QATrialMerge.Branch] = []
+  ) async throws(Stop) -> ([String], String) {
     try await checkFixIsFree(command, context)
     let fix = context.fix
     let branch = context.names.branch
@@ -944,10 +1066,21 @@ public struct BuildMerge: Sendable {
         ).path
       }
       let subject = try await merger.subject(of: "refs/heads/\(branch)", in: path)
-      return (path, try await merger.merge(branch, message: "Merge: \(subject)", in: path))
+      var outcome = try await merger.merge(branch, message: "Merge: \(subject)", in: path)
+      var taken = [branch]
+      for other in carrying {
+        guard case .merged = outcome else { break }
+        let subject = try await merger.subject(of: other.tip, in: path)
+        outcome = try await merger.merge(
+          other.tip, message: "Merge \(other.branch): \(subject)", in: path)
+        taken.append("\(other.branch) at \(other.tip)")
+      }
+      return (path, (outcome: outcome, taken: taken))
     }
-    let cut = "Fix worktree \(path) on \(fix.branch) has \(branch) merged in"
-    switch outcome {
+    let cut =
+      "Fix worktree \(path) on \(fix.branch) has \(outcome.taken.joined(separator: ", then ")) "
+      + "merged in"
+    switch outcome.outcome {
     case .merged: return ([], cut + ".")
     case .conflicted(let files):
       return (files, cut + ", conflicted in \(files.joined(separator: ", ")).")
