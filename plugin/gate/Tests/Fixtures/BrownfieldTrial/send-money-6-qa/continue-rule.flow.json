@@ -1,0 +1,224 @@
+[
+ {
+  "command": "open",
+  "input": {
+   "app": "com.example.InterviewStarter",
+   "relaunch": true,
+   "launchArgs": [
+    "-harness-scenario",
+    "success"
+   ]
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"home.send\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"home.send\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.alice\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.row.alice\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"amount.display\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$0"
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"amount.continue\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"amount.continue\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"confirm.send\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.balance\"",
+   "value": "$250.00"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.2\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.5\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.0\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.decimal\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.0\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.1\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$250.01"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"amount.continue\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"confirm.send\""
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.delete\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.delete\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$250."
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"amount.continue\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"confirm.send\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"confirm.amount\"",
+   "value": "$250.00"
+  }
+ }
+]

@@ -1,0 +1,245 @@
+[
+ {
+  "command": "open",
+  "input": {
+   "app": "com.example.InterviewStarter",
+   "relaunch": true,
+   "launchArgs": [
+    "-harness-scenario",
+    "success"
+   ]
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"home.send\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"home.send\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.alice\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.row.alice\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"amount.display\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$0"
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"keypad.0\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.0\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.0\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.7\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$7"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.delete\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$0"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.1\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.2\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.3\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.4\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$1,234"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.decimal\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.5\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$1,234.5"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.decimal\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.6\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.7\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$1,234.56"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.delete\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$1,234.5"
+  }
+ }
+]

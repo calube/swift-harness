@@ -1,0 +1,181 @@
+[
+ {
+  "command": "open",
+  "input": {
+   "app": "com.example.InterviewStarter",
+   "relaunch": true,
+   "launchArgs": [
+    "-harness-scenario",
+    "success"
+   ]
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"home.balance\" label=\"$250.00\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"home.balance\"",
+   "value": "$250.00"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"home.send\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.alice\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.row.alice\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"keypad.1\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.1\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.2\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.decimal\""
+   }
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"keypad.5\""
+   }
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"amount.display\"",
+   "value": "$12.5"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"amount.continue\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"confirm.send\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"confirm.contact\"",
+   "value": "Alice Johnson"
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"confirm.amount\"",
+   "value": "$12.50"
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"confirm.send\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"home.balance\" label=\"$237.50\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "text",
+   "selector": "id=\"home.balance\"",
+   "value": "$237.50"
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"activity.row\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "text",
+   "text": "Alice Johnson",
+   "timeoutMs": 10000
+  }
+ }
+]

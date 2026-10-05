@@ -1,0 +1,186 @@
+[
+ {
+  "command": "open",
+  "input": {
+   "app": "com.example.InterviewStarter",
+   "relaunch": true,
+   "launchArgs": [
+    "-harness-scenario",
+    "success"
+   ]
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"home.send\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"home.send\""
+   }
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.search\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.alice\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.bob\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.carla\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.dev\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.emma\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.farid\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.grace\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.hiro\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "press",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.search\""
+   }
+  }
+ },
+ {
+  "command": "fill",
+  "input": {
+   "target": {
+    "kind": "selector",
+    "selector": "id=\"contacts.search\""
+   },
+   "text": "GR"
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "absent",
+   "selector": "id=\"contacts.row.alice\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "wait",
+  "input": {
+   "kind": "selector",
+   "selector": "id=\"contacts.row.grace\"",
+   "timeoutMs": 10000
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.alice\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.bob\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.carla\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.dev\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.emma\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.farid\""
+  }
+ },
+ {
+  "command": "is",
+  "input": {
+   "predicate": "absent",
+   "selector": "id=\"contacts.row.hiro\""
+  }
+ }
+]

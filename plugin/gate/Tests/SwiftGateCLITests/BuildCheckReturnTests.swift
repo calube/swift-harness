@@ -292,6 +292,80 @@ struct BuildCheckReturnTests {
   }
 
   @Test(
+    "a fixer's edit to a merged task's file, its notes silent, is unexplained until the task's before-merge run is RED in a row that runs after that merged task too, and then passes --fix against that task's write set — catches a fixer blamed for a red screen another task owns, held outside the files that screen lives in"
+  )
+  func fixMayEditTheMergedOwnerOfARedRow() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let common = try await scenario.git.commonDirectory()
+    let view = "Sources/QueueList/QueueListView.swift"
+    func git(_ arguments: [String], in directory: String) async throws {
+      let output = try await scenario.runner.run(
+        ProcessInvocation(
+          executable: "git", arguments: arguments, workingDirectory: directory,
+          timeout: .seconds(60)))
+      try #require(output.status.isSuccess, "git \(arguments): \(output.stderr.text)")
+    }
+    func write(_ path: String, in directory: String, _ text: String) throws {
+      let file = URL(filePath: directory).appending(path: path)
+      try FileManager.default.createDirectory(
+        at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+      try Data(text.utf8).write(to: file)
+    }
+    try write(view, in: scenario.main.path, "struct QueueListView {}\n")
+    try await git(["add", "-A"], in: scenario.main.path)
+    try await git(["commit", "-q", "-m", "Merge: list view"], in: scenario.main.path)
+    let plan = try PlanStateLayout(commonDirectory: common).plan(ReturnScenario.plan)
+    var ledger = try PlanStateStore(plan: plan).ledger()
+    ledger = Ledger(
+      schemaVersion: ledger.schemaVersion, resume: ledger.resume, maxParallel: ledger.maxParallel,
+      tasks: ledger.tasks + [
+        LedgerTask(
+          id: "queue-list", deps: [], writeSet: ["Sources/QueueList/"], gate: .push, tests: [],
+          covers: ["D2"], estLines: 20, status: .done, worktree: scenario.main.path + "-list",
+          model: .sonnet)
+      ], waves: [[ReturnScenario.task, "queue-list"]])
+    try LedgerJSON.encode(ledger).write(to: URL(filePath: plan.ledgerFile))
+    let (fix, _) = try await scenario.cutFixWorktree()
+    try write(view, in: fix.path, "struct QueueListView { let searchable = true }\n")
+    try await git(["commit", "-q", "-am", "fix: the search field takes text"], in: fix.path)
+    let commit = try #require(
+      try await LiveGit(runner: scenario.runner, repositoryRoot: fix.path).revision("HEAD"))
+    let runID = try await scenario.recordGateRun(
+      tier: .ready, verdict: .green, suffix: 2, in: fix, steps: nil)
+    let fixReturn = scenario.returnValue(
+      commits: [commit], gate: .init(tier: .ready, verdict: .green, runID: runID),
+      notes: "The search field takes text.", review: nil)
+
+    let before = try await scenario.check(fixReturn, fix: true)
+    let captured = try QAReportJSON.decode(
+      Fixture.data("BrownfieldTrial/send-money-6-qa-fixer-before-merge.json"))
+    let red = try #require(captured.rows.first { $0.result == .red })
+    let names = try TaskWorktree(
+      commonDirectory: common, plan: ReturnScenario.plan, task: ReturnScenario.task)
+    let redRun = "20261005T094736Z-1149c44c"
+    let report = QAReport(
+      runID: redRun, plan: ReturnScenario.plan, after: ReturnScenario.task, atBase: false,
+      commit: nil,
+      rows: [
+        QARow(
+          row: 1, requirement: red.requirement, layer: red.layer, check: red.check,
+          runsAfter: ["queue-list", ReturnScenario.task], result: .red, message: red.message)
+      ],
+      trialMerge: QATrialMerge(
+        branch: names.branch, tip: scenario.taskCommit, base: scenario.taskCommit))
+    let directory = try RunStore(worktreeRoot: scenario.main).runDirectory(for: redRun)
+      .appending(path: QAReport.directory, directoryHint: .isDirectory)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
+    let after = try await scenario.check(fixReturn, fix: true)
+
+    #expect(before.findings.map(\.rule) == [.outsideWriteSetUnexplained], "\(before.findings)")
+    #expect(after.findings == [], "\(after.findings)")
+    #expect(after.verdict == .green)
+  }
+
+  @Test(
     "a fixer's ready-to-merge return with review null passes --fix, and a worker's with review null still fails — catches the fix path rejecting every fixer, or a worker skipping review"
   )
   func fixReturnNeedsNoReview() async throws {
