@@ -114,14 +114,25 @@ extension RunCommand {
     return prepared
   }
 
-  /// Stops the warm-up, removes the plan checkout, deletes the plan branch while it still points
-  /// at the base, and removes the plan dir with its lock. Returns what couldn't be undone.
+  /// Stops the warm-up, removes the slots it added and the plan checkout, deletes the plan branch
+  /// while it still points at the base, and removes the plan dir with its lock. Returns what
+  /// couldn't be undone.
   static func rollBack(_ prepared: RunPrepared, dependencies: Dependencies) async -> [String] {
     var left: [String] = []
     if let pid = prepared.warmupPID {
       dependencies.warmup.stop(pid: pid)
     } else {
       left.append("a warm-up whose pid is unknown, logging to \(prepared.warmupLog)")
+    }
+    let root = URL(filePath: prepared.root, directoryHint: .isDirectory)
+    let layout = try? await GitTrackedTree(runner: dependencies.runner, directory: root)
+      .stateLayout()
+    if let layout {
+      let disposal = await WorktreePool(
+        commonDirectory: layout.commonDir.path(percentEncoded: false), plan: prepared.slug
+      ).dispose(
+        workspace: LiveGitWorkspace(runner: dependencies.runner, repositoryRoot: prepared.root))
+      left += disposal.failures.map { "a slot: \($0)" }
     }
     if let checkout = prepared.checkout {
       let removed = try? await git(
