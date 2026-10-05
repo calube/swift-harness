@@ -8,7 +8,7 @@ import Testing
 
 @testable import SwiftGateCLI
 
-@Suite("brownfield slice tier")
+@Suite("brownfield slice tier", .timeLimit(.minutes(5)))
 struct BrownfieldSliceCheckTests {
   /// A temp directory holding the clone's state, the worktree path and the scratch tree path.
   /// Nothing here resolves this checkout's git dir.
@@ -890,34 +890,42 @@ extension BrownfieldSliceCheckTests {
     let tree = try #require(warmup["tree"] as? String)
     let source = "Packages/AppFeature/Sources/AppCore/AmountInput.swift"
     let budget = Duration.milliseconds(30_000 - warmTest + 100)
+    // The gate times its steps on a clock only the build moves, so the build takes the slice past
+    // its budget without the test spending that time.
+    let base = ContinuousClock.now
+    let offset = Mutex(Duration.zero)
     let runner = FakeAreaCommandRunner { request in
       if request.step == .build, request.area == "AppFeature" {
-        // A build that takes the slice past its budget, measured on the gate's own clock.
-        let end = ContinuousClock.now + budget
-        while ContinuousClock.now < end {}
+        offset.withLock { $0 += budget }
       }
       return request.step == .testFiles && Self.inScratchTree(request, clone)
         ? .failed(exit: 1, tail: "1 failed", junit: nil) : .passed
     }
     let context = GateRun.Context(runID: "run", directory: clone.base)
 
-    let parts = try await Self.run(
-      clone, areas: config.areas,
-      changes: [
-        Change(path: source, text: "let amount = 1\n", added: [1...1]),
-        Self.newFile(
-          "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift",
-          try Fixture.text("BrownfieldTrial/send-money-2-AmountInputTests.swift")),
-      ],
-      runner: runner,
-      history: [
-        CommitTree(commit: "base0", tree: "tree0"), CommitTree(commit: "warm0", tree: tree),
-      ],
-      warmByTree: [tree: ["AppFeature": warmTest]], changedSince: ["warm0": [source]],
-      context: context)
+    let now: @Sendable () -> ContinuousClock.Instant = { base + offset.withLock { $0 } }
+    let parts = try await GateRun.$now.withValue(now) {
+      try await Self.run(
+        clone, areas: config.areas,
+        changes: [
+          Change(path: source, text: "let amount = 1\n", added: [1...1]),
+          Self.newFile(
+            "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift",
+            try Fixture.text("BrownfieldTrial/send-money-2-AmountInputTests.swift")),
+        ],
+        runner: runner,
+        history: [
+          CommitTree(commit: "base0", tree: "tree0"), CommitTree(commit: "warm0", tree: tree),
+        ],
+        warmByTree: [tree: ["AppFeature": warmTest]], changedSince: ["warm0": [source]],
+        context: context)
+    }
 
     let head = runner.requests.filter { $0.area == "AppFeature" && !Self.inScratchTree($0, clone) }
     #expect(head.map(\.step) == [.build, .testFiles])
+    let build = context.steps.steps.first { $0.step == .areaBuild && $0.area == "AppFeature" }
+    #expect(
+      build.map { $0.milliseconds + warmTest > 30_000 } == true, "\(String(describing: build))")
     #expect(context.proofs.results.filter { $0.target == "AppFeature" }.count == 8)
     #expect(
       !parts.findings.contains {
@@ -1141,7 +1149,9 @@ extension BrownfieldSliceCheckTests {
   }
 }
 
-/// Fired once; a waiter learns whether it fired before its time ran out.
+/// Fired once; a waiter waits for it with no bound of its own, so a loaded machine that fires it
+/// late can't read as one that never fires. A wait that never ends is a regression the suite's
+/// time limit ends by cancelling it.
 final class OnceSignal: Sendable {
   private struct State {
     var fired = false
@@ -1162,14 +1172,9 @@ final class OnceSignal: Sendable {
     for continuation in waiting.values { continuation.resume() }
   }
 
-  /// Whether the signal fired before `limit` passed.
-  func wait(upTo limit: Duration) async -> Bool {
-    await withTaskGroup(of: Void.self) { group in
-      group.addTask { await self.untilFired() }
-      group.addTask { try? await Task.sleep(for: limit) }
-      await group.next()
-      group.cancelAll()
-    }
+  /// Whether the signal fired, once it has or the wait is cancelled.
+  func wait() async -> Bool {
+    await untilFired()
     return fired
   }
 
@@ -1216,7 +1221,7 @@ extension BrownfieldSliceCheckTests {
       warm: ["AppFeature": 22_600],
       judge: { _, _ in
         guard !answers.all.contains("before") else { return .asserts }
-        answers.append(await started.wait(upTo: .seconds(5)) ? "during" : "before")
+        answers.append(await started.wait() ? "during" : "before")
         return .asserts
       })
 

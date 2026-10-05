@@ -85,7 +85,9 @@ struct OffPoolTests {
     // The only way out if the pool is starved: a thread of its own opens the latch.
     let watchdog = DispatchSemaphore(value: 0)
     Thread {
-      if watchdog.wait(timeout: .now() + 60) == .timedOut {
+      // Long past any wait a loaded machine gives a new task for a thread, so it fires only on a
+      // starved pool.
+      if watchdog.wait(timeout: .now() + 600) == .timedOut {
         watchdogFired.set()
       }
       latch.open()
