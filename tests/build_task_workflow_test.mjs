@@ -1107,6 +1107,8 @@ const tests = {
   async 'with a null plan surface the worker prompt and schema are today\'s, byte for byte — catches a design plan\'s workers told about a plan surface'() {
     const head =
       'Build this task and return one TaskReturn JSON object with "review": null, plus "span".\n\n' +
+      'Your worktree is /work/app-catalog-catalog-list-reducer. Run every command there and give every file you read or write by its absolute path under it: a write outside it, as to the user\'s checkout, is refused.\n' +
+      'Never run a bare `ls`: here it waits on stdin and hangs. Name the folder, as in `ls /work/app-catalog-catalog-list-reducer`.\n' +
       'Task: catalog-list-reducer (plan catalog).\n' +
       'Worktree: /work/app-catalog-catalog-list-reducer, branch catalog/catalog-list-reducer, already checked out.\n' +
       'Write set: Sources/CatalogCore/CatalogList.swift, Tests/CatalogCoreTests/CatalogListTests.swift.\n'
@@ -1205,6 +1207,35 @@ const tests = {
           `${profile}: no gate-wait on the gate's file:\n${prompt}`,
         )
         for (const word of ['`pgrep -f`', '`pkill`', '`killall`']) assert.ok(prompt.includes(word), `${profile}: ${word} is not forbidden`)
+      }
+    }
+  },
+
+  async 'every worker and fix prompt opens with the worktree\'s absolute path and never a bare ls, and a brownfield one with the test-only --area line, before the task — catches workers refused for a bare ls, a raw swift test, or a write to the user\'s checkout'() {
+    const behave = profile =>
+      profile === 'brownfield'
+        ? { workers: [brownfieldReturn({ outcome: 'gate-red', gate: { tier: 'slice', verdict: 'RED', runId: '20261004T141540Z-be184a1a' }, redReason: 'no-progress' }), brownfieldReturn()] }
+        : { workers: [red(), workerReturn()] }
+    const testOnly = `${SG} test-only --area <area> <Target>/<Class>`
+    for (const { profile, args } of [
+      { profile: 'brownfield', args: brownfieldArgs() },
+      { profile: 'owned', args: baseArgs({ review: 'gate' }) },
+    ]) {
+      const { workerCalls } = await run(args, behave(profile))
+      assert.equal(workerCalls.length, 2, profile)
+      for (const { prompt } of workerCalls) {
+        const task = prompt.indexOf('Task: ')
+        const top = prompt.slice(0, task)
+        assert.ok(task > 0, `${profile}: no task line:\n${prompt}`)
+        assert.ok(top.includes(`Your worktree is ${args.worktree}.`), `${profile}: the worktree path is not first:\n${top}`)
+        assert.ok(top.includes('Never run a bare `ls`'), `${profile}: no bare ls rule before the task:\n${top}`)
+        assert.ok(top.includes(`\`ls ${args.worktree}\``), `${profile}: the ls rule names no folder:\n${top}`)
+        if (profile === 'brownfield') {
+          assert.ok(top.includes(testOnly), `brownfield: no test-only --area line before the task:\n${top}`)
+          assert.ok(top.includes('`swift build`') && top.includes('`swift test`'), `brownfield: raw swift build and test not ruled out:\n${top}`)
+        } else {
+          assert.ok(!prompt.includes('test-only --area'), `owned: a test-only --area line in an owned prompt:\n${prompt}`)
+        }
       }
     }
   },

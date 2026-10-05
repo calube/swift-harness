@@ -4762,3 +4762,33 @@ cp $T/send-money-7/state/baseline/bf8ec9fb54cc37235d92d4b06cd15cc7d11d55ca.json 
 record the 43 s rerun added; the tests drop that record to read the file as the rerun found it.
 
 `grep -rlaE '/Users|/private|/var/folders|caleb'` on these 3 files matched nothing.
+
+## Brownfield trial: pos-checkout-1's finish, return and cart row
+
+pos-checkout-1 (2026-10-05) passed, with 3 findings these files pin. `build finish`, run from the
+user's checkout, missed the final qa run `20261005T124225Z-b49370a4` still in the plan checkout's
+store. checkout-ui's worker returned `cd878fd` for its commit `cd878fa`. Every cart-quantities step
+carried a `sim.a11y-untargeted` nit of 144 findings over about 30 controls, while its +/−/trash
+buttons, drawn about 20 pt square, earned none. `T` is the trial's harness-runs folder, `S` its
+clone's state copied to `$T/state`, `C` the clone, and `R` the cart row's run folder in the clone's
+git dir:
+
+```sh
+T=<harness runs folder>/pos-checkout-1 S=$T/state C=<trial clone> F=BrownfieldTrial
+R=$C/.git/swift-harness/runs/20261005T123527Z-658b917a/qa/02-req-cart-quantities.flow
+cp $T/plan.json $F/pos-checkout-1-plan.json
+cp $T/validation.json $F/pos-checkout-1-validation.json
+cp $S/runs/20261005T124225Z-b49370a4/qa/report.json $F/pos-checkout-1-final-qa-report.json
+python3 -c "import json,sys; d=json.load(open(sys.argv[1])); \
+  open(sys.argv[2],'w').write(json.dumps(d['result'],indent=2,sort_keys=True)+'\n')" \
+  $T/transcripts/<session>/workflows/wf_2a924975-34d.json $F/pos-checkout-1-checkout-ui-return.json
+git -C $C log --reverse --format=%H 6938fd1^..cd878fa > $F/pos-checkout-1-checkout-ui-branch-commits.txt
+D=$F/pos-checkout-1-cart-quantities
+cp $S/plans/spec/qa/cart-quantities.flow.json $D/flow.json
+cp $R/sim/session.json $R/sim/steps.ndjson $R/sim/report.json $D/sim/
+cp $R/sim/steps/*.tree.json $D/sim/steps/
+```
+
+The return is the build-task workflow's own result, before the orchestrator patched its file with
+`sed`. `grep -rniE '/Users|/private|/var/folders|caleb' BrownfieldTrial/pos-checkout-1-*` matched
+nothing.

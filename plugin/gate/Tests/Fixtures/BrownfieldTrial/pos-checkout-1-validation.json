@@ -1,0 +1,83 @@
+{
+  "rows" : [
+    {
+      "check" : "qa/catalogue-grid.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-catalogue-grid",
+      "runsAfter" : [
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/cart-quantities.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-cart-quantities",
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/subtotal-tax.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-subtotal-tax",
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/tip.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-tip",
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/empty-cart.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-empty-cart",
+      "runsAfter" : [
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    },
+    {
+      "check" : "qa/receipt.flow.json",
+      "layer" : "flow",
+      "requirement" : "req-receipt",
+      "runsAfter" : [
+        "spec-pricing",
+        "spec-checkout-feature",
+        "spec-checkout-ui"
+      ],
+      "writer" : "spec-validation"
+    }
+  ],
+  "schemaVersion" : 1,
+  "unitOnly" : [
+    {
+      "reason" : "the contract and PricingTests type every amount as Decimal; a Double would not compile against them",
+      "requirement" : "req-decimal-money"
+    },
+    {
+      "reason" : "the table-driven PricingTests in spec-pricing are the check, and its slice proves them red against the stubs",
+      "requirement" : "req-pricing-tests"
+    },
+    {
+      "reason" : "gate: final runs every area's whole suite, including AppFeatureTests and LaunchFlowUITests",
+      "requirement" : "req-existing-tests"
+    }
+  ]
+}

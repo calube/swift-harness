@@ -426,6 +426,31 @@ struct BuildCheckReturnTests {
   }
 
   @Test(
+    "a return naming its commit by a mistyped short sha, as pos-checkout-1's checkout-ui named cd878fd for cd878fa, passes on the branch's real commit, says so in a warning, and leaves the file listing that commit — catches check-return sending a clerical sha to a fixer or to a hand edit"
+  )
+  func mistypedCommitIsRefilledFromTheBranch() async throws {
+    let scenario = try await ReturnScenario()
+    defer { scenario.remove() }
+    let runID = try await scenario.recordGateRun(tier: .push, verdict: .green, suffix: 1)
+    let short = String(scenario.taskCommit.prefix(7))
+    let mistyped = String(short.dropLast()) + (short.last == "0" ? "1" : "0")
+    let file = try scenario.write(
+      try TaskReturnJSON.encode(
+        scenario.returnValue(
+          commits: [mistyped], gate: .init(tier: .push, verdict: .green, runID: runID))))
+
+    let report = await scenario.check(file: file)
+
+    #expect(report.findings == [], "\(report.findings)")
+    #expect(report.verdict == .green)
+    #expect(report.commit == scenario.taskCommit)
+    #expect(report.warnings.contains { $0.contains(mistyped) }, "\(report.warnings)")
+    let rewritten = try TaskReturnJSON.decode(try Data(contentsOf: URL(filePath: file)))
+    #expect(rewritten.commits == [scenario.taskCommit])
+    #expect(rewritten.notes.contains(mistyped), "\(rewritten.notes)")
+  }
+
+  @Test(
     "a file the task's commits touch outside its write set, and its notes never name, is a finding with exit 1 — catches a worker spreading past its write set in silence"
   )
   func unexplainedEditOutsideWriteSetFails() async throws {

@@ -1,0 +1,122 @@
+{
+  "livePlan" : {
+    "briefs" : {
+      "spec-checkout-feature" : {
+        "acceptance" : [
+          "`CheckoutFeatureTests` TestStore tests fail first against the stub, then pass: tapping builds the cart and its totals change, removing the last line empties it and `canCharge` is false, a charge's receipt equals the cart then and doesn't change after, New sale empties; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "views; pricing maths"
+        ],
+        "scope" : [
+          "`itemTapped` adds 1 (appending a new line at quantity 1), `incrementTapped`, `decrementTapped` (removing the line at 0), `removeTapped`, `tipSelected`",
+          "`chargeTapped` does nothing for an empty cart, else sets `receipt` from the cart, tip and totals at that moment",
+          "`newSaleTapped` clears the cart and receipt and resets the tip to none"
+        ],
+        "title" : "Implement the checkout reducer: adding, quantities, removal, tip, charge and new sale.",
+        "why" : "spec sections 1 and 3, and the acceptance criteria on building the cart, emptying it, the disabled Charge and the receipt matching the cart."
+      },
+      "spec-checkout-ui" : {
+        "acceptance" : [
+          "the app builds; `LaunchFlowUITests` passes at merge with the checkout first; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "reducer behaviour; pricing maths"
+        ],
+        "scope" : [
+          "`CheckoutView`: a 4-column `LazyVGrid` of catalogue buttons, the cart lines with quantity, +, − and remove, the 4 tip buttons, the subtotal, tax, tip and total rows, and Charge disabled when `!store.canCharge`; every element carries its `CheckoutID`",
+          "`ReceiptView` in a sheet over `store.receipt`, listing the receipt's lines and totals and a New sale button; `.interactiveDismissDisabled()`",
+          "`AppView` shows `CheckoutView` scoped to `\\.checkout` and drops the posts load and status text",
+          "the launch UI test asserts the catalogue's Latte button appears at launch"
+        ],
+        "title" : "Build the checkout and receipt screens and make the checkout the first screen.",
+        "why" : "the spec's setup, \"Replace that screen with the checkout\", and the grid, cart, totals, tip, Charge and receipt it describes."
+      },
+      "spec-contract" : {
+        "acceptance" : [
+          "every touched area builds; existing tests pass; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "pricing maths, reducer behaviour, any visible change"
+        ],
+        "scope" : [
+          "`Catalogue.items` with the 8 items, `CatalogueItem`, `CartLine`, `TipOption` with its rates, `Totals`, `Receipt`",
+          "`Pricing` with stub functions returning 0, and `Money.format` (USD, en_US)",
+          "`CheckoutFeature` State and Action with a stub reducer; AppFeature scopes it as `checkout`",
+          "`CheckoutID` accessibility ids, and stub `CheckoutView` and `ReceiptView` nothing shows yet"
+        ],
+        "title" : "Declare the catalogue, pricing, checkout feature and view names every task compiles against, with no behaviour change.",
+        "why" : "every requirement crosses AppCore and AppUI, so all tasks build against 1 declared shape and 1 set of accessibility ids."
+      },
+      "spec-pricing" : {
+        "acceptance" : [
+          "`PricingTests` fail first against the stubs, then pass: parameterized `@Test(arguments:)` tables for rounding (including x.xx5 up, x.xx4999 down, exact cents), subtotal, tax (11.25 gives 1.00), each tip option on the subtotal (11.25 at 20% gives 2.25, not 2.45), and totals; slice is GREEN"
+        ],
+        "outOfScope" : [
+          "the reducer and views"
+        ],
+        "scope" : [
+          "`Pricing.roundHalfUpToCent`, `subtotal`, `tax(onSubtotal:)`, `tip(onSubtotal:option:)` and `totals(lines:tip:)` in Decimal only"
+        ],
+        "title" : "Implement the pricing rules in Decimal with table-driven tests.",
+        "why" : "spec section 2, \"Totals\", and the acceptance criteria on the $11.25 / $1.00 example, the tip on the subtotal, and table-driven tests with half-cent rounding."
+      },
+      "spec-validation" : {
+        "acceptance" : [
+          "`qa lint` is GREEN on each flow; `qa run --at-base` reads each row red"
+        ],
+        "outOfScope" : [
+          "source, tests in the tracked tree, and any commit"
+        ],
+        "scope" : [
+          "1 file under `.harness/qa/spec/` per `## Validation` row whose `Writer` is this task"
+        ],
+        "title" : "Write the flow checks against the contract's ids, and record why each fails now.",
+        "why" : "every screen requirement needs a check that fails before its tasks merge and passes after."
+      }
+    },
+    "path" : "PLAN.md",
+    "requirements" : [
+      {
+        "id" : "req-catalogue-grid",
+        "title" : "The first screen is the checkout, showing a hard-coded catalogue of 8 items, each with a name and a price, as a grid, and tapping an item adds 1 to the cart"
+      },
+      {
+        "id" : "req-cart-quantities",
+        "title" : "The cart lists each item with its quantity, the seller can raise, lower or remove it, and every total updates at once"
+      },
+      {
+        "id" : "req-subtotal-tax",
+        "title" : "The subtotal is the sum of price times quantity and tax is 8.875% of it rounded half-up to the cent, so a $4.75 latte and two $3.25 muffins show $11.25 subtotal and $1.00 tax"
+      },
+      {
+        "id" : "req-tip",
+        "title" : "The tip is none, 15%, 20% or 25% of the subtotal before tax, rounded half-up to the cent, and the total is subtotal plus tax plus tip"
+      },
+      {
+        "id" : "req-empty-cart",
+        "title" : "Removing the last item empties the cart, and Charge is disabled for an empty cart"
+      },
+      {
+        "id" : "req-receipt",
+        "title" : "Charge shows a receipt of the items, subtotal, tax, tip and total as they were when charged, and New sale empties the cart"
+      },
+      {
+        "id" : "req-decimal-money",
+        "title" : "Every money value is a Decimal, never a floating-point type"
+      },
+      {
+        "id" : "req-pricing-tests",
+        "title" : "The pricing rules have table-driven unit tests, including rounding at the half cent"
+      },
+      {
+        "id" : "req-existing-tests",
+        "title" : "The repository's existing tests keep passing"
+      }
+    ]
+  },
+  "resume" : "planned; 5 tasks in 3 waves; next: build the first wave",
+  "schemaVersion" : 1,
+  "slug" : "spec",
+  "source" : "livePlan"
+}
