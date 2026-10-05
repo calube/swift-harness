@@ -972,6 +972,29 @@ struct BuildMergeFlowsTests {
     #expect(FileManager.default.fileExists(atPath: fix + "/B.swift"))
   }
 
+  @Test(
+    "a RED qa run --before-merge red only on a row a no-repair decision left unverified merges — catches a task whose gate and other rows passed refused flows-red over that row"
+  )
+  func redRunOnALeftRowMerges() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.plan(scenario)
+    let tip = try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let pre = try await scenario.main()
+    try Self.report(scenario, runID: "20261005T031853Z-43708cc1", tip: tip, base: pre, red: true)
+    try await scenario.run.append(
+      .rowsUnverified(
+        BuildEvent.RowsUnverified(
+          task: "t1", requirement: "req-search", rows: [1], qaRun: "20261005T031853Z-43708cc1",
+          cause: .contractGap, at: MergeScenario.at)))
+
+    let report = await scenario.merge("t1")
+
+    #expect(report.status == .merged, "\(report.message)")
+    #expect(try scenario.merges().map(\.task) == ["t1"])
+    #expect(report.fixWorktree == nil)
+  }
+
   /// Writes a table with 1 row that runs after `t1` and `t2`, and a ledger with both in progress.
   fileprivate static func planOverBoth(_ scenario: MergeScenario) throws {
     let plan = try PlanStateLayout(commonDirectory: scenario.checkout.path + "/.git")

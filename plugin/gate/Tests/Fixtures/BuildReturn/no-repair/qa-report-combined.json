@@ -1,0 +1,198 @@
+{
+  "after" : "chat-app",
+  "atBase" : false,
+  "atBaseRecord" : null,
+  "commit" : "1d22c1e2b373c7937a2f762369af9ae11178dc27",
+  "final" : false,
+  "findings" : [
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 3 (req-send-sending-sent, flow) `qa/send-sent.flow.json`: step 8 `wait` failed: Batch failed at step 18 (wait): wait timed out for selector: id=\"chat.message.status\" label=\"Sending\". Current surface: Chats, Alice Moreau, Are we still on for Friday?, Yes, 7pm works..; sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 5 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 4 (req-send-failure-retry, flow) `qa/send-failure-retry.flow.json`: sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 004 \"after step 8: wait selector id=\"chat.message.status\" label=\"Failed\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 005 \"after step 9: wait selector id=\"chat.message.retry\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 006 \"after step 10: is text id=\"chat.message.text\" label=\"QA retry 5521\" \"QA retry 5521\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 007 \"after step 12: wait absent \"id=\"chat.message.status\" label=\"Failed\"\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 008 \"after step 13: wait absent \"id=\"chat.message.status\" label=\"Sending\"\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 009 \"after step 14: is absent id=\"chat.message.retry\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 010 \"after step 15: is text id=\"chat.message.text\" label=\"QA retry 5521\" \"QA retry 5521\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 8 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 2 pressed controls are under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt, Button chat.message.retry 41×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    },
+    {
+      "failureScenario" : null,
+      "file" : "validation.json",
+      "line" : null,
+      "message" : "row 5 (req-preview-update, flow) `qa/preview-update.flow.json`: sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 004 \"after step 8: wait selector id=\"chat.message.text\" label=\"QA preview 8830\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 005 \"after step 9: wait absent \"id=\"chat.message.status\" label=\"Sending\"\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 7 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "rule" : "qa.check-failed",
+      "severity" : "major"
+    }
+  ],
+  "message" : "5 of 8 rows verified (3 reason-only): 2 pass, 3 red, 0 unverified, 0 waiting, 0 abandoned",
+  "notes" : [
+
+  ],
+  "plan" : "spec",
+  "reasonOnly" : 3,
+  "rows" : [
+    {
+      "check" : "qa/launch-list.flow.json",
+      "evidence" : [
+        "qa/01-req-launch-list.flow/steps.json",
+        "qa/01-req-launch-list.flow/batch.json",
+        "qa/01-req-launch-list.flow/flow.json",
+        "qa/01-req-launch-list.flow/video.mp4",
+        "qa/01-req-launch-list.flow/sheet.png",
+        "qa/01-req-launch-list.flow/sim/steps.ndjson",
+        "qa/01-req-launch-list.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 11 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name",
+      "ms" : 26746,
+      "requirement" : "req-launch-list",
+      "result" : "pass",
+      "row" : 1,
+      "runsAfter" : [
+        "chat-list",
+        "chat-app"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/list-failure-retry.flow.json",
+      "evidence" : [
+        "qa/02-req-list-failure-retry.flow/steps.json",
+        "qa/02-req-list-failure-retry.flow/batch.json",
+        "qa/02-req-list-failure-retry.flow/flow.json",
+        "qa/02-req-list-failure-retry.flow/video.mp4",
+        "qa/02-req-list-failure-retry.flow/sheet.png",
+        "qa/02-req-list-failure-retry.flow/sim/steps.ndjson",
+        "qa/02-req-list-failure-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "batch passed; sim verify GREEN over 7 steps; nit sim.a11y-untargeted: 3 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button chat.list.retry 70×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 18457,
+      "requirement" : "req-list-failure-retry",
+      "result" : "pass",
+      "row" : 2,
+      "runsAfter" : [
+        "chat-list",
+        "chat-app"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-sent.flow.json",
+      "evidence" : [
+        "qa/03-req-send-sending-sent.flow/steps.json",
+        "qa/03-req-send-sending-sent.flow/batch.json",
+        "qa/03-req-send-sending-sent.flow/flow.json",
+        "qa/03-req-send-sending-sent.flow/video.mp4",
+        "qa/03-req-send-sending-sent.flow/sheet.png",
+        "qa/03-req-send-sending-sent.flow/sim/steps.ndjson",
+        "qa/03-req-send-sending-sent.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "step 8 `wait` failed: Batch failed at step 18 (wait): wait timed out for selector: id=\"chat.message.status\" label=\"Sending\". Current surface: Chats, Alice Moreau, Are we still on for Friday?, Yes, 7pm works..; sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 5 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 22073,
+      "requirement" : "req-send-sending-sent",
+      "result" : "red",
+      "row" : 3,
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/send-failure-retry.flow.json",
+      "evidence" : [
+        "qa/04-req-send-failure-retry.flow/steps.json",
+        "qa/04-req-send-failure-retry.flow/batch.json",
+        "qa/04-req-send-failure-retry.flow/flow.json",
+        "qa/04-req-send-failure-retry.flow/video.mp4",
+        "qa/04-req-send-failure-retry.flow/sheet.png",
+        "qa/04-req-send-failure-retry.flow/sim/steps.ndjson",
+        "qa/04-req-send-failure-retry.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 004 \"after step 8: wait selector id=\"chat.message.status\" label=\"Failed\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 005 \"after step 9: wait selector id=\"chat.message.retry\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 006 \"after step 10: is text id=\"chat.message.text\" label=\"QA retry 5521\" \"QA retry 5521\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 007 \"after step 12: wait absent \"id=\"chat.message.status\" label=\"Failed\"\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 008 \"after step 13: wait absent \"id=\"chat.message.status\" label=\"Sending\"\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 009 \"after step 14: is absent id=\"chat.message.retry\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 010 \"after step 15: is text id=\"chat.message.text\" label=\"QA retry 5521\" \"QA retry 5521\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 8 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 2 pressed controls are under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt, Button chat.message.retry 41×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 34417,
+      "requirement" : "req-send-failure-retry",
+      "result" : "red",
+      "row" : 4,
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "waitingOn" : [
+
+      ]
+    },
+    {
+      "check" : "qa/preview-update.flow.json",
+      "evidence" : [
+        "qa/05-req-preview-update.flow/steps.json",
+        "qa/05-req-preview-update.flow/batch.json",
+        "qa/05-req-preview-update.flow/flow.json",
+        "qa/05-req-preview-update.flow/video.mp4",
+        "qa/05-req-preview-update.flow/sheet.png",
+        "qa/05-req-preview-update.flow/sim/steps.ndjson",
+        "qa/05-req-preview-update.flow/sim/report.json"
+      ],
+      "exitStatus" : null,
+      "layer" : "flow",
+      "message" : "sim verify RED: sim.a11y-label: step 002 \"after step 4: wait selector id=\"chat.composer.field\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 003 \"after step 5: wait selector id=\"chat.message.text\" label=\"Yes, 7pm works.\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 004 \"after step 8: wait selector id=\"chat.message.text\" label=\"QA preview 8830\"\": TextField chat.composer.field has no readable label; sim.a11y-label: step 005 \"after step 9: wait absent \"id=\"chat.message.status\" label=\"Sending\"\"\": TextField chat.composer.field has no readable label; nit sim.a11y-untargeted: 7 controls no flow step selects by id lack an accessibility identifier or a readable label: a brownfield clone judges only the controls its flow's id= selectors name; nit sim.tap-target: 1 pressed control is under 44×44 pt, too small to hit reliably: Button chat.composer.send 39×20 pt; give each a frame or `.contentShape` of at least 44×44 pt",
+      "ms" : 43537,
+      "requirement" : "req-preview-update",
+      "result" : "red",
+      "row" : 5,
+      "runsAfter" : [
+        "chat-list",
+        "chat-thread",
+        "chat-app"
+      ],
+      "waitingOn" : [
+
+      ]
+    }
+  ],
+  "runID" : "20261005T151346Z-23962d10",
+  "schemaVersion" : 1,
+  "settled" : false,
+  "trialMerge" : {
+    "alongside" : [
+      {
+        "branch" : "spec/chat-list",
+        "task" : "chat-list",
+        "tip" : "095137156244e4a34e1c32d4bbbe0efd38b831d7"
+      },
+      {
+        "branch" : "spec/chat-thread",
+        "task" : "chat-thread",
+        "tip" : "a2f8dc27e5e36641724691ef43c3e91f66ec1305"
+      }
+    ],
+    "base" : "37f9ee74b7f20d73eed5a5e2c8654ea76820cdde",
+    "branch" : "spec/chat-app",
+    "conflicts" : [
+
+    ],
+    "tip" : "bbcdc91df080410554eb197664a85d75e3b7a644"
+  },
+  "verdict" : "RED"
+}

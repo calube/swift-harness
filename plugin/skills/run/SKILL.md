@@ -308,7 +308,12 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
         `qa.check-passes-at-base`: that check can't tell the change from its absence. Drop the row
         from `## Validation`, giving a requirement left with no row the reason-only row, add 1
         assumption naming it, and `"$SG" plan import <slug> --json`. Each `missing:` line of its
-        return gets the same treatment for the row that needed the name. A row that reads
+        return, while `run clock` is before `noNewStartsAt`, amends the contract instead: add 1
+        task to `PLAN.md` that writes the name into the contract's files, a `held` scenario
+        shaped as step 6 says, add it to that row's `Runs after`, and import again. Launch the
+        validation worker for that requirement alone, its prompt saying the name lands with that
+        task, and adopt its check as above. Past `noNewStartsAt` the row is dropped as a passing
+        one is. A row that reads
         `unverified` there has no red run behind it, whatever the worker returned: 1 report line,
         `<requirement> <layer> <check>: no red run, <message>`.
      4. After every adopt and its `--at-base` run, run
@@ -345,9 +350,13 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      before `noNewStartsAt`, and the fixer runs again. Add 1 assumption naming the repaired row,
      its cause and the reason the adopt recorded. A refused repair is never a reason to stop the
      build while time remains: before `cutoffAt`, send the row back to the repair worker with the
-     refusal's messages, which say what would pass, and adopt again. Only a `no repair:` return
-     halts, decided as the next bullet says.
-   - Where it halts and asks, decide yourself: take the option it marks recommended, record the
+     refusal's messages, which say what would pass, and adopt again. A `no repair:` return goes
+     to `build no-repair`, as [the build loop's no repair](../build/references/event-loop.md#no-repair)
+     says: take its `action` as the answer. It amends the contract while there's time, or merges
+     the task with that row unverified when its gate and other rows are GREEN, and never stops
+     the build. Add 1 assumption naming the row and the action.
+   - Where it halts and asks, decide yourself: take the option it marks recommended, never stop
+     the build before `cutoffAt` over 1 task, record the
      halt with `build halt` and `build resume` as it says, and add 1 assumption naming the halt
      and what you chose. An option that stops the build starts nothing new: let running tasks
      merge or stop them, then go to step 8. No answer skips step 8. The time budget's cutoff is

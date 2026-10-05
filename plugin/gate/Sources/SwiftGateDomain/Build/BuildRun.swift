@@ -183,6 +183,7 @@ public enum BuildEvent: Sendable, Equatable {
   case gate(Gate)
   case returnCheck(ReturnCheck)
   case finish(Finish)
+  case rowsUnverified(RowsUnverified)
 
   public struct Transition: Sendable, Equatable {
     public let task: String
@@ -307,10 +308,46 @@ public enum BuildEvent: Sendable, Equatable {
     }
   }
 
+  /// `build no-repair` decided that a task merges with these validation rows left unverified:
+  /// the flow repair found no repair for them, and every other row of the run passed. `build
+  /// merge` then takes a run red on these rows alone, and the final `qa run` reports them
+  /// `unverified` without running them.
+  public struct RowsUnverified: Sendable, Equatable {
+    public enum Cause: String, Sendable, Codable {
+      case contractGap = "contract-gap"
+      case appAtFault = "app-at-fault"
+    }
+
+    public let task: String
+    public let requirement: String
+    /// 1-based positions in `validation.json`'s `rows`.
+    public let rows: [Int]
+    /// The before-merge `qa run` the rows were red in.
+    public let qaRun: String
+    public let cause: Cause
+    /// The contract name a `contract-gap` row needs; `nil` when the return named none.
+    public let contractName: String?
+    public let at: Date
+
+    public init(
+      task: String, requirement: String, rows: [Int], qaRun: String, cause: Cause,
+      contractName: String? = nil, at: Date
+    ) {
+      self.task = task
+      self.requirement = requirement
+      self.rows = rows
+      self.qaRun = qaRun
+      self.cause = cause
+      self.contractName = contractName
+      self.at = at
+    }
+  }
+
   public enum Kind: String, Sendable, Codable, CaseIterable {
     case transition, merge, undo, gate
     case returnCheck = "return-check"
     case finish
+    case rowsUnverified = "rows-unverified"
   }
 
   public var kind: Kind {
@@ -321,6 +358,7 @@ public enum BuildEvent: Sendable, Equatable {
     case .gate: .gate
     case .returnCheck: .returnCheck
     case .finish: .finish
+    case .rowsUnverified: .rowsUnverified
     }
   }
 
@@ -337,6 +375,7 @@ public enum BuildEvent: Sendable, Equatable {
       }
     case .returnCheck(let check): check.task
     case .finish: nil
+    case .rowsUnverified(let left): left.task
     }
   }
 }
@@ -345,6 +384,7 @@ extension BuildEvent: Codable {
   private enum CodingKeys: String, CodingKey {
     case kind, task, from, to, preCommit, postCommit, fromCommit, toCommit, at, gate, tier, verdict
     case fix, commit, rules, qaRun, validation, outcome, carried
+    case requirement, rows, cause, contractName
     case runID = "runId"
     case checkID = "checkId"
   }
@@ -399,6 +439,14 @@ extension BuildEvent: Codable {
         Finish(
           at: at, qaRun: try container.decodeIfPresent(String.self, forKey: .qaRun),
           validation: try container.decodeIfPresent(Verdict.self, forKey: .validation)))
+    case .rowsUnverified:
+      self = .rowsUnverified(
+        RowsUnverified(
+          task: try task(), requirement: try container.decode(String.self, forKey: .requirement),
+          rows: try container.decode([Int].self, forKey: .rows),
+          qaRun: try container.decode(String.self, forKey: .qaRun),
+          cause: try container.decode(RowsUnverified.Cause.self, forKey: .cause),
+          contractName: try container.decodeIfPresent(String.self, forKey: .contractName), at: at))
     }
   }
 
@@ -447,6 +495,14 @@ extension BuildEvent: Codable {
       try container.encodeIfPresent(finish.qaRun, forKey: .qaRun)
       try container.encodeIfPresent(finish.validation, forKey: .validation)
       try container.encode(finish.at, forKey: .at)
+    case .rowsUnverified(let left):
+      try container.encode(left.task, forKey: .task)
+      try container.encode(left.requirement, forKey: .requirement)
+      try container.encode(left.rows, forKey: .rows)
+      try container.encode(left.qaRun, forKey: .qaRun)
+      try container.encode(left.cause, forKey: .cause)
+      try container.encodeIfPresent(left.contractName, forKey: .contractName)
+      try container.encode(left.at, forKey: .at)
     }
   }
 }
@@ -476,7 +532,7 @@ public struct BuildEventLog: Sendable, Equatable {
       switch event {
       case .merge(let merge): return merge.postCommit
       case .undo(let undo): return undo.toCommit
-      case .transition, .gate, .returnCheck, .finish: continue
+      case .transition, .gate, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     return nil
@@ -497,7 +553,7 @@ public struct BuildEventLog: Sendable, Equatable {
       case .undo(let undo):
         let gone = [undo.task] + (carriedBy[undo.task] ?? [])
         tasks.removeAll { gone.contains($0) }
-      case .transition, .gate, .returnCheck, .finish: continue
+      case .transition, .gate, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     return tasks
@@ -511,7 +567,7 @@ public struct BuildEventLog: Sendable, Equatable {
       case .gate(let gate):
         if case .final = gate.stage { return true }
       case .merge, .undo: return false
-      case .transition, .returnCheck, .finish: continue
+      case .transition, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     return false
@@ -534,10 +590,21 @@ public struct BuildEventLog: Sendable, Equatable {
           continue
         }
         stage = gate.verdict == .green ? .landed : .merged
-      case .merge, .undo, .transition, .returnCheck, .finish: continue
+      case .merge, .undo, .transition, .returnCheck, .finish, .rowsUnverified: continue
       }
     }
     return stage
+  }
+
+  /// Each validation row a `build no-repair` decision left unverified, by its 1-based position,
+  /// with the newest decision that names it.
+  public func unverifiedRows() -> [Int: BuildEvent.RowsUnverified] {
+    var rows: [Int: BuildEvent.RowsUnverified] = [:]
+    for event in events {
+      guard case .rowsUnverified(let left) = event else { continue }
+      for row in left.rows { rows[row] = left }
+    }
+    return rows
   }
 
   /// The newest `build check-return` verdict on `task`'s return, or with `fix` on its fixer's;

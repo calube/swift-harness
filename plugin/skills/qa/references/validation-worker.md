@@ -185,8 +185,10 @@ Return 1 line:
 ```text
 repaired: <requirement> <path>: red: <message> (qa run <run id>)
 no repair: <requirement>: <why>
+no repair: <requirement>: contract gap: <name>: <why>
 ```
 
 Return `no repair` when the flow already drives what the requirement needs and the app is at
-fault, or when the fix needs a contract name the app doesn't have. A `held` scenario for a state
-the fake ends before the `wait` sees it is such a name.
+fault, or, with `contract gap: <name>:`, when the fix needs a contract name the app doesn't have.
+A `held` scenario for a state the fake ends before the `wait` sees it is such a name: name the
+one the flow would launch with.

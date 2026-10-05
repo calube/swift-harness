@@ -11,5 +11,6 @@ struct BuildCommand: ParsableCommand {
       BuildCheckReturnCommand.self, BuildProofBasesCommand.self,
       BuildRecordGateCommand.self, BuildFinishCommand.self, BuildHaltCommand.self,
       BuildResumeCommand.self, BuildCutoffCommand.self, BuildGateWaitCommand.self,
+      BuildNoRepairCommand.self,
     ])
 }

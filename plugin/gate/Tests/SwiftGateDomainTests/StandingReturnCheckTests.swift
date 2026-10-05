@@ -48,6 +48,7 @@ struct StandingReturnCheckTests {
       case .gate(let gate): gate.at < time
       case .undo(let undo): undo.at < time
       case .finish(let finish): finish.at < time
+      case .rowsUnverified(let left): left.at < time
       }
     }
     let halts = try halts().filter { $0.time < time }
