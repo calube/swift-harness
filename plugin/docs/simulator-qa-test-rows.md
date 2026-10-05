@@ -25,7 +25,8 @@ run shares. `qa run` holds 1 clone across its acceptance rows and gives it back 
 rows start. With no clone to be had, the command runs as written; a row's message says why.
 
 A brownfield gate leases each area's test clone as the area starts, so the clone boots while the
-area builds, and gives it back once the area is done.
+area builds, and gives it back once the area is done. While no `qa run` borrows the build run's device, a
+brownfield gate's test step runs on that device instead, and takes no `sim` slot.
 
 ## 1 device for the flow rows
 
