@@ -62,46 +62,44 @@ struct ViewCommandTests {
     #expect((view["tasks"] as? [Any])?.count == 3)
   }
 
+  static let stallHalt = HarnessEvent(
+    eventID: "live-halt-1", time: Date(timeIntervalSince1970: 1_791_100_000),
+    source: HarnessEventSource(route: nil),
+    payload: .buildHalt(
+      BuildHaltEvent(
+        buildRun: ReportCommandTests.buildRun, task: "counter-ui-reset-button", reason: .stall)))
+
   @Test(
-    "after 1 appended event, /changes answers only the rows it changed and a new cursor — catches a poll that resends the whole view"
+    "a poll naming the current token answers 204 with no body, and after 1 appended event the whole view under a new token — catches a poll that rebuilds and resends an unchanged run, or a page that misses a change"
   )
-  func changesAfterOneEvent() throws {
+  func pollAnswersNothingOrTheWholeView() throws {
     let repository = try Repository()
     defer { repository.remove() }
     let view = try Self.serve(repository)
     let first = try Self.object(view.respond(to: Self.get("/view.json")))
-    let cursor = try #require(first["cursor"] as? String)
+    let token = try #require(first["cursor"] as? String)
 
-    let idle = try Self.object(view.respond(to: Self.get("/changes", ["after": cursor])))
-    #expect(idle.keys.sorted() == ["cursor"])
-    #expect(idle["cursor"] as? String == cursor)
+    let idle = view.respond(to: Self.get("/view.json", ["after": token]))
+    #expect(idle.status == 204)
+    #expect(idle.body.isEmpty)
 
-    try HarnessEventFiles(root: repository.root).append(
-      HarnessEvent(
-        eventID: "live-halt-1", time: Date(timeIntervalSince1970: 1_791_000_000),
-        source: HarnessEventSource(route: nil),
-        payload: .buildHalt(
-          BuildHaltEvent(
-            buildRun: ReportCommandTests.buildRun, task: "counter-ui-reset-button",
-            reason: .stall))))
-    let response = view.respond(to: Self.get("/changes", ["after": cursor]))
+    try HarnessEventFiles(root: repository.root).append(Self.stallHalt)
+    let response = view.respond(to: Self.get("/view.json", ["after": token]))
 
     #expect(response.status == 200)
-    let changes = try Self.object(response)
-    let next = try #require(changes["cursor"] as? String)
-    #expect(next != cursor)
-    #expect(changes["tasks"] == nil)
-    #expect(changes["gates"] == nil)
-    #expect(changes["spec"] == nil)
-    let halts = try #require(changes["halts"] as? [[String: Any]])
-    #expect(halts.map { $0["reason"] as? String } == ["stall"])
-    #expect((changes["run"] as? [String: Any])?["state"] as? String == "halted")
-    let spans = (changes["spans"] as? [[String: Any]]) ?? []
-    #expect(spans.count < ((first["spans"] as? [Any])?.count ?? 0))
+    let whole = try Self.object(response)
+    let next = try #require(whole["cursor"] as? String)
+    #expect(next != token)
+    #expect((whole["tasks"] as? [Any])?.count == 3)
+    #expect((whole["spans"] as? [Any])?.count == (first["spans"] as? [Any])?.count)
+    let halts = try #require(whole["halts"] as? [[String: Any]])
+    #expect(halts.contains { $0["reason"] as? String == "stall" })
+    #expect((whole["run"] as? [String: Any])?["state"] as? String == "halted")
+    #expect(view.respond(to: Self.get("/view.json", ["after": next])).status == 204)
   }
 
   @Test(
-    "a RED gate landing after the first fetch reaches /changes with its tier, rule, file:line, failing test and report, and no machine path — catches a live page with no failure context"
+    "a RED gate landing after the first fetch reaches the next poll with its tier, rule, file:line, failing test and report, and no machine path — catches a live page with no failure context"
   )
   func changesCarryTheFailure() throws {
     let redGate = "20261004T050310Z-ed998508"
@@ -129,14 +127,14 @@ struct ViewCommandTests {
       try handle.write(contentsOf: Data(lines.map { $0 + "\n" }.joined().utf8))
       try handle.close()
     }
-    let response = view.respond(to: Self.get("/changes", ["after": cursor]))
+    let response = view.respond(to: Self.get("/view.json", ["after": cursor]))
     #expect(response.status == 200)
     let text = String(decoding: response.body, as: UTF8.self)
     for leak in ["/var/folders", "/Users/", "file://", repository.root.path] {
       #expect(!text.contains(leak), "\(leak)")
     }
-    let changes = try Self.object(response)
-    let gates = try #require(changes["gates"] as? [[String: Any]])
+    let polled = try Self.object(response)
+    let gates = try #require(polled["gates"] as? [[String: Any]])
     let gate = try #require(gates.first { $0["runId"] as? String == redGate })
     let failure = try #require(gate["failure"] as? [String: Any])
     #expect(failure["tiers"] as? [String] == ["T2"])
@@ -154,14 +152,14 @@ struct ViewCommandTests {
   }
 
   @Test(
-    "a malformed or stale cursor gets the whole view and a fresh cursor, never a 500 — catches a page stuck after the server restarts"
+    "a malformed or stale token gets the whole view and a fresh token, never a 204 or a 500 — catches a page stuck after the server restarts"
   )
   func malformedCursorGetsTheWholeView() throws {
     let repository = try Repository()
     defer { repository.remove() }
     let view = try Self.serve(repository)
     for query in [["after": "not-a-cursor"], ["after": ""], [:]] {
-      let response = view.respond(to: Self.get("/changes", query))
+      let response = view.respond(to: Self.get("/view.json", query))
       #expect(response.status == 200, "\(query)")
       let answer = try Self.object(response)
       #expect((answer["cursor"] as? String)?.isEmpty == false)
@@ -180,7 +178,7 @@ struct ViewCommandTests {
       contentsOf: repository.planDirectory.appending(path: "ledger.json"), encoding: .utf8)
     for path in [
       "/ledger.json", "/../ledger.json", "/run-viewer.js", "/view.json/x", "/.harness/events",
-      "/index.html",
+      "/index.html", "/changes", "/final/x",
     ] {
       let response = view.respond(to: Self.get(path))
       #expect(response.status == 404, "\(path)")
@@ -205,7 +203,7 @@ struct ViewCommandTests {
     try Data(poisoned.utf8).write(to: ledgerURL)
 
     let view = try Self.serve(repository)
-    for request in [Self.get("/view.json"), Self.get("/changes", ["after": "x"])] {
+    for request in [Self.get("/view.json"), Self.get("/view.json", ["after": "x"])] {
       let response = view.respond(to: request)
       let text = String(decoding: response.body, as: UTF8.self)
       #expect(response.status == 500, "\(request.path)")
@@ -271,7 +269,7 @@ struct ViewCommandTests {
   }
 
   @Test(
-    "the live server on a run with no ledger log yet answers it as not written yet, and once the log is written its next /changes carries the task spans and an empty unwritten list — catches a live page stuck on a file the run wrote since"
+    "the live server on a run with no ledger log yet answers it as not written yet, and once the log is written its next poll carries the task spans and an empty unwritten list — catches a live page stuck on a file the run wrote since"
   )
   func liveServerFollowsTheLedgerLog() async throws {
     let repository = try Repository()
@@ -298,11 +296,161 @@ struct ViewCommandTests {
     let cursor = try #require(first["cursor"] as? String)
 
     try captured.write(to: log)
-    let changes = try await fetch("/changes?after=\(cursor)")
+    let polled = try await fetch("/view.json?after=\(cursor)")
 
-    #expect((changes["unwritten"] as? [Any])?.isEmpty == true, "\(changes.keys.sorted())")
-    let spans = (changes["spans"] as? [[String: Any]]) ?? []
+    #expect((polled["unwritten"] as? [Any])?.isEmpty == true, "\(polled.keys.sorted())")
+    let spans = (polled["spans"] as? [[String: Any]]) ?? []
     #expect(spans.contains { $0["phase"] as? String == "task" })
-    #expect((changes["run"] as? [String: Any])?["state"] as? String == "done")
+    #expect((polled["run"] as? [String: Any])?["state"] as? String == "done")
+  }
+
+  /// The JSON of a response, its token dropped: the 1 field that names file times.
+  static func withoutToken(_ data: Data) throws -> NSDictionary {
+    var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    object["cursor"] = nil
+    return object as NSDictionary
+  }
+
+  @Test(
+    "/final answers 404 until the run's final report exists, then serves that page, and the next poll carries the final link under a new token — catches a live page that never learns its run ended"
+  )
+  func finalReportOnceWritten() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let view = try Self.serve(repository)
+    let first = try Self.object(view.respond(to: Self.get("/view.json")))
+    let token = try #require(first["cursor"] as? String)
+    #expect(first["finalReport"] is NSNull)
+    #expect(view.respond(to: Self.get("/final")).status == 404)
+
+    guard case .wrote = repository.run(.html) else {
+      Issue.record("report --html wrote nothing")
+      return
+    }
+    let polled = view.respond(to: Self.get("/view.json", ["after": token]))
+    #expect(polled.status == 200)
+    let whole = try Self.object(polled)
+    #expect(whole["finalReport"] as? String == "/final")
+    #expect(whole["cursor"] as? String != token)
+
+    let final = view.respond(to: Self.get("/final"))
+    #expect(final.status == 200)
+    #expect(final.contentType.hasPrefix("text/html"))
+    let page = try Data(
+      contentsOf: repository.root.appending(
+        path: ".harness/reports/\(ReportCommandTests.buildRun)/index.html"))
+    #expect(final.body == page)
+  }
+
+  @Test(
+    "a snapshot report of a run still going is no final report: /final stays 404 and the view carries no final link — catches an end banner while the run is still building"
+  )
+  func snapshotReportIsNotFinal() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let log = repository.planDirectory.appending(
+      path: "build/\(ReportCommandTests.buildRun)/events.jsonl")
+    let lines = try String(contentsOf: log, encoding: .utf8).split(separator: "\n")
+    try Data(lines.dropLast().map { $0 + "\n" }.joined().utf8).write(to: log)
+    guard case .wrote = repository.run(.html) else {
+      Issue.record("report --html wrote nothing")
+      return
+    }
+    let view = try Self.serve(repository)
+    let whole = try Self.object(view.respond(to: Self.get("/view.json")))
+    #expect((whole["run"] as? [String: Any])?["state"] as? String == "running")
+    #expect(whole["finalReport"] is NSNull)
+    #expect(view.respond(to: Self.get("/final")).status == 404)
+  }
+
+  @Test(
+    "GET /server answers the serving process's pid — catches an ensure that reuses whatever process now holds a dead server's pid or port"
+  )
+  func serverAnswersItsPid() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let response = try Self.serve(repository).respond(to: Self.get("/server"))
+    #expect(response.status == 200)
+    #expect(try Self.object(response)["pid"] as? Int == Int(getpid()))
+  }
+
+  @Test(
+    "a server following the newest build run serves it, and with no build run yet serves the page and answers /view.json 503 naming the wait — catches a dashboard started at run start that errors until build start"
+  )
+  func followsTheNewestRun() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let page = try ViewerTemplate.load(pluginRoot: Fixture.checkoutRoot).render(viewJSON: Data())
+    let reader = RunViewReader(
+      commonDirectory: repository.common,
+      stateRoot: StateRootResolver.resolve(worktree: repository.root))
+    let following = ViewRun(newestOf: reader, page: Data(page.utf8))
+    let whole = try Self.object(following.respond(to: Self.get("/view.json")))
+    #expect((whole["run"] as? [String: Any])?["id"] as? String == ReportCommandTests.buildRun)
+
+    try FileManager.default.removeItem(
+      at: repository.common.appending(path: "swift-harness/plans", directoryHint: .isDirectory))
+    let waiting = following.respond(to: Self.get("/view.json"))
+    #expect(waiting.status == 503)
+    #expect(String(decoding: waiting.body, as: UTF8.self).contains("no build run"))
+    #expect(following.respond(to: Self.get("/")).status == 200)
+  }
+
+  @Test(
+    "the watch's observation is active after a request or a run change and quiet otherwise, sees the final report once written, and stops seeing it once a ledger line comes after it — catches an idle exit while a page polls, a server that never sees its run end, or one that exits under a resumed build"
+  )
+  func observationFollowsRequestsAndTheRun() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    let view = try Self.serve(repository)
+    _ = view.observe()
+    #expect(view.observe() == .init(active: false, finalExists: false))
+    _ = view.respond(to: Self.get("/view.json"))
+    #expect(view.observe().active)
+    #expect(!view.observe().active)
+    guard case .wrote = repository.run(.html) else {
+      Issue.record("report --html wrote nothing")
+      return
+    }
+    #expect(view.observe() == .init(active: true, finalExists: true))
+    #expect(view.observe() == .init(active: false, finalExists: true))
+    let log = repository.planDirectory.appending(
+      path: "build/\(ReportCommandTests.buildRun)/events.jsonl")
+    let handle = try FileHandle(forWritingTo: log)
+    try handle.seekToEnd()
+    try handle.write(
+      contentsOf: Data(
+        "{\"at\":\"2026-10-04T05:30:00Z\",\"from\":\"abandoned\",\"kind\":\"transition\",\"task\":\"counter-ui-reset-button-snapshot\",\"to\":\"in-progress\"}\n"
+          .utf8))
+    try handle.close()
+    #expect(view.observe() == .init(active: true, finalExists: false))
+    #expect(view.respond(to: Self.get("/final")).status == 404)
+  }
+
+  @Test(
+    "the finished run's /view.json matches the captured snapshot but for its token — catches a change to the live view's shape or content that no other test names"
+  )
+  func viewJSONSnapshot() throws {
+    let repository = try Repository()
+    defer { repository.remove() }
+    guard case .wrote = repository.run(.html) else {
+      Issue.record("report --html wrote nothing")
+      return
+    }
+    let response = try Self.serve(repository).respond(to: Self.get("/view.json"))
+    #expect(response.status == 200)
+    let captured = try Data(
+      contentsOf: Fixture.gateDirectory.appending(
+        path: "Tests/Fixtures/RunView/view-json/build-run-1-final.json"))
+    let live = try Self.withoutToken(response.body)
+    let snapshot = try Self.withoutToken(captured)
+    #expect(live == snapshot)
+    if live != snapshot {
+      for key in Set(live.allKeys.compactMap { $0 as? String }).union(
+        snapshot.allKeys.compactMap { $0 as? String }).sorted()
+      where !((live[key] as AnyObject).isEqual(snapshot[key])) {
+        Issue.record("\(key) differs from the snapshot")
+      }
+    }
   }
 }

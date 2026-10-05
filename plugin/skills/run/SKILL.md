@@ -82,6 +82,10 @@ runs beside them.
 
 ## 1. Read the spec
 
+Start the live run viewer: `"$SG" view --ensure` prints its URL, or nothing under
+`SWIFTGATE_VIEW=off`. Print `Live: <url>`. It shows the build run once step 7 starts it, and step 7's
+call reuses it. A failure prints 1 line for the report and never stops the run.
+
 Open the phase: `"$SG" events span start --phase spec-read --build-run <slug>`, kept as `<span>`.
 
 Read `<spec>` whole. List what it asks for as numbered requirements, each a sentence a test could
