@@ -104,7 +104,8 @@ struct QARunReusesPreparedTests {
     #expect(edited.programs.sorted() == ["exit 4", "total.sh"], "\(edited.programs)")
     #expect(again.rows.first { $0.row == 3 }?.exitStatus == 6)
     #expect(again.rows.first { $0.row == 1 }?.reusedFrom == worker.runID)
-    #expect(again.notes.contains { $0.contains("row 3") && $0.contains("changed") }, "\(again.notes)")
+    #expect(
+      again.notes.contains { $0.contains("row 3") && $0.contains("changed") }, "\(again.notes)")
   }
 
   @Test(
