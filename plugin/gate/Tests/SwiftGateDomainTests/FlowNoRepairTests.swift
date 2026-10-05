@@ -115,11 +115,13 @@ struct FlowNoRepairTests {
   }
 
   @Test(
-    "a fixer whose cited gate isn't GREEN keeps the task blocked — catches a merge of code no gate passed"
+    "a fixer whose cited gate isn't GREEN keeps the task blocked once no amendment fits — catches a merge of code no gate passed"
   )
   func redFixGateGoesOn() throws {
+    let cutoff = try #require(try Self.record().cutoffAt)
     let decision = try Self.decide(
-      try Self.noRepair(), report: try Self.report(), fixGate: .red, at: Self.replied)
+      try Self.noRepair(), report: try Self.report(), fixGate: .red,
+      at: cutoff.addingTimeInterval(-60))
     #expect(decision.action == .continue, "\(decision)")
   }
 

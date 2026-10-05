@@ -236,7 +236,7 @@ struct PlanImportValidationTests {
   }
 
   @Test(
-    "a plan whose screen runs on a timer, in a clone holding the starter's tracked files, fails the import with clock-unheld at its launch flow row and obstacle-seedable for the 3 requirements excused as random or moving, and imports once the contract reads `-harness-scenario` with a held scenario and those 3 are flow rows — catches the brief text never reaching the clock and seed checks"
+    "a plan whose screen runs on a timer, in a clone holding the starter's tracked files, fails the import with clock-unheld at its launch flow row and obstacle-seedable for the 3 requirements excused as random or moving, and imports once the contract reads `-harness-scenario` with a held scenario, held after Start again too, and those 3 are flow rows — catches the brief text never reaching the clock and seed checks"
   )
   func clockScreenFailsImport() async throws {
     let captured = try String(
@@ -277,7 +277,8 @@ struct PlanImportValidationTests {
     var fixed = try replacing(
       String(stub),
       with: stub + "\n  - the composition root reads `-harness-scenario`: `launch-held` holds "
-        + "the clock until the first input, and `entity-center` seeds 1 entity at the centre",
+        + "the clock until the first input, and `entity-center` seeds 1 entity at the centre"
+        + "\n  - `launch-held` also holds the clock after Start again, until the next input",
       in: captured)
     for requirement in ["req-motion", "req-cut-target", "req-hazard"] {
       let old = try #require(

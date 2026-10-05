@@ -83,8 +83,9 @@ public struct FlowNoRepair: Sendable, Equatable {
 /// is never an answer: the rest of the plan's work doesn't depend on 1 row.
 public struct NoRepairDecision: Sendable, Equatable, Encodable {
   public enum Action: String, Sendable, Equatable, Encodable {
-    /// The orchestrator adds the missing name to the contract on the plan branch, then sends the
-    /// row back to the repair worker and the fixer runs again. No halt.
+    /// The row goes back to the repair worker, its flow naming the missing name, and the fixer
+    /// runs again to add that name to the contract on the fix branch, while the repair's proof
+    /// and 1 more fix round end before the cutoff. No halt.
     case amendContract = "amend-contract"
     /// `build merge --fix` takes the task with ``NoRepairDecision/rows`` left unverified, which
     /// the final `qa run` reports with the reason. Halt, then `build resume --answer merge`.
@@ -96,6 +97,14 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
     /// more fix round fits before the cutoff. Halt, then `build resume --answer retry`.
     case fixAgain = "fix-again"
   }
+
+  /// How an `amend-contract` amendment lands, the 1 path its advice names: the fixer writes it,
+  /// and the orchestrator writes neither the amendment nor the fixer's return.
+  public static let amendmentPath =
+    "repair the row again, its flow naming the new name, then relaunch the fixer in its fix "
+    + "worktree, its brief quoting this line: it adds the name to the contract, commits it on the "
+    + "fix branch, names each file that commit changed in its notes, and runs its gate and the "
+    + "before-merge `qa run --fix`; never write the amendment or the fixer's return yourself"
 
   public let action: Action
   /// The requirement's rows in the red run that didn't pass, 1-based table positions.
@@ -111,11 +120,13 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
   /// - Parameters:
   ///   - noRepair: the repair worker's return.
   ///   - run: the rows of the before-merge `qa run` the row was red in, at the fixer's tip.
-  ///   - runSeconds: how long that run took; an amendment costs the repair worker's at-base proof
-  ///     and the fixer's before-merge run, about 2 of it.
+  ///   - runSeconds: how long that run took; it prices 1 more fix round when `fixRound` is
+  ///     `nil`. An amendment costs the repair worker's at-base proof of the red rows, priced as
+  ///     those rows took in the run, and 1 more fix round.
   ///   - fixGate: the verdict of the gate the fixer's return cites; `nil` when it cites none.
-  ///   - noNewStartsAt: after it no amendment round starts; `nil` for a build with no box.
-  ///   - cutoffAt: from then `build cutoff` decides the task; `nil` for a build with no box.
+  ///   - noNewStartsAt: no new starts; a started task's amendment or fix round isn't one.
+  ///   - cutoffAt: from then `build cutoff` decides the task, and an amendment or a fix round
+  ///     must end before it; `nil` for a build with no box.
   ///   - fixRound: 1 more fix round of the task as this run measured it; `nil` prices it as
   ///     `runSeconds`.
   public static func decide(
@@ -156,17 +167,20 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
           + "\(stamp(cutoffAt)): the task stays blocked, never merged with the defect")
     }
     if case .contractGap(let name) = noRepair.cause {
-      let round = 2 * max(0, runSeconds)
-      let fits = noNewStartsAt.map { now.addingTimeInterval(TimeInterval(round)) <= $0 } ?? true
+      let proof = (left.reduce(0) { $0 + max(0, $1.milliseconds) } + 999) / 1000
+      let fix = fixRound?.seconds ?? max(0, runSeconds)
+      let round = proof + fix
+      let fits = cutoffAt.map { now.addingTimeInterval(TimeInterval(round)) <= $0 } ?? true
       if fits {
         return NoRepairDecision(
           action: .amendContract, rows: rows,
           why: "\(named) needs a contract name the app doesn't have"
             + (name.map { " (`\($0)`)" } ?? "")
-            + ": add it to the contract on the plan branch, then repair the row again and run "
-            + "the fixer; the repair's proof and the fixer's run take about \(round) s"
-            + (noNewStartsAt.map {
-              ", and \(Int($0.timeIntervalSince(now))) s remain before no new starts"
+            + ": \(Self.amendmentPath). The repair's proof (\(proof) s) and 1 more fix round ("
+            + (fixRound.map(\.described) ?? "\(fix) s, priced as the red run")
+            + ") take about \(round) s"
+            + (cutoffAt.map {
+              ", which ends \(Int($0.timeIntervalSince(now)) - round) s before the cutoff"
             } ?? ""))
       }
     }
@@ -190,7 +204,7 @@ public struct NoRepairDecision: Sendable, Equatable, Encodable {
       switch noRepair.cause {
       case .contractGap(let name):
         "a contract name the app doesn't have" + (name.map { " (`\($0)`)" } ?? "")
-          + ", with too little time to add it before no new starts"
+          + ", with too little time to add it before the cutoff"
       case .appAtFault, .appDefect: "the app, by the repair worker's reading"
       }
     return NoRepairDecision(

@@ -878,7 +878,7 @@ const tests = {
 
   'a contract gap with a fix round left before the cutoff is amended by the relaunched fixer on the fix branch, never by the orchestrator or a hand-written return — catches an amendment committed by the orchestrator with the fixer\'s return rewritten by hand'() {
     assert.deepEqual(amendContractProblems(read('skills/build/references/event-loop.md'), read('agents/build-fixer.md')), [])
-    const old = '## No repair\n\n- `amend-contract`: a contract gap with time before `noNewStartsAt`. In the fix worktree, add the name to the contract and commit it on the fix branch.\n- `merge-unverified`: x'
+    const old = '\n## No repair\n\n- `amend-contract`: a contract gap with time before `noNewStartsAt`. In the fix worktree, add the name to the contract and commit it on the fix branch.\n- `merge-unverified`: x'
     assert.deepEqual(amendContractProblems(old, ''), [
       '`amend-contract` is priced against no new starts, not the cutoff',
       'the orchestrator may write the amendment or the fixer\'s return itself',
