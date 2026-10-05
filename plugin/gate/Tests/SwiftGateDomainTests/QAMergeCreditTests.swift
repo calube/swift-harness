@@ -30,7 +30,8 @@ struct QAMergeCreditTests {
   }
 
   static func solo() throws -> QAReport {
-    try QAReportJSON.decode(try Fixture.data("\(directory)/price-tracker-4-qa-before-watchlist.json"))
+    try QAReportJSON.decode(
+      try Fixture.data("\(directory)/price-tracker-4-qa-before-watchlist.json"))
   }
 
   static func checkedTip(_ task: String) throws -> String {

@@ -720,10 +720,11 @@ public struct BuildMerge: Sendable {
         branch: context.branch, tip: tip, base: main, waiting: waiting)
       if !fix {
         noNewStartsAt = (try? context.run.record())?.timeBox?.deadlines.noNewStartsAt
+        let skipping = Set(waiting.map(\.task)).union(merged)
         awaited = QAMergeReadiness.awaited(
           table: table, merged: merged, task: task, waiting: waiting,
           pending: try await pendingReturns(
-            context, progress: progress, log: log, skipping: Set(waiting.map(\.task)).union(merged)),
+            context, progress: progress, log: log, skipping: skipping),
           now: clock.now(), noNewStartsAt: noNewStartsAt)
       }
     } catch {
