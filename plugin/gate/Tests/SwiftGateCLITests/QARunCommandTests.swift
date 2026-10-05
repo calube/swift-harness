@@ -580,7 +580,7 @@ struct QAAdoptCommandTests {
     #expect(names == ["save.flow.json", "save.state.sh"])
     let folder = worktree.appending(path: ".harness/qa").path
     #expect(!FileManager.default.fileExists(atPath: folder), "a GREEN adopt removes what it took")
-    #expect(report.removed == folder)
+    #expect(report.removed == CanonicalPath.of(worktree) + "/.harness/qa")
   }
 
   @Test(

@@ -294,9 +294,9 @@ Close the phase: `"$SG" events span end <span> --outcome ok`.
      1. From `<checkout>`, `"$SG" qa adopt <worktree> --session <session> --json` copies its
         `.harness/qa/<slug>/` into `<plan-dir>/qa/`, where `qa run` reads every check. A non-GREEN
         adopt is 1 report line. Its `unblocks` names each checked return that waited on this
-        task, with the exact `build merge` command.
-     2. `/bin/rm -rf <worktree>/.harness/qa`, then
-        `"$SG" ledger set <slug> <task> done --session <session> --json` and
+        task, with the exact `build merge` command. A GREEN adopt removes
+        `<worktree>/.harness/qa` itself.
+     2. `"$SG" ledger set <slug> <task> done --session <session> --json` and
         `"$SG" worktree remove <slug> <task> --session <session> --json`.
      3. Confirm each check fails before its tasks merge (amendment §5.2):
         `"$SG" qa run --plan <slug> --at-base --json --output <out>/qa-at-base.json` in

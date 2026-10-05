@@ -112,7 +112,7 @@ struct QAAdoptRepairTests {
     #expect(
       !FileManager.default.fileExists(atPath: prepared.path),
       "a GREEN repair removes the prepared folder it took")
-    #expect(report.removed == repo.root.appending(path: ".harness/qa").path)
+    #expect(report.removed == CanonicalPath.of(repo.root) + "/.harness/qa")
     try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
     try Data("exit 6\n".utf8).write(to: prepared.appending(path: "total.sh"))
     _ = await repo.run(
@@ -275,7 +275,8 @@ struct QAAdoptRepairTests {
     let scenario = try await PlanBranchScenario()
     defer { scenario.remove() }
     let task = await scenario.create()
-    let slot = URL(filePath: try #require(task.worktree, "\(task.message)"), directoryHint: .isDirectory)
+    let slot = URL(
+      filePath: try #require(task.worktree, "\(task.message)"), directoryHint: .isDirectory)
     let checkout = URL(filePath: scenario.checkout, directoryHint: .isDirectory)
 
     let plan = try PlanStateLayout(commonDirectory: scenario.common).plan(RefreshRepairTrial.plan)
@@ -320,6 +321,6 @@ struct QAAdoptRepairTests {
     #expect(Self.repairs(events).first?.redRuns == RefreshRepairTrial.redRuns)
     #expect(Self.repairs(events).first?.failingStep == 6)
     #expect(!FileManager.default.fileExists(atPath: slot.appending(path: ".harness/qa").path))
-    #expect(report.removed == slot.appending(path: ".harness/qa").path)
+    #expect(report.removed == CanonicalPath.of(slot) + "/.harness/qa")
   }
 }
