@@ -33,7 +33,14 @@ public enum PlanLintValidation {
   /// The dependency-client modules among `paths`, repository-relative files: each outermost
   /// folder named `…Client` that holds a Swift file, such as `Packages/APIClient`, in path order.
   public static func clientModules(in paths: [String]) -> [String] {
-    []
+    var modules: [String] = []
+    for path in paths where path.hasSuffix(".swift") {
+      let folders = path.split(separator: "/").dropLast()
+      guard let index = folders.firstIndex(where: { $0.hasSuffix("Client") }) else { continue }
+      let module = folders[...index].joined(separator: "/")
+      if !modules.contains(module) { modules.append(module) }
+    }
+    return modules
   }
 
   /// A task as the screen check reads it: the requirements it covers and the paths it writes.
@@ -154,7 +161,7 @@ public enum PlanLintValidation {
     let screenTasks = tasks.filter { $0.id != contractTask }
     findings += try screenFindings(
       table: table, requirements: requirements, tasks: screenTasks, appAreas: appAreas,
-      file: file, rowLines: rowLines, sectionLine: sectionLine)
+      clientModules: clientModules, file: file, rowLines: rowLines, sectionLine: sectionLine)
     findings += try appFindings(
       table: table, screenTasks: screenTasks, allTasks: tasks, appAreas: appAreas, file: file,
       sectionLine: sectionLine)
@@ -172,45 +179,67 @@ public enum PlanLintValidation {
       appAreas: appAreas, file: file, sectionLine: nil)
   }
 
-  /// 1 finding per requirement, in plan order, that a task covers while writing a screen of an
-  /// `xcode` area, with no `flow` row and no reason on any of its rows naming an obstacle.
+  /// 1 finding per requirement, in plan order, that a task covers while writing a screen or a
+  /// feature of an `xcode` area, with no `flow` row and no reason on any of its rows naming an
+  /// obstacle. A ``fakeableObstacleKinds`` obstacle counts only while no client module sits in
+  /// that area; past it the finding is ``obstacleFakeableRuleID``.
   private static func screenFindings(
     table: ValidationTable, requirements: [String], tasks: [TaskWrites], appAreas: [AppArea],
-    file: String, rowLines: [Int], sectionLine: Int?
+    clientModules: [String], file: String, rowLines: [Int], sectionLine: Int?
   ) throws(ReportContractViolation) -> [Finding] {
     guard !appAreas.isEmpty else { return [] }
     var findings: [Finding] = []
     for requirement in requirements {
       let rows = table.rows.enumerated().filter { $0.element.requirement == requirement }
+      guard !rows.contains(where: { $0.element.layer == .flow }) else { continue }
       let reasons =
         (table.unitOnly.filter { $0.requirement == requirement }.map(\.reason)
         + rows.compactMap(\.element.reason)).filter {
           !$0.trimmingCharacters(in: .whitespaces).isEmpty
         }
-      guard !reasons.contains(where: { obstacle(of: $0) != nil }),
-        !rows.contains(where: { $0.element.layer == .flow })
-      else { continue }
       guard
         let (task, path, area) = tasks.lazy.filter({ $0.covers.contains(requirement) })
-          .compactMap({ task in screenPath(task, appAreas).map { (task.id, $0.path, $0.area) } })
+          .compactMap({ task in
+            onScreenPath(task, appAreas).map { (task.id, $0.path, $0.area) }
+          })
           .first
       else { continue }
+      let kinds = reasons.compactMap(obstacle(of:))
+      let clients = clientModules.filter { contains(area.root, $0) }
+      guard !kinds.contains(where: { clients.isEmpty || !fakeableObstacleKinds.contains($0) })
+      else { continue }
       let line = rows.first.flatMap { $0.offset < rowLines.count ? rowLines[$0.offset] : nil }
-      let kinds = obstacleKinds.map { "`\($0):`" }.joined(separator: ", ")
+      let onScreen =
+        "\(requirement) is on screen: `\(task)` writes `\(path)` in the xcode area "
+        + "`\(area.name)`"
+      if let kind = kinds.first, let client = clients.first {
+        findings.append(
+          try Finding(
+            ruleID: obstacleFakeableRuleID, severity: .major, file: file,
+            line: line ?? sectionLine,
+            message:
+              "\(onScreen), and its Reason excuses it with `\(kind):`, but the area holds the "
+              + "dependency client `\(client)`: a fake of it, chosen by a launch argument, serves "
+              + "the failure or the data the journey needs; add a flow row that opens the app "
+              + "with that fake, and a task or the contract that adds the fake",
+            failureScenario:
+              "the journey merges with no flow, so its error, retry or refresh path never runs "
+              + "in the app, and the flows that do run hit the live service"))
+        continue
+      }
+      let obstacles = obstacleKinds.map { "`\($0):`" }.joined(separator: ", ")
       let fix =
         reasons.isEmpty
         ? "add a flow row for its journey, or open its row's Reason with what stops a flow: "
-          + kinds
+          + obstacles
         : "its Reason names no obstacle a flow can't pass, and unit or acceptance tests never "
           + "stand in for a flow; add a flow row for its journey, or open the Reason with what "
-          + "stops a flow: " + kinds
+          + "stops a flow: " + obstacles
       findings.append(
         try Finding(
           ruleID: screenWithoutFlowRuleID, severity: .major, file: file,
           line: line ?? sectionLine,
-          message:
-            "\(requirement) is on screen: `\(task)` writes `\(path)` in the xcode area "
-            + "`\(area)`, but \(requirement) has no flow row; \(fix)",
+          message: "\(onScreen), but \(requirement) has no flow row; \(fix)",
           failureScenario:
             "the screen merges with no flow, so no video is recorded, nothing runs red at the "
             + "base, and the Validation tab has no journey for \(requirement)"))
@@ -266,6 +295,37 @@ public enum PlanLintValidation {
       }
     }
     return nil
+  }
+
+  /// The first path `task` writes that is a screen or a feature inside 1 of `appAreas`, with
+  /// that area.
+  private static func onScreenPath(_ task: TaskWrites, _ appAreas: [AppArea])
+    -> (path: String, area: AppArea)?
+  {
+    for path in task.writes where isScreen(path) || isFeature(path) {
+      if let area = appAreas.first(where: { contains($0.root, path) }) {
+        return (path, area)
+      }
+    }
+    return nil
+  }
+
+  /// Name endings that mark a feature: the reducer or view model whose state a screen shows.
+  private static let featureSuffixes = [
+    "Feature", "Features", "Reducer", "Reducers", "ViewModel", "ViewModels",
+  ]
+
+  /// Whether a folder or file of `path` names a feature, by its name up to the first `.`. Inside
+  /// a `Sources` or `Tests` folder only the module and the files under it count, so a pure
+  /// engine module in a feature package, or its tests, is no feature; nor is a package manifest.
+  private static func isFeature(_ path: String) -> Bool {
+    let components = path.split(separator: "/")
+    guard let name = components.last, !name.hasPrefix("Package.") else { return false }
+    let start = components.lastIndex { $0 == "Sources" || $0 == "Tests" }.map { $0 + 1 } ?? 0
+    return components[start...].contains { component in
+      guard let stem = component.split(separator: ".", maxSplits: 1).first else { return false }
+      return featureSuffixes.contains { stem.hasSuffix($0) }
+    }
   }
 
   /// Whether `root`, repository-relative with `.` for the root, holds `path`.

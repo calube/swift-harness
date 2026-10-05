@@ -236,7 +236,7 @@ struct PlanImportValidationTests {
   }
 
   @Test(
-    "the price-tracker trial's plan, in a clone holding the starter's tracked files, fails the import with screen-without-flow for req-refresh, which only the reducer task covers, and obstacle-fakeable for req-load-states and req-chart-states at their rows, and imports once those 3 are flow rows — catches the trial's plan that excused journeys a fake APIClient could drive"
+    "the price-tracker trial's plan, in a clone holding the starter's tracked files, fails the import with screen-without-flow for req-refresh, which only the reducer task covers, and obstacle-fakeable for req-load-states and req-chart-states at the Validation heading, and imports once those 3 are flow rows — catches the trial's plan that excused journeys a fake APIClient could drive"
   )
   func priceTrackerNetworkReasonsFailImport() async throws {
     let captured = try String(
@@ -260,16 +260,16 @@ struct PlanImportValidationTests {
 
     #expect(report.status == .invalid, "\(report.message)")
     #expect(report.verdict == .red)
-    let refresh = try #require(line(of: "| req-refresh |", in: captured))
+    // A reason-only row keeps no line of its own, so its finding names the section's.
+    let section = try #require(line(of: "## Validation", in: captured))
     #expect(
       report.message.contains(
-        "line \(refresh): \(PlanLintValidation.screenWithoutFlowRuleID): req-refresh "),
+        "line \(section): \(PlanLintValidation.screenWithoutFlowRuleID): req-refresh "),
       "\(report.message)")
     for requirement in ["req-load-states", "req-chart-states"] {
-      let row = try #require(line(of: "| \(requirement) |", in: captured))
       #expect(
         report.message.contains(
-          "line \(row): \(PlanLintValidation.obstacleFakeableRuleID): \(requirement) "),
+          "line \(section): \(PlanLintValidation.obstacleFakeableRuleID): \(requirement) "),
         "\(report.message)")
     }
     #expect(report.message.contains("`Packages/APIClient`"), "\(report.message)")
