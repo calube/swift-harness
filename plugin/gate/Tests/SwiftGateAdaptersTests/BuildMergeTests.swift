@@ -1349,6 +1349,72 @@ struct BuildMergeFlowsTests {
     try QAReportJSON.encode(report).write(to: directory.appending(path: QAReport.fileName))
   }
 
+  /// Commits `content` to `path` on `task`'s existing branch, as its worker would.
+  @discardableResult
+  fileprivate static func commit(
+    _ scenario: MergeScenario, _ task: String, _ path: String, _ content: String
+  ) async throws -> String {
+    try await scenario.repo.git("switch", "-q", "\(MergeScenario.plan)/\(task)")
+    try scenario.repo.write(path, content)
+    let tip = try await scenario.repo.commitAll("feat: \(task) retry work")
+    try await scenario.repo.git("switch", "-q", "main")
+    return tip
+  }
+
+  @Test(
+    "with t2's review-blocked return halted and retried, its ledger back to in-progress and a new commit on its branch no gate has passed, t1's merge waits flows-pending for t2 instead of naming a run that takes t2's branch, and once t2's ready-to-merge return is checked at its tip it names the run over both — catches the send-money trial's combined run taking a task mid-retry at a commit no gate had passed"
+  )
+  func retriedTaskIsNotTakenIn() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let blocked = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: blocked, outcome: .reviewBlocked)
+    for (from, to) in [(TaskStatus.inProgress, TaskStatus.blocked), (.blocked, .pending),
+      (.pending, .inProgress)]
+    {
+      try await scenario.run.append(
+        .transition(.init(task: "t2", from: from, to: to, at: MergeScenario.at)))
+    }
+    let retried = try await Self.commit(scenario, "t2", "D.swift", "d\n")
+    let pre = try await scenario.main()
+
+    let midRetry = await scenario.merge("t1")
+    try await scenario.check("t2", verdict: .green, commit: retried)
+    let checked = await scenario.merge("t1")
+
+    #expect(midRetry.status == .deferred, "\(midRetry.message)")
+    #expect(midRetry.reason == .flowsPending)
+    #expect(midRetry.action == .wait)
+    #expect(midRetry.waitUntil == MergeScenario.at.addingTimeInterval(300).formatted(.iso8601))
+    #expect(midRetry.message.contains("t2"), "\(midRetry.message)")
+    #expect(checked.reason == .flowsUnchecked, "\(checked.message)")
+    #expect(checked.message.contains("--after t1,t2 --before-merge"), "\(checked.message)")
+    #expect(try await scenario.main() == pre)
+    #expect(try scenario.merges() == [])
+  }
+
+  @Test(
+    "with t2's ready-to-merge return checked at a commit its branch has since moved past, t1's merge waits flows-pending for t2's next return instead of naming a run that takes t2's new commit — catches a combined run vouching for commits no check saw"
+  )
+  func movedPastItsCheckIsNotTakenIn() async throws {
+    let scenario = try await MergeScenario()
+    defer { scenario.remove() }
+    try Self.planOverBoth(scenario)
+    try await scenario.taskBranch("t1", "B.swift", "b\n")
+    let checkedAt = try await scenario.taskBranch("t2", "C.swift", "c\n")
+    try await scenario.check("t2", verdict: .green, commit: checkedAt)
+    try await Self.commit(scenario, "t2", "D.swift", "d\n")
+
+    let report = await scenario.merge("t1")
+
+    #expect(report.status == .deferred, "\(report.message)")
+    #expect(report.reason == .flowsPending)
+    #expect(report.message.contains("t2"), "\(report.message)")
+    #expect(try scenario.merges() == [])
+  }
+
   @Test(
     "a GREEN qa run --before-merge of the tip on main's commit merges, while one of an older tip is refused — catches a stale run vouching for new commits"
   )
