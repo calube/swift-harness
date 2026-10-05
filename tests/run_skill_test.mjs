@@ -183,6 +183,26 @@ export function atBaseProblems(text) {
   return problems
 }
 
+/** Every way the validation task's step `text` can leave a merge-ready task idle after
+ * `qa adopt`: an adopt with no `--session` to quote in the `build merge` it names, or no
+ * `build next` after the `--at-base` run before the turn ends. */
+export function adoptNextProblems(text) {
+  const calls = extractInvocations(text)
+  const adopt = calls.find(inv => inv.words.join(' ').startsWith('qa adopt'))
+  if (!adopt) return ['never runs `swiftgate qa adopt`']
+  const problems = []
+  if (!adopt.words.includes('--session')) problems.push('runs `qa adopt` without `--session`')
+  const atBase = calls.find(inv => inv.words[0] === 'qa' && inv.words[1] === 'run' && inv.words.includes('--at-base'))
+  const next = calls.find(inv => inv.words.join(' ').startsWith('build next') && (!atBase || inv.line > atBase.line))
+  if (!next) problems.push('never runs `swiftgate build next` after the `--at-base` run')
+  const prose = text.replace(/\s+/g, ' ')
+  if (!/build next[^.]*before ending the turn/.test(prose)) {
+    problems.push('never says to run `build next` before ending the turn')
+  }
+  if (!/`unblocks`/.test(prose)) problems.push('never reads the adopt\'s `unblocks`')
+  return problems
+}
+
 /** Every way the `qa run --before-merge` step `text` lets a RED validation row land: no run on
  * the branch before `build merge`, no recorded `gate-red` halt, no fixer for the `flows-red`
  * refusal, or a merge kept on judgement. */
@@ -708,6 +728,15 @@ const tests = {
     assert.deepEqual(atBaseProblems(skill), [], 'skills/run/SKILL.md')
     const loop = read('skills/build/references/event-loop.md')
     assert.deepEqual(atBaseProblems(section(loop, 'Validation task') ?? ''), [], 'event-loop.md#validation-task')
+  },
+
+  'the run skill and the build loop adopt with the session, read the adopt\'s unblocks, and run build next after the at-base run before ending the turn — catches the send-money trial\'s orchestrator idle for 118 s with a task ready to merge after the adopt'() {
+    assert.deepEqual(adoptNextProblems(read('skills/run/SKILL.md')), [], 'skills/run/SKILL.md')
+    const loop = read('skills/build/references/event-loop.md')
+    assert.deepEqual(adoptNextProblems(section(loop, 'Validation task') ?? ''), [], 'event-loop.md#validation-task')
+    assert.deepEqual(adoptNextProblems('1. `"$SG" qa adopt <worktree> --json`\n2. `"$SG" qa run --plan <slug> --at-base --json`\n'),
+      ['runs `qa adopt` without `--session`', 'never runs `swiftgate build next` after the `--at-base` run',
+        'never says to run `build next` before ending the turn', 'never reads the adopt\'s `unblocks`'])
   },
 
   'the run skill and the build loop take the rows a validation worker proved from its at-base-run.json while each check is byte-identical, and the worker runs its prepared run last — catches every at-base row driven twice'() {

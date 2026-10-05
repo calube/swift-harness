@@ -64,16 +64,17 @@ public struct QATrialMerge: Sendable, Equatable, Codable {
   }
 }
 
-/// A running task whose worker's own gate passed at its branch's tip on a clean tree, with no
-/// check of its return recorded since: the worker is reviewing and returning.
+/// A running task whose return is on its way: its worker's own gate passed at its branch's tip on
+/// a clean tree with no check of its return recorded since, or its checked return went back to
+/// work and no gate has passed since.
 public struct QAPendingReturn: Sendable, Equatable {
   public let task: String
-  /// The gate run that passed at the tip.
-  public let gateRunID: String
-  /// When that gate run finished.
+  /// The gate run that passed at the tip; `nil` for a checked return sent back to work.
+  public let gateRunID: String?
+  /// When that gate run finished, or when the checked return went back to work.
   public let gatedAt: Date
 
-  public init(task: String, gateRunID: String, gatedAt: Date) {
+  public init(task: String, gateRunID: String?, gatedAt: Date) {
     self.task = task
     self.gateRunID = gateRunID
     self.gatedAt = gatedAt

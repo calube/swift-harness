@@ -12,17 +12,30 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
     var destination: String
   }
 
+  /// A running task whose checked return waits to merge and that a validation row runs after:
+  /// the adopted checks' `--at-base` run was all it waited on.
+  struct Unblocked: Sendable, Equatable, Encodable {
+    var plan: String
+    var task: String
+    /// The fixer's return is the one checked.
+    var fix: Bool
+    /// The exact command that merges it, once the `--at-base` run is done.
+    var next: String
+  }
+
   var worktree: String
   var verdict: Verdict = .blocked
   var adopted: [Adopted] = []
   /// The repair a `--repair` adopt took; `nil` otherwise, or when it took none.
   var repaired: QAFlowRepairRecord?
+  /// In merge-queue order: merge the first while no merge is on `main` ungated.
+  var unblocks: [Unblocked] = []
   /// Why a `--repair` adopt took nothing.
   var findings: [Finding] = []
   var message = ""
 
   private enum CodingKeys: String, CodingKey {
-    case command, worktree, verdict, adopted, repaired, findings, message
+    case command, worktree, verdict, adopted, repaired, unblocks, findings, message
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -32,6 +45,7 @@ struct QAAdoptReport: Sendable, Equatable, Encodable {
     try c.encode(verdict, forKey: .verdict)
     try c.encode(adopted, forKey: .adopted)
     try c.encode(repaired, forKey: .repaired)
+    try c.encode(unblocks, forKey: .unblocks)
     try c.encode(findings, forKey: .findings)
     try c.encode(message, forKey: .message)
   }
@@ -55,9 +69,11 @@ enum QAAdoptRun {
 
   /// Copies nothing unless `worktree` is a checkout `git worktree list` names and every plan
   /// folder it holds names a plan that exists, so a refusal never leaves half an adoption.
-  static func run(worktree: String, root: URL, git: any Git, runner: any ProcessRunner) async
-    -> QAAdoptReport
-  {
+  /// - Parameter session: the session holding the plan's lock, quoted in each `build merge` it
+  ///   names; `<session>` when not given.
+  static func run(
+    worktree: String, root: URL, git: any Git, runner: any ProcessRunner, session: String? = nil
+  ) async -> QAAdoptReport {
     var report = QAAdoptReport(worktree: worktree)
     func refused(_ message: String) -> QAAdoptReport {
       var refusal = report
@@ -126,7 +142,46 @@ enum QAAdoptRun {
     report.message =
       "adopted "
       + report.adopted.map { "\($0.plan) (\($0.files) files)" }.joined(separator: ", ")
+    for (name, plan) in plans {
+      report.unblocks += await unblocked(
+        plan: name, layout: plan, root: root, git: git, session: session)
+    }
+    if !report.unblocks.isEmpty {
+      report.message +=
+        "; once the --at-base run is done, \(report.unblocks.count) checked "
+        + (report.unblocks.count == 1 ? "return waits" : "returns wait")
+        + " to merge: run `build next` and merge the first in its readyToMerge"
+    }
     return report
+  }
+
+  /// The running tasks of `plan`'s newest build run whose checked return waits to merge, in
+  /// queue order, that a validation row runs after; none when the plan has no build run or its
+  /// state doesn't read.
+  static func unblocked(
+    plan name: String, layout plan: PlanStateLayout.Plan, root: URL, git: any Git,
+    session: String?
+  ) async -> [QAAdoptReport.Unblocked] {
+    guard
+      let data = FileManager.default.contents(
+        atPath: plan.directory + "/" + ValidationTable.fileName),
+      let table = try? ValidationTableJSON.decode(data),
+      let progress = try? PlanStateStore(plan: plan).ledgerProgress(),
+      let store = try? await BuildRunStore.latest(plan: name, git: git),
+      let log = try? store.events()
+    else { return [] }
+    let named = Set(table.rows.flatMap(\.runsAfter))
+    let running = Set(progress.tasks.filter { $0.status == .inProgress }.map(\.id))
+    let retried = BuildHalts.retried(
+      in: (try? BuildHaltLog(root: root).events()) ?? [], buildRun: store.runID)
+    return log.mergeQueue(running: running, retried: retried).ready
+      .filter { named.contains($0.task) }
+      .map { ready in
+        QAAdoptReport.Unblocked(
+          plan: name, task: ready.task, fix: ready.fix,
+          next: "\"$SG\" build merge \(name) \(ready.task)\(ready.fix ? " --fix" : "") "
+            + "--session \(session ?? "<session>") --json")
+      }
   }
 
   /// Copies only `repair.requirement`'s checks from the worktree's prepared folder into plan
@@ -348,7 +403,8 @@ enum QAAdoptRun {
     guard json else {
       return
         (["\(command): \(report.verdict.rawValue) \(report.message)"]
-        + report.findings.map { "  \($0.ruleID): \($0.message)" }).joined(separator: "\n")
+        + report.findings.map { "  \($0.ruleID): \($0.message)" }
+        + report.unblocks.map { "  \($0.task): \($0.next)" }).joined(separator: "\n")
     }
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -386,6 +442,9 @@ struct QAAdoptCommand: AsyncParsableCommand {
   @Option(help: "With --repair, a qa run that read the row red before the repair; repeat it.")
   var redRun: [String] = []
 
+  @Option(help: "The session id holding the plan's lock, quoted in the build merge it names.")
+  var session: String?
+
   @Flag(help: "Print JSON.")
   var json = false
 
@@ -409,7 +468,8 @@ struct QAAdoptCommand: AsyncParsableCommand {
           UUID().uuidString  // swiftgate:allow det.uuid-init — an event id need only be unique
         })
     } else {
-      report = await QAAdoptRun.run(worktree: worktree, root: root, git: git, runner: runner)
+      report = await QAAdoptRun.run(
+        worktree: worktree, root: root, git: git, runner: runner, session: session)
     }
     Console.write(QAAdoptRun.render(report, json: json))
     if report.verdict != .green { throw ExitCode(report.verdict.exitCode) }

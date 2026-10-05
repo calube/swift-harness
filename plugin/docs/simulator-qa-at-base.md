@@ -24,9 +24,12 @@ while a ready row has no GREEN or conflicted run at the branch's tip on `main`'s
 
 `--after <task>,<other>,… --before-merge` merges each named branch in turn and runs every row that
 names any of them, each counting as merged; `trialMerge.alongside` names the others' branches and
-tips. Once each unmerged task a row waits on has a checked return waiting to merge, and no fixer's
-branch, `build merge` of any of them refuses `flows-unchecked` until such a run took all their
-branches at their tips on `main`'s commit, so the row runs before the first of them lands.
+tips. Once each unmerged task a row waits on has a checked return that still stands at its branch
+tip, and no fixer's branch, `build merge` of any of them refuses `flows-unchecked` until such a run
+took all their branches at those commits on `main`'s commit, so the row runs before the first of
+them lands. A check stands while it is GREEN for a `ready-to-merge` return with no ledger reset or
+halt answered `retry` since. With a build run, `qa run` takes each branch alongside at the commit
+its standing check names, whatever its branch head is, and is BLOCKED for a task with none.
 
 Each merged run leaves `merged-tree-run.json` beside its report: the merge's tree and each row's
 result with its check's digest. A later run whose trial merge makes the same tree takes, from the
