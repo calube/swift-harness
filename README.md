@@ -40,23 +40,7 @@ something a little different.
 mutation, simulator evidence. Hooks, skills, agents, workflows and git hooks all call it, and none
 of them re-implement a check. **When the gate says GREEN, it's GREEN everywhere.**
 
-```mermaid
-flowchart LR
-  subgraph CC[Claude Code]
-    SK[17 skills<br/>/ship · /sprint · /build · /qa · /review …]
-    WF[4 workflows + 20 agents<br/>design research · review · build tasks]
-    HK[Hooks<br/>SessionStart · PreToolUse · PostToolUse · Stop]
-  end
-  GIT[Git hooks<br/>pre-commit · commit-msg · pre-push]
-  SK --> WF
-  SK --> G
-  WF --> G
-  HK --> G
-  GIT --> G
-  G[[swiftgate]] --> T[swift format · swift test<br/>xcodebuild · simulators]
-  G --> V{GREEN / RED<br/>+ rule ids}
-  G --> E[(Evidence<br/>reports · video · telemetry)]
-```
+![swiftgate architecture: skills, workflows, agents, hooks and git hooks all call 1 gate, which drives the toolchain and writes the run report](docs/images/swiftgate-architecture.svg)
 
 `swiftgate` follows the layering it enforces. A pure domain module holds the logic, IO adapters sit
 behind protocols, and a thin CLI wires them together. It knows 460+ rule ids, each documented in

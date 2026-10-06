@@ -1,0 +1,107 @@
+<svg class="sh" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" width="1200" height="600" role="img" aria-labelledby="sh-title sh-desc">
+  <title id="sh-title">swiftgate architecture</title>
+  <desc id="sh-desc">Skills, workflows and agents, and hooks inside Claude Code, plus git hooks outside it, all call one gate, swiftgate. The gate drives the Swift toolchain and simulators and writes a run report with evidence and a GREEN or RED verdict.</desc>
+  <style>
+    .sh { --panel:#FBFAF8; --card:#FFFFFF; --stroke:#DADDE4; --ink:#1B1F2A; --muted:#5B6272; --line:#9097A6; --frame:#B4BAC6; --accent:#E5512B; --accent-ink:#B83A18; --accent-soft:#FDECE6; --green:#1E8E4E; --green-soft:#E3F4EA; --red:#C93434; --red-soft:#FBE7E7; }
+    @media (prefers-color-scheme: dark) {
+      .sh { --panel:#10131A; --card:#181D27; --stroke:#2B3240; --ink:#E8EBF1; --muted:#9AA2B3; --line:#687184; --frame:#394152; --accent:#FF6B3F; --accent-ink:#FF8A63; --accent-soft:#2B1912; --green:#43C77B; --green-soft:#12271B; --red:#FF6E6E; --red-soft:#2C1517; }
+    }
+    .sh .panel { fill: var(--panel); }
+    .sh .frame { fill: none; stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .sh .card { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .sh .gate { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+    .sh .gate-rail { stroke: var(--accent); stroke-width: 2; }
+    .sh .gate-rule { stroke: var(--accent); stroke-opacity: .35; stroke-width: 1; }
+    .sh .wire { fill: none; stroke: var(--line); stroke-width: 2; }
+    .sh .wire-out { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .sh .head { fill: var(--line); }
+    .sh .head-out { fill: var(--accent); }
+    .sh text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .sh .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .sh .title { font-size: 18px; font-weight: 650; }
+    .sh .sub { font-size: 12.5px; fill: var(--muted); }
+    .sh .count { font-size: 12px; fill: var(--muted); text-anchor: end; }
+    .sh .label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; fill: var(--muted); }
+    .sh .gate-name { font-size: 30px; font-weight: 700; fill: var(--accent-ink); text-anchor: middle; }
+    .sh .gate-sub { font-size: 13px; fill: var(--ink); text-anchor: middle; }
+    .sh .gate-checks { font-size: 11.5px; fill: var(--muted); text-anchor: middle; }
+    .sh .pill-green { fill: var(--green-soft); stroke: var(--green); stroke-width: 1.2; }
+    .sh .pill-red { fill: var(--red-soft); stroke: var(--red); stroke-width: 1.2; }
+    .sh .pill-text-green { font-size: 11px; font-weight: 700; fill: var(--green); text-anchor: middle; letter-spacing: .06em; }
+    .sh .pill-text-red { font-size: 11px; font-weight: 700; fill: var(--red); text-anchor: middle; letter-spacing: .06em; }
+  </style>
+  <defs>
+    <marker id="sh-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="sh-arrow-out" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head-out" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <rect class="panel" x="0" y="0" width="1200" height="600" rx="20"/>
+
+  <!-- Claude Code -->
+  <rect class="frame" x="36" y="34" width="438" height="394" rx="16"/>
+  <text class="label" x="60" y="62">CLAUDE CODE</text>
+
+  <rect class="card" x="60" y="80" width="390" height="92" rx="12"/>
+  <text class="title" x="80" y="116">Skills</text>
+  <text class="count mono" x="430" y="116">17</text>
+  <text class="sub mono" x="80" y="146">/ship · /design · /plan · /build · /review …</text>
+
+  <rect class="card" x="60" y="198" width="390" height="92" rx="12"/>
+  <text class="title" x="80" y="234">Workflows + agents</text>
+  <text class="count mono" x="430" y="234">4 + 20</text>
+  <text class="sub mono" x="80" y="264">design research · review · build tasks</text>
+
+  <rect class="card" x="60" y="316" width="390" height="92" rx="12"/>
+  <text class="title" x="80" y="352">Hooks</text>
+  <text class="count mono" x="430" y="352">4 events</text>
+  <text class="sub mono" x="80" y="382">SessionStart · PreToolUse · PostToolUse · Stop</text>
+
+  <path class="wire" d="M255,172 L255,196" marker-end="url(#sh-arrow)"/>
+
+  <!-- Git hooks -->
+  <text class="label" x="60" y="466">OUTSIDE CLAUDE</text>
+  <rect class="card" x="60" y="482" width="390" height="92" rx="12"/>
+  <text class="title" x="80" y="518">Git hooks</text>
+  <text class="count mono" x="430" y="518">3 hooks</text>
+  <text class="sub mono" x="80" y="548">pre-commit · commit-msg · pre-push</text>
+
+  <!-- wires into the gate -->
+  <path class="wire" d="M450,126 C525,126 515,236 580,236" marker-end="url(#sh-arrow)"/>
+  <path class="wire" d="M450,244 C520,244 515,280 580,280" marker-end="url(#sh-arrow)"/>
+  <path class="wire" d="M450,362 C520,362 515,324 580,324" marker-end="url(#sh-arrow)"/>
+  <path class="wire" d="M450,528 C540,528 515,368 580,368" marker-end="url(#sh-arrow)"/>
+
+  <!-- the gate -->
+  <rect class="gate" x="580" y="186" width="240" height="228" rx="14"/>
+  <line class="gate-rail" x1="598" y1="186" x2="598" y2="414"/>
+  <line class="gate-rail" x1="802" y1="186" x2="802" y2="414"/>
+  <text class="gate-name mono" x="700" y="258">swiftgate</text>
+  <text class="gate-sub" x="700" y="284">1 gate · every check</text>
+  <line class="gate-rule" x1="622" y1="306" x2="778" y2="306"/>
+  <text class="gate-checks mono" x="700" y="332">lint · arch · testlint</text>
+  <text class="gate-checks mono" x="700" y="354">prove · mutate · reach</text>
+  <text class="gate-checks mono" x="700" y="376">sim · qa · judge</text>
+
+  <!-- wires out of the gate -->
+  <path class="wire-out" d="M820,256 C862,256 858,206 900,206" marker-end="url(#sh-arrow-out)"/>
+  <path class="wire-out" d="M820,344 C862,344 858,396 900,396" marker-end="url(#sh-arrow-out)"/>
+
+  <!-- toolchain -->
+  <rect class="card" x="900" y="150" width="264" height="112" rx="12"/>
+  <text class="title" x="920" y="186">Toolchain</text>
+  <text class="sub mono" x="920" y="214">swift format · swift test</text>
+  <text class="sub mono" x="920" y="236">xcodebuild · simulators</text>
+
+  <!-- run report -->
+  <rect class="card" x="900" y="340" width="264" height="112" rx="12"/>
+  <text class="title" x="920" y="376">Run report</text>
+  <text class="sub mono" x="920" y="402">evidence · verdict</text>
+  <rect class="pill-green" x="920" y="416" width="64" height="22" rx="11"/>
+  <text class="pill-text-green" x="952" y="431">GREEN</text>
+  <rect class="pill-red" x="992" y="416" width="48" height="22" rx="11"/>
+  <text class="pill-text-red" x="1016" y="431">RED</text>
+</svg>
