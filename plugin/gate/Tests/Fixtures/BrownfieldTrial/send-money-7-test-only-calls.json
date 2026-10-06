@@ -5,7 +5,7 @@
   },
   {
     "argument": "AppCoreTests/ConfirmFeatureTests",
-    "refusal": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/ConfirmFeatureTests`"
+    "refusal": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `TimedBuildStarter`); name 1 as `test <area>: AppCoreTests/ConfirmFeatureTests`"
   },
   {
     "argument": "test AppFeature: AppCoreTests/ConfirmFeatureTests",

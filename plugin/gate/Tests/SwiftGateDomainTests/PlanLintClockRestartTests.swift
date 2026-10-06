@@ -7,7 +7,7 @@ import Testing
 /// a button that starts the clock-driven state over (`BrownfieldTrial/clock-restart-1-PLAN.md`).
 private enum ClockRestartPlan {
   static let contract = "spec-contract"
-  static let starter = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let starter = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
 
   static var captured: String {
     get throws {

@@ -17,7 +17,7 @@
 
 ## Areas
 
-- InterviewStarter (warm test 34.1 s, build-only): the one xcode area; its packages AppFeature and the new AccountClient hold every change. The contract added AppCoreTests and AccountClientTests to the scheme's test action, so `test` runs the unit tests too.
+- TimedBuildStarter (warm test 34.1 s, build-only): the one xcode area; its packages AppFeature and the new AccountClient hold every change. The contract added AppCoreTests and AccountClientTests to the scheme's test action, so `test` runs the unit tests too.
 
 ## Assumptions
 
@@ -32,7 +32,7 @@
 - After a successful send the navigation stack pops back to the home screen, where the payment heads the activity list.
 - Every requirement is proved by unit tests (TCA TestStore and plain Swift Testing) in the tasks that build it, so the validation table has reason-only rows and the plan has no validation task.
 - The explorers were skipped: the repository has 1 area and is small enough to read in full.
-- Halt (gate-red, amount-rules): the contract's scheme edit, which added AppCoreTests and AccountClientTests to the InterviewStarter test action, made the UI test runner fail to launch (SBMainWorkspace Busy). Chose the fixer (retry); it restored the scheme to the base, so the area's `test` runs only the UI tests and the package unit tests run through `swift test --package-path` alone, not through any gate.
+- Halt (gate-red, amount-rules): the contract's scheme edit, which added AppCoreTests and AccountClientTests to the TimedBuildStarter test action, made the UI test runner fail to launch (SBMainWorkspace Busy). Chose the fixer (retry); it restored the scheme to the base, so the area's `test` runs only the UI tests and the package unit tests run through `swift test --package-path` alone, not through any gate.
 - Halt (gate-red, root-flow): the rewritten launch UI test expects "$250.00" while the in-memory fake was still the contract stub; chose the fixer (retry), told to implement the account-fake task's fake and tests in its fix, since account-fake could not start before no-new-starts.
 - Halt (gate-red, amount-confirm): 2 merge gates failed to launch the UI test runner (SBMainWorkspace Busy, then Mach error -308) while the root-flow fixer used the simulator; chose retry, undid the merge and launched no fixer, since a fixer's gate would compete for the same simulator before the cutoff.
 
@@ -49,7 +49,7 @@ Declare the account client, the amount input and the screen skeletons every task
 - Out of scope:
   - any behaviour
 - Covers: req-decimal-money
-- Writes: Packages/AccountClient/, Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, .swiftgate.toml, InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme
+- Writes: Packages/AccountClient/, Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, .swiftgate.toml, TimedBuildStarter.xcodeproj/xcshareddata/xcschemes/TimedBuildStarter.xcscheme
 
 ### account-fake
 Implement the in-memory account backend: $250.00, 8 contacts, and a send that can fail.
@@ -123,12 +123,12 @@ Replace the posts screen with the home screen: balance, activity list, and the s
 - Scope:
   - AppFeature: State holds `balance: Decimal?`, `activity: [Payment]` (newest first) and `path: StackState<Path.State>`, with `@Reducer enum Path { case contacts(ContactsFeature), amount(AmountFeature), confirm(ConfirmFeature) }`; `.task` loads the balance from `accountClient.balance()`; `.sendMoneyButtonTapped` pushes contacts; contacts' `.contactSelected` pushes amount with the current balance; amount's `.continued` pushes confirm; confirm's `.sent(payment)` lowers the balance by `payment.amount`, inserts the payment at index 0 of `activity` and empties `path`; remove the posts loading and its APIClient use
   - AppView: a NavigationStack over `path` showing the balance as USD currency (`homeBalance`), a "Send money" button (`homeSendButton`), and the activity list, each row (`homeActivityRow`) with the contact's name and the amount; the destinations use ContactsView, AmountView and ConfirmView
-  - App/InterviewStarterApp.swift only if the root store's construction must change
+  - App/TimedBuildStarterApp.swift only if the root store's construction must change
   - rewrite AppFeatureTests for the new root, and LaunchFlowUITests so launch shows the balance "$250.00"
 - Acceptance:
   - AppFeatureTests (TCA TestStore): the balance loads on appear; selecting a contact pushes the amount screen; continuing pushes confirm; a sent delegate lowers 250 by 40.25 to 209.75, puts the payment first ahead of an earlier one and pops to home; a failed send inside the stack leaves the balance at 250; each fails against the stub first; slice is GREEN
 - Out of scope:
   - the child screens' own behaviour and views
 - Covers: req-contact-select, req-send-success, req-send-failure, req-replace-screen
-- Writes: Packages/AppFeature/Sources/AppCore/AppFeature.swift, Packages/AppFeature/Sources/AppUI/AppView.swift, Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift, App/InterviewStarterApp.swift, UITests/LaunchFlowUITests.swift
+- Writes: Packages/AppFeature/Sources/AppCore/AppFeature.swift, Packages/AppFeature/Sources/AppUI/AppView.swift, Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift, App/TimedBuildStarterApp.swift, UITests/LaunchFlowUITests.swift
 - Does: child reducers are empty in the contract, so drive the root tests by sending the children's delegate actions through `.path(.element(id:action:))`, with `accountClient` stubbed. Run tests with `swift test --package-path Packages/AppFeature --filter AppFeatureTests`.

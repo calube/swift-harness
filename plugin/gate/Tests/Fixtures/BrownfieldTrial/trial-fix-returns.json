@@ -6,7 +6,7 @@
       "Packages/AppFeature/Tests/AppCoreTests/KeypadInputTests.swift"
     ],
     "changed": [
-      "InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme"
+      "TimedBuildStarter.xcodeproj/xcshareddata/xcschemes/TimedBuildStarter.xcscheme"
     ],
     "notesName": []
   },
@@ -16,7 +16,7 @@
       "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
       "Packages/AppFeature/Sources/AppUI/AppView.swift",
       "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift",
-      "App/InterviewStarterApp.swift",
+      "App/TimedBuildStarterApp.swift",
       "UITests/LaunchFlowUITests.swift"
     ],
     "changed": [

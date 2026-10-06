@@ -40,7 +40,7 @@
       "failureScenario" : null,
       "file" : ".",
       "line" : null,
-      "message" : "InterviewStarter build passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "message" : "TimedBuildStarter build passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
       "rule" : "gate.reused",
       "severity" : "nit"
     },
@@ -48,7 +48,7 @@
       "failureScenario" : null,
       "file" : ".",
       "line" : null,
-      "message" : "InterviewStarter test passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
+      "message" : "TimedBuildStarter test passed in merge gate run 20261005T061118Z-9f1d794c on the same tree, merge base, binary and state, so it didn't run again",
       "rule" : "gate.reused",
       "severity" : "nit"
     },
@@ -56,7 +56,7 @@
       "failureScenario" : null,
       "file" : ".",
       "line" : null,
-      "message" : "InterviewStarter has no lint command, so this tier doesn't run it",
+      "message" : "TimedBuildStarter has no lint command, so this tier doesn't run it",
       "rule" : "area.step-dropped",
       "severity" : "nit"
     },
@@ -80,7 +80,7 @@
       "failureScenario" : null,
       "file" : "UITests/LaunchFlowUITests.swift",
       "line" : null,
-      "message" : "prove: InterviewStarter's changed tests not run: the 96 s left before the run's box ends at 2026-10-05T06:33:02Z can't hold its measured 226 s",
+      "message" : "prove: TimedBuildStarter's changed tests not run: the 96 s left before the run's box ends at 2026-10-05T06:33:02Z can't hold its measured 226 s",
       "rule" : "prove.no-evidence",
       "severity" : "minor"
     }

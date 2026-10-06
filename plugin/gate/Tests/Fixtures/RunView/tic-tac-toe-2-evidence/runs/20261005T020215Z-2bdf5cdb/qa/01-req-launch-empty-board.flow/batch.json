@@ -17,8 +17,8 @@
           "recordingScope": "app",
           "recordOnlySession": false,
           "activeSessionApp": {
-            "bundleId": "com.example.InterviewStarter",
-            "name": "com.example.InterviewStarter"
+            "bundleId": "com.example.TimedBuildStarter",
+            "name": "com.example.TimedBuildStarter"
           },
           "showTouches": true
         },
@@ -45,7 +45,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -350,8 +350,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602823
         },
         "durationMs": 420
@@ -382,7 +382,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -687,8 +687,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602824
         },
         "durationMs": 431
@@ -716,7 +716,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -1021,8 +1021,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602826
         },
         "durationMs": 430
@@ -1053,7 +1053,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -1358,8 +1358,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602827
         },
         "durationMs": 422
@@ -1387,7 +1387,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -1692,8 +1692,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602829
         },
         "durationMs": 414
@@ -1724,7 +1724,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -2029,8 +2029,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602830
         },
         "durationMs": 554
@@ -2058,7 +2058,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -2363,8 +2363,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602832
         },
         "durationMs": 550
@@ -2395,7 +2395,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -2700,8 +2700,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602833
         },
         "durationMs": 825
@@ -2729,7 +2729,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -3034,8 +3034,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602835
         },
         "durationMs": 774
@@ -3066,7 +3066,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -3371,8 +3371,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602836
         },
         "durationMs": 463
@@ -3400,7 +3400,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -3705,8 +3705,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602838
         },
         "durationMs": 427
@@ -3737,7 +3737,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -4042,8 +4042,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602839
         },
         "durationMs": 461
@@ -4071,7 +4071,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -4376,8 +4376,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602841
         },
         "durationMs": 481
@@ -4408,7 +4408,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -4713,8 +4713,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602842
         },
         "durationMs": 459
@@ -4742,7 +4742,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -5047,8 +5047,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602844
         },
         "durationMs": 479
@@ -5079,7 +5079,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -5384,8 +5384,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602845
         },
         "durationMs": 490
@@ -5413,7 +5413,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -5718,8 +5718,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602847
         },
         "durationMs": 473
@@ -5750,7 +5750,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -6055,8 +6055,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602848
         },
         "durationMs": 484
@@ -6084,7 +6084,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -6389,8 +6389,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602850
         },
         "durationMs": 460
@@ -6421,7 +6421,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -6726,8 +6726,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602851
         },
         "durationMs": 489
@@ -6755,7 +6755,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -7060,8 +7060,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602853
         },
         "durationMs": 437
@@ -7092,7 +7092,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -7397,8 +7397,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602854
         },
         "durationMs": 462
@@ -7414,7 +7414,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -7719,8 +7719,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 602855
         },
         "durationMs": 423

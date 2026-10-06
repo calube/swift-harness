@@ -6,7 +6,7 @@ import Testing
 /// The send-money trial's plan, linted as `plan import` lints it.
 private enum SendMoneyPlan {
   static let contract = "send-money-contract"
-  static let starter = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let starter = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
 
   static var text: String {
     get throws {
@@ -55,7 +55,7 @@ private enum SendMoneyPlan {
 @Suite("plan-lint validation: an app needs a flow row, and only an obstacle excuses a screen")
 struct PlanLintAppFlowTests {
   @Test(
-    "the send-money trial's plan, 4 tasks writing AppUI screens and every row reason-only naming unit tests, gets 1 major app-without-flow naming the InterviewStarter area at the Validation heading, and 1 screen-without-flow per requirement a non-contract screen task covers — catches a plan whose unit-test reasons excuse every screen from a flow"
+    "the send-money trial's plan, 4 tasks writing AppUI screens and every row reason-only naming unit tests, gets 1 major app-without-flow naming the TimedBuildStarter area at the Validation heading, and 1 screen-without-flow per requirement a non-contract screen task covers — catches a plan whose unit-test reasons excuse every screen from a flow"
   )
   func sendMoneyPlanNeedsAFlow() throws {
     let text = try SendMoneyPlan.text
@@ -65,7 +65,7 @@ struct PlanLintAppFlowTests {
     let app = findings.filter { $0.ruleID == PlanLintValidation.appWithoutFlowRuleID }
     #expect(app.count == 1, "\(findings.map(\.message))")
     #expect(app.first?.severity == .major)
-    #expect(app.first?.message.contains("`InterviewStarter`") == true, "\(app.map(\.message))")
+    #expect(app.first?.message.contains("`TimedBuildStarter`") == true, "\(app.map(\.message))")
     #expect(
       app.first?.message.contains("Packages/AppFeature/Sources/AppUI/") == true,
       "\(app.map(\.message))")

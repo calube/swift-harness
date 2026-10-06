@@ -2,7 +2,7 @@
   {
     "argument": "AppCoreTests/WatchlistFeatureTests",
     "verdict": "BLOCKED",
-    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/WatchlistFeatureTests`"
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `TimedBuildStarter`); name 1 as `test <area>: AppCoreTests/WatchlistFeatureTests`"
   },
   {
     "argument": "AppCoreTests/WatchlistFeatureTests",
@@ -32,7 +32,7 @@
   {
     "argument": "AppCoreTests/DetailFeatureTests",
     "verdict": "BLOCKED",
-    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppCoreTests/DetailFeatureTests`"
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `TimedBuildStarter`); name 1 as `test <area>: AppCoreTests/DetailFeatureTests`"
   },
   {
     "argument": "AppCoreTests/DetailFeatureTests",
@@ -47,7 +47,7 @@
   {
     "argument": "AppFeature/AppFeatureTests",
     "verdict": "BLOCKED",
-    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `InterviewStarter`); name 1 as `test <area>: AppFeature/AppFeatureTests`"
+    "finding": "test-only not run: 4 areas run tests (`APIClient`, `AppFeature`, `LogClient`, `TimedBuildStarter`); name 1 as `test <area>: AppFeature/AppFeatureTests`"
   },
   {
     "argument": "test AppFeature: AppFeature/AppFeatureTests",

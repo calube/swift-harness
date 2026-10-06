@@ -40,7 +40,7 @@ struct PlanLintCheckDependenciesTests {
   )
   func rowWriterWaitsForEveryRunsAfterTask() throws {
     let row =
-      "| req-replace-screen | acceptance | `test: InterviewStarterUITests/LaunchFlowUITests` "
+      "| req-replace-screen | acceptance | `test: TimedBuildStarterUITests/LaunchFlowUITests` "
       + "| root-flow, account-fake | root-flow | |"
     let text = try CapturedPlan.replacingLine(
       starting: "| req-replace-screen |", with: row,

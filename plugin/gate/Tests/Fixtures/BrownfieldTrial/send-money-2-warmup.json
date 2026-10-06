@@ -16,7 +16,7 @@
       },
       "testMs" : 27394
     },
-    "InterviewStarter" : {
+    "TimedBuildStarter" : {
       "coldMs" : 388416,
       "steps" : {
         "build" : "passed",

@@ -301,10 +301,10 @@ struct BootstrapPlanTests {
     #expect(
       change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
         == .create("[harness]\nprofile = \"default\"\n"))
-    inputs.profile = "interview"
+    inputs.profile = "timed"
     #expect(
       change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
-        == .create("[harness]\nprofile = \"interview\"\n"))
+        == .create("[harness]\nprofile = \"timed\"\n"))
   }
 
   @Test(
@@ -320,16 +320,16 @@ struct BootstrapPlanTests {
         ]), profile: profile)
     }
     var inputs = Self.inputs(config: .loaded(try config(profile: nil)))
-    inputs.profile = "interview"
+    inputs.profile = "timed"
     guard case .untouched(let advice) = change(BootstrapPlanner.plan(inputs), ".swiftgate.toml")
     else {
       Issue.record("expected the config to be left alone with advice")
       return
     }
     #expect(advice.contains("[harness] profile is \"default\""))
-    #expect(advice.contains("--profile asked for \"interview\""))
+    #expect(advice.contains("--profile asked for \"timed\""))
 
-    inputs.config = .loaded(try config(profile: "interview"))
+    inputs.config = .loaded(try config(profile: "timed"))
     #expect(change(BootstrapPlanner.plan(inputs), ".swiftgate.toml") == .unchanged)
     inputs.profile = nil
     #expect(change(BootstrapPlanner.plan(inputs), ".swiftgate.toml") == .unchanged)

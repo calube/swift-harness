@@ -92,13 +92,13 @@ struct DoctorTests {
         buildPresets: ["default": preset, "fast": preset], profile: profile)
     }
 
-    let result = Doctor.evaluate(try facts(config: config(profile: "interview")))
+    let result = Doctor.evaluate(try facts(config: config(profile: "timed")))
     let finding = try #require(result.findings.first { $0.ruleID == Doctor.profileRuleID })
     #expect(finding.severity == .major)
     #expect(result.verdict == .red)
     #expect(finding.file == Config.fileName)
-    #expect(finding.message.contains("profile \"interview\""))
-    #expect(finding.message.contains("[build.presets.interview]"))
+    #expect(finding.message.contains("profile \"timed\""))
+    #expect(finding.message.contains("[build.presets.timed]"))
     #expect(finding.message.contains("default, fast"))
 
     for profile in ["fast", nil] {

@@ -146,7 +146,7 @@ extension GateReuseTests {
       GateReuse.Inputs(
         tier: tier, treeHash: treeHash, mergeBase: mergeBase, sourceHash: "436cadb577503dd6",
         stateFiles: ["config": config, "baseline": GateReuse.digest(Data(tier.rawValue.utf8))]),
-      mergeBase: mergeBase, area: "InterviewStarter", command: command,
+      mergeBase: mergeBase, area: "TimedBuildStarter", command: command,
       tests: ["UITests/LaunchFlowUITests.swift"],
       copied: ["UITests/LaunchFlowUITests.swift": test], renames: renames)
   }
@@ -238,14 +238,14 @@ extension GateReuseTests {
       copied: [String: String?]? = nil
     ) -> String {
       GateReuse.proveHeadKey(
-        inputs, area: "InterviewStarter", command: command, tests: tests ?? ["\(test) \(test)"],
+        inputs, area: "TimedBuildStarter", command: command, tests: tests ?? ["\(test) \(test)"],
         copied: copied ?? [test: blob])
     }
     let mergeInputs = inputs(merge.run, proofBase: merge.proofBase)
     let finalInputs = inputs(final.run, proofBase: final.proofBase)
     let reverted = [mergeInputs, finalInputs].map {
       GateReuse.proveKey(
-        $0, mergeBase: $0.mergeBase, area: "InterviewStarter", command: "test xcodebuild test",
+        $0, mergeBase: $0.mergeBase, area: "TimedBuildStarter", command: "test xcodebuild test",
         tests: ["\(test) \(test)"], copied: [test: blob], renames: [:])
     }
     #expect(reverted[0] != reverted[1], "the trial's 2 passes were stored apart")

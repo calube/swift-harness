@@ -89,9 +89,9 @@ struct ScratchTreeBuildTests {
     "a scratch tree's xcode command builds in the worktree's prove DerivedData and a swiftpm one in the worktree's prove scratch path, and those are the folders a step reads as warm — catches a baseline rerun writing gigabytes into Xcode's global DerivedData and every prove step labelled none"
   )
   func buildDirectories() throws {
-    let starter = try Self.area("InterviewStarter")
+    let starter = try Self.area("TimedBuildStarter")
     let feature = try Self.area("AppFeature")
-    let prove = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/InterviewStarter"
+    let prove = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/TimedBuildStarter"
     #expect(
       ScratchTreeBuild.buildDirectories(area: starter, layout: Self.linked) == ["\(prove)/Build"])
     #expect(

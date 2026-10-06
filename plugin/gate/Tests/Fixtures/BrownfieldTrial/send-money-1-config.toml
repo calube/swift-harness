@@ -10,19 +10,19 @@ time_budget_min = 0
 sensitive = []
 
 [[areas]]
-name = "InterviewStarter"
+name = "TimedBuildStarter"
 root = "."
 language = "swift"
 kind = "xcode"
-test = "xcodebuild test -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation"
-build = "xcodebuild build -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
-test_globs = ["**/InterviewStarterUITests/**/*.swift"]
+test = "xcodebuild test -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation"
+build = "xcodebuild build -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'generic/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation"
+test_globs = ["**/TimedBuildStarterUITests/**/*.swift"]
 packs = []
 
 [areas.xcode]
-project = "InterviewStarter.xcodeproj"
+project = "TimedBuildStarter.xcodeproj"
 inclusion = "synchronized"
-schemes = ["InterviewStarter"]
+schemes = ["TimedBuildStarter"]
 
 [judge]
 backend = "claude"

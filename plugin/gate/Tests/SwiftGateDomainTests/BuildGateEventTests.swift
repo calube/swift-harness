@@ -69,7 +69,7 @@ struct BuildGateEventTests {
       designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
       workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
     let record = BuildRunRecord(
-      runID: "r", plan: "p", startedAt: Self.startedAt, presetName: "interview", preset: preset)
+      runID: "r", plan: "p", startedAt: Self.startedAt, presetName: "timed", preset: preset)
     let log = BuildEventLog(
       events: [Self.merge("api", "m1", minutes: 10), Self.gate(.final, .green, minutes: 40)],
       damage: [])

@@ -13,7 +13,7 @@
   "plan" : "spec",
   "rows" : [
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/01-req-board-screen.acceptance.txt"
       ],
@@ -32,7 +32,7 @@
       ]
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/02-req-status-text.acceptance.txt"
       ],
@@ -51,7 +51,7 @@
       ]
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/03-req-new-game.acceptance.txt"
       ],

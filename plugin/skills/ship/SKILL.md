@@ -1,6 +1,6 @@
 ---
 name: ship
-description: This skill should be used to take a spec file all the way to merged, green code in a swift-harness repository with one command. It checks the machine and a clean, warm main, then runs /swift-harness:design at the preset's design tier with the spec as the goal (or, at a preset whose design tier is none, writes and confirms a spec page and lands a surface commit on main instead), /swift-harness:plan, and /swift-harness:build with the same preset, and ends with the ledger page and the build's wall time. It stops at the first halt and says where to resume. Use when the user says "ship this spec", "build this README end to end", "/swift-harness:ship", or hands over a spec that already states what to build and wants it built under a preset such as interview.
+description: This skill should be used to take a spec file all the way to merged, green code in a swift-harness repository with one command. It checks the machine and a clean, warm main, then runs /swift-harness:design at the preset's design tier with the spec as the goal (or, at a preset whose design tier is none, writes and confirms a spec page and lands a surface commit on main instead), /swift-harness:plan, and /swift-harness:build with the same preset, and ends with the ledger page and the build's wall time. It stops at the first halt and says where to resume. Use when the user says "ship this spec", "build this README end to end", "/swift-harness:ship", or hands over a spec that already states what to build and wants it built under a preset such as timed.
 ---
 
 # Ship

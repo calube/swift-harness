@@ -121,7 +121,7 @@ struct BuildRunStoreTests {
       designTier: .sketch, maxParallel: 1, review: .full, taskGate: .ledger, mergeGate: .fast,
       workerModel: .opus, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend)
     let other = BuildRunRecord(
-      runID: "r", plan: "p", startedAt: Self.startedAt, presetName: "interview",
+      runID: "r", plan: "p", startedAt: Self.startedAt, presetName: "timed",
       preset: ledgerGated)
     #expect(try BuildRunJSON.decode(BuildRunJSON.encode(other)) == other)
   }
@@ -137,7 +137,7 @@ struct BuildRunStoreTests {
 
     await #expect(throws: BuildRunStoreError.runExists(first.layout.directory)) {
       _ = try await BuildRunStore.create(
-        plan: "search", presetName: "interview", preset: Self.preset, startedAt: Self.startedAt,
+        plan: "search", presetName: "timed", preset: Self.preset, startedAt: Self.startedAt,
         git: repo.adapter, suffix: 0xabc)
     }
     #expect(FileManager.default.contents(atPath: first.layout.runFile) == before)

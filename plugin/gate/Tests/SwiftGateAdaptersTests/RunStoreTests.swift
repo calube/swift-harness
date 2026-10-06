@@ -76,7 +76,7 @@ struct RunStoreTests {
     try store.record(
       try Self.report("run-a"), finishedAt: Date(), command: "check slice",
       gateSteps: [
-        step(.neutral, "InterviewStarter"), step(.areaBuild, "InterviewStarter"),
+        step(.neutral, "TimedBuildStarter"), step(.areaBuild, "TimedBuildStarter"),
         step(.areaTest, "LogClient"), step(.areaTest, "AppFeature"), step(.prove, "AppFeature"),
         step(.areaTest, "AppFeature"),
       ])

@@ -21,7 +21,7 @@ struct BrownfieldConfigTOMLTests {
   )
   func xcodePackagesRoundTrip() throws {
     let directory = Fixture.directory.appending(
-      path: "Discover/interview-starter", directoryHint: .isDirectory)
+      path: "Discover/timed-build-starter", directoryHint: .isDirectory)
     let listing = try String(
       contentsOf: directory.appending(path: "ls-files.txt"), encoding: .utf8)
     let tree = TrackedTreeSnapshot(

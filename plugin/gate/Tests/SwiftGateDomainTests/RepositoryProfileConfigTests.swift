@@ -20,9 +20,9 @@ struct RepositoryProfileConfigTests {
     "a [harness] profile names the preset a build uses, and a repository with no [harness] table keeps default — catches a profile silently ignored, or an older config losing its default"
   )
   func profileResolvesPresetName() {
-    let named = decoded(root(harness: .table(["profile": .string("interview")])))
-    #expect(named?.profile == "interview")
-    #expect(named?.profileName == "interview")
+    let named = decoded(root(harness: .table(["profile": .string("timed")])))
+    #expect(named?.profile == "timed")
+    #expect(named?.profileName == "timed")
 
     let unnamed = decoded(root(harness: nil))
     #expect(unnamed != nil)
@@ -46,7 +46,7 @@ struct RepositoryProfileConfigTests {
   func malformedHarnessTableIsAnIssue() {
     let cases: [(ConfigValue, [ConfigIssue])] = [
       (
-        .table(["profile": .string("interview"), "profiel": .string("x")]),
+        .table(["profile": .string("timed"), "profiel": .string("x")]),
         [.unknownKey(path: "harness.profiel")]
       ),
       (

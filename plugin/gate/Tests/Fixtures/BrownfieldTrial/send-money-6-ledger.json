@@ -20,7 +20,7 @@
       "worktree" : "/REPO/repo-spec-spec-contract",
       "writeSet" : [
         ".swiftgate.toml",
-        "App/InterviewStarterApp.swift",
+        "App/TimedBuildStarterApp.swift",
         "Packages/AppFeature/Package.swift",
         "Packages/AppFeature/Sources/AccountClient/AccountClient.swift",
         "Packages/AppFeature/Tests/AccountClientTests/AccountClientTests.swift",

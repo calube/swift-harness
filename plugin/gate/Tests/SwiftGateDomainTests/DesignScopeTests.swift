@@ -245,7 +245,7 @@ struct DesignScopeTests {
   }
 
   @Test(
-    "an interface/live pair and a core/UI pair each count as 1 touched module — catches a 2-screen interview spec scoped deep because each pair counts twice"
+    "an interface/live pair and a core/UI pair each count as 1 touched module — catches a 2-screen short spec scoped deep because each pair counts twice"
   )
   func pairsCountOnce() throws {
     let facts = try DesignScope.deriveFacts(

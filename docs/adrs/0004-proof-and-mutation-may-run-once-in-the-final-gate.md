@@ -18,7 +18,7 @@ per-task runs caught nothing the final gate would miss.
 A required preset key, `task_proof`, is `per-task` or `final` (a closed enum). Under `per-task` each task gate
 proves and mutates, as before. Under `final` the task gate drops `--prove --mutate`, `check-return` stops requiring
 them from a worker, and the build's final `ready` gate proves and mutates every merged task once. The template
-stamps `default` = `per-task` and `interview` = `final`.
+stamps `default` = `per-task` and `timed` = `final`.
 
 ## Consequences
 

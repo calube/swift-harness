@@ -24,7 +24,7 @@
       "failureScenario" : null,
       "file" : ".",
       "line" : null,
-      "message" : "InterviewStarter has no lint command, so this tier doesn't run it",
+      "message" : "TimedBuildStarter has no lint command, so this tier doesn't run it",
       "rule" : "area.step-dropped",
       "severity" : "nit"
     },

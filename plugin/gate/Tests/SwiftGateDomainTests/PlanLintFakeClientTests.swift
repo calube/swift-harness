@@ -7,7 +7,7 @@ import Testing
 /// holds, the table `validation.json` holds, and the tasks `PLAN.md` lists.
 private enum PriceTrackerPlan {
   static let contract = "spec-contract"
-  static let starter = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let starter = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
   static let trial = Fixture.directory.appending(
     path: "BrownfieldTrial", directoryHint: .isDirectory)
 

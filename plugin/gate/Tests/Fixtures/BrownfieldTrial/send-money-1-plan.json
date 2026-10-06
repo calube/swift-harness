@@ -72,7 +72,7 @@
         "scope" : [
           "AppFeature: State holds `balance: Decimal?`, `activity: [Payment]` (newest first) and `path: StackState<Path.State>`, with `@Reducer enum Path { case contacts(ContactsFeature), amount(AmountFeature), confirm(ConfirmFeature) }`; `.task` loads the balance from `accountClient.balance()`; `.sendMoneyButtonTapped` pushes contacts; contacts' `.contactSelected` pushes amount with the current balance; amount's `.continued` pushes confirm; confirm's `.sent(payment)` lowers the balance by `payment.amount`, inserts the payment at index 0 of `activity` and empties `path`; remove the posts loading and its APIClient use",
           "AppView: a NavigationStack over `path` showing the balance as USD currency (`homeBalance`), a \"Send money\" button (`homeSendButton`), and the activity list, each row (`homeActivityRow`) with the contact's name and the amount; the destinations use ContactsView, AmountView and ConfirmView",
-          "App/InterviewStarterApp.swift only if the root store's construction must change",
+          "App/TimedBuildStarterApp.swift only if the root store's construction must change",
           "rewrite AppFeatureTests for the new root, and LaunchFlowUITests so launch shows the balance \"$250.00\""
         ],
         "title" : "Replace the posts screen with the home screen: balance, activity list, and the send flow as a navigation stack.",

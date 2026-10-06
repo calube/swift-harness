@@ -6,6 +6,15 @@ Commands run from the repository root. Where output embeds absolute paths, the c
 through `sed "s#$ROOT#/REPO#g"` (with `ROOT=$(pwd)`) so fixtures carry no machine paths; tests
 decode them with repository root `/REPO`.
 
+The practice starter app in `evals/apps/timed-build-starter` took its current name after many of
+these captures. Every fixture captured from it, or from a trial cloned from it, had the starter's
+earlier app name replaced by `TimedBuildStarter` (bundle id `com.example.TimedBuildStarter`, folder
+`timed-build-starter`) in its text, its folder and file names, and the bundle id of the one binary
+container plist (`plutil -replace MCMMetadataIdentifier`). A recorded digest of a renamed file (a
+flow row's `digest`, a config's git blob id) was recomputed over the renamed bytes the same way the
+gate computes it; nothing else in those fixtures changed.
+The commands below name the starter by its current name.
+
 ## SwiftPM
 
 Toolchain: Apple Swift 6.2 (swiftlang-6.2.3.3.20), macOS 26.
@@ -891,7 +900,10 @@ with `.swiftgate.toml` and `App/Scenario.swift` deleted, so the copy is the app 
 the harness: 1 `@main … : App` file, `App/SampleApp.swift`. Not a git repository. Every command
 ran with `HOME=<scratch>/home SWIFTGATE_CACHE_DIR=<scratch>/cache SWIFTGATE_BUILD_CONFIG=debug
 <checkout>/plugin/bin/swiftgate`, written `SG` below. Scrubbing: the copy's path becomes `/REPO`,
-the scratch home `/HOME`, the checkout's `plugin` directory `/PLUGIN`.
+the scratch home `/HOME`, the checkout's `plugin` directory `/PLUGIN`. `single-dry-run.stdout`,
+`single-stamped.swiftgate.toml` and `two-dry-run.stdout` hold the stamped config template, so they
+were captured again on 2026-10-05 (Xcode 26.2) with the same commands when the template's
+comments and preset names changed; the other files keep the first capture.
 
 | File | Capture |
 |---|---|
@@ -2003,9 +2015,9 @@ git clone -q --no-checkout <path to the trial's memos clone> "$R"
 git -C "$R" reset -q 0d989707f82c33f74bb852edd8965ec88fcf041b
 ```
 
-`interview-starter` (Swift) came on 2026-10-04 from a brownfield trial's clone of `evals/apps/interview-starter`,
+`timed-build-starter` (Swift) came on 2026-10-04 from a brownfield trial's clone of `evals/apps/timed-build-starter`,
 whose first commit is the starter as committed. Its synchronized `UITests` folder belongs to the scheme's only
-testable, `InterviewStarterUITests`, and its 3 local packages keep their tests under `Tests/`. Capture it with the
+testable, `TimedBuildStarterUITests`, and its 3 local packages keep their tests under `Tests/`. Capture it with the
 commands above, the commit `533b9165147c54297ab09847d5a2aacc9b04c568` and, in place of the first 2 lines:
 
 ```sh
@@ -2819,7 +2831,7 @@ matched nothing.
 ## qa run: a relaunching flow whose captures delayed its check
 
 `QA/capture-delay/` is a real `swiftgate qa run` over 2 flow rows on a copy of
-`evals/apps/interview-starter`, for the launch and capture times a flow record carries and the
+`evals/apps/timed-build-starter`, for the launch and capture times a flow record carries and the
 delay a red row names. Captured 2026-10-05 with `agent-device` 0.21.18 and Xcode 26.2, from a
 `swiftgate` debug build of the surface commit, on a clone the harness made under its `sim` lock,
 on a loaded machine. The plan and inputs follow `RunView/qa-flows/`: the ledger is
@@ -2833,7 +2845,7 @@ the 3 input files:
 ```sh
 SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
 T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
-rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/interview-starter/ $T/app/ && cd $T/app
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/timed-build-starter/ $T/app/ && cd $T/app
 git init -q -b main
 git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
 SLUG=2026-10-03-counter-reset-and-floor P=.git/swift-harness/plans/$SLUG
@@ -2860,7 +2872,7 @@ matched nothing.
 ## qa run: a state that lasts 1 s, read with captures on and off the flow's clock
 
 `QA/short-state/` is 2 real `swiftgate qa run`s over 2 flow rows on a copy of
-`evals/apps/interview-starter` changed by `short-state-app.py`: an app whose state advances on a
+`evals/apps/timed-build-starter` changed by `short-state-app.py`: an app whose state advances on a
 clock, showing a `New` badge (`id="app.new"`) for 1 s, 3 s after the posts load. Captured
 2026-10-05 with `agent-device` 0.21.18 and Xcode 26.2, from a `swiftgate` debug build of this
 change, on clones the harness made under its `sim` lock. `validation.json`, `reads.flow.json`
@@ -2872,7 +2884,7 @@ hand-written inputs; the ledger is `RunView/build-run-1/ledger.json`. From `plug
 ```sh
 SG=$PWD/.build/debug/swiftgate H=<harness> IN=<inputs> F=$H/plugin/gate/Tests/Fixtures/RunView/build-run-1
 T=$(mktemp -d) && export LLVM_PROFILE_FILE=$T/p-%p.profraw GIT_CONFIG_GLOBAL=/dev/null SWIFTGATE_HARNESS_ROOT=$H/plugin
-rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/interview-starter/ $T/app/ && cd $T/app
+rsync -a --exclude .build --exclude .harness --exclude DerivedData $H/evals/apps/timed-build-starter/ $T/app/ && cd $T/app
 python3 $IN/short-state-app.py $T/app
 git init -q -b main
 git add -A && git -c user.name=t -c user.email=t@example.com -c commit.gpgsign=false commit -q -m base
@@ -3756,14 +3768,14 @@ nothing.
 
 ## Brownfield trial: a clone that commits its own config
 
-`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the interview starter commits. A
+`BrownfieldTrial/starter-swiftgate.toml` is the `.swiftgate.toml` the timed-build starter commits. A
 brownfield one-shot trial ran `swiftgate run spec.md` on a fresh copy of the starter, and its
 discovery wrote the common dir's `config.toml` beside this committed file, so every command in the
 user's checkout failed on the 2 configs. The copy in that trial's repository matched this file byte
 for byte. From the repository root:
 
 ```sh
-cp evals/apps/interview-starter/.swiftgate.toml \
+cp evals/apps/timed-build-starter/.swiftgate.toml \
   plugin/gate/Tests/Fixtures/BrownfieldTrial/starter-swiftgate.toml
 ```
 
@@ -4176,7 +4188,7 @@ git -C $TRIALS/send-money-2/repo show \
 ```
 
 `app-core-slice-gate.jsonl` is the slice run the return cites: its `gate.step`s build `AppFeature`
-and `InterviewStarter` and test neither, each labelled `derivedData: "none"`.
+and `TimedBuildStarter` and test neither, each labelled `derivedData: "none"`.
 `grep -rniE '/Users|/private|/var/folders|caleb'` over these files matched nothing.
 
 ## Brownfield trial: an area test step's reports
@@ -4283,7 +4295,7 @@ at the contract commit, where the target exists. Each ran with Apple Swift 6.2 o
 ```sh
 D=BrownfieldTrial/send-money-3-prove-new-target B=0eb5b8291b6f0ba5c4d9453fa8ff19b28795daae
 git clone -q $R $SCRATCH/newtarget && git -C $SCRATCH/newtarget checkout -q d676ad6
-(cd $SCRATCH/newtarget && git checkout -q $B -- .swiftgate.toml App/InterviewStarterApp.swift \
+(cd $SCRATCH/newtarget && git checkout -q $B -- .swiftgate.toml App/TimedBuildStarterApp.swift \
   Packages/APIClient/Package.swift Packages/AppFeature/Package.swift &&
   git rm -q Packages/APIClient/Sources/AccountClient/AccountClient.swift \
   Packages/AppFeature/Sources/AppCore/{AmountFeature,AmountInput,ConfirmFeature}.swift \
@@ -4408,13 +4420,13 @@ root:
 
 ```sh
 F=plugin/gate/Tests/Fixtures/BrownfieldTrial D=$F/price-tracker-3-contract
-for p in $(git -C $G diff --name-only c138826 e54fcd5) App/InterviewStarterApp.swift; do
+for p in $(git -C $G diff --name-only c138826 e54fcd5) App/TimedBuildStarterApp.swift; do
   if git -C $G cat-file -e c138826:$p 2>/dev/null; then
     mkdir -p $D/base/$(dirname $p); git -C $G show c138826:$p > $D/base/$p; fi
   mkdir -p $D/contract/$(dirname $p); git -C $G show e54fcd5:$p > $D/contract/$p
 done
 rm -r $D/contract/App   # the contract left it identical to the base
-mkdir -p $D/seam/App; git -C $G show 44b3687:App/InterviewStarterApp.swift > $D/seam/App/InterviewStarterApp.swift
+mkdir -p $D/seam/App; git -C $G show 44b3687:App/TimedBuildStarterApp.swift > $D/seam/App/TimedBuildStarterApp.swift
 cp $T/PLAN.md $F/price-tracker-3-PLAN.md; cp $T/state/config.toml $F/price-tracker-3-config.toml
 ```
 
@@ -5246,7 +5258,7 @@ python3 - $T/run.jsonl > plugin/gate/Tests/Fixtures/Hooks/relative-heredoc-after
 import json,sys,re
 def scrub(c):
     c=re.sub(r'/Users/[^/]+/Developer/trials/practice/[^/]+/repo','/CLONE',c)
-    return c.replace('com.example.InterviewStarter','com.example.App')
+    return c.replace('com.example.TimedBuildStarter','com.example.App')
 cwd=None; denied={}
 lines=[json.loads(l) for l in open(sys.argv[1])]
 for d in lines:

@@ -22,7 +22,7 @@
         "Packages/AppFeature/Package.swift",
         "Packages/AppFeature/Sources/TicTacToe/",
         "Packages/AppFeature/Tests/TicTacToeTests/",
-        "InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme",
+        "TimedBuildStarter.xcodeproj/xcshareddata/xcschemes/TimedBuildStarter.xcscheme",
         ".swiftgate.toml"
       ]
     },

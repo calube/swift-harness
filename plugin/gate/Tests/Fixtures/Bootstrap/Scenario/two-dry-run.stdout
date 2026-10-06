@@ -53,9 +53,9 @@ CLAUDE.md -> AGENTS.md (new symlink)
 
 --- /dev/null
 +++ b/.swiftgate.toml
-@@ -0,0 +1,113 @@
+@@ -0,0 +1,121 @@
 +# swiftgate project profile. `swiftgate bootstrap` writes this file once and never rewrites it;
-+# edit it freely. Shape: the swift-harness design spec, section 5.4.
++# edit it freely. An unknown key or value is a config error that names itself.
 +schema = 1
 +xcode = "26.2"
 +app_scheme = "SampleApp"
@@ -96,8 +96,8 @@ CLAUDE.md -> AGENTS.md (new symlink)
 +# router = 400
 +# topic = 800
 +# [docs.budgets.sections]
-+# architecture defaults to 80 words (spec §5.3); an entry here overrides it and merges over,
-+# rather than replacing, the other section defaults.
++# A section named here gets that word budget. The architecture section defaults to 80 words;
++# an entry overrides only the sections it names and keeps the other defaults.
 +# architecture = 120
 +
 +# The test-quality judge sends test source and diffs to a model, so it is off until a repository
@@ -130,7 +130,8 @@ CLAUDE.md -> AGENTS.md (new symlink)
 +# name = "live"
 +# reason = "the app's own live dependencies, as it ships"
 +
-+# Bounds swiftgate's plan workflows enforce on a decomposed plan (design spec §9.3).
++# Bounds swiftgate's plan workflows enforce on a decomposed plan. `max_parallel` caps how many
++# tasks run at once.
 +# [plan]
 +# max_parallel = 3
 +
@@ -140,22 +141,29 @@ CLAUDE.md -> AGENTS.md (new symlink)
 +[harness]
 +profile = "default"
 +
-+# Named `build` presets (design spec §5.1). Every key is required: a typo fails `swiftgate doctor`
-+# rather than falling back to a default without warning.
++# Named `build` presets. Every key is required: a typo fails `swiftgate doctor` rather than
++# falling back to a default without warning. Values marked brownfield are accepted only in the
++# config `swiftgate discover` writes for a repository the harness doesn't own, never in this file.
 +[build.presets.default]
-+design_tier = "standard"
-+max_parallel = 3
-+review = "full"            # full: architecture + test-quality per task, verified; gate: the task gate only
-+task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready
-+merge_gate = "push"
-+worker_model = "tagged"    # tagged: the decomposer's tag; or sonnet | opus
-+time_budget_min = 0        # 0: no budget
-+stop_starts_before_min = 0
-+on_design_conflict = "amend"   # amend: full --amend flow; block: D14
-+task_proof = "per-task"    # per-task: each task gate runs --prove --mutate; final: only the final ready gate does
++design_tier = "standard"   # quick | standard | deep | sketch; none: a 1-page spec replaces the design
++max_parallel = 3           # tasks running at once (at least 1)
++review = "full"            # full: architecture + test-quality per task, verified; gate: the task gate only;
++                           # classified (brownfield): review depth follows the diff's risk class
++task_gate = "ledger"       # ledger: each task's planned gate; or fast | push | ready;
++                           # slice | merge | final (brownfield)
++merge_gate = "push"        # fast | push | ready; slice | merge | final (brownfield)
++worker_model = "tagged"    # tagged: the decomposer's tag; sonnet | opus: the current model of that name;
++                           # claude-sonnet-5-5 | claude-opus-5-5: pinned ids
++time_budget_min = 0        # minutes for the whole build; 0: no budget
++stop_starts_before_min = 0 # start no new task this many minutes before the budget ends
++on_design_conflict = "amend"   # amend: full --amend flow; block: block only the affected tasks and
++                               # their dependents, then ask once whether to retry, drop or stop
++task_proof = "per-task"    # per-task: each task gate runs --prove --mutate; final: only the final ready gate does;
++                           # prove (brownfield): each task gate proves its changed tests, never mutates
 +sim_qa = "changed"         # changed: drive the changed screens in a simulator after the final gate; off: skip
 +
-+[build.presets.interview]
++# A short time box: a sketch design, the fast gate per task, and proof once at the end.
++[build.presets.timed]
 +design_tier = "sketch"
 +max_parallel = 3
 +review = "gate"

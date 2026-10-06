@@ -1,5 +1,5 @@
 [
-  {"command": "open", "input": {"app": "com.example.InterviewStarter", "relaunch": true, "launchArgs": ["-harness-scenario", "success"]}},
+  {"command": "open", "input": {"app": "com.example.TimedBuildStarter", "relaunch": true, "launchArgs": ["-harness-scenario", "success"]}},
   {"command": "wait", "input": {"timeoutMs": 15000, "selector": "id=\"watchlist.price.bitcoin\" label=\"$64,000.00\""}},
   {"command": "wait", "input": {"timeoutMs": 5000, "selector": "id=\"watchlist.lastUpdated\""}},
   {"command": "wait", "input": {"kind": "duration", "durationMs": 1500}},

@@ -14,7 +14,7 @@
       },
       {
         "check" : "qa/refresh.flow.json",
-        "digest" : "4e052aa9ab80f6a60b075d596dd22a3d1dbd23e9ff7654fe85f41c36e729b5d2",
+        "digest" : "fe6d06fdfa332810f8a8d6ef4f43d8b19dafe648ba8cefd084c73be742fc8f0b",
         "layer" : "flow",
         "message" : "batch passed; sim verify GREEN over 4 steps; nit sim.a11y-untargeted: 24 findings on controls no flow step selects by id, each a missing accessibility identifier or readable label: a brownfield clone judges only the controls its flow's id= selectors name",
         "ms" : 13446,

@@ -258,6 +258,6 @@ struct ViewServerEnsurerTests {
     #expect(strings.contains(shot))
     #expect(strings.contains("Saved screenshot: \(shot)"))
     #expect(strings.contains("swiftgate-\(runID)-row1"))
-    #expect(strings.contains("com.example.InterviewStarter"))
+    #expect(strings.contains("com.example.TimedBuildStarter"))
   }
 }

@@ -281,7 +281,7 @@ struct ReusedFinalCutoffCostsTests {
     #expect(
       seconds([
         FinalGateArea(name: "LogClient", unreused: [.build, .test]),
-        FinalGateArea(name: "InterviewStarter", unreused: [.test]),
+        FinalGateArea(name: "TimedBuildStarter", unreused: [.test]),
       ]) == 56)
     #expect(seconds([FinalGateArea(name: "LogClient", unreused: [.e2e])]) == 227)
     #expect(seconds([FinalGateArea(name: "Unmeasured", unreused: [.build])]) == 227)

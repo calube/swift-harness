@@ -456,9 +456,9 @@ const round6 = {
         'Here is specs/favorites.md. Take it all the way to merged, green code.',
         'ship specs/favorites.md end to end',
       ]],
-      ['r6t-interview-preset', 60, 'names the interview preset for a spec', [
-        'Run the offline-sync README through the whole pipeline with the interview preset and tell me how long it took.',
-        'interview preset on docs/offline-sync-README.md, full run please',
+      ['r6t-timed-preset', 60, 'names the timed preset for a spec', [
+        'Run the offline-sync README through the whole pipeline with the timed preset and tell me how long it took.',
+        'timed preset on docs/offline-sync-README.md, full run please',
       ]],
     ],
     near: [

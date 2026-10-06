@@ -15,7 +15,7 @@ private func captured(_ relative: String) throws -> TrackedTreeSnapshot {
 }
 
 private func starterAreas() throws -> [ProposedArea] {
-  Discover.propose(tree: try captured("interview-starter"), head: "abc", dirty: []).areas
+  Discover.propose(tree: try captured("timed-build-starter"), head: "abc", dirty: []).areas
 }
 
 @Suite("discover gives a local package's unit tests an area of their own")
@@ -104,7 +104,7 @@ struct DiscoverPackageTestAreasTests {
     "a package test target the app's scheme runs is left out of the package area's swift test — catches the scheme's tests run twice"
   )
   func swiftTestSkipsSchemeRunTargets() throws {
-    let tree = try captured("interview-starter")
+    let tree = try captured("timed-build-starter")
     let area = try #require(
       SwiftPMReader.area(
         manifest: "Packages/AppFeature/Package.swift", in: tree, runElsewhere: ["AppCoreTests"]))
@@ -140,7 +140,7 @@ struct DiscoverPackageTestAreasTests {
   )
   func recordKeepsPackages() throws {
     let proposal = Discover.propose(
-      tree: try captured("interview-starter"), head: "abc", dirty: [])
+      tree: try captured("timed-build-starter"), head: "abc", dirty: [])
     let cache = DiscoverRecord.Cache(key: "k", inputs: [], areas: proposal.areas)
     let encoded = try JSONEncoder().encode(cache)
     let decoded = try JSONDecoder().decode(DiscoverRecord.Cache.self, from: encoded)

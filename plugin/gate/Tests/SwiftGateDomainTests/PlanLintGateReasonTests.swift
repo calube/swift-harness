@@ -7,7 +7,7 @@ import Testing
 /// then rewrote it to get past the refusal.
 private enum SendMoneyPlan {
   static let contract = "send-money-contract"
-  static let appAreas = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let appAreas = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
   static let untagged =
     "| req-existing-tests | | | | | the final gate runs every area's whole suite, APIClient and "
     + "LogClient included |"

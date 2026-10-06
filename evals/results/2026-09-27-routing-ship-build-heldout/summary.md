@@ -29,7 +29,7 @@ pass^3: 38 of 40 cases. Confusion: every row is on the diagonal except `ship` â†
 
 Neither miss chose another skill. Each spent its only turn reading the spec the prompt named. A
 real session has more turns and may load `ship` on turn 2, so a 1-turn trial counts this pattern
-against the skill. That matches the red-first miss on the tuning set, a formal "interview preset"
+against the skill. That matches the red-first miss on the tuning set, a formal "timed preset"
 request that also loaded nothing.
 
 ## Against the red-first

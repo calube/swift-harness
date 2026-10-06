@@ -15,7 +15,7 @@
 
 - APIClient (warm test unknown)
 - AppFeature (warm test 31.7 s, build-only)
-- InterviewStarter (xcode, warm test 76.8 s, build-only)
+- TimedBuildStarter (xcode, warm test 76.8 s, build-only)
 - LogClient is untouched; only `final` runs it.
 
 ## Assumptions
@@ -99,7 +99,7 @@ Build the watchlist and detail SwiftUI screens over the contract's state, with t
   - `AssetDetailView`: price text (`TrackerID.detailPrice`) always shown from the quote; a Swift Charts `LineMark` chart (`TrackerID.chart`) on `.loaded`, `ProgressView` (`TrackerID.chartLoading`) on `.loading`, error text (`TrackerID.chartError`) with a retry button (`TrackerID.chartRetry`) on `.failed`; `.task { await store.send(.task).finish() }`
   - previews with the preview client
 - Acceptance:
-  - the InterviewStarter app and AppFeature build; slice is GREEN
+  - the TimedBuildStarter app and AppFeature build; slice is GREEN
 - Out of scope:
   - reducer logic, the app's root scene, UI tests
 - Covers: req-watchlist, req-detail
@@ -110,14 +110,14 @@ Point the app's root scene at the tracker and rewrite the launch UI test for it.
 - Deps: tracker-ui, app-core, client-live · Gate: slice · estLines: 50
 - Why: "Replace that screen with the tracker"; req-watchlist on launch.
 - Scope:
-  - `InterviewStarterApp` builds a `Store(initialState: WatchlistFeature.State()) { WatchlistFeature() }` and shows `WatchlistView`
+  - `TimedBuildStarterApp` builds a `Store(initialState: WatchlistFeature.State()) { WatchlistFeature() }` and shows `WatchlistView`
   - `LaunchFlowUITests` waits up to 20 s for either the `TrackerID.row("bitcoin")` element or the `TrackerID.error` text, so it passes with or without the network, and asserts that "Bitcoin", "Ethereum" and "Solana" rows exist when the load succeeds
 - Acceptance:
   - the app builds for testing; slice is GREEN
 - Out of scope:
   - deleting the posts `AppFeature`
 - Covers: req-watchlist
-- Writes: App/InterviewStarterApp.swift, UITests/LaunchFlowUITests.swift
+- Writes: App/TimedBuildStarterApp.swift, UITests/LaunchFlowUITests.swift
 - Tests: UITests/LaunchFlowUITests.swift
 
 ### spec-validation

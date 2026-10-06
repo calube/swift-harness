@@ -9,9 +9,9 @@
         "The document docs/offline-sync-README.md already says exactly what offline sync should do. Rather than running design, planning and the build as separate steps, could you drive the entire pipeline from that README in one go?",
         "run the whole thing off docs/offline-sync-README.md, design thru build, one shot"
       ]],
-      ["r6-interview-preset-spec", "a spec plus a named preset (interview) and a request to get it built end to end", [
-        "This is a timed take-home exercise. The brief is in specs/take-home.md. Please get it implemented and merged end to end using the interview preset, and tell me how long the build took.",
-        "take-home brief in specs/take-home.md, interview preset, get it merged + tell me the wall time"
+      ["r6-timed-preset-spec", "a spec plus a named preset (timed) and a request to get it built end to end", [
+        "This is a timed exercise. The brief is in specs/brief.md. Please get it implemented and merged end to end using the timed preset, and tell me how long the build took.",
+        "timed brief in specs/brief.md, timed preset, get it merged + tell me the wall time"
       ]],
       ["r6-no-babysitting-streak", "wants a spec turned into shipped code without supervising each phase", [
         "I have a spec for a daily streak counter in specs/streak.md. I don't want to babysit each phase separately; please take it from spec to merged code and only stop if something actually breaks.",
@@ -55,9 +55,9 @@
         "The plan came back with nine ledger tasks. Please kick them off in parallel worktrees and merge each one into main as it completes.",
         "9 tasks in the ledger. fan them out in worktrees and merge as they land"
       ]],
-      ["r6-existing-plan-interview-preset", "an existing plan (not a spec) to execute under a named preset", [
-        "The offline-sync plan is already written and its ledger is set. Please execute it using the interview preset.",
-        "offline-sync plan already exists. run it w/ interview preset"
+      ["r6-existing-plan-timed-preset", "an existing plan (not a spec) to execute under a named preset", [
+        "The offline-sync plan is already written and its ledger is set. Please execute it using the timed preset.",
+        "offline-sync plan already exists. run it w/ timed preset"
       ]],
       ["r6-resume-after-red-main", "resuming an execution run that halted on a red main after the user fixed it", [
         "The run over the favorites ledger halted because main went red after a merge. I've fixed the failing test on main; please carry on with the remaining ledger tasks.",

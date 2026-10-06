@@ -1,7 +1,7 @@
 # swift-harness: the build executor
 
 **Status: Built.** `/swift-harness:build`, `/swift-harness:ship`, the `build-task` workflow, the `build-worker` and
-`build-fixer` agents, `swiftgate build`, `ledger` and `worktree`, and the `default` and `interview` presets all ship.
+`build-fixer` agents, `swiftgate build`, `ledger` and `worktree`, and the `default` and `timed` presets all ship.
 The `validate` stage shipped as simulator QA under a preset's `sim_qa` key; profiling has no code. Notes in §1,
 §5.1 and §8.6 mark where the code moved past this design.
 
@@ -9,7 +9,7 @@ The `validate` stage shipped as simulator QA under a preset's `sim_qa` key; prof
 `/swift-harness:build` starts each task once its dependencies merge, runs 1 worker per task in its own warm
 worktree, gates each merge and keeps the ledger current. `/swift-harness:ship` chains design, plan and build from
 1 spec file. Named presets in `.swiftgate.toml` set parallelism, review depth, gates, worker models and a time
-budget; the `interview` preset fits a timed, single-session build. It exists to turn a hand-run build loop into
+budget; the `timed` preset fits a timed, single-session build. It exists to turn a hand-run build loop into
 commands, a workflow and a skill that keep that loop's lessons as rules.
 
 <!-- RESUME
@@ -30,7 +30,7 @@ Three pieces turn an approved plan, or a single spec file, into merged, gated co
 - **`/swift-harness:ship <spec-file> --preset <name>`** chains design → plan → build from 1 file, such as
   the task README of a timed, single-session build, with a single command.
 - **Named presets** in `.swiftgate.toml` set parallelism, review depth, gate tiers, worker models, the
-  design tier and a time budget. Bootstrap stamps `default` and `interview`.
+  design tier and a time budget. Bootstrap stamps `default` and `timed`.
 
 The hand-run loop in the [orchestrator runbook](../process/orchestrator-runbook.md) built
 sub-projects 1 and 2. This spec turns that loop into commands, a workflow and a skill, and keeps the
@@ -58,7 +58,7 @@ runbook's lessons as rules.
 | D8 | `validate` stage; sub-projects 3–4 plug in | §8.6, §15 |
 | D9 | `swiftgate worktree create` seeds warm builds | §6.2 |
 | D10 | Decomposer tags each task's worker model | §5.2 |
-| D11 | `interview` preset gates: `fast` per task, `push` per merge, `ready` at the end | §10 |
+| D11 | `timed` preset gates: `fast` per task, `push` per merge, `ready` at the end | §10 |
 | D12 | Rehearsal fixture app and practice specs | §13 |
 | D13 | `/swift-harness:ship` | §3.1 |
 | D14 | `design-conflict` blocks only the affected tasks | §8.4 |
@@ -158,7 +158,7 @@ stop_starts_before_min = 0
 on_design_conflict = "amend"   # amend: full --amend flow; block: D14
 task_proof = "per-task"    # per-task: each task gate proves and mutates; final: only the final gate does
 
-[build.presets.interview]
+[build.presets.timed]
 design_tier = "sketch"
 max_parallel = 3
 review = "gate"
@@ -356,9 +356,9 @@ checks on merged `main`.
 `design-scope` never recommends `sketch`. Only a preset or `--tier sketch` selects it. The design doc's
 status frontmatter records `tier: sketch`, so a later reader knows no research lane checked its claims.
 
-## 10. The interview preset
+## 10. The timed preset
 
-The `interview` preset in §5.1 targets a timed, single-session build of 45 minutes. It budgets about 5 minutes
+The `timed` preset in §5.1 fits a single-session build in a short time box. It budgets about 5 minutes
 for design and plan, 30 for the build, and leaves the rest as slack for the person running it.
 
 | Knob | Value | Why |
@@ -412,7 +412,7 @@ stays out of scope, as in sub-project 2.
 
 - A pre-built TCA starter app plus 3 practice specs of increasing size, under `evals/` and coordinated with the
   evals session that owns that tree.
-- `/swift-harness:ship <spec> --preset interview` runs to completion on each practice spec with no manual step
+- `/swift-harness:ship <spec> --preset timed` runs to completion on each practice spec with no manual step
   other than the frame questions and the approval.
 - `swiftgate stats --build <run>` reports wall time per phase (design, plan, each task, merges, final gate)
   against the preset's budget. The rehearsal runs tune the §10 values.

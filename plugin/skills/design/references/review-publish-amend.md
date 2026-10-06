@@ -621,7 +621,7 @@ A clarify applies itself: it needs no review and no approval.
 
 ## Sketch
 
-`--tier sketch` is for a goal that already states what to build, such as an interview README. It
+`--tier sketch` is for a goal that already states what to build, such as a short spec README. It
 runs the frame, the drafter and the lints, and nothing else: no research lane, probe, claim checker
 or reviewer. The user approves through `AskUserQuestion`, not a page. `design-scope` never
 recommends `sketch`; only `--tier sketch`, or a preset through `/swift-harness:ship`, selects it.

@@ -43,14 +43,14 @@
               "candidateCount": 1,
               "bootOccurred": false
             },
-            "appName": "com.example.InterviewStarter",
-            "appBundleId": "com.example.InterviewStarter",
+            "appName": "com.example.TimedBuildStarter",
+            "appBundleId": "com.example.TimedBuildStarter",
             "startup": {
               "durationMs": 1404,
               "measuredAt": "2026-10-05T18:13:36.778Z",
               "method": "open-command-roundtrip",
-              "appTarget": "com.example.InterviewStarter",
-              "appBundleId": "com.example.InterviewStarter"
+              "appTarget": "com.example.TimedBuildStarter",
+              "appBundleId": "com.example.TimedBuildStarter"
             },
             "timing": {
               "runnerDemand": "none",
@@ -67,7 +67,7 @@
             "kind": "simulator",
             "device_udid": "UDID",
             "ios_simulator_device_set": null,
-            "message": "Opened: com.example.InterviewStarter"
+            "message": "Opened: com.example.TimedBuildStarter"
           },
           "durationMs": 1627
         },
@@ -92,7 +92,7 @@
                 "type": "Other",
                 "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
                 "subrole": "UIApplication",
-                "label": "InterviewStarter",
+                "label": "TimedBuildStarter",
                 "rect": {
                   "x": 0,
                   "y": 0,
@@ -187,8 +187,8 @@
                 }
               }
             },
-            "appName": "com.example.InterviewStarter",
-            "appBundleId": "com.example.InterviewStarter",
+            "appName": "com.example.TimedBuildStarter",
+            "appBundleId": "com.example.TimedBuildStarter",
             "refsGeneration": 988656
           },
           "durationMs": 490
@@ -219,7 +219,7 @@
                 "type": "Other",
                 "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
                 "subrole": "UIApplication",
-                "label": "InterviewStarter",
+                "label": "TimedBuildStarter",
                 "rect": {
                   "x": 0,
                   "y": 0,
@@ -314,8 +314,8 @@
                 }
               }
             },
-            "appName": "com.example.InterviewStarter",
-            "appBundleId": "com.example.InterviewStarter",
+            "appName": "com.example.TimedBuildStarter",
+            "appBundleId": "com.example.TimedBuildStarter",
             "refsGeneration": 988657
           },
           "durationMs": 508

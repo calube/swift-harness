@@ -65,7 +65,7 @@ struct AreaBuildPlacementTests {
         == ["/work/a/.build"])
     // Xcode keys a build by the project's path: a shared DerivedData rebuilt every target on each
     // switch of checkout, so an xcode area keeps the slot's own.
-    let starter = try Self.area("InterviewStarter")
+    let starter = try Self.area("TimedBuildStarter")
     let xcode = Self.request(starter, try #require(starter.build), in: "/work/repo-spec.slot-3")
     #expect(
       AreaBuildPlacement.checkout(xcode, kind: .xcode, layout: Self.slot)

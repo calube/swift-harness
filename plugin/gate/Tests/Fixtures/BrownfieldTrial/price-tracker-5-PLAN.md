@@ -15,7 +15,7 @@
 
 - APIClient (swiftpm; warm test unknown, test_files narrows to changed tests)
 - AppFeature (swiftpm; warm test unknown, test_files narrows to changed tests)
-- InterviewStarter (xcode; composition root and UI tests; warm test 141.8 s, build-only)
+- TimedBuildStarter (xcode; composition root and UI tests; warm test 141.8 s, build-only)
 
 ## Assumptions
 
@@ -42,7 +42,7 @@ Declare the CoinGecko client endpoints, the watchlist and detail features, their
 - Out of scope:
   - any behaviour of the new endpoints, reducers or views
 - Covers: req-watchlist
-- Writes: Packages/APIClient/Sources/APIClient/, Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift, Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift, Packages/AppFeature/Sources/AppCore/HarnessScenario.swift, Packages/AppFeature/Sources/AppUI/WatchlistView.swift, Packages/AppFeature/Sources/AppUI/AssetDetailView.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, App/InterviewStarterApp.swift
+- Writes: Packages/APIClient/Sources/APIClient/, Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift, Packages/AppFeature/Sources/AppCore/AssetDetailFeature.swift, Packages/AppFeature/Sources/AppCore/HarnessScenario.swift, Packages/AppFeature/Sources/AppUI/WatchlistView.swift, Packages/AppFeature/Sources/AppUI/AssetDetailView.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, App/TimedBuildStarterApp.swift
 
 ### spec-client-live
 Implement the live CoinGecko endpoints and test them against recorded JSON.

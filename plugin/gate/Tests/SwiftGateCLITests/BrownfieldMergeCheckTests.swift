@@ -1072,12 +1072,12 @@ extension BrownfieldMergeCheckTests {
     let branch = try await SendMoneyPlanBranch(root: clone.root)
 
     let first = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.firstMerge)
-    let app = first.proofs.filter { $0.target == "InterviewStarter" }
+    let app = first.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!app.isEmpty, "\(first.parts.findings.map(\.message))")
     #expect(app.allSatisfy { $0.proofBase == branch.planBase && $0.outcome == .proven })
 
     let second = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.secondMerge)
-    #expect(second.proofs.filter { $0.target == "InterviewStarter" } == [])
+    #expect(second.proofs.filter { $0.target == "TimedBuildStarter" } == [])
   }
 
   @Test(
@@ -1108,7 +1108,7 @@ extension BrownfieldMergeCheckTests {
     #expect(Self.verdict(final.parts) == .green)
     let unproven = final.parts.findings.filter { $0.ruleID == ProofRules.unprovenRuleID }
     #expect(unproven.count == 1)
-    #expect(unproven.allSatisfy { $0.severity == .nit && $0.message.contains("InterviewStarter") })
+    #expect(unproven.allSatisfy { $0.severity == .nit && $0.message.contains("TimedBuildStarter") })
     #expect(unproven.first?.message.contains(reason) == true)
     #expect(!final.parts.findings.contains { $0.ruleID == ProofRules.noEvidenceRuleID })
 
@@ -1160,7 +1160,7 @@ extension BrownfieldMergeCheckTests {
       clone, branch, tier: .merge, at: branch.firstMerge,
       proveReuse: Self.proveReuse(branch, store: store, runID: "merge-run", tier: .merge))
     #expect(merge.scratchRuns > 0)
-    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    let proved = merge.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
 
     let context = GateRun.Context(runID: "final-run", directory: clone.base)
@@ -1298,7 +1298,7 @@ extension BrownfieldMergeCheckTests {
       proveReuse: Self.proveReuse(
         branch, store: store, runID: "merge-run", tier: .merge, treeHash: tree))
     #expect(merge.scratchRuns > 0)
-    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    let proved = merge.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
     #expect(proved.allSatisfy { $0.proofBase == branch.secondMerge })
 

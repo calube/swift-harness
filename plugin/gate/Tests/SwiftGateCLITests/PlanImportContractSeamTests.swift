@@ -13,7 +13,7 @@ private struct SeamClone {
   static let slug = "spec"
   static let contract = "tracker-contract"
   static let planBranch = "swift-harness/spec"
-  static let appFile = "App/InterviewStarterApp.swift"
+  static let appFile = "App/TimedBuildStarterApp.swift"
   static let trial = Fixture.directory.appending(
     path: "BrownfieldTrial", directoryHint: .isDirectory)
 

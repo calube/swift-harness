@@ -114,7 +114,7 @@ tree and no commit to the user's branch.
   return against git. A merge conflict or a RED `main` goes to a fixer agent in its own
   worktree, and `build merge` can undo a merge.
 - **Time budgets have phases.** A build moves from normal to no new starts to cutoff. The
-  `interview` preset allows 38 minutes and starts only required tasks in the last 8. It runs
+  `timed` preset allows 38 minutes and starts only required tasks in the last 8. It runs
   `prove` and `mutate` once in the final gate
   ([ADR 0004](adrs/0004-proof-and-mutation-may-run-once-in-the-final-gate.md)).
 - **Worktrees start warm.** `swiftgate worktree create` clones a warm build into each task's

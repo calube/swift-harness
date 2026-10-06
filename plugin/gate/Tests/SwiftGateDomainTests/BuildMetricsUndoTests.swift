@@ -8,7 +8,7 @@ struct BuildMetricsUndoTests {
 
   private static let record = BuildRunRecord(
     runID: "20260927T000000Z-00000001", plan: "search", startedAt: startedAt,
-    presetName: "interview",
+    presetName: "timed",
     preset: BuildPreset(
       designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast),
       mergeGate: .push, workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8,

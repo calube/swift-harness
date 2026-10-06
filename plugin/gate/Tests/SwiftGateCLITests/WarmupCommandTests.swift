@@ -332,11 +332,11 @@ struct WarmupSeedCheckoutTests {
       in: .whitespacesAndNewlines)
     let checkouts = [planCheckout] + slots
     let seed = AreaCacheEnvironment.derivedDataSeed(
-      area: "InterviewStarter", layout: BrownfieldStateLayout(commonDir: common, gitDir: common))
+      area: "TimedBuildStarter", layout: BrownfieldStateLayout(commonDir: common, gitDir: common))
     for path in checkouts {
       let gitDir = try await clone.git("-C", path, "rev-parse", "--absolute-git-dir")
         .trimmingCharacters(in: .whitespacesAndNewlines)
-      let own = "\(gitDir)/swift-harness/derived-data/areas/InterviewStarter"
+      let own = "\(gitDir)/swift-harness/derived-data/areas/TimedBuildStarter"
       let inCheckout = runner.requests.filter { Self.inside($0.workingDirectory, path) }
       #expect(inCheckout.count == 1 + Self.packages.count, "\(path): \(inCheckout.map(\.command))")
       for package in Self.packages {
@@ -346,8 +346,8 @@ struct WarmupSeedCheckoutTests {
         #expect(swift.command == "swift build --scratch-path '\(prove)'")
         #expect(swift.workingDirectory == "\(path)/Packages/\(package)")
       }
-      let build = try #require(inCheckout.first { $0.area == "InterviewStarter" })
-      #expect(build.area == "InterviewStarter" && build.step == .build)
+      let build = try #require(inCheckout.first { $0.area == "TimedBuildStarter" })
+      #expect(build.area == "TimedBuildStarter" && build.step == .build)
       #expect(build.command.hasPrefix("xcodebuild -derivedDataPath '\(own)' build "))
       #expect(build.derivedDataSeed == DerivedDataSeedCopy(seed: seed, destination: own))
     }
@@ -362,8 +362,8 @@ struct WarmupSeedCheckoutTests {
     let proveTree = try #require(outcome.seeded.last?.checkout)
     #expect(proveTree.hasPrefix("\(planGitDir)/swift-harness/scratch/"))
     let proveBuild = try #require(runner.requests.last)
-    let proveData = "\(planGitDir)/swift-harness/derived-data/prove/InterviewStarter"
-    #expect(proveBuild.area == "InterviewStarter" && proveBuild.step == .build)
+    let proveData = "\(planGitDir)/swift-harness/derived-data/prove/TimedBuildStarter"
+    #expect(proveBuild.area == "TimedBuildStarter" && proveBuild.step == .build)
     #expect(
       proveBuild.command.hasPrefix("xcodebuild -derivedDataPath '\(proveData)' build-for-testing "),
       "\(proveBuild.command)")
@@ -427,7 +427,7 @@ extension WarmupSeedCheckoutTests {
   )
   func buildsTheQAAppInItsOwnSlot() async throws {
     let (clone, checkout) = try await Self.clone()
-    let project = clone.root.appending(path: "InterviewStarter.xcodeproj/project.pbxproj")
+    let project = clone.root.appending(path: "TimedBuildStarter.xcodeproj/project.pbxproj")
     try FileManager.default.createDirectory(
       at: project.deletingLastPathComponent(), withIntermediateDirectories: true)
     try Data("// !$*UTF8*$!\n".utf8).write(to: project)
@@ -457,8 +457,8 @@ extension WarmupSeedCheckoutTests {
     #expect(!runner.requests.contains { Self.inside($0.workingDirectory, qa) })
     let build = try #require(xcodebuild.buildRequests.first)
     #expect(xcodebuild.buildRequests.count == 1)
-    #expect(build.scheme == "InterviewStarter")
-    #expect(build.container == .project(path: "\(qa)/InterviewStarter.xcodeproj"))
+    #expect(build.scheme == "TimedBuildStarter")
+    #expect(build.container == .project(path: "\(qa)/TimedBuildStarter.xcodeproj"))
     #expect(
       build.derivedDataPath
         == SimUpCommand.derivedDataDirectory(root: URL(filePath: qa, directoryHint: .isDirectory))

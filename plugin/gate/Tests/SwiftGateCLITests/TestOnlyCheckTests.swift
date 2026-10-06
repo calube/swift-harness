@@ -364,7 +364,7 @@ struct TestOnlyCheckTests {
     let suggested = "`\"$SG\" test-only --area <area> \(id)`"
     #expect(message.contains(suggested), "\(message)")
     #expect(!message.contains("`test <area>:"), "\(message)")
-    for area in ["APIClient", "AppFeature", "LogClient", "InterviewStarter"] {
+    for area in ["APIClient", "AppFeature", "LogClient", "TimedBuildStarter"] {
       #expect(message.contains("`\(area)`"), "\(message)")
     }
 

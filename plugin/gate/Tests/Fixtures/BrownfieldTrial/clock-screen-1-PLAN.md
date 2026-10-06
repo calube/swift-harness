@@ -15,7 +15,7 @@
 ## Areas
 
 - AppFeature (Packages/AppFeature, swiftpm; warm test time unknown, slice measures it): EngineCore engine target, TargetFeature reducer, TargetView
-- InterviewStarter (., xcode; warm test time unknown): composition root and UITests; the app already links AppCore and AppUI, so no project file change
+- TimedBuildStarter (., xcode; warm test time unknown): composition root and UITests; the app already links AppCore and AppUI, so no project file change
 
 ## Assumptions
 

@@ -190,7 +190,7 @@ struct PlanImportValidationTests {
     #expect(!clone.exists("ledger.json"))
     #expect(!clone.exists("validation.json"))
 
-    let check = "`test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen |"
+    let check = "`test: TimedBuildStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen |"
     let reasoned = captured.replacingOccurrences(
       of: check + " |", with: check + " system: the app has no flow runner here |")
     try clone.write(plan: reasoned)
@@ -381,7 +381,7 @@ struct PlanImportValidationTests {
   }
 
   @Test(
-    "the send-money plan with its Validation section deleted fails the import with 1 app-without-flow naming the InterviewStarter area and the missing section, and writes nothing — catches a screen plan that skips every flow rule by leaving the section out"
+    "the send-money plan with its Validation section deleted fails the import with 1 app-without-flow naming the TimedBuildStarter area and the missing section, and writes nothing — catches a screen plan that skips every flow rule by leaving the section out"
   )
   func sendMoneyWithoutSectionFailsImport() async throws {
     let captured = try String(
@@ -401,7 +401,7 @@ struct PlanImportValidationTests {
     #expect(
       report.message.components(separatedBy: PlanLintValidation.appWithoutFlowRuleID).count == 2,
       "\(report.message)")
-    #expect(report.message.contains("`InterviewStarter`"), "\(report.message)")
+    #expect(report.message.contains("`TimedBuildStarter`"), "\(report.message)")
     #expect(report.message.contains("`## Validation`"), "\(report.message)")
     #expect(!report.message.contains(PlanLintValidation.screenWithoutFlowRuleID))
     #expect(!clone.exists("ledger.json"))

@@ -6,7 +6,7 @@ import Testing
 /// The captured starter's tracked tree, as discover reads it.
 private func starterTree() throws -> TrackedTreeSnapshot {
   let directory = Fixture.directory.appending(
-    path: "Discover/interview-starter", directoryHint: .isDirectory)
+    path: "Discover/timed-build-starter", directoryHint: .isDirectory)
   let listing = try String(contentsOf: directory.appending(path: "ls-files.txt"), encoding: .utf8)
   let tree = directory.appending(path: "tree", directoryHint: .isDirectory)
   return TrackedTreeSnapshot(

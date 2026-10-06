@@ -8,7 +8,7 @@ import Testing
 /// a seed, and its reason-only rows excuse interactions with moving entities.
 private enum ClockScreenPlan {
   static let contract = "spec-contract"
-  static let starter = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let starter = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
 
   static var captured: String {
     get throws {

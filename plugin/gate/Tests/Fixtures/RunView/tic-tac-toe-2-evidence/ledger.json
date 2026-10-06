@@ -24,7 +24,7 @@
         "Packages/AppFeature/Tests/GameCoreTests/",
         "Packages/AppFeature/Sources/AppCore/GameFeature.swift",
         "Packages/AppFeature/Sources/AppUI/AccessibilityID.swift",
-        "InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme"
+        "TimedBuildStarter.xcodeproj/xcshareddata/xcschemes/TimedBuildStarter.xcscheme"
       ]
     },
     {

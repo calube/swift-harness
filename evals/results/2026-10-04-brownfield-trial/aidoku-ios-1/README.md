@@ -8,7 +8,7 @@ download queue summary row: a value type, a SwiftUI row with an accessibility id
 harness ran from this branch's `plugin/bin/swiftgate`, which is main at `99f847d0`, built as source hash
 `18477dbc3f8e90ef`.
 
-**Verdict: the one-shot run PASSES, in 29.6 minutes for $2.43, inside the 45-minute expectation.** `spec.md` went to
+**Verdict: the one-shot run PASSES, in 29.6 minutes for $2.43, inside the time box.** `spec.md` went to
 the plan branch `swift-harness/spec` at `835ba9da` with all 3 tasks done. The contract went through `plan import
 --contract`, then came 2 merges, each with a GREEN `merge` gate that built the app, ran its tests on the simulator and
 proved the new test. `final` is GREEN. The run asked the user nothing and raised no halt.

@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: This skill should be used to stamp or upgrade the swift-harness layer in a Swift/iOS app repository with `swiftgate bootstrap` (AGENTS.md router, .swiftgate.toml inferred from the repo, format/lint configs, lefthook git hooks, .gitignore entries, the plan index, the ~/.local/bin/swiftgate link). Shows the diff and asks before writing. In a repository the harness doesn't own, its brownfield branch runs `swiftgate discover --apply`, which writes only under the git dir. Use when the user says "bootstrap", "set up swift-harness", "install the harness in this repo", "upgrade the harness files", "add the git hooks", or when `swiftgate doctor` reports the shim missing or stale, or a repo has no .swiftgate.toml.
+description: This skill should be used to stamp or upgrade the swift-harness layer in a Swift/iOS app repository with `swiftgate bootstrap` (AGENTS.md router, .swiftgate.toml inferred from the repo, format/lint configs, lefthook git hooks, .gitignore entries, the docs/index.md router, the ~/.local/bin/swiftgate link). Shows the diff and asks before writing. In a repository the harness doesn't own, its brownfield branch runs `swiftgate discover --apply`, which writes only under the git dir. Use when the user says "bootstrap", "set up swift-harness", "install the harness in this repo", "upgrade the harness files", "add the git hooks", or when `swiftgate doctor` reports the shim missing or stale, or a repo has no .swiftgate.toml.
 ---
 
 # Bootstrap
@@ -22,8 +22,8 @@ must stay as they are, or the git common dir already holds `swift-harness/config
    directory; bootstrap then leaves `lefthook.yml` alone, says how to wire the toplevel one, and
    does not run `lefthook install`.
 2. Run `"$SG" bootstrap`. When the user says what the repository is optimised for, such as
-   interview practice, run `"$SG" bootstrap --profile <name>` instead, where `<name>` is a
-   `[build.presets.<name>]` table the template stamps (`default` or `interview`), and keep the
+   timed builds, run `"$SG" bootstrap --profile <name>` instead, where `<name>` is a
+   `[build.presets.<name>]` table the template stamps (`default` or `timed`), and keep the
    flag for the apply. The profile only picks the preset `/swift-harness:build` and
    `/swift-harness:ship` use without `--preset`. The first call after a plugin update builds swiftgate, which can take a
    few minutes; let it finish in the foreground. Exit status 2 here means BLOCKED before any
