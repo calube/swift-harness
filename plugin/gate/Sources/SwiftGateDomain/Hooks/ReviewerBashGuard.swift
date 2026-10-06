@@ -1,5 +1,6 @@
-/// PreToolUse guard on the review agents' Bash: they hold the tool only to open and close their
-/// own run-viewer span, so any other command is denied.
+/// PreToolUse guard on the review agents' Bash, a backstop: their tool lists hold no Bash, and the
+/// workflow records their spans through a plain agent. Should one ever reach Bash, only 1 command
+/// that opens or closes its own run-viewer span passes, and any other is denied.
 ///
 /// It is an allowlist read with its own strict lexer rather than ``ShellSyntax``, which splits
 /// generously to find commands to deny: here anything the lexer doesn't fully understand denies.

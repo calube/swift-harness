@@ -24,8 +24,8 @@ const ARGS =
       })()
     : args
 
-// `TaskReturn`'s JSON keys (the gate's D/Build/TaskReturn.swift). check-return rejects a missing or
-// extra key, so the return is rebuilt from exactly these.
+// `TaskReturn`'s JSON keys (the gate's SwiftGateDomain/Build/TaskReturn.swift). check-return
+// rejects a missing or extra key, so the return is rebuilt from exactly these.
 const TASK_RETURN_KEYS = [
   'task', 'outcome', 'commits', 'gate', 'review', 'testsAdded', 'notes', 'designConflict', 'surfaceCommit',
 ]
