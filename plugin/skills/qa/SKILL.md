@@ -40,8 +40,8 @@ A plan built from a design or a brownfield `PLAN.md` may carry a validation tabl
   step 2.
 - Exit 2 naming several plans: run it again with `"$SG" qa run --plan <slug> --json` for the plan
   this change belongs to.
-- Otherwise list each row's `requirement`, `layer` and `result` (`pass`, `red`, `unverified` or
-  `waiting`) from `rows[]`. The run already drove its flow rows on its own leased devices and wrote
+- Otherwise list each row's `requirement`, `layer` and `result` (`pass`, `red`, `unverified`,
+  `waiting` or `abandoned`) from `rows[]`. The run already drove its flow rows on its own leased devices and wrote
   `.harness/runs/<runID>/qa/report.json`.
 
 A `red` row is a finding like any other: it goes to step 4 with the run's verdict. Then explore
@@ -124,7 +124,10 @@ Each flow's verdict is the one `sim verify` printed, or, when no run started, th
 printed. The skill never states a verdict `sim verify` didn't print, and never turns a RED or
 BLOCKED into a pass because the screen looked right.
 
-- `GREEN` for every flow and every row `pass` or `waiting`: QA passed.
+- `GREEN` for every flow and every row `pass` or `waiting`: QA passed. An `abandoned` row, which
+  only a run after the build ended reads, never passes: its task was abandoned before it merged,
+  so the row never ran, and its `qa.check-unverified` finding gates. Report it with the task the
+  message names.
 - Any `RED`, or a `red` row: list each finding as `rule step path — message`, plus the typed reason
   of any failed `wait`, and hand off to `/swift-harness:tdd` to name the regression in a failing
   test and fix it. Called from a validate stage, list them and hand off nothing: the caller decides.

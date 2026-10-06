@@ -98,7 +98,7 @@ Bash commands get these guards too, through [Bash writes](#bash-writes).
 | `guard.subagent-protected-path` | A subagent's write into `.git`, `.claude`, `.vscode` or `.idea`, which Claude Code always asks about. |
 | `guard.subagent-outside-checkouts` | A subagent's write outside the repository's checkouts, such as `/tmp`. The denial names `.harness/tmp/`. |
 | `guard.build-agent-main-checkout` | A build worker's or fixer's write to the main checkout. |
-| `guard.reviewer-bash` | Any Bash call by `swift-harness:architecture`, `swift-harness:test-quality` or `swift-harness:verifier` other than 1 `swiftgate events span start\|end`, even outside a project. |
+| `guard.reviewer-bash` | Any Bash call by `swift-harness:architecture`, `swift-harness:test-quality` or `swift-harness:verifier` other than 1 `swiftgate events span start\|end`, even outside a project. These agents hold no Bash, so the guard is a backstop for a call that is ever attempted. |
 | `guard.fixer-gate-cap` | A merge fixer's `swiftgate check` at `push`, `ready`, `merge` or `final` once its worktree's run history holds 3 such runs. The denial names `swiftgate test-only`. |
 | `guard.build-agent-foreground` | A build worker or fixer launched without `run_in_background: true`. |
 | `guard.foreground-timeout` | Not a denial: in a run session, holds an orchestrator's foreground Bash `timeout` to 120 s ([Run sessions](#run-sessions)). |
@@ -190,7 +190,7 @@ When a PreToolUse call carries `agent_id`, the hook decides it after the guards 
 | A write into `.git`, `.claude`, `.vscode` or `.idea` | deny (`guard.subagent-protected-path`) |
 | A write outside the repository's checkouts, such as `/tmp` | deny, naming `.harness/tmp/` (`guard.subagent-outside-checkouts`) |
 | A build worker's or fixer's write to the main checkout | deny (`guard.build-agent-main-checkout`) |
-| A reviewer's or verifier's Bash other than 1 `swiftgate events span start\|end`, even outside a project | deny (`guard.reviewer-bash`) |
+| A reviewer's or verifier's Bash other than 1 `swiftgate events span start\|end`, even outside a project; they hold no Bash, so only if ever attempted | deny (`guard.reviewer-bash`) |
 | A merge fixer's `swiftgate check` at `push`, `ready`, `merge` or `final` when its worktree's run history already holds 3 such runs | deny, naming `swiftgate test-only` (`guard.fixer-gate-cap`) |
 | Anything else | allow |
 

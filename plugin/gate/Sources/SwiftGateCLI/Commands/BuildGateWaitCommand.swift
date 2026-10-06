@@ -181,7 +181,7 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
   @Argument(help: "The plan's slug.")
   var plan: String
 
-  @Option(help: "The gate's tier: merge or final.")
+  @Option(help: "The gate's tier, as `check --tier` takes it.")
   var tier: CheckTier?
 
   @Flag(
@@ -204,7 +204,7 @@ struct BuildGateWaitCommand: AsyncParsableCommand {
 
   func validate() throws {
     guard (tier == nil) == qa else {
-      throw ValidationError("name exactly 1 of --tier <merge|final> and --qa")
+      throw ValidationError("name exactly 1 of --tier <tier> and --qa")
     }
   }
 

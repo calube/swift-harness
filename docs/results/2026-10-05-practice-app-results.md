@@ -60,11 +60,18 @@ a run stopped, not only by pass or fail.
 
 | Measure | Value |
 |---|---|
-| Merges to `main`, 2026-10-04 evening to 2026-10-05 | 123 |
-| Merges on 2026-10-05 | 40 (153 non-merge commits) |
-| Lines changed on 2026-10-05 | +20,891 / −2,118 across 400 files |
-| `swift test` suite size | 4,534 → 4,689 tests |
-| Pushes on 2026-10-05 | 10, each after two clean full-suite runs in a row and a leak scan |
+| Merges to `main`, 2026-10-04 18:00 to the freeze tag | 124 |
+| Merges to `main` on 2026-10-05 | 73 (318 non-merge commits) |
+| Lines changed on 2026-10-05 | +73,695 / −2,556 across 1,029 files, 1,002 of them under `plugin/`, mostly captured test fixtures |
+| `swift test` suite size | 4,534 → 4,689 tests, per `swift test` output |
+| Pushes on 2026-10-05 | 16, each after two clean full-suite runs in a row and a leak scan |
+
+These counts come from the tag `harness-freeze-2026-10-05`, with times in UTC−5. Merges
+are `git log harness-freeze-2026-10-05 --first-parent --merges --since=<start>`, with start
+`'2026-10-04 18:00 -0500'` or `'2026-10-05 00:00 -0500'`. Non-merge commits are `git log
+harness-freeze-2026-10-05 --no-merges --since='2026-10-05 00:00 -0500'`. Lines are `git diff
+--shortstat` from `32f3349d`, the last `main` commit of 2026-10-04, to the tag. Pushes are the
+2026-10-05 `update by push` entries in the orchestrator clone's `origin/main` reflog.
 
 Fixes that showed no reliable measured win stayed unmerged: running warm-up builds at a lower priority, and running
 only the changed UI tests in prove.

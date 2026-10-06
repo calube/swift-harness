@@ -571,7 +571,9 @@ A clarify applies itself: it needs no review and no approval.
 2. **Evidence.** New claims and their probes go through the verify phase before review.
 3. **Delta review.** 2 agents on the changed sections, at `standard` and `deep`. `quick` has no
    reviewers: the approval is its review. Map each trigger to its section anchor:
-   `requirement-line` to `requirements`, `decision` to `decision`, `module-kinds` to
+   `requirement-line` to `requirements`, plus each other section holding a line with a `changedIds`
+   `req-` id, since that trigger fires on a `req-` line anywhere in the doc and names no section
+   itself; `decision` to `decision`, `module-kinds` to
    `module-kinds`, `test-plan` to `test-plan-by-tier`, `changelog` to `changelog`. Build the
    evidence auditor's pack with those anchors as `--doc-anchor` and the claims they cite as
    `--claim-id`, and the standards

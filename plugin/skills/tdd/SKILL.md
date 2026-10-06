@@ -5,7 +5,7 @@ description: This skill should be used for test-first work on Swift code in a sw
 
 # TDD
 
-Every behavior starts as a failing test. Rules cited as `P1`–`P11` live in the plugin's
+Every behavior starts as a failing test. Rules cited as `P1`–`P12` live in the plugin's
 `docs/testing-playbook.md` (§ 7 has a worked example per pattern); `D1`, `G1` in
 `docs/standards.md`.
 

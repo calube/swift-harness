@@ -12,9 +12,9 @@ in [`simulator-qa-at-base.md`](simulator-qa-at-base.md). Rule ids are in
 
 `--output <path>` writes the JSON report, as `--json` prints it, to `<path>` and nothing else. The
 `run <id> started` line and all other output stay on the terminal, which gets the 1-line summary,
-so the file always parses. A relative path starts from the checkout's top level, and `qa run`
-makes any missing folders. It creates the file empty as the run starts and fills it once the run
-ends; `build gate-wait --qa` watches it. Send the JSON there, never with `--json > file 2>&1`,
+so the file always parses. A relative path starts from the current directory, so run `qa run`
+from the checkout's top level; it makes any missing folders. It creates the file empty as the run
+starts and fills it once the run ends; `build gate-wait --qa` watches it. Send the JSON there, never with `--json > file 2>&1`,
 which puts the start line first.
 
 `--deadline <time>` takes an ISO 8601 time or whole seconds from now. The wait for the build

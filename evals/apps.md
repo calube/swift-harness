@@ -40,7 +40,8 @@ a gap between them is visible.
 
 ## Tasks
 
-A task is a directory under `evals/tasks/<app>/<task-slug>/` holding:
+Planned: no `evals/tasks/` directory exists yet. A task will be a directory under
+`evals/tasks/<app>/<task-slug>/` holding:
 
 - `prompt.md`: what the user types, written the way a user would write it. No hints about harness
   rules unless the task is about them.

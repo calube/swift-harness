@@ -1,8 +1,8 @@
 # Simulator QA
 
-This page covers the 3 `swiftgate qa` commands that check a plan's validation rows: `qa lint`
-checks flow files offline, `qa run` runs the rows, and `qa adopt` takes a validation worker's
-checks into plan state. Read it when you write, run or read a validation row.
+This page covers the 4 `swiftgate qa` commands that check a plan's validation rows: `qa lint`
+checks flow files offline, `qa run` runs the rows, `qa adopt` takes a validation worker's
+checks into plan state, and `qa stage` copies them back. Read it when you write, run or read a validation row.
 
 | Topic | Page |
 |---|---|
@@ -15,6 +15,7 @@ checks into plan state. Read it when you write, run or read a validation row.
 | `--output`, `--deadline`, and the rows the final run takes | [`simulator-qa-run-bounds.md`](simulator-qa-run-bounds.md) |
 | `--at-base`, `--before-merge` and a validation worker's prepared run | [`simulator-qa-at-base.md`](simulator-qa-at-base.md) |
 | Rewriting a flow row with `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
+| Staging 1 requirement's checks for a repair with `qa stage` | [`simulator-qa-stage.md`](simulator-qa-stage.md) |
 | `sim up`, `sim verify` and `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Which controls `sim verify`'s accessibility audit judges | [`simulator-qa-audit.md`](simulator-qa-audit.md) |
 
@@ -164,3 +165,11 @@ worktree has no prepared folder, or when the folder names no plan.
 
 `--repair <requirement>` takes only 1 requirement's rewritten checks. See
 [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md).
+
+## qa stage
+
+```bash
+swiftgate qa stage <worktree> --plan <slug> --requirement <requirement> [--json]
+```
+
+See [`simulator-qa-stage.md`](simulator-qa-stage.md).

@@ -7,7 +7,7 @@ description: This skill should be used to judge whether a swift-harness Swift ch
 
 Sequence: scope → `push` → test-slop judgment → `ready`. Each tool step stops the sequence on RED:
 running a slower tier over code that fails a faster one wastes minutes and tokens. Rules cited as
-`P1`–`P11` live in the plugin's `docs/testing-playbook.md`.
+`P1`–`P12` live in the plugin's `docs/testing-playbook.md`.
 
 `SG="${CLAUDE_PLUGIN_ROOT}/bin/swiftgate"`. Pass `--base <ref>` to `impact` and `check` when the
 branch does not target `origin/main`. Read only `verdict`, `tiers[]` and `findings[]` from `--json`

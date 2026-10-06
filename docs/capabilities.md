@@ -63,6 +63,7 @@ Jev blocks on its own with a reason Claude writes, and hands its uncertain answe
 | `sim snap <label> --assert <text>` | Records a screenshot and accessibility tree as the next step |
 | `sim verify` | Judges the recorded steps GREEN, RED or BLOCKED, including missing accessibility ids and labels |
 | `sim down` | Closes the session, deletes the clone and frees the slot |
+| `sim hold --run <runID>` | Holds 1 slot and device for a run; `sim up` starts it, and you don't run it yourself |
 | `qa lint` | Checks `agent-device` flow files offline, before any device boots |
 | `qa run` | Runs a plan's validation rows in layer order: acceptance, flow, state |
 
@@ -151,8 +152,9 @@ tree and no commit to the user's branch.
   token counts land in `.harness/events/`, with no source, prompt or key. `events summary`
   reports cost, gate time, wrong verdicts, flaky tests and halts. `[telemetry] enabled = false`
   opts out, except the judge's audit log ([`telemetry.md`](../plugin/docs/telemetry.md)).
-- **The run viewer.** `report --html` writes 1 offline page per build run: timeline, spec
-  coverage, proofs, tokens, gates and flow videos. `view` serves it live
+- **The run viewer.** `report --html` writes 1 offline page per build run: timeline, a kanban
+  board of tasks, the dependency graph in waves, spec coverage, gates and proofs, tokens and
+  dollar cost, and validation rows with flow videos. `view` serves it live
   ([`run-viewer.md`](../plugin/docs/run-viewer.md)).
 - **`stats`** reports per-command, per-tier p50 and p95 against budgets from run history.
 - **`doctor`** checks the Xcode pin, toolchain, runtime, disk and shim, and flags a plugin changed

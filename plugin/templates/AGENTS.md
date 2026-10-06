@@ -21,7 +21,7 @@ by their `index.md`:
 
 - `standards.md`: concurrency, architecture, clients, errors, logging, SwiftUI, comments.
   Rule ids such as `det.date-init` or `A2` point into it.
-- `testing-playbook.md`: tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P11).
+- `testing-playbook.md`: tiers T0–T3, test naming, red/green proof, snapshots, flows (P1–P12).
 
 **This repository's own docs.** [`docs/index.md`](docs/index.md) routes every doc this repository
 has: designs, plans, ADRs, handoffs. Add a row there whenever you add a new one.
