@@ -66,7 +66,7 @@ a run stopped, not only by pass or fail.
 | `swift test` suite size | 4,534 → 4,689 tests, per `swift test` output |
 | Pushes on 2026-10-05 | 16, each after two clean full-suite runs in a row and a leak scan |
 
-The counts are recomputed against the tag `harness-freeze-2026-10-05`, with times in UTC−5. Merges
+These counts come from the tag `harness-freeze-2026-10-05`, with times in UTC−5. Merges
 are `git log harness-freeze-2026-10-05 --first-parent --merges --since=<start>`, with start
 `'2026-10-04 18:00 -0500'` or `'2026-10-05 00:00 -0500'`. Non-merge commits are `git log
 harness-freeze-2026-10-05 --no-merges --since='2026-10-05 00:00 -0500'`. Lines are `git diff

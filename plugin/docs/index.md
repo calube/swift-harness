@@ -24,6 +24,7 @@ into a committed file.
 | Writing a flow's `wait` and `is` steps: the input key each `wait` kind reads, and `qa.flow-kind-key` | [`simulator-qa-flow-steps.md`](simulator-qa-flow-steps.md) |
 | Naming an element in a flow step: the selector keys `id`, `label`, `value` and `role`, whole-value matching, several terms and `||` alternatives | [`simulator-qa-flow-selectors.md`](simulator-qa-flow-selectors.md) |
 | Rewriting a flow row its flow file kept red, with `qa run --requirement` and `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
+| Staging 1 requirement's adopted checks in a checkout for a flow repair with `qa stage`, and why it refuses | [`simulator-qa-stage.md`](simulator-qa-stage.md) |
 | How T3 turns each kept XCUITest flow into a qa.flow record with its video | [`simulator-qa-kept-flows.md`](simulator-qa-kept-flows.md) |
 | Judging a simulator run's steps with `swiftgate sim verify`, or ending it with `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Which controls `sim verify`'s accessibility rules judge, in an owned repository or a brownfield clone | [`simulator-qa-audit.md`](simulator-qa-audit.md) |

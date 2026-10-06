@@ -25,8 +25,9 @@ never edits a flow file: flow files live in plan state, which only `qa adopt` wr
 
 ## The repair worker's red run
 
-`qa stage <worktree> --plan <plan> --requirement <requirement>` empties the checkout's
-`.harness/qa/` and fills `.harness/qa/<plan>/` with that requirement's adopted checks alone.
+[`qa stage <worktree> --plan <plan> --requirement <requirement>`](simulator-qa-stage.md) empties
+the checkout's `.harness/qa/` and fills `.harness/qa/<plan>/` with that requirement's adopted checks
+alone.
 
 The worker rewrites only those check files, then proves them red at the merge base itself. The
 build loop repairs several rows 1 requirement at a time, each in its own folder:

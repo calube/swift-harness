@@ -108,7 +108,7 @@ The board and the graph are optional modules. The page inlines every `run-viewer
 `run-viewer-*.css` present, and a module's tab shows once it draws.
 
 - **Board.** It puts each task in a lane: queued, building, gating, review, merged or blocked. The
-  blocked lane holds a task whose status is blocked, needs-replan or abandoned, and a task with an
+  blocked lane holds a task with the status blocked, needs-replan or abandoned, and a task with an
   open halt.
 - **Graph.** It draws the deps as SVG, in waves.
 - **Task popover.** A card, node or Overview row opens it: status, column, deps, latest gate,
