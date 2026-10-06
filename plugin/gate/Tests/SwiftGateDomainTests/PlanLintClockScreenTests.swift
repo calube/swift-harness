@@ -62,7 +62,9 @@ private enum ClockScreenPlan {
     "  - `launch-held` also holds the clock after Start again, until the next input"
 }
 
-@Suite("plan-lint validation: a screen whose state advances on a clock needs a held scenario, and a seed makes a moving target placeable")
+@Suite(
+  "plan-lint validation: a screen whose state advances on a clock needs a held scenario, and a seed makes a moving target placeable"
+)
 struct PlanLintClockScreenTests {
   @Test(
     "the captured plan: spec-screen's timer drives the screen its req-launch flow row checks while the contract names no `-harness-scenario` seam, so clock-unheld fires once at that row's line, naming the contract's PLAN.md section it read and the Scope line to add there; req-motion, req-cut-target and req-hazard, excused as random or moving while the engine takes a seed, are obstacle-seedable; req-seed, req-cut-test and req-miss stay clear — catches the plan whose launch check raced the clock and whose gesture requirements never got a flow, and a message that sends the fix to the source the rule never reads"

@@ -11,7 +11,8 @@ struct ScratchTreeBuildTests {
     gitDir: URL(filePath: "/clone/.git/worktrees/task", directoryHint: .isDirectory))
   private static let main = BrownfieldStateLayout(commonDir: common, gitDir: common)
   private static let shared = "/clone/.git/swift-harness/caches/swiftpm-scratch/AppFeature"
-  private static let slotProve = "/clone/.git/worktrees/task/swift-harness/derived-data/prove/AppFeature"
+  private static let slotProve =
+    "/clone/.git/worktrees/task/swift-harness/derived-data/prove/AppFeature"
 
   /// 1 of the send-money trial's discovered areas, with the commands discovery wrote for it.
   private static func area(_ name: String) throws -> BrownfieldArea {
@@ -41,8 +42,10 @@ struct ScratchTreeBuildTests {
   )
   func swiftPMCommandsGetTheWorktreesProvePath() throws {
     let area = try Self.area("AppFeature")
-    #expect(ScratchTreeBuild.swiftPMScratchPath(area: area.name, layout: Self.linked) == Self.shared)
-    #expect(ScratchTreeBuild.proveScratchPath(area: area.name, layout: Self.linked) == Self.slotProve)
+    #expect(
+      ScratchTreeBuild.swiftPMScratchPath(area: area.name, layout: Self.linked) == Self.shared)
+    #expect(
+      ScratchTreeBuild.proveScratchPath(area: area.name, layout: Self.linked) == Self.slotProve)
     #expect(ScratchTreeBuild.proveScratchPath(area: area.name, layout: Self.main) == Self.shared)
     let commands = try [area.build, area.test, area.testFiles].map { try #require($0) }
     for (layout, path) in [(Self.linked, Self.slotProve), (Self.main, Self.shared)] {

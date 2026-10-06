@@ -344,7 +344,8 @@ struct PlanImportValidationTests {
         captured.split(separator: "\n").first { $0.hasPrefix("| \(requirement) |") })
       flowed = try replacing(
         String(old),
-        with: "| \(requirement) | flow | `qa/\(flow).flow.json` | launch-wiring | spec-validation | |",
+        with:
+          "| \(requirement) | flow | `qa/\(flow).flow.json` | launch-wiring | spec-validation | |",
         in: flowed)
     }
     try clone.write(plan: flowed)
@@ -590,7 +591,8 @@ struct PlanImportValidationTests {
     try ledger.write(to: ledgerFile)
 
     try clone.write(
-      plan: try Self.sendMoney3Refused(reason: "gate: the final gate runs every area's whole suite"))
+      plan: try Self.sendMoney3Refused(reason: "gate: the final gate runs every area's whole suite")
+    )
     let moved = await clone.run()
 
     #expect(moved.status == .invalid, "\(moved.message)")

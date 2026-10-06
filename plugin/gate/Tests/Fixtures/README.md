@@ -7,13 +7,13 @@ through `sed "s#$ROOT#/REPO#g"` (with `ROOT=$(pwd)`) so fixtures carry no machin
 decode them with repository root `/REPO`.
 
 The practice starter app in `evals/apps/timed-build-starter` took its current name after many of
-these captures. Every fixture captured from it, or from a trial cloned from it, had the starter's
-earlier app name replaced by `TimedBuildStarter` (bundle id `com.example.TimedBuildStarter`, folder
-`timed-build-starter`) in its text, its folder and file names, and the bundle id of the one binary
-container plist (`plutil -replace MCMMetadataIdentifier`). A recorded digest of a renamed file (a
-flow row's `digest`, a config's git blob id) was recomputed over the renamed bytes the same way the
-gate computes it; nothing else in those fixtures changed.
-The commands below name the starter by its current name.
+these captures. In every fixture captured from it, or from a trial cloned from it, the rename put
+`TimedBuildStarter` in place of the starter's earlier app name. It reached the text, the folder and
+file names, and the bundle id of the one binary container plist (`plutil -replace
+MCMMetadataIdentifier`), and the bundle id became `com.example.TimedBuildStarter`. The rename also
+recomputed each recorded digest of a renamed file (a flow row's `digest`, a config's git blob id)
+over the renamed bytes, the same way the gate computes it. Nothing else in those fixtures changed,
+and the commands below name the starter by its current name.
 
 ## SwiftPM
 
@@ -901,8 +901,8 @@ the harness: 1 `@main … : App` file, `App/SampleApp.swift`. Not a git reposito
 ran with `HOME=<scratch>/home SWIFTGATE_CACHE_DIR=<scratch>/cache SWIFTGATE_BUILD_CONFIG=debug
 <checkout>/plugin/bin/swiftgate`, written `SG` below. Scrubbing: the copy's path becomes `/REPO`,
 the scratch home `/HOME`, the checkout's `plugin` directory `/PLUGIN`. `single-dry-run.stdout`,
-`single-stamped.swiftgate.toml` and `two-dry-run.stdout` hold the stamped config template, so they
-were captured again on 2026-10-05 (Xcode 26.2) with the same commands when the template's
+`single-stamped.swiftgate.toml` and `two-dry-run.stdout` hold the stamped config template, so a
+second capture on 2026-10-05 (Xcode 26.2) with the same commands replaced them when the template's
 comments and preset names changed; the other files keep the first capture.
 
 | File | Capture |

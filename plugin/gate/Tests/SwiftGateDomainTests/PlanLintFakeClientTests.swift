@@ -46,7 +46,9 @@ private enum PriceTrackerPlan {
   }
 }
 
-@Suite("plan-lint validation: a reducer's requirement is on screen, and a client fake removes a network obstacle")
+@Suite(
+  "plan-lint validation: a reducer's requirement is on screen, and a client fake removes a network obstacle"
+)
 struct PlanLintFakeClientTests {
   @Test(
     "the starter's base files hold 2 dependency-client modules, Packages/APIClient and Packages/LogClient, each named once at its outermost folder, and no *ClientLive or test folder — catches a repository whose injectable client goes unseen"
@@ -114,8 +116,9 @@ struct PlanLintFakeClientTests {
     func findings(_ modules: [String]) throws -> [Finding] {
       try PlanLintValidation.findings(
         table: table, requirements: ["req-a", "req-b"], taskIDs: ["core"], hasIOSArea: true,
-        file: "PLAN.md", tasks: tasks, appAreas: elsewhere, clientModules: modules)
-        .filter { $0.ruleID != PlanLintValidation.appWithoutFlowRuleID }
+        file: "PLAN.md", tasks: tasks, appAreas: elsewhere, clientModules: modules
+      )
+      .filter { $0.ruleID != PlanLintValidation.appWithoutFlowRuleID }
     }
 
     #expect(try findings(["Packages/APIClient"]).isEmpty)

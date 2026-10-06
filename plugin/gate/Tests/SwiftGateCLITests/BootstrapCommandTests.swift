@@ -265,8 +265,7 @@ struct BootstrapCommandTests {
     "bootstrap --profile timed stamps profile = \"timed\" into a config the gate loads, and no flag stamps default — catches the flag dropped between the command and the stamped file"
   )
   func profileIsStamped() async throws {
-    for (profile, expected) in [("timed", "timed"), (nil, "default")] as [(String?, String)]
-    {
+    for (profile, expected) in [("timed", "timed"), (nil, "default")] as [(String?, String)] {
       let sandbox = try Sandbox(
         copyingSampleApp: false, probe: try await FakeBootstrapProbe.make(isRepository: false))
       defer { sandbox.remove() }

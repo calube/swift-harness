@@ -34,7 +34,9 @@ struct BrownfieldConfigTOMLTests {
       packages == ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"])
 
     let text = BrownfieldConfigTOML.render(config)
-    #expect(text.contains(#"packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]"#))
+    #expect(
+      text.contains(
+        #"packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]"#))
     #expect(try TOMLConfigDecoder().decodeBrownfield(text) == config)
   }
 

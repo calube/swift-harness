@@ -234,7 +234,9 @@ struct BrownfieldSliceCheckTests {
 
     let parts = try await Self.run(
       clone,
-      areas: [Self.area("app", testFiles: nil), Self.area("api"), Self.area("cli", testFiles: nil)],
+      areas: [
+        Self.area("app", testFiles: nil), Self.area("api"), Self.area("cli", testFiles: nil),
+      ],
       changes: [
         Change(path: "app/src/load.py", text: "x = 1\n", added: [1...1]),
         Change(path: "app/tests/test_load.py", text: test, added: [2...2]),
@@ -990,7 +992,9 @@ extension BrownfieldSliceCheckTests {
       runner: FakeAreaCommandRunner { _ in .passed },
       warm: ["TimedBuildStarter": 76_800, "AppFeature": 31_700], context: context)
 
-    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
+    let labels = context.steps.steps.map {
+      "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)"
+    }
     #expect(labels.contains("TimedBuildStarter area-build warm"), "\(labels)")
     #expect(labels.contains("AppFeature area-build cold"), "\(labels)")
     #expect(labels.contains("AppFeature neutral none"), "\(labels)")
@@ -1057,7 +1061,9 @@ extension BrownfieldSliceCheckTests {
       "\(feature.map(\.command))")
 
     let label = warm ? "warm" : "cold"
-    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
+    let labels = context.steps.steps.map {
+      "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)"
+    }
     #expect(labels.contains("AppFeature prove \(label)"), "\(labels)")
     #expect(labels.contains("- baseline \(label)"), "\(labels)")
     let proved = feature.filter { $0.buildLock != nil }

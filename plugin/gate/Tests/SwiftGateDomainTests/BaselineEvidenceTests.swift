@@ -145,7 +145,8 @@ struct BaselineEvidenceTests {
     let decoded = try BaselineFile.decode(file.encoded(), tree: "tree0")
 
     #expect(decoded.records == [kept, bare])
-    let plain = String(decoding: BaselineFile(tree: "tree0", records: [bare]).encoded(), as: UTF8.self)
+    let plain = String(
+      decoding: BaselineFile(tree: "tree0", records: [bare]).encoded(), as: UTF8.self)
     #expect(!plain.contains("evidence"))
   }
 

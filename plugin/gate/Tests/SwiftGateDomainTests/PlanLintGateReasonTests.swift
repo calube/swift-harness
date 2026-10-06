@@ -117,7 +117,8 @@ struct PlanLintGateReasonTests {
     #expect(!PlanLintValidation.isGateReason("gate:"))
     #expect(!PlanLintValidation.isGateReason("Gate: final runs it"))
     #expect(!PlanLintValidation.isGateReason("the final gate runs every suite"))
-    #expect(PlanLintValidation.namesTests("The existing APIClient and LogClient tests keep passing"))
+    #expect(
+      PlanLintValidation.namesTests("The existing APIClient and LogClient tests keep passing"))
     #expect(PlanLintValidation.namesTests("Existing test suites stay green"))
     #expect(!PlanLintValidation.namesTests("The confirmation screen shows the contact"))
     #expect(!PlanLintValidation.namesTests("A contest entry form"))

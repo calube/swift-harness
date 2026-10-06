@@ -324,7 +324,8 @@ struct BrownfieldMergeCheckTests {
       reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
 
     let priced = FinalGateReuse.areas(
-      config.areas, inputs: GateReuse.Inputs(
+      config.areas,
+      inputs: GateReuse.Inputs(
         tier: .final, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
         stateFiles: ["config": "c1"]),
       repositoryRoot: clone.root.path(percentEncoded: false), layout: clone.layout,
@@ -1084,8 +1085,9 @@ extension BrownfieldMergeCheckTests {
     "send-money-4's final, whose box left 96 s for the app target's measured 226 s prove while every area's tests passed, is GREEN with a prove.unproven note where the trial read BLOCKED — catches a final blocked by a prove there was no time to run"
   )
   func finalWithNoTimeToProveIsUnprovenNotBlocked() async throws {
-    let trial = try JSONSerialization.jsonObject(
-      with: try Fixture.data("BrownfieldTrial/send-money-4-final.json")) as? [String: Any]
+    let trial =
+      try JSONSerialization.jsonObject(
+        with: try Fixture.data("BrownfieldTrial/send-money-4-final.json")) as? [String: Any]
     let trialFindings = trial?["findings"] as? [[String: Any]] ?? []
     let skipped = try #require(trialFindings.first { $0["rule"] as? String == "prove.no-evidence" })
     #expect(trial?["verdict"] as? String == "BLOCKED")
@@ -1114,7 +1116,8 @@ extension BrownfieldMergeCheckTests {
 
     let merge = try await Self.sendMoneyRun(
       clone, branch, tier: .merge, at: branch.firstMerge, bound: short)
-    #expect(Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
+    #expect(
+      Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
   }
 }
 
