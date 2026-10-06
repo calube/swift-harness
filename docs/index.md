@@ -13,6 +13,7 @@ follow-ups.
 |---|---|
 | New to the repo, or an agent starting a session | [`../AGENTS.md`](../AGENTS.md), then this file |
 | Seeing everything the harness does, with the command behind each capability | [`capabilities.md`](capabilities.md) |
+| Explaining the harness to someone else: likely questions with answers, the numbers to know, and the honest weak spots | [`study/harness-study-guide.md`](study/harness-study-guide.md) |
 | Seeing how the harness did on seven practice apps: pass rates, wall time, cost, what each failure taught, and the open follow-ups | [`results/2026-10-05-practice-app-results.md`](results/2026-10-05-practice-app-results.md) |
 | Writing or reviewing Swift code against the harness's rules | [`plugin/docs/standards.md`](../plugin/docs/standards.md) |
 | Writing or reviewing tests (tiers, red/green, snapshots, flake stress) | [`plugin/docs/testing-playbook.md`](../plugin/docs/testing-playbook.md) |
