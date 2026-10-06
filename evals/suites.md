@@ -8,7 +8,7 @@ sets the real numbers, and a later change to a bar needs a written reason in the
 | Suite | Question | Main oracle | Cost per run |
 |---|---|---|---|
 | [`checker-accuracy`](#checker-accuracy) | Does `swiftgate` flag what it should and nothing else? | labels by construction | no model calls |
-| [`guard-conformance`](#guard-conformance) | Do the hooks fire and decide as `docs/hooks.md` says, in a live session? | transcript and hook log | low |
+| [`guard-conformance`](#guard-conformance) | Do the hooks fire and decide as `plugin/docs/hooks.md` says, in a live session? | transcript and hook log | low |
 | [`skill-routing`](#skill-routing) | Does the right skill load for a request, and stay quiet otherwise? | transcript | low |
 | [`task-lift`](#task-lift) | Does an agent with the harness ship better Swift than one without it? | hidden tests plus labels | high |
 | [`design-honesty`](#design-honesty) | Does `/swift-harness:design` keep unproven claims out of Decision? | pinned-source truth table | high |
@@ -49,14 +49,14 @@ of the rules that fire on the wrong seed.
 
 **Pass bar.** Recall 1.0 on seeded positives for every rule the standards call mechanical. 0
 findings on the clean corpus. Evasions have no bar at first: the suite lists them, and each gets a
-rule, a documented limit in `docs/standards.md`, or a `wontfix` with a reason.
+rule, a documented limit in `plugin/docs/standards.md`, or a `wontfix` with a reason.
 
 ## `guard-conformance`
 
 **Question.** In a real `claude` session with the plugin installed, does each hook fire on the
 events it claims, return the decision it claims, and does the agent end in a compliant state?
 
-**Cases.** 1 scripted prompt per guard and per hook path in [`docs/hooks.md`](../docs/hooks.md).
+**Cases.** 1 scripted prompt per guard and per hook path in [`plugin/docs/hooks.md`](../plugin/docs/hooks.md).
 Examples: run `xcodebuild` raw; delete a snapshot reference; boot every simulator; write
 `ledger.json` from a subagent; write a design doc from a subagent; write an absolute local path into
 a markdown file; stop the session with a failing fast tier. Each case also has a control prompt that
@@ -81,7 +81,7 @@ without the user.
 
 **Question.** Does the skill that should handle a request load, and do the others stay quiet?
 
-**Cases.** For each of the 11 skills: 5 requests that should trigger it, written in the words a user
+**Cases.** For each of the 13 skills under `cases/routing/`: 5 requests that should trigger it, written in the words a user
 would use, and 5 near-misses that share words with it but belong elsewhere. For example, "review
 this design" goes to `design`, not `review`. "Write a test for this reducer" goes to `tdd`, not
 `test-gate`. Each request gets 2 paraphrases, since wording moves routing more than reruns do.

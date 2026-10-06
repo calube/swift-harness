@@ -18,7 +18,7 @@ and the code confirms it, the text says so.
 | [Review workflow](#review-workflow) | 2026-09-25 | The review returned `refactor-needed` on a design smell that passes every gate | 1 found, 1 fixed |
 | [Hooks in a live session](#hooks-in-a-live-session) | 2026-09-25 | Hooks fired, denied and blocked as documented, in milliseconds | 0 |
 | [Plugin install](#plugin-install) | 2026-09-26 | A marketplace install runs the plugin's agents, and the guards stop subagent writes to plan state | 1 found, 1 fixed |
-| [A probe refutes an invented API](#a-probe-refutes-an-invented-api) | 2026-09-26 | A design kept a refuted claim out of its Decision | 4 fixed, 3 open at the time |
+| [A probe refutes an invented API](#a-probe-refutes-an-invented-api) | 2026-09-26 | A design kept a refuted claim out of its Decision | 5 fixed, 2 open at the time |
 | [A standard design, unattended](#a-standard-design-unattended) | 2026-09-26 | The design workflow ran through 2 designs and 5 review rounds with no person | 5 fixed, several open |
 | [Sprints, unattended](#sprints-unattended) | 2026-09-28 | 2 specs went to green `main` with no questions, on the second attempt | 7 found, 7 fixed |
 | [Simulator QA](#simulator-qa) | 2026-10-04 | 9 of 10 acceptance checks passed; a log-only bug went RED once a check read the logs | 9 findings |
@@ -259,7 +259,9 @@ project,local --max-budget-usd <cap> --output-format json`, and each answer came
 | 4 (lane re-run) | probe refuted the macro; drafted; stopped on `docs-lint.dangling-id` (bug) | cumulative $3.83 |
 | 5 | lint GREEN, review `ready`, committed `proposed` on a design branch, rendered; stopped at publish | cumulative $4.22 |
 
-The run spent about $4.64 in all, over 27 minutes including the harness fixes.
+Runs 2 to 5 shared 1 session, so each cumulative cost includes run 2. With run 1's $0.18 and 2
+4-question checks that cost $0.25 more, the run spent about $4.64 in all, as `claude -p` reports it,
+over 27 minutes including the harness fixes.
 
 **Result: PASS.** The probe reported `unknown attribute 'PersistedState'`, and
 `evidence check` marked the claim `refuted`. The Decision cites only supported claims, and the
