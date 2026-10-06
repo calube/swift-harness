@@ -1,8 +1,8 @@
 # Simulator QA
 
-This page covers the 3 `swiftgate qa` commands that check a plan's validation rows: `qa lint`
-checks flow files offline, `qa run` runs the rows, and `qa adopt` takes a validation worker's
-checks into plan state. Read it when you write, run or read a validation row.
+This page covers the 4 `swiftgate qa` commands that check a plan's validation rows: `qa lint`
+checks flow files offline, `qa run` runs the rows, `qa adopt` takes a validation worker's
+checks into plan state, and `qa stage` copies 1 requirement's adopted checks back out for a repair. Read it when you write, run or read a validation row.
 
 | Topic | Page |
 |---|---|
@@ -14,7 +14,7 @@ checks into plan state. Read it when you write, run or read a validation row.
 | `test:` acceptance rows and the shared simulator | [`simulator-qa-test-rows.md`](simulator-qa-test-rows.md) |
 | `--output`, `--deadline`, and the rows the final run takes | [`simulator-qa-run-bounds.md`](simulator-qa-run-bounds.md) |
 | `--at-base`, `--before-merge` and a validation worker's prepared run | [`simulator-qa-at-base.md`](simulator-qa-at-base.md) |
-| Rewriting a flow row with `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
+| Staging a flow row with `qa stage` and rewriting it with `qa adopt --repair` | [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md) |
 | `sim up`, `sim verify` and `sim down` | [`simulator-qa-sim.md`](simulator-qa-sim.md) |
 | Which controls `sim verify`'s accessibility audit judges | [`simulator-qa-audit.md`](simulator-qa-audit.md) |
 
@@ -164,3 +164,34 @@ worktree has no prepared folder, or when the folder names no plan.
 
 `--repair <requirement>` takes only 1 requirement's rewritten checks. See
 [`simulator-qa-flow-repair.md`](simulator-qa-flow-repair.md).
+
+## qa stage
+
+```bash
+swiftgate qa stage <worktree> --plan <slug> --requirement <requirement> [--json]
+```
+
+`qa stage` is the reverse of `qa adopt`, for a [flow repair](simulator-qa-flow-repair.md). It
+removes `<worktree>/.harness/qa/`, then copies into `<worktree>/.harness/qa/<plan>/` each check file
+that the plan's `validation.json` rows for that requirement name, from the plan's `qa/` in plan
+state. Each file keeps its permissions.
+
+| Flag | What it does |
+|---|---|
+| `--plan <slug>` | The plan whose adopted checks it copies |
+| `--requirement <requirement>` | The requirement whose rows' check files it copies |
+| `--json` | Prints the report as JSON |
+
+It copies nothing unless the path is a checkout that `git worktree list` names, some row of the
+requirement checks a `qa/` file, and every such file is in plan state.
+
+| Exit | When |
+|---|---|
+| 0 | GREEN: it filled the folder |
+| 1 | RED: it refused, and the message ends "nothing was staged" |
+| 2 | BLOCKED: it couldn't list the checkouts, resolve or read plan state, or copy a file |
+
+Text output is `qa stage: <verdict> <message>`, then 1 indented line per copied file. The JSON
+report holds `command`, `worktree`, `plan`, `requirement`, `verdict`, `destination` (the folder it
+filled), `files` (each copied file's name) and `message`. A copy that fails partway says to remove
+`.harness/qa/` before a repair worker starts there.

@@ -94,8 +94,8 @@ badges counted from the view.
 | Graph | the plan graph module | merged tasks of all |
 | Spec | requirements against tasks, commits and merge gates | uncovered requirements |
 | Gates | every gate run, and a row per changed test `prove` ran | RED runs, a task's runs after its first RED, unproven tests |
-| Tokens | tokens per task and role, "pending" for a running worker until its ingest | pending tasks |
-| Validation | each validation row's newest `qa run` result: see [validation rows](run-viewer-validation.md) | red, unverified and waiting rows |
+| Tokens | tokens and dollar cost per task and role, "pending" for a running worker until its ingest | pending tasks |
+| Validation | each validation row's newest `qa run` result: see [validation rows](run-viewer-validation.md) | red, unverified, waiting and abandoned rows |
 
 The footer, under every tab, names what the reader couldn't read.
 
@@ -108,7 +108,8 @@ The board and the graph are optional modules. The page inlines every `run-viewer
 `run-viewer-*.css` present, and a module's tab shows once it draws.
 
 - **Board.** It puts each task in a lane: queued, building, gating, review, merged or blocked. The
-  blocked lane also holds a task with an open halt.
+  blocked lane holds a task whose status is blocked, needs-replan or abandoned, and a task with an
+  open halt.
 - **Graph.** It draws the deps as SVG, in waves.
 - **Task popover.** A card, node or Overview row opens it: status, column, deps, latest gate,
   commits, covers, and why the task failed or stopped.

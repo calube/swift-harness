@@ -20,7 +20,7 @@ report counts every allow.
 
 | Tier | What runs | Runner | Budget | Why it's deterministic |
 |---|---|---|---|---|
-| T0 static | `swift format`, `swiftgate lint` (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `swiftgate arch`, `swiftgate testlint`, `swiftgate impact` | `swiftgate` | 5 s (`[budgets] t0`) | No IO. |
+| T0 static | `swift format`, `swiftgate lint` (determinism bans in Core: `Date()`, `UUID()`, `Task.sleep`, `asyncAfter`, `.random`), `swiftgate arch`, `swiftgate testlint`, and `swiftgate impact` at `push` and above | `swiftgate` | 5 s (`[budgets] t0`) | No IO. |
 | T1 host | `TestStore` tests (exhaustive), client tests, engine rule and replay tests | `swift test` on the affected packages | 60 s (`[budgets] t1`) | Injected dependencies, `TestClock`/`ImmediateClock`, `withMainSerialExecutor` only inside `.serialized` suites. |
 | T2 simulator | Snapshot tests, view and integration tests | `xcodebuild test` on a cloned simulator | none by default (`[budgets] t2`) | Pinned device and OS, no network, dependency overrides. |
 | T3 flow | A thin XCUITest smoke test per critical flow | `xcodebuild test` on a cloned simulator | none by default (`[budgets] t3`) | Launch-argument scenario injection (`-harness-scenario <name>`). |

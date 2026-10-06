@@ -20,7 +20,7 @@ names no spec page: no damage, and the Spec tab says so.
 
 ## Live mode
 
-`view` answers these requests, and 404 to any other:
+`view` answers these requests with GET, 404 to any other path and 405 to any other method:
 
 | Path | Serves |
 |---|---|
@@ -36,11 +36,12 @@ can't reach it through a rebound name.
 The page polls `/view.json?after=<token>` each second, naming the token of the view it holds. The
 server answers 204 when none of the run's files moved since that token, and otherwise the whole
 view under a new token, which the page puts in place of its own. An unknown token gets the whole
-view. A redraw keeps the open tab, scroll, popover and drawer. The page keeps polling after a
+view. A view the server can't build gets 500, naming the error. A redraw keeps the open tab, scroll, popover and drawer. The page keeps polling after a
 failure, which it shows under the title. A now strip shows each running task's open phase, elapsed
 time and last event age, a stall badge once `stallMin` passes with no event of that task, and a
 halt badge until the resume. `stallMin` is the preset's `stall_min`, or 15, the value `build next`
-hands the stall watch.
+hands the stall watch. When the run's `run.json` didn't read, `stallMin` is null, and the strip says
+"stall watch off: the run's run.json didn't read" in place of a stall badge.
 
 Once the run is done and `report --html` has written its final report, the view's `finalReport` is `/final`, which
 serves that report, and the page shows an end banner linking it in place of the now strip. A ledger
