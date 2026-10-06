@@ -1,229 +1,90 @@
 # swift-harness
 
-**Hand Claude Code a spec. Get back a merged, GREEN, simulator-verified SwiftUI app, with the
-evidence to prove it.**
-
-swift-harness is a Claude Code plugin that lets agents take an iOS feature from a spec file to
-merged code on `main` with no human input. 1 Swift CLI, `swiftgate`, judges every step, so an
-agent can't talk its way past a check.
+**Hand Claude Code a spec. Get back a merged, GREEN, simulator-verified SwiftUI app, with the evidence.**
 
 ![Swift 6.2](https://img.shields.io/badge/Swift-6.2-orange) ![iOS 18+](https://img.shields.io/badge/iOS-18%2B-blue) ![Xcode 26.2](https://img.shields.io/badge/Xcode-26.2-lightgrey)
 
 | 7 / 7 | ~30 min | ~$5.50 | 0 | 12 days | 2,752 |
 |:---:|:---:|:---:|:---:|:---:|:---:|
-| practice apps built spec to merged | per app, 25 to 32 min | mean cost per app | human inputs | from first commit to freeze | commits, 84% co-authored by Claude |
+| practice apps, spec to merged | per app (25 to 32) | mean cost per app | human inputs | first commit to freeze | commits, 84% co-authored by Claude |
 
-The numbers come from the [practice-app results](docs/results/2026-10-05-practice-app-results.md)
-and the git history. The harness froze at the tag `harness-freeze-2026-10-05`.
+A Claude Code plugin. 1 Swift CLI, `swiftgate`, judges every step, so an agent can't talk its way
+past a check. Frozen at `harness-freeze-2026-10-05`.
 
-This README tells 2 stories:
+## 1 gate
 
-1. [**What the harness does**](#part-1-what-the-harness-does): 1 gate, hooks, skills, agents,
-   simulator QA, anti-faking, a live dashboard and local telemetry.
-2. [**How it got built**](#part-2-ai-native-engineering): 1 engineer as the
-   orchestrator over fleets of Claude agents, 12 days, every merge behind the same gate.
-
----
-
-## Part 1: what the harness does
-
-### The problem
-
-Coding agents write Swift fast. Left alone, they also drift: a `Date()` in a reducer, a singleton
-behind a protocol, a `try!` with no reason, a test that passes whether the code works or not.
-Rules in a prompt don't hold. The agent forgets them, and every place meant to enforce them checks
-something a little different.
-
-### The answer: there is 1 gate
-
-`swiftgate` is a Swift CLI that owns every check: lint, architecture, test tiers, red/green proof,
-mutation, simulator evidence. Hooks, skills, agents, workflows and git hooks all call it, and none
-of them re-implement a check. **When the gate says GREEN, it's GREEN everywhere.**
+Every hook, skill, workflow and git hook calls `swiftgate`. None re-implements a check.
 
 ![swiftgate architecture: skills, workflows, agents, hooks and git hooks all call 1 gate, which drives the toolchain and writes the run report](docs/images/swiftgate-architecture.svg)
 
-`swiftgate` follows the layering it enforces. A pure domain module holds the logic, IO adapters sit
-behind protocols, and a thin CLI wires them together. It knows 460+ rule ids, each documented in
-[`standards.md`](plugin/docs/standards.md), and `swiftgate self-test` proves every code rule fires
-on a seeded violation and passes clean code.
+## A brownfield run
 
-### Hooks keep the agent honest while it types
+`swiftgate run spec.md`: a repository the harness doesn't own, 1 spec, 0 questions, nothing written
+into the user's tree.
 
-- **Every Swift edit** gets formatted and linted on the spot.
-- **PreToolUse guards** (24 `guard.*` ids) deny raw `xcodebuild`, hand edits to snapshots or
-  `Package.resolved`, and wiping every simulator. They parse the shell command itself, so a
-  compound command or an env prefix can't slip a banned command past them.
-- **Subagents never hit a permission prompt.** The hook allows or denies each call with a reason
-  the agent can act on.
-- **The session can't stop** while `swiftgate check --tier fast` is RED.
-- **Hook latency is a tested budget:** the fastest of several PreToolUse runs stays under 50ms of
-  CPU.
+![A brownfield run: spec.md, discover and warm-up, explorers, PLAN.md, contract commit, parallel workers behind slice gates, review by diff risk, merge gate with QA, final with video, report](docs/images/swiftgate-brownfield-flow.svg)
 
-### 3 ways to run a change
+![The brownfield run against its 40-minute time box: explore by 5, plan by 8, contract by 12, no new starts at 27, cutoff at 35, report at 40](docs/images/swiftgate-brownfield-timebox.svg)
 
-| Command | Use it when | What happens |
-|---|---|---|
-| `/swift-harness:ship <spec>` | the change needs a design | preflight, design, plan, parallel build in git worktrees, simulator QA, report |
-| `/swift-harness:sprint <spec>` | the spec already says what to build | 1 session, 1 branch, test-first slices behind a gate, no workers |
-| `swiftgate run <spec.md>` | the repository isn't yours (brownfield) | plans and builds the spec headless, with no input, in a time box |
+Also: `/swift-harness:ship` (design, plan, parallel build, QA) and `/swift-harness:sprint` (1
+branch, test-first slices) for repositories the harness owns.
 
-```mermaid
-flowchart LR
-  S[spec.md] --> P[1 · Preflight<br/>doctor · clean, warm, GREEN main]
-  P --> D[2 · Design<br/>research lanes · probes<br/>challengers · pre-mortem]
-  D --> PL[5 · Plan<br/>sized tasks · waves]
-  P -. preset with no design .-> SP[3 · Spec page<br/>4 · Surface commit]
-  SP --> PL
-  PL --> B[6 · Build<br/>1 worktree per task<br/>merge gate after every merge]
-  B --> Q[validate stage<br/>qa run · flows on simulators]
-  Q --> R[7 · Report<br/>ledger page · wall time]
-```
+## Model-judged decisions
 
-**`ship`** runs 7 steps from [its skill](plugin/skills/ship/SKILL.md) and stops at the first halt
-(a RED `main` after the fixer, a design conflict, a spent time budget), naming the commands that
-resume it. A preset with no design tier swaps step 2 for a 1-page spec page and a surface commit
-([ADR 0003](docs/adrs/0003-ship-may-skip-the-design-step.md)). The build's `validate` stage runs the
-simulator QA.
+Jev answers first; Claude takes the uncertain answers and writes the reason for every block. Off
+until a repository opts in ([ADR 0007](docs/adrs/0007-jev-is-an-opt-in-second-judge-backend.md),
+[benchmark](evals/results/2026-09-30-judge-benchmark/summary.md)).
 
-**`sprint`** writes a 1-page spec with 1 acceptance test per slice, lands a surface commit, builds
-each slice test-first, and fast-forwards `main` only after a final `ready` gate.
+![Where a model decides, and the Jev-to-Claude cascade: Jev answers first, uncertain answers go to Claude, a policy blocks at p ≥ 0.9, and an audit log keeps every call](docs/images/swiftgate-judge-cascade.svg)
 
-**`run`** is the brownfield profile. `swiftgate discover --apply` infers the repository's own build
-and test commands and keeps its config in the git directory
-([design](docs/designs/2026-10-03-brownfield-profile-design.md)).
+## Telemetry and the live dashboard
 
-### 20 agents, each with 1 job
+Local only, on by default, never gates a verdict. `swiftgate view` serves it live;
+`swiftgate report --html` writes it offline ([run viewer](plugin/docs/run-viewer.md),
+[telemetry](plugin/docs/telemetry.md)).
 
-| Stage | Agents |
-|---|---|
-| Design research lanes | `design-lane-codebase`, `design-lane-apple-docs`, `design-lane-packages`, `design-lane-prior-decisions` |
-| Design drafting and checks | `design-decomposer`, `design-drafter`, `design-claim-checker`, `design-evidence-auditor` |
-| Design review | `design-challenger`, `design-pre-mortem`, `design-standards-conformance` |
-| Build | `build-worker`, `build-fixer`, `brownfield-explorer` |
-| Code review | `swiftui`, `concurrency`, `architecture`, `api-errors`, `test-quality`, `verifier` |
-
-The 4 workflows (`design-research`, `design-review`, `build-task`, `review`) fan these out in
-parallel. Design claims cite evidence with a hash, and `probe` compiles a design's API snippets
-against the pinned packages. The `verifier` reproduces each review finding without seeing the
-reviewer's reasoning, and `review-synth` returns merge, fix-then-merge or refactor-needed.
-
-### Agents can't fake GREEN
-
-| Check | What it proves |
-|---|---|
-| `prove` | every new or changed test fails on an assertion with the source change reverted |
-| `mutate` | the tests kill mutants (flipped conditions and boundaries) on the changed lines |
-| `reach` | each test, run alone, touches the module it claims to test |
-| `surface-check` | a surface commit adds API and no behaviour: empty bodies, `.none` effects, `EmptyView` |
-| `testlint` | no assertion-free, tautological, sleeping or wrong-tier tests |
-
-Verdicts come from the test reports, not exit codes. A configured retry is itself a finding,
-because retries hide flakes. Editing a design or build agent's prompt blocks `git push` until
-`swiftgate calibrate` passes that agent again on labelled cases.
-
-### QA that writes the checks before the code
-
-- **Validation rows come first.** Each plan carries `validation.json`: 1 row per requirement, with
-  layered checks (acceptance, then flow, then state). A validation worker writes them in its own
-  worktree, against a contract of names and accessibility ids, before the feature code exists.
-  `qa lint` checks the flow files offline.
-- **Flows run in real simulators, on video.** `swiftgate qa run` runs each row once its tasks have
-  merged. Flows drive the app through `agent-device` on simulators that `swiftgate sim` leases under
-  a machine-wide cap, and every flow records video.
-- **Every row ends with a result:** pass, red, unverified, waiting or abandoned. A red flow gets at
-  most 2 repairs a run, and the fixer must judge it from the frames and reproduce it in a unit test.
-- **`/swift-harness:qa` decides what to try; `swiftgate` decides pass or fail.**
-
-### A judge for what static checks can't see
-
-`swiftgate judge` asks whether a test would fail if its behaviour broke, plus 3 more questions, and
-gets probabilities back. The backend is Claude, or a **Jev-to-Claude cascade**: TypeSafe's Jev
-decision model (`jev-1.13.0`) answers first, and the answers it's unsure of escalate to Claude,
-which also writes the reason for any block. In a benchmark of 66 labelled tests, 3 repeats each,
-the cascade matched Claude at about a quarter of the cost
-([summary](evals/results/2026-09-30-judge-benchmark/summary.md); 10 positives per question, so
-the sample is small). The judge is off until a repository opts in, because it sends test source off
-the machine ([ADR 0007](docs/adrs/0007-jev-is-an-opt-in-second-judge-backend.md)).
-
-### Watch a run live
+![Telemetry: hooks, gates, the build loop, agents, QA and the judge write events to a local store; the run view joins them with the ledger for the live dashboard and the offline report](docs/images/swiftgate-telemetry.svg)
 
 ![The run viewer's kanban board: tasks in queued, building, gating, review, merged and blocked lanes](docs/images/run-viewer-board.png)
 
-*The Board tab, rendered by `swiftgate report --html` from a captured test fixture.*
+## Agents can't fake GREEN
 
-`swiftgate view` serves a live run viewer on `127.0.0.1`, polling every second, with a "now" strip
-that shows each running task's phase, elapsed time and stall or halt badges.
-`swiftgate report --html` writes the same page as a self-contained folder that opens offline.
-
-| Tab | Shows |
+| Check | Proves |
 |---|---|
-| Overview | the run summary and a row per task |
-| Timeline | every span at 1x, 2x or 4x zoom; RED spans explain why |
-| Board | a kanban of queued, building, gating, review, merged and blocked |
-| Graph | the task dependency graph, in waves |
-| Spec | requirements mapped to tasks, commits and merge gates |
-| Gates | every gate run, and each test `prove` ran |
-| Tokens | tokens and dollar cost per task and role |
-| Validation | each row's newest QA result, with per-step video |
+| `prove` | each new or changed test fails with its source change reverted |
+| `mutate` | the tests kill mutants on the changed lines |
+| `reach` | each test, run alone, touches the module it claims to test |
+| `surface-check` | a surface commit adds API and no behaviour |
+| `testlint` | no assertion-free, tautological, sleeping or wrong-tier tests |
+| hooks | 24 guards deny raw `xcodebuild`, snapshot edits and more; the session can't stop RED |
 
-The page is read-only and carries no source or prompts ([run viewer](plugin/docs/run-viewer.md)).
+## Proof
 
-### Local telemetry, on by default
+Each app: a fresh clone, a `spec.md`, headless `swiftgate run`, a 40-minute box, 0 inputs.
 
-Typed JSON-lines events record gate runs and steps, every test result, hook decisions, cache
-lookups and build halts with reasons. Token counts and cost come from Claude Code transcripts, read
-offline: ids, models, counts and times, never text. Nothing leaves the machine, and telemetry never
-gates a verdict. `swiftgate events summary` reports cost, gate time variance, flaky and slow tests
-and halt waits ([telemetry](plugin/docs/telemetry.md)).
+| App | Attempts | Wall time | Cost |
+|---|---|---|---|
+| tic-tac-toe | 2 | 30.9 min | $4.36 |
+| send-money | 7 | 29.5 min | $5.88 |
+| price-tracker | 6 | 32.0 min | $5.45 |
+| pos-checkout | 1 | 25.1 min | $4.53 |
+| chat-app | 3 | 30.7 min | $5.83 |
+| pacman | 1 | 26.9 min | $5.81 |
+| swipe-arcade | 4 | 27.7 min | $6.86 |
 
-### Proof
+- **Seeded violations:** 1 per layer, each RED with the expected rule id; a clean tree GREEN at
+  every tier ([end-to-end report](docs/e2e-report.md)).
+- **Evals:** graded against labels the harness didn't write; small samples ([evals](evals/README.md)).
+- **Details:** [practice-app results](docs/results/2026-10-05-practice-app-results.md).
 
-- **7 practice apps, spec to merged code, no input.** Each started from a fresh clone of a shared
-  starter project and a `spec.md`, and ran `swiftgate run` headless in a 40-minute box. All passed
-  in 25 to 32 minutes (mean 29.0), at $4.36 to $6.86 a run. All 40 flow rows pass with simulator video
-  ([results](docs/results/2026-10-05-practice-app-results.md)).
+## Built by 1 engineer and fleets of Claude agents
 
-  | App | Attempts | Wall time | Cost |
-  |---|---|---|---|
-  | tic-tac-toe | 2 | 30.9 min | $4.36 |
-  | send-money | 7 | 29.5 min | $5.88 |
-  | price-tracker | 6 | 32.0 min | $5.45 |
-  | pos-checkout | 1 | 25.1 min | $4.53 |
-  | chat-app | 3 | 30.7 min | $5.83 |
-  | pacman | 1 | 26.9 min | $5.81 |
-  | swipe-arcade | 4 | 27.7 min | $6.86 |
+12 days. The engineer orchestrated; agents wrote the code in parallel worktrees; every merge passed the
+same gate.
 
-- **Every layer catches its seed.** A fresh bootstrap of `examples/SampleApp` took 1 seeded
-  violation per layer, from a `Date()` in Core to a surviving mutant. Each turned RED with the
-  expected rule id, and a clean tree stayed GREEN at every tier
-  ([end-to-end report](docs/e2e-report.md)).
-- **Unattended sprints.** 2 headless `/swift-harness:sprint` runs built a persisted form and an
-  approval workflow with undo: 31m 45s ($2.75) and 12m 28s ($1.02).
-- **Evals grade the harness against labels it didn't write.** Rule corpora, hook payloads, injected
-  faults, skill routing, seeded reviews and the judge benchmark. Most suites have 1 recorded run, so
-  read each number with its sample size ([evals](evals/README.md)).
-
----
-
-## Part 2: AI-native engineering
-
-1 engineer built swift-harness in 12 days (2026-09-24 to 2026-10-05) by working as the
-**orchestrator** over fleets of Claude agents. The engineer and the orchestrator session planned,
-checked and merged. Agents wrote most of the code: 84% of commits carry a Claude co-author trailer.
-
-### The numbers
-
-| Measure | Value | How to check |
-|---|---|---|
-| Commits | 2,752 | `git rev-list --count HEAD` |
-| Merge commits | 840 | `git rev-list --count --merges HEAD` |
-| Worker branches merged as `Merge: <subject>` | 558 | `git log --format=%s \| grep -c '^Merge: '` |
-| Commits co-authored by Claude | 2,316 (84%) | `git log --format=%B \| grep -c '^Co-Authored-By: Claude'` |
-| Busiest day | 900 commits (2026-10-04) | `git log --format=%ad --date=short \| sort \| uniq -c` |
-| `swiftgate` source / tests | ~133k / ~137k lines of Swift | `git ls-files plugin/gate/Sources` and `Tests`, counted with `wc -l` |
-| Gate test suite | 4,689 tests at the freeze | the [results page](docs/results/2026-10-05-practice-app-results.md#harness-work-in-the-loop) |
-
-### Waves of parallel workers
+| Commits | Merges | Claude co-authored | Gate source / tests | Gate tests |
+|:---:|:---:|:---:|:---:|:---:|
+| 2,752 | 840 | 84% | ~133k / ~137k lines | 4,689 |
 
 ```mermaid
 flowchart TB
@@ -242,56 +103,16 @@ flowchart TB
   G -- RED --> O
 ```
 
-- **1 committer per worktree.** Each task gets its own `git worktree` and branch, with `.build`
-  APFS-cloned from `main` so no worker pays for a cold SwiftSyntax build. Workers commit to their
-  own branch and never push.
-- **Only the orchestrator merges.** It merges in id order and runs the push gate on merged `main`
-  after each batch. Branches that pass alone still break `main` about once per batch, so the full
-  suite runs after every batch.
-- **Test-first briefs.** Every worker gets the same [brief](docs/process/worker-brief.md): write the
-  failing test first, named `<behavior> — catches <regression>`, and see it fail. Stay in the write
-  set, use only captured fixtures, and self-gate before committing.
-- **Reports get checked, not trusted.** The [runbook](docs/process/orchestrator-runbook.md) keeps a
-  table of defects real reports hid: checks that can't fail, a second copy of shared logic, a new
-  required flag with no caller updated. Every report gets read against it.
-- **A push bar.** Each push followed 2 clean full-suite runs in a row and a leak scan.
-
-### Speedups from measured runs
-
-Speed work started from timings of real runs, with the harness's own telemetry and run reports,
-not from reading code.
-
-| Change | Before | After |
+| Measured speedup | Before | After |
 |---|---|---|
 | Contract slice gate | 240 to 248 s | 55 to 58 s |
-| Final prove, reusing the last merge gate's prove | 54 to 77 s | 9 s |
-| Merge prove, with a kept, pre-built tree | 85 s | 65 s |
+| Final prove | 54 to 77 s | 9 s |
 | QA capture per check | 1.1 to 1.3 s | 0.35 to 0.44 s |
 | Guard refusals per run | 17 | 0 |
 
-2 more attempted speedups showed no reliable measured win, so they stayed unmerged.
-
-### Every failed app run became a generic fix
-
-The 7 apps took 24 attempts. Each failure became 1 fix worker per finding, then a full suite run,
-then the next attempt. No fix was app-specific:
-
-| Failed attempt | Generic fix |
-|---|---|
-| The orchestrator hung on shell aliases waiting at a prompt | run sessions clear aliases and close stdin |
-| A flow checked a short-lived state that no fake held still | contracts give each in-flight state a `held` scenario |
-| A clock-driven screen had no way to hold still | `plan import` refuses such a screen with no held scenario |
-| A real app defect was misread as a timing race | the fixer judges a red row from its frames and reproduces it in a unit test |
-| QA's own captures were slower than the state they checked | 1 snapshot per check, images filled from the video |
-
-### Evals keep the harness honest
-
-Each eval grades the harness against independent labels, never its own output. Each grader is proven on
-known-good and known-bad cases first, and every failure gets an error analysis. A miss in the
-failure-modes suite (a mismatched Xcode pin) became a gate change. Most suites have 1 recorded run,
-and sample sizes are small ([evals](evals/README.md)).
-
----
+Every failed app run (24 attempts for 7 apps) became a generic harness fix, never an app-specific
+one. Process: [orchestrator runbook](docs/process/orchestrator-runbook.md) ·
+[worker brief](docs/process/worker-brief.md).
 
 ## Quick start
 
@@ -343,9 +164,10 @@ every commit counts as a new one. `swiftgate check --tier push` fails if either 
 
 </details>
 
-## The bar
+<details>
+<summary>The bar</summary>
 
-The opinions live in [`standards.md`](plugin/docs/standards.md), and the gate enforces them.
+The gate enforces [`standards.md`](plugin/docs/standards.md).
 
 | Area | Rule |
 |---|---|
@@ -358,6 +180,8 @@ The opinions live in [`standards.md`](plugin/docs/standards.md), and the gate en
 | Escape hatches | `try!`, `as!`, `fatalError`, `@unchecked Sendable` and every suppression carry `// swiftgate:allow <rule> — <reason>` |
 | Comments | Only what the code can't say. No restated code, no history, no codenames |
 | Tests | 4 tiers with budgets: T0 static (under 5s), T1 host (under 60s), T2 simulator snapshots, T3 UI flows |
+
+</details>
 
 ## Reference
 

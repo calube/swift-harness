@@ -1,0 +1,183 @@
+<svg class="jv" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 710" width="1240" height="710" role="img" aria-labelledby="jv-title jv-desc">
+  <title id="jv-title">Model-judged decisions and the Jev to Claude cascade</title>
+  <desc id="jv-desc">Four decision points ask the judge typed questions and get probabilities back: test quality, which can block the ready tier; a diff-risk classifier that sets review depth; a commit comment judge; and design calibration. Jev answers first. When its probability on a blocking question falls inside an uncertainty band, or Jev fails at the ready tier after one retry, Claude answers instead. A policy turns probabilities into block, advisory or dropped, and Claude writes the reason for every block. Every call and decision is logged. On 66 labelled tests the cascade matched Claude on fails-if-broken at about a quarter of the cost.</desc>
+  <style>
+    .jv { --panel:#FBFAF8; --card:#FFFFFF; --stroke:#DADDE4; --ink:#1B1F2A; --muted:#5B6272; --line:#9097A6; --frame:#B4BAC6; --accent:#E5512B; --accent-ink:#B83A18; --accent-soft:#FDECE6; --jev:#5B4FD6; --jev-soft:#ECEAFD; --green:#1E8E4E; --green-soft:#E3F4EA; --red:#C93434; --amber:#A86A00; }
+    @media (prefers-color-scheme: dark) {
+      .jv { --panel:#10131A; --card:#181D27; --stroke:#2B3240; --ink:#E8EBF1; --muted:#9AA2B3; --line:#687184; --frame:#394152; --accent:#FF6B3F; --accent-ink:#FF8A63; --accent-soft:#2B1912; --jev:#9D95FF; --jev-soft:#1E1B3A; --green:#43C77B; --green-soft:#12271B; --red:#FF6E6E; --amber:#F2B44A; }
+    }
+    .jv .panel { fill: var(--panel); }
+    .jv .card { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .jv .judge { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+    .jv .region { fill: none; stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .jv .jev { fill: var(--jev-soft); stroke: var(--jev); stroke-width: 2.5; }
+    .jv .claude { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+    .jv .diamond { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+    .jv .keep { fill: var(--card); stroke: var(--jev); stroke-width: 1.5; }
+    .jv .policy { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+    .jv .wire { fill: none; stroke: var(--line); stroke-width: 2; }
+    .jv .wire-jev { fill: none; stroke: var(--jev); stroke-width: 2; }
+    .jv .wire-claude { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .jv .wire-fail { fill: none; stroke: var(--red); stroke-width: 1.8; stroke-dasharray: 6 5; }
+    .jv .head { fill: var(--line); }
+    .jv .head-jev { fill: var(--jev); }
+    .jv .head-claude { fill: var(--accent); }
+    .jv .head-fail { fill: var(--red); }
+    .jv .rule { stroke: var(--stroke); stroke-width: 1; }
+    .jv text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .jv .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .jv .title { font-size: 17px; font-weight: 650; }
+    .jv .big { font-size: 22px; font-weight: 700; }
+    .jv .sub { font-size: 12px; fill: var(--muted); }
+    .jv .ink { font-size: 12px; fill: var(--ink); }
+    .jv .label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; fill: var(--muted); }
+    .jv .tag { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-anchor: end; }
+    .jv .tag-block { fill: var(--red); }
+    .jv .tag-route { fill: var(--accent-ink); }
+    .jv .tag-adv { fill: var(--amber); }
+    .jv .tag-pass { fill: var(--green); }
+    .jv .jev-ink { fill: var(--jev); }
+    .jv .claude-ink { fill: var(--accent-ink); }
+    .jv .fail-ink { font-size: 11.5px; fill: var(--red); }
+    .jv .edge { font-size: 11.5px; font-weight: 700; }
+    .jv .center { text-anchor: middle; }
+    .jv .block { fill: var(--red); font-weight: 700; }
+    .jv .adv { fill: var(--amber); font-weight: 700; }
+    .jv .th { font-size: 11px; font-weight: 700; letter-spacing: .08em; fill: var(--muted); }
+    .jv .note { font-size: 12px; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="jv-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="jv-a-jev" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-jev" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="jv-a-claude" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-claude" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="jv-a-fail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-fail" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <rect class="panel" x="0" y="0" width="1240" height="710" rx="20"/>
+
+  <!-- decision points -->
+  <text class="label" x="40" y="46">WHERE A MODEL DECIDES</text>
+
+  <rect class="card" x="40" y="62" width="330" height="104" rx="12"/>
+  <text class="title" x="58" y="90">Test quality</text>
+  <text class="tag tag-block" x="352" y="89">BLOCKS READY</text>
+  <text class="sub mono" x="58" y="114">judge tests · check --tier ready</text>
+  <text class="ink mono" x="58" y="134">fails-if-broken? asserts-impl?</text>
+  <text class="sub mono" x="58" y="154">+ tier, name specificity (advice)</text>
+
+  <rect class="card" x="40" y="180" width="330" height="104" rx="12"/>
+  <text class="title" x="58" y="208">Diff-risk classifier</text>
+  <text class="tag tag-route" x="352" y="207">ROUTES REVIEW</text>
+  <text class="sub mono" x="58" y="232">build task · review = classified</text>
+  <text class="ink mono" x="58" y="252">low → gate only</text>
+  <text class="ink mono" x="58" y="272">medium → +1 reviewer · high → full</text>
+
+  <rect class="card" x="40" y="298" width="330" height="104" rx="12"/>
+  <text class="title" x="58" y="326">Comment judge</text>
+  <text class="tag tag-adv" x="352" y="325">ADVISORY</text>
+  <text class="sub mono" x="58" y="350">git commit hook · up to 6 comments</text>
+  <text class="ink mono" x="58" y="370">loses a fact? → CUT</text>
+  <text class="ink mono" x="58" y="390">right size? → TRIM</text>
+
+  <rect class="card" x="40" y="416" width="330" height="86" rx="12"/>
+  <text class="title" x="58" y="444">Design calibration</text>
+  <text class="tag tag-pass" x="352" y="443">PASS AT p ≥ 0.7</text>
+  <text class="sub mono" x="58" y="468">calibrate design</text>
+  <text class="ink mono" x="58" y="488">grades agent output on labelled cases</text>
+
+  <!-- into the judge -->
+  <path class="wire" d="M370,114 C400,114 392,236 418,250" marker-end="url(#jv-a)"/>
+  <path class="wire" d="M370,232 C396,232 396,268 418,270" marker-end="url(#jv-a)"/>
+  <path class="wire" d="M370,350 C396,350 396,292 418,290" marker-end="url(#jv-a)"/>
+  <path class="wire" d="M370,459 C404,459 392,324 418,310" marker-end="url(#jv-a)"/>
+
+  <rect class="judge" x="420" y="200" width="180" height="160" rx="14"/>
+  <text class="big mono center" x="510" y="238">judge</text>
+  <text class="sub center" x="510" y="264">typed questions</text>
+  <text class="sub center" x="510" y="284">probabilities back,</text>
+  <text class="sub center" x="510" y="302">never free text</text>
+  <line class="rule" x1="440" y1="318" x2="580" y2="318"/>
+  <text class="sub mono center" x="510" y="340">SHA-256 cache</text>
+
+  <path class="wire-jev" d="M600,250 C630,250 640,146 676,146" marker-end="url(#jv-a-jev)"/>
+
+  <!-- cascade -->
+  <rect class="region" x="640" y="28" width="572" height="490" rx="16"/>
+  <text class="label" x="664" y="56">JEV → CLAUDE CASCADE</text>
+
+  <rect class="jev" x="678" y="80" width="230" height="124" rx="14"/>
+  <text class="big jev-ink" x="698" y="114">Jev</text>
+  <text class="sub mono" x="746" y="113">jev-1.13.0</text>
+  <text class="ink" x="698" y="140">TypeSafe's decision model</text>
+  <text class="sub" x="698" y="160">answers every question first</text>
+  <text class="ink mono" x="698" y="188">$0.00007 / case</text>
+
+  <path class="wire-jev" d="M793,204 L793,226" marker-end="url(#jv-a-jev)"/>
+  <polygon class="diamond" points="793,228 913,284 793,340 673,284"/>
+  <text class="ink center" x="793" y="280">p inside the</text>
+  <text class="ink center" x="793" y="297">uncertainty band?</text>
+  <text class="sub mono" x="672" y="364">fails-if-broken   0.40 – 0.90</text>
+  <text class="sub mono" x="672" y="382">asserts-impl      0.30 – 0.95</text>
+
+  <path class="wire-jev" d="M673,284 C652,284 652,430 676,430" marker-end="url(#jv-a-jev)"/>
+  <text class="edge jev-ink" x="604" y="408">no · 58%</text>
+
+  <rect class="keep" x="678" y="400" width="230" height="64" rx="12"/>
+  <text class="title" x="698" y="428" style="font-size:15px">Keep Jev's answer</text>
+  <text class="sub" x="698" y="450">no Claude call</text>
+
+  <path class="wire-claude" d="M913,284 L958,284" marker-end="url(#jv-a-claude)"/>
+  <text class="edge claude-ink center" x="936" y="274">yes</text>
+  <text class="edge claude-ink center" x="936" y="302">42%</text>
+
+  <rect class="claude" x="960" y="226" width="232" height="116" rx="14"/>
+  <text class="big claude-ink" x="980" y="260">Claude</text>
+  <text class="sub mono" x="1066" y="259">Sonnet 5.5</text>
+  <text class="ink" x="980" y="286">answers the uncertain</text>
+  <text class="ink" x="980" y="304">questions instead</text>
+  <text class="ink mono" x="980" y="328">$0.00523 / case</text>
+
+  <path class="wire-fail" d="M908,112 L1150,112 L1150,224" marker-end="url(#jv-a-fail)"/>
+  <text class="fail-ink" x="926" y="102">Jev error at ready: retry once</text>
+  <text class="fail-ink" x="926" y="134">after 750 ms, then jevFailed</text>
+
+  <path class="wire-claude" d="M1076,342 L1076,392" marker-end="url(#jv-a-claude)"/>
+  <path class="wire-jev" d="M908,432 L942,432" marker-end="url(#jv-a-jev)"/>
+
+  <rect class="policy" x="944" y="394" width="248" height="108" rx="12"/>
+  <text class="title" x="962" y="420" style="font-size:15px">Policy</text>
+  <text class="ink mono" x="962" y="444"><tspan class="block">p ≥ 0.9</tspan> → BLOCK (ready only)</text>
+  <text class="ink mono" x="962" y="464"><tspan class="adv">0.6 – 0.9</tspan> → advisory</text>
+  <text class="ink mono" x="962" y="484">&lt; 0.6 → dropped</text>
+
+  <text class="note" x="678" y="488">Claude writes the reason for every block.</text>
+  <text class="note" x="678" y="505">Jev writes no text.</text>
+
+  <!-- audit -->
+  <rect class="card" x="40" y="540" width="520" height="126" rx="12"/>
+  <text class="title" x="58" y="568">Audit trail</text>
+  <text class="sub mono" x="58" y="592">.harness/events/judge.jsonl · swiftgate judge events</text>
+  <text class="ink mono" x="58" y="616">judge.call<tspan x="196">answer · escalation · reason</tspan></text>
+  <text class="ink mono" x="58" y="636">judge.decision<tspan x="196">band · escalated · decided by</tspan></text>
+  <text class="sub" x="58" y="656">tokens, cost and latency for every call</text>
+
+  <!-- benchmark -->
+  <rect class="card" x="580" y="540" width="620" height="126" rx="12"/>
+  <text class="title" x="598" y="568">Benchmark: 66 labelled tests × 3 repeats</text>
+  <text class="th" x="598" y="590">ARM</text>
+  <text class="th" x="700" y="590">FAILS-IF-BROKEN</text>
+  <text class="th" x="890" y="590">COST / CASE</text>
+  <text class="th" x="1030" y="590">P50 LATENCY</text>
+  <line class="rule" x1="598" y1="598" x2="1182" y2="598"/>
+  <text class="ink mono" x="598" y="616"><tspan class="jev-ink" font-weight="700">cascade</tspan></text>
+  <text class="ink mono" x="700" y="616">10/10 hits · 32/32 clean</text>
+  <text class="ink mono" x="890" y="616" font-weight="700">$0.00135</text>
+  <text class="ink mono" x="1030" y="616" font-weight="700">218 ms</text>
+  <text class="ink mono" x="598" y="636"><tspan class="claude-ink" font-weight="700">Claude</tspan></text>
+  <text class="ink mono" x="700" y="636">10/10 hits · 32/32 clean</text>
+  <text class="ink mono" x="890" y="636">$0.00523</text>
+  <text class="ink mono" x="1030" y="636">3,808 ms</text>
+  <text class="sub" x="598" y="657">Same accuracy, about ¼ the cost, 17× faster at p50.</text>
+
+  <text class="note" x="40" y="692">Off until a repository opts in, because test source leaves the machine. Jev needs send_to = api.typesafe.ai and TYPESAFE_API_KEY, and its model is pinned. Labels came from an agent; samples are small.</text>
+</svg>

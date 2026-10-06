@@ -1,0 +1,225 @@
+<svg class="tm" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 770" width="1240" height="770" role="img" aria-labelledby="tm-title tm-desc">
+  <title id="tm-title">Telemetry and the run dashboard</title>
+  <desc id="tm-desc">Hooks, gates, the build loop, agents, QA and the judge write typed JSON-line events to a local event store. The run view joins those events with the plan ledger and run.json. swiftgate view serves it live, polling every second, and report --html writes an offline copy. The dashboard has a timeline of nested spans drawn as a flame graph, a kanban board of tasks, validation rows with video, and token and cost bars by role.</desc>
+  <style>
+    .tm { --panel:#FBFAF8; --card:#FFFFFF; --stroke:#DADDE4; --ink:#1B1F2A; --muted:#5B6272; --line:#9097A6; --frame:#B4BAC6; --sunk:#F1F2F5; --bar:#C9CEDA; --bar-2:#AEB5C4; --accent:#E5512B; --accent-ink:#B83A18; --accent-soft:#FDECE6; --jev:#5B4FD6; --jev-soft:#ECEAFD; --green:#1E8E4E; --green-soft:#E3F4EA; --red:#C93434; --red-soft:#FBE7E7; --amber:#A86A00; --amber-soft:#FBF0DA; }
+    @media (prefers-color-scheme: dark) {
+      .tm { --panel:#10131A; --card:#181D27; --stroke:#2B3240; --ink:#E8EBF1; --muted:#9AA2B3; --line:#687184; --frame:#394152; --sunk:#141821; --bar:#343C4B; --bar-2:#465063; --accent:#FF6B3F; --accent-ink:#FF8A63; --accent-soft:#2B1912; --jev:#9D95FF; --jev-soft:#1E1B3A; --green:#43C77B; --green-soft:#12271B; --red:#FF6E6E; --red-soft:#2C1517; --amber:#F2B44A; --amber-soft:#2A2110; }
+    }
+    .tm .panel { fill: var(--panel); }
+    .tm .card { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .tm .store { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+    .tm .store-top { fill: var(--card); stroke: var(--accent); stroke-width: 2.5; }
+    .tm .small { fill: var(--card); stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 5 4; }
+    .tm .view { fill: var(--card); stroke: var(--ink); stroke-width: 2; }
+    .tm .out { fill: var(--card); stroke: var(--accent); stroke-width: 1.8; }
+    .tm .wire { fill: none; stroke: var(--line); stroke-width: 1.8; }
+    .tm .wire-hot { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .tm .head { fill: var(--line); }
+    .tm .head-hot { fill: var(--accent); }
+    .tm .browser { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .tm .chrome { fill: var(--sunk); }
+    .tm .dot { fill: var(--bar-2); }
+    .tm .pane { fill: var(--sunk); }
+    .tm .tabline { stroke: var(--stroke); stroke-width: 1; }
+    .tm .tab-on { stroke: var(--accent); stroke-width: 2.5; }
+    .tm .b0 { fill: var(--bar-2); }
+    .tm .b1 { fill: var(--bar); }
+    .tm .bt { fill: var(--jev-soft); stroke: var(--jev); stroke-width: 1; }
+    .tm .bg { fill: var(--accent); }
+    .tm .bred { fill: var(--red); }
+    .tm .bqa { fill: var(--green-soft); stroke: var(--green); stroke-width: 1; }
+    .tm .bok { fill: var(--green); }
+    .tm .col { fill: var(--card); stroke: var(--stroke); stroke-width: 1; }
+    .tm .kc { fill: var(--card); stroke: var(--stroke); stroke-width: 1; }
+    .tm .kc-top { fill: var(--jev); }
+    .tm .kc-green { fill: var(--green); }
+    .tm .kc-red { fill: var(--red); }
+    .tm .kc-amber { fill: var(--amber); }
+    .tm .row { fill: var(--card); stroke: var(--stroke); stroke-width: 1; }
+    .tm .p-pass { fill: var(--green-soft); stroke: var(--green); stroke-width: 1; }
+    .tm .p-red { fill: var(--red-soft); stroke: var(--red); stroke-width: 1; }
+    .tm .p-wait { fill: var(--amber-soft); stroke: var(--amber); stroke-width: 1; }
+    .tm .tok { fill: var(--accent); fill-opacity: .8; }
+    .tm text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .tm .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .tm .title { font-size: 15px; font-weight: 650; }
+    .tm .big { font-size: 19px; font-weight: 700; }
+    .tm .sub { font-size: 11.5px; fill: var(--muted); }
+    .tm .ink { font-size: 12px; fill: var(--ink); }
+    .tm .label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; fill: var(--muted); }
+    .tm .plabel { font-size: 10px; font-weight: 700; letter-spacing: .12em; fill: var(--muted); }
+    .tm .tab { font-size: 11.5px; fill: var(--muted); }
+    .tm .tab-active { font-size: 11.5px; font-weight: 700; fill: var(--ink); }
+    .tm .bl { font-size: 9.5px; fill: var(--ink); }
+    .tm .bl-on { font-size: 9.5px; fill: var(--card); font-weight: 600; }
+    .tm .kh { font-size: 8.5px; font-weight: 700; letter-spacing: .06em; fill: var(--muted); text-anchor: middle; }
+    .tm .pill { font-size: 9.5px; font-weight: 700; text-anchor: middle; }
+    .tm .pass { fill: var(--green); } .tm .redt { fill: var(--red); } .tm .wait { fill: var(--amber); }
+    .tm .hot { fill: var(--accent-ink); }
+    .tm .center { text-anchor: middle; }
+  </style>
+  <defs>
+    <marker id="tm-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="tm-a-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-hot" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <rect class="panel" x="0" y="0" width="1240" height="770" rx="20"/>
+
+  <!-- writers -->
+  <text class="label" x="40" y="44">WHAT WRITES EVENTS</text>
+  <rect class="card" x="40" y="60" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="80">Hooks</text><text class="sub mono" x="56" y="98">hook.decision on every tool call</text>
+  <rect class="card" x="40" y="116" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="136">Gates</text><text class="sub mono" x="56" y="154">gate.run · gate.step · test · prove</text>
+  <rect class="card" x="40" y="172" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="192">Build loop</text><text class="sub mono" x="56" y="210">span start/end · halt · return-checked</text>
+  <rect class="card" x="40" y="228" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="248">Agents</text><text class="sub mono" x="56" y="266">tokens · cost · tools, never text</text>
+  <rect class="card" x="40" y="284" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="304">QA</text><text class="sub mono" x="56" y="322">qa.check · qa.flow · qa.setup · repair</text>
+  <rect class="card" x="40" y="340" width="320" height="48" rx="10"/>
+  <text class="title" x="56" y="360">Judge</text><text class="sub mono" x="56" y="378">judge.call · judge.decision</text>
+
+  <path class="wire" d="M360,84 C400,84 396,200 428,206" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M360,140 C396,140 398,212 428,214" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M360,196 C392,196 400,222 428,222" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M360,252 C392,252 400,232 428,230" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M360,308 C396,308 398,240 428,238" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M360,364 C400,364 396,250 428,246" marker-end="url(#tm-a)"/>
+
+  <!-- event store -->
+  <path class="store" d="M430,96 L430,330 A130,18 0 0 0 690,330 L690,96"/>
+  <ellipse class="store-top" cx="560" cy="96" rx="130" ry="18"/>
+  <text class="big center" x="560" y="146">Event store</text>
+  <text class="ink mono center" x="560" y="174">.harness/events/</text>
+  <text class="ink mono center" x="560" y="192">&lt;stream&gt;.jsonl</text>
+  <text class="sub center" x="560" y="222">10 streams of typed JSON lines</text>
+  <text class="sub center" x="560" y="242">local only, on by default</text>
+  <text class="sub center" x="560" y="262">never gates a verdict</text>
+  <text class="sub center" x="560" y="282">sealed past 4 MiB, never deleted</text>
+
+  <rect class="small" x="754" y="96" width="100" height="36" rx="8"/>
+  <text class="ink mono center" x="804" y="119">plan ledger</text>
+  <rect class="small" x="868" y="96" width="100" height="36" rx="8"/>
+  <text class="ink mono center" x="918" y="119">run.json</text>
+  <path class="wire" d="M804,132 L804,178" marker-end="url(#tm-a)"/>
+  <path class="wire" d="M918,132 L918,178" marker-end="url(#tm-a)"/>
+
+  <!-- run view -->
+  <path class="wire-hot" d="M690,200 C720,200 724,214 752,214" marker-end="url(#tm-a-hot)"/>
+
+  <rect class="view" x="754" y="180" width="214" height="110" rx="12"/>
+  <text class="big" x="774" y="212">Run view</text>
+  <text class="ink mono" x="774" y="238">view.json</text>
+  <text class="sub" x="774" y="258">events + ledger, joined</text>
+  <text class="sub" x="774" y="276">no source, no prompts</text>
+
+  <path class="wire" d="M690,300 C720,330 730,346 752,346" marker-end="url(#tm-a)"/>
+  <rect class="card" x="754" y="318" width="214" height="80" rx="12"/>
+  <text class="title mono" x="774" y="344">events summary</text>
+  <text class="sub" x="774" y="366">slow gates · flaky tests</text>
+  <text class="sub" x="774" y="384">cost · halt waits</text>
+
+  <!-- outputs -->
+  <path class="wire-hot" d="M968,214 C1000,214 996,140 1024,140" marker-end="url(#tm-a-hot)"/>
+  <path class="wire-hot" d="M968,256 C1000,256 996,282 1024,282" marker-end="url(#tm-a-hot)"/>
+  <rect class="out" x="1026" y="90" width="174" height="104" rx="12"/>
+  <text class="title mono hot" x="1044" y="118">swiftgate view</text>
+  <text class="ink" x="1044" y="142">live on 127.0.0.1</text>
+  <text class="sub" x="1044" y="162">polls every 1 s</text>
+  <text class="sub" x="1044" y="180">"now" strip, stall badges</text>
+  <rect class="out" x="1026" y="232" width="174" height="104" rx="12"/>
+  <text class="title mono hot" x="1044" y="260">report --html</text>
+  <text class="ink" x="1044" y="284">the same page, offline</text>
+  <text class="sub" x="1044" y="304">self-contained folder</text>
+  <text class="sub" x="1044" y="322">flow videos included</text>
+
+  <path class="wire-hot" d="M1113,336 L1113,440" marker-end="url(#tm-a-hot)"/>
+
+  <!-- dashboard schematic -->
+  <rect class="browser" x="40" y="442" width="1160" height="306" rx="14"/>
+  <path class="chrome" d="M54,443 L1186,443 A13,13 0 0 1 1199,456 L1199,472 L41,472 L41,456 A13,13 0 0 1 54,443 Z"/>
+  <circle class="dot" cx="62" cy="458" r="5"/><circle class="dot" cx="78" cy="458" r="5"/><circle class="dot" cx="94" cy="458" r="5"/>
+  <text class="sub mono" x="116" y="462">swiftgate view · run 20261005-a1b2 · building</text>
+  <text class="plabel" x="1186" y="462" text-anchor="end">SCHEMATIC</text>
+
+  <text class="tab" x="60" y="494">Overview</text>
+  <text class="tab-active" x="132" y="494">Timeline</text>
+  <text class="tab-active" x="204" y="494">Board</text>
+  <text class="tab" x="256" y="494">Graph</text>
+  <text class="tab" x="308" y="494">Spec</text>
+  <text class="tab" x="352" y="494">Gates</text>
+  <text class="tab-active" x="404" y="494">Tokens</text>
+  <text class="tab-active" x="464" y="494">Validation</text>
+  <line class="tabline" x1="40" y1="504" x2="1200" y2="504"/>
+  <line class="tab-on" x1="132" y1="504" x2="186" y2="504"/>
+  <line class="tab-on" x1="204" y1="504" x2="240" y2="504"/>
+  <line class="tab-on" x1="404" y1="504" x2="448" y2="504"/>
+  <line class="tab-on" x1="464" y1="504" x2="530" y2="504"/>
+
+  <!-- timeline flame graph: 11 px per minute from x=70 -->
+  <rect class="pane" x="56" y="516" width="468" height="220" rx="10"/>
+  <text class="plabel" x="70" y="536">TIMELINE · NESTED SPANS</text>
+  <rect class="b0" x="70" y="546" width="440" height="18" rx="3"/><text class="bl-on" x="76" y="559">run</text>
+  <rect class="b1" x="70" y="568" width="22" height="18" rx="3"/>
+  <rect class="b1" x="93" y="568" width="65" height="18" rx="3"/><text class="bl" x="99" y="581">plan</text>
+  <rect class="b1" x="159" y="568" width="43" height="18" rx="3"/><text class="bl" x="163" y="581">contract</text>
+  <rect class="b1" x="203" y="568" width="252" height="18" rx="3"/><text class="bl" x="209" y="581">build</text>
+  <rect class="b1" x="456" y="568" width="54" height="18" rx="3"/><text class="bl" x="462" y="581">final</text>
+  <rect class="bt" x="206" y="590" width="124" height="18" rx="3"/><text class="bl" x="212" y="603">task A</text>
+  <rect class="bt" x="334" y="590" width="110" height="18" rx="3"/><text class="bl" x="340" y="603">task C</text>
+  <rect class="bt" x="210" y="612" width="92" height="18" rx="3"/><text class="bl" x="216" y="625">task B</text>
+  <rect class="bqa" x="306" y="612" width="120" height="18" rx="3"/><text class="bl" x="312" y="625">validation</text>
+  <rect class="bg" x="292" y="634" width="18" height="18" rx="3"/>
+  <rect class="bg" x="314" y="634" width="14" height="18" rx="3"/>
+  <rect class="bred" x="398" y="634" width="14" height="18" rx="3"/>
+  <rect class="bg" x="420" y="634" width="20" height="18" rx="3"/>
+  <rect class="bg" x="462" y="634" width="30" height="18" rx="3"/>
+  <rect class="bok" x="470" y="656" width="10" height="18" rx="3"/>
+  <rect class="bok" x="484" y="656" width="10" height="18" rx="3"/>
+  <rect class="bok" x="498" y="656" width="10" height="18" rx="3"/>
+  <text class="sub" x="70" y="648">gates</text>
+  <text class="sub" x="70" y="670">qa flows</text>
+  <text class="sub" x="70" y="692">RED spans say why they failed</text>
+  <text class="sub mono" x="70" y="724">0</text><text class="sub mono center" x="180" y="724">10</text><text class="sub mono center" x="290" y="724">20</text><text class="sub mono center" x="400" y="724">30</text><text class="sub mono" x="482" y="724">40 min</text>
+
+  <!-- board -->
+  <rect class="pane" x="536" y="516" width="340" height="220" rx="10"/>
+  <text class="plabel" x="550" y="536">BOARD · KANBAN</text>
+  <rect class="col" x="550" y="546" width="50" height="132" rx="6"/><text class="kh" x="575" y="560">QUEUED</text>
+  <rect class="col" x="604" y="546" width="50" height="132" rx="6"/><text class="kh" x="629" y="560">BUILDING</text>
+  <rect class="col" x="658" y="546" width="50" height="132" rx="6"/><text class="kh" x="683" y="560">GATING</text>
+  <rect class="col" x="712" y="546" width="50" height="132" rx="6"/><text class="kh" x="737" y="560">REVIEW</text>
+  <rect class="col" x="766" y="546" width="50" height="132" rx="6"/><text class="kh" x="791" y="560">MERGED</text>
+  <rect class="col" x="820" y="546" width="50" height="132" rx="6"/><text class="kh" x="845" y="560">BLOCKED</text>
+  <rect class="kc" x="555" y="568" width="40" height="26" rx="4"/><rect class="kc-top" x="555" y="568" width="40" height="3"/>
+  <rect class="kc" x="609" y="568" width="40" height="26" rx="4"/><rect class="kc-top" x="609" y="568" width="40" height="3"/>
+  <rect class="kc" x="609" y="598" width="40" height="26" rx="4"/><rect class="kc-top" x="609" y="598" width="40" height="3"/>
+  <rect class="kc" x="663" y="568" width="40" height="26" rx="4"/><rect class="kc-amber" x="663" y="568" width="40" height="3"/>
+  <rect class="kc" x="717" y="568" width="40" height="26" rx="4"/><rect class="kc-amber" x="717" y="568" width="40" height="3"/>
+  <rect class="kc" x="771" y="568" width="40" height="26" rx="4"/><rect class="kc-green" x="771" y="568" width="40" height="3"/>
+  <rect class="kc" x="771" y="598" width="40" height="26" rx="4"/><rect class="kc-green" x="771" y="598" width="40" height="3"/>
+  <rect class="kc" x="771" y="628" width="40" height="26" rx="4"/><rect class="kc-green" x="771" y="628" width="40" height="3"/>
+  <rect class="kc" x="825" y="568" width="40" height="26" rx="4"/><rect class="kc-red" x="825" y="568" width="40" height="3"/>
+  <text class="sub" x="550" y="712" style="font-size:10.5px">cards move on the 1 s poll</text>
+
+  <!-- validation -->
+  <rect class="pane" x="888" y="516" width="298" height="128" rx="10"/>
+  <text class="plabel" x="902" y="536">VALIDATION · QA ROWS</text>
+  <rect class="row" x="902" y="544" width="270" height="20" rx="4"/><text class="bl mono" x="910" y="558">R1 acceptance</text>
+  <rect class="p-pass" x="1124" y="547" width="42" height="14" rx="7"/><text class="pill pass" x="1145" y="557">PASS</text>
+  <rect class="row" x="902" y="568" width="270" height="20" rx="4"/><text class="bl mono" x="910" y="582">R2 flow  ▶ video</text>
+  <rect class="p-pass" x="1124" y="571" width="42" height="14" rx="7"/><text class="pill pass" x="1145" y="581">PASS</text>
+  <rect class="row" x="902" y="592" width="270" height="20" rx="4"/><text class="bl mono" x="910" y="606">R3 flow  ▶ video</text>
+  <rect class="p-red" x="1124" y="595" width="42" height="14" rx="7"/><text class="pill redt" x="1145" y="605">RED</text>
+  <rect class="row" x="902" y="616" width="270" height="20" rx="4"/><text class="bl mono" x="910" y="630">R4 state</text>
+  <rect class="p-wait" x="1116" y="619" width="50" height="14" rx="7"/><text class="pill wait" x="1141" y="629">WAITING</text>
+
+  <!-- tokens -->
+  <rect class="pane" x="888" y="652" width="298" height="84" rx="10"/>
+  <text class="plabel" x="902" y="670">TOKENS · COST BY ROLE</text>
+  <text class="bl mono" x="902" y="688">build-worker</text><rect class="tok" x="990" y="680" width="150" height="10" rx="2"/>
+  <text class="bl mono" x="902" y="706">orchestrator</text><rect class="tok" x="990" y="698" width="92" height="10" rx="2"/>
+  <text class="bl mono" x="902" y="724">qa</text><rect class="tok" x="990" y="716" width="54" height="10" rx="2"/>
+</svg>

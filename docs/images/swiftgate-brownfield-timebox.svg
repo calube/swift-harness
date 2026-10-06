@@ -1,0 +1,145 @@
+<svg class="bf" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 650" width="1240" height="650" role="img" aria-labelledby="bf-title bf-desc">
+  <title id="bf-title">A brownfield run</title>
+  <desc id="bf-desc">swiftgate run takes a spec.md in a repository the harness doesn't own and builds it inside a 40-minute box with no human input. It discovers the repository's own commands and warms builds, plans with read-only explorers, lands a contract commit, builds tasks in parallel worktrees behind slice and merge gates while a validation worker writes QA checks before the code, then runs a final gate and simulator QA with video and writes a report. Nothing is written into the user's tree.</desc>
+  <style>
+    .bf { --panel:#FBFAF8; --card:#FFFFFF; --stroke:#DADDE4; --ink:#1B1F2A; --muted:#5B6272; --line:#9097A6; --frame:#B4BAC6; --seg:#EEF0F4; --accent:#E5512B; --accent-ink:#B83A18; --accent-soft:#FDECE6; --green:#1E8E4E; --green-soft:#E3F4EA; --red:#C93434; }
+    @media (prefers-color-scheme: dark) {
+      .bf { --panel:#10131A; --card:#181D27; --stroke:#2B3240; --ink:#E8EBF1; --muted:#9AA2B3; --line:#687184; --frame:#394152; --seg:#1F2531; --accent:#FF6B3F; --accent-ink:#FF8A63; --accent-soft:#2B1912; --green:#43C77B; --green-soft:#12271B; --red:#FF6E6E; }
+    }
+    .bf .panel { fill: var(--panel); }
+    .bf .card { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .bf .card-build { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+    .bf .lane { fill: var(--card); stroke: var(--stroke); stroke-width: 1.2; }
+    .bf .lane-qa { fill: var(--green-soft); stroke: var(--green); stroke-width: 1.2; }
+    .bf .gatebox { fill: var(--card); stroke: var(--accent); stroke-width: 1.5; }
+    .bf .seg { fill: var(--seg); stroke: var(--panel); stroke-width: 2; }
+    .bf .seg-build { fill: var(--accent-soft); stroke: var(--panel); stroke-width: 2; }
+    .bf .seg-final { fill: var(--green-soft); stroke: var(--panel); stroke-width: 2; }
+    .bf .tick { stroke: var(--frame); stroke-width: 1.5; }
+    .bf .wire { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .bf .wire-thin { fill: none; stroke: var(--line); stroke-width: 1.5; }
+    .bf .head { fill: var(--accent); }
+    .bf .head-thin { fill: var(--line); }
+    .bf .badge { fill: var(--accent); }
+    .bf .trace { fill: none; stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .bf text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .bf .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .bf .title { font-size: 18px; font-weight: 650; }
+    .bf .cmd { font-size: 15.5px; font-weight: 700; fill: var(--accent-ink); }
+    .bf .sub { font-size: 12.5px; fill: var(--muted); }
+    .bf .lane-text { font-size: 12px; fill: var(--ink); }
+    .bf .lane-qa-text { font-size: 12px; fill: var(--green); font-weight: 600; }
+    .bf .red { font-size: 12.5px; fill: var(--red); }
+    .bf .num { font-size: 11px; font-weight: 700; fill: var(--panel); text-anchor: middle; }
+    .bf .label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; fill: var(--muted); }
+    .bf .seg-text { font-size: 12px; font-weight: 600; fill: var(--ink); text-anchor: middle; }
+    .bf .tick-text { font-size: 11px; fill: var(--muted); text-anchor: middle; }
+    .bf .note { font-size: 12.5px; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="bf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path class="head" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+    <marker id="bf-arrow-thin" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head-thin" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <rect class="panel" x="0" y="0" width="1240" height="650" rx="20"/>
+  <text class="label" x="40" y="40">SWIFTGATE RUN · A REPOSITORY THE HARNESS DOESN'T OWN · 0 HUMAN INPUTS</text>
+
+  <!-- time box ruler: 28 px per minute from x=60 -->
+  <rect class="seg" x="60" y="62" width="140" height="32" rx="6"/>
+  <rect class="seg" x="200" y="62" width="84" height="32" rx="6"/>
+  <rect class="seg" x="284" y="62" width="112" height="32" rx="6"/>
+  <rect class="seg-build" x="396" y="62" width="420" height="32" rx="6"/>
+  <rect class="seg" x="816" y="62" width="224" height="32" rx="6"/>
+  <rect class="seg-final" x="1040" y="62" width="140" height="32" rx="6"/>
+  <text class="seg-text" x="130" y="83">explore</text>
+  <text class="seg-text" x="242" y="83">plan</text>
+  <text class="seg-text" x="340" y="83">contract</text>
+  <text class="seg-text" x="606" y="83">build · new tasks start</text>
+  <text class="seg-text" x="928" y="83">no new starts</text>
+  <text class="seg-text" x="1110" y="83">final · report</text>
+  <line class="tick" x1="60" y1="98" x2="60" y2="106"/><text class="tick-text mono" x="60" y="121">0</text>
+  <line class="tick" x1="200" y1="98" x2="200" y2="106"/><text class="tick-text mono" x="200" y="121">5</text>
+  <line class="tick" x1="284" y1="98" x2="284" y2="106"/><text class="tick-text mono" x="284" y="121">8</text>
+  <line class="tick" x1="396" y1="98" x2="396" y2="106"/><text class="tick-text mono" x="396" y="121">12</text>
+  <line class="tick" x1="816" y1="98" x2="816" y2="106"/><text class="tick-text mono" x="816" y="121">27</text>
+  <line class="tick" x1="1040" y1="98" x2="1040" y2="106"/><text class="tick-text mono" x="1040" y="121">35 cutoff</text>
+  <line class="tick" x1="1180" y1="98" x2="1180" y2="106"/><text class="tick-text mono" x="1180" y="121">40 min</text>
+
+  <!-- row 1 -->
+  <rect class="card" x="40" y="156" width="360" height="124" rx="12"/>
+  <text class="cmd mono" x="60" y="190">swiftgate run spec.md</text>
+  <text class="sub mono" x="60" y="220">discover: the repo's own commands</text>
+  <text class="sub mono" x="60" y="242">warm-up builds in parallel</text>
+  <text class="sub mono" x="60" y="264">live run viewer starts</text>
+  <path class="wire" d="M400,218 L438,218" marker-end="url(#bf-arrow)"/>
+
+  <rect class="card" x="440" y="156" width="360" height="124" rx="12"/>
+  <circle class="badge" cx="464" cy="184" r="13"/><text class="num mono" x="464" y="188">1–5</text>
+  <text class="title" x="486" y="190">Read and plan</text>
+  <text class="sub mono" x="460" y="220">requirements + written assumptions</text>
+  <text class="sub mono" x="460" y="242">read-only explorer agents</text>
+  <text class="sub mono" x="460" y="264">PLAN.md with validation rows</text>
+  <path class="wire" d="M800,218 L838,218" marker-end="url(#bf-arrow)"/>
+
+  <rect class="card" x="840" y="156" width="360" height="124" rx="12"/>
+  <circle class="badge" cx="864" cy="184" r="12"/><text class="num mono" x="864" y="188">6</text>
+  <text class="title" x="886" y="190">Contract commit</text>
+  <text class="sub mono" x="860" y="220">types · stubs · accessibility ids</text>
+  <text class="sub mono" x="860" y="242">held scenarios for in-flight states</text>
+  <text class="sub mono" x="860" y="264">slice gate GREEN before any task</text>
+
+  <path class="wire" d="M1020,280 L1020,300 Q1020,308 1012,308 L708,308 Q700,308 700,316 L700,334" marker-end="url(#bf-arrow)"/>
+
+  <!-- row 2: build -->
+  <rect class="card-build" x="40" y="336" width="720" height="232" rx="14"/>
+  <circle class="badge" cx="64" cy="366" r="12"/><text class="num mono" x="64" y="370">7</text>
+  <text class="title" x="86" y="372">Build in parallel</text>
+  <text class="sub" x="230" y="372">each task in its own git worktree, test-first</text>
+
+  <rect class="lane" x="60" y="392" width="460" height="34" rx="8"/>
+  <text class="lane-text mono" x="76" y="414">task A · slice gate · prove: fails when reverted</text>
+  <rect class="lane" x="60" y="434" width="460" height="34" rx="8"/>
+  <text class="lane-text mono" x="76" y="456">task B · slice gate · prove: fails when reverted</text>
+  <rect class="lane" x="60" y="476" width="460" height="34" rx="8"/>
+  <text class="lane-text mono" x="76" y="498">task C · slice gate · prove: fails when reverted</text>
+  <rect class="lane-qa" x="60" y="518" width="460" height="34" rx="8"/>
+  <text class="lane-qa-text mono" x="76" y="540">validation worker · writes QA checks before the code</text>
+
+  <path class="wire-thin" d="M520,409 C548,409 548,430 566,430" marker-end="url(#bf-arrow-thin)"/>
+  <path class="wire-thin" d="M520,451 L566,451" marker-end="url(#bf-arrow-thin)"/>
+  <path class="wire-thin" d="M520,493 C548,493 548,472 566,472" marker-end="url(#bf-arrow-thin)"/>
+  <path class="wire-thin" d="M520,535 L566,535" marker-end="url(#bf-arrow-thin)"/>
+
+  <rect class="gatebox" x="568" y="400" width="172" height="90" rx="10"/>
+  <text class="title" x="588" y="430" style="font-size:16px">Merge gate</text>
+  <text class="sub mono" x="588" y="454">on the plan branch</text>
+  <text class="sub mono" x="588" y="474">after every merge</text>
+  <rect class="lane-qa" x="568" y="506" width="172" height="46" rx="10"/>
+  <text class="lane-qa-text mono" x="584" y="526">qa run</text>
+  <text class="sub mono" x="584" y="544">rows as tasks merge</text>
+  <path class="wire-thin" d="M654,490 L654,504" marker-end="url(#bf-arrow-thin)"/>
+
+  <path class="wire" d="M760,410 L798,410" marker-end="url(#bf-arrow)"/>
+
+  <!-- final and report -->
+  <rect class="card" x="800" y="336" width="400" height="132" rx="12"/>
+  <circle class="badge" cx="824" cy="366" r="12"/><text class="num mono" x="824" y="370">8</text>
+  <text class="title" x="846" y="372">Final</text>
+  <text class="sub mono" x="820" y="402">final tier: test · lint · build</text>
+  <text class="sub mono" x="820" y="424">qa run --final · video per flow</text>
+  <text class="red mono" x="820" y="450">RED → 1 fix task, final once more</text>
+  <path class="wire" d="M1000,468 L1000,494" marker-end="url(#bf-arrow)"/>
+
+  <rect class="card" x="800" y="496" width="400" height="72" rx="12"/>
+  <circle class="badge" cx="824" cy="526" r="12"/><text class="num mono" x="824" y="530">9</text>
+  <text class="title" x="846" y="532">Report</text>
+  <text class="sub mono" x="820" y="554">verdict · evidence · tokens and cost</text>
+
+  <!-- no trace -->
+  <rect class="trace" x="40" y="590" width="1160" height="40" rx="10"/>
+  <text class="note" x="60" y="615">No trace in the tree: config and state live in the git common dir, every commit lands on a plan branch in a sibling checkout, and the user's branch is never touched.</text>
+</svg>
