@@ -71,6 +71,7 @@ Path: `<plans>/<slug>/ledger.json`, and the draft at `.harness/plan-draft/<slug>
       "tests": ["test-queued-orders-replay-in-submit-order"],
       "covers": ["req-offline-queue-drains-on-reconnect", "test-queued-orders-replay-in-submit-order"],
       "estLines": 180,
+      "model": "sonnet",
       "status": "pending",
       "worktree": "../myapp-offline-order-queue-offline-queue-core-reducer"
     }

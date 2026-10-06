@@ -72,10 +72,11 @@ Each check must pass before any design work starts. On a failure, report it and 
    fresh session.
 3. **Clean main.** `git branch --show-current` prints `main`, and `git status --porcelain` prints
    nothing. Otherwise stop, and ask the user to commit, stash or switch first. Never do it for them.
-4. **Warm build.** `"$SG" worktree warm-check --json`. Exit 1 means the main checkout has no warm
-   `.build` or DerivedData to clone, so every task worktree would start cold and spend minutes
-   compiling. Stop, name the `missing` entries, and tell the user to warm it by building once in
-   the main checkout: `swift build --package-path <dir>` for each package `.swiftgate.toml` names.
+4. **Warm build.** `"$SG" worktree warm-check --json`. Exit 1 means no package `.swiftgate.toml` names
+   has a warm `.build` in the main checkout to clone, so every task worktree would start cold and
+   spend minutes compiling. Stop, name the `missing` entries, and tell the user to warm it by
+   building once in the main checkout: `swift build --build-tests --package-path <dir>` for each
+   package `.swiftgate.toml` names.
    Then run ship again. Exit 2: report the message and stop.
 5. **Green main.** `"$SG" check --tier <merge_gate>`, where `<merge_gate>` is the preset's
    `merge_gate` key. Not GREEN: quote the findings as `rule: message` and stop. Every merge gate

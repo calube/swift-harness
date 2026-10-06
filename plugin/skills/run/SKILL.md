@@ -202,7 +202,7 @@ write sets from each kind's target graph, and the rules a task's write set obeys
   it red first. A screen is a `Writes` path inside the area's root with a folder or file named
   `…View`, `…Views`, `…Screen`, `…Screens`, `…ViewController`, `…UI` or `…UITests`, or a
   `.storyboard` or `.xib`; a feature, the state a screen shows, is one named `…Feature`,
-  `…Reducer` or `…ViewModel`. The contract's stubs don't count. Such a requirement no flow can check
+  `…Features`, `…Reducer`, `…Reducers`, `…ViewModel` or `…ViewModels`. The contract's stubs don't count. Such a requirement no flow can check
   opens its row's `Reason` with the obstacle: `network:`, `hardware:`, `account:`, `data:` or
   `system:`, then what the simulator lacks. "Unit tests prove it" is no obstacle. An existing-tests requirement opens its reason-only row with `gate:` and the tier, `final` or `merge`. A reason
   excuses 1 requirement, never the app: every `xcode` area whose screens a task writes gets at
