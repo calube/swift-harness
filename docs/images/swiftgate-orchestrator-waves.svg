@@ -1,0 +1,119 @@
+<svg class="ow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 600" width="1240" height="600" role="img" aria-labelledby="ow-title ow-desc">
+  <title id="ow-title">Waves of parallel workers</title>
+  <desc id="ow-desc">An engineer drives an orchestrator session that plans, spawns, checks and merges. It spawns a wave of up to 3 workers, each in its own git worktree and branch. Their short reports are checked against a defect checklist; a failing report goes back to the same worker for a fix round, one issue at a time. Passing branches merge in id order, and the push gate runs on merged main. GREEN starts the next wave; RED goes back to the orchestrator.</desc>
+  <style>
+    .ow { --panel:#FBFAF8; --card:#FFFFFF; --stroke:#D3D7DF; --ink:#1B1F2A; --muted:#5B6272; --line:#8E95A4; --frame:#B4BAC6; --accent:#E5512B; --accent-ink:#B83A18; --accent-soft:#FDECE6; --worker:#4C45C9; --worker-soft:#ECEAFD; --gate:#A86A00; --gate-soft:#FBF0DA; --green:#1E8E4E; --red:#C93434; --red-soft:#FBE7E7; }
+    @media (prefers-color-scheme: dark) {
+      .ow { --panel:#121417; --card:#191C21; --stroke:#363B45; --ink:#E8EBF1; --muted:#9AA2B3; --line:#7A8292; --frame:#454C58; --accent:#FF6B3F; --accent-ink:#FF8A63; --accent-soft:#2B1912; --worker:#9D95FF; --worker-soft:#1E1D3B; --gate:#E6A93D; --gate-soft:#2A2214; --green:#43C77B; --red:#FF6E6E; --red-soft:#2C1517; }
+    }
+    .ow .panel { fill: var(--panel); }
+    .ow .box { fill: var(--card); stroke: var(--stroke); stroke-width: 1.5; }
+    .ow .pill { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+    .ow .orch { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2.5; }
+    .ow .wave { fill: none; stroke: var(--frame); stroke-width: 1.5; stroke-dasharray: 6 6; }
+    .ow .worker { fill: var(--worker-soft); stroke: var(--worker); stroke-width: 1.8; }
+    .ow .diamond { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+    .ow .gate { fill: var(--gate-soft); stroke: var(--gate); stroke-width: 2; }
+    .ow .fix { fill: var(--red-soft); stroke: var(--red); stroke-width: 1.5; }
+    .ow .wire { fill: none; stroke: var(--line); stroke-width: 1.8; }
+    .ow .wire-green { fill: none; stroke: var(--green); stroke-width: 2; }
+    .ow .wire-red { fill: none; stroke: var(--red); stroke-width: 1.8; stroke-dasharray: 6 5; }
+    .ow .head { fill: var(--line); }
+    .ow .head-green { fill: var(--green); }
+    .ow .head-red { fill: var(--red); }
+    .ow text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; fill: var(--ink); }
+    .ow .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; }
+    .ow .c { text-anchor: middle; }
+    .ow .h { font-size: 16px; font-weight: 700; }
+    .ow .big { font-size: 18px; font-weight: 700; }
+    .ow .s { font-size: 12.5px; fill: var(--muted); }
+    .ow .ink { font-size: 12.5px; fill: var(--ink); }
+    .ow .label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; fill: var(--muted); }
+    .ow .edge { font-size: 12px; font-weight: 700; }
+    .ow .accent-ink { fill: var(--accent-ink); }
+    .ow .worker-ink { fill: var(--worker); }
+    .ow .gate-ink { fill: var(--gate); }
+    .ow .green { fill: var(--green); }
+    .ow .red { fill: var(--red); }
+    .ow .note { font-size: 12.5px; fill: var(--muted); }
+  </style>
+  <defs>
+    <marker id="ow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="head" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ow-a-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-green" d="M0,0 L10,5 L0,10 z"/></marker>
+    <marker id="ow-a-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-red" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+
+  <rect class="panel" x="0" y="0" width="1240" height="600" rx="20"/>
+  <text class="label" x="40" y="44">HOW THE HARNESS GOT BUILT · 1 WAVE AT A TIME</text>
+
+  <!-- engineer and orchestrator -->
+  <rect class="pill" x="60" y="92" width="190" height="44" rx="22"/>
+  <text class="h c" x="155" y="120">1 engineer</text>
+  <path class="wire" d="M155,136 L155,172" marker-end="url(#ow-a)"/>
+
+  <rect class="orch" x="40" y="174" width="230" height="150" rx="14"/>
+  <text class="big accent-ink" x="60" y="206">Orchestrator</text>
+  <text class="s" x="60" y="228">1 Claude session · sole committer</text>
+  <text class="ink" x="60" y="256">plans the wave</text>
+  <text class="ink" x="60" y="276">spawns · checks · merges</text>
+  <text class="ink" x="60" y="296">never writes the code</text>
+
+  <path class="wire" d="M270,250 L318,250" marker-end="url(#ow-a)"/>
+  <text class="s c" x="294" y="238">spawn</text>
+
+  <!-- the wave -->
+  <rect class="wave" x="320" y="92" width="300" height="340" rx="16"/>
+  <text class="label" x="340" y="118">1 WAVE · UP TO 3 WORKERS</text>
+  <rect class="worker" x="340" y="134" width="260" height="84" rx="10"/>
+  <text class="h worker-ink" x="358" y="160">worker A</text>
+  <text class="ink mono" x="358" y="184">own worktree + branch</text>
+  <text class="s" x="358" y="204">test-first · Opus · never pushes</text>
+  <rect class="worker" x="340" y="230" width="260" height="84" rx="10"/>
+  <text class="h worker-ink" x="358" y="256">worker B</text>
+  <text class="ink mono" x="358" y="280">own worktree + branch</text>
+  <text class="s" x="358" y="300">test-first · Opus · never pushes</text>
+  <rect class="worker" x="340" y="326" width="260" height="84" rx="10"/>
+  <text class="h worker-ink" x="358" y="352">worker C</text>
+  <text class="ink mono" x="358" y="376">own worktree + branch</text>
+  <text class="s" x="358" y="396">test-first · Opus · never pushes</text>
+
+  <!-- reports and checklist -->
+  <path class="wire" d="M620,250 L664,250" marker-end="url(#ow-a)"/>
+  <rect class="box" x="666" y="214" width="150" height="72" rx="10"/>
+  <text class="h c" x="741" y="244">reports</text>
+  <text class="s c" x="741" y="266">≤ 200 words each</text>
+  <path class="wire" d="M816,250 L846,250" marker-end="url(#ow-a)"/>
+
+  <polygon class="diamond" points="938,186 1030,250 938,314 848,250"/>
+  <text class="ink c" x="938" y="240">passes the</text>
+  <text class="ink c" x="938" y="258">defect checklist?</text>
+
+  <!-- fix round -->
+  <path class="wire-red" d="M938,314 L938,372" marker-end="url(#ow-a-red)"/>
+  <text class="edge red" x="948" y="346">no</text>
+  <rect class="fix" x="848" y="374" width="180" height="76" rx="10"/>
+  <text class="h c" x="938" y="400">fix round</text>
+  <text class="s c mono" x="938" y="420">SendMessage</text>
+  <text class="s c" x="938" y="438">same worker · 1 issue a round</text>
+  <path class="wire-red" d="M848,412 L624,412" marker-end="url(#ow-a-red)"/>
+
+  <!-- merge and gate -->
+  <path class="wire" d="M1030,250 L1068,250" marker-end="url(#ow-a)"/>
+  <text class="edge green" x="1036" y="240">yes</text>
+  <rect class="box" x="1070" y="214" width="140" height="72" rx="10"/>
+  <text class="h c mono" x="1140" y="244" style="font-size:14px">merge --no-ff</text>
+  <text class="s c" x="1140" y="266">in id order</text>
+  <path class="wire" d="M1140,286 L1140,330" marker-end="url(#ow-a)"/>
+
+  <polygon class="gate" points="1140,332 1214,392 1140,452 1066,392"/>
+  <text class="ink c" x="1140" y="386">push gate</text>
+  <text class="ink c" x="1140" y="404">on merged main</text>
+
+  <!-- loops back -->
+  <path class="wire-red" d="M1140,452 L1140,500 L190,500 L190,326" marker-end="url(#ow-a-red)"/>
+  <text class="edge red" x="560" y="492">RED · back to the orchestrator</text>
+  <path class="wire-green" d="M1214,392 L1226,392 L1226,530 L120,530 L120,326" marker-end="url(#ow-a-green)"/>
+  <text class="edge green" x="560" y="522">GREEN · next wave</text>
+
+  <text class="note" x="40" y="572">A worker used about 140k to 300k tokens and 9 to 35 minutes. Branches green on their own still broke main about once a batch, so the full suite ran after every batch.</text>
+</svg>

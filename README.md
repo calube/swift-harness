@@ -86,22 +86,7 @@ same gate.
 |:---:|:---:|:---:|:---:|:---:|
 | 2,752 | 840 | 84% | ~133k / ~137k lines | 4,689 |
 
-```mermaid
-flowchart TB
-  O[Orchestrator session<br/>plans · spawns · checks · merges] --> W
-  subgraph W[1 wave: up to 3 workers on a laptop]
-    direction LR
-    W1[worker A<br/>own worktree + branch] --- W2[worker B<br/>own worktree + branch] --- W3[worker C<br/>own worktree + branch]
-  end
-  W --> RP[≤200-word reports]
-  RP --> CK{report passes<br/>the defect checklist?}
-  CK -- no --> FX[SendMessage fix round<br/>to the same worker, 1 issue per round]
-  FX --> RP
-  CK -- yes --> M[merge --no-ff in id order]
-  M --> G{swiftgate check --tier push<br/>on merged main}
-  G -- GREEN --> N[next wave]
-  G -- RED --> O
-```
+![Waves of parallel workers: 1 engineer drives an orchestrator session that spawns up to 3 workers in their own worktrees, checks their reports, sends fix rounds, merges in id order and runs the push gate on merged main](docs/images/swiftgate-orchestrator-waves.svg)
 
 | Measured speedup | Before | After |
 |---|---|---|
