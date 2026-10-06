@@ -118,7 +118,7 @@ struct BootstrapCommand: AsyncParsableCommand {
       Writes AGENTS.md (managed block) and a CLAUDE.md symlink, .swiftgate.toml (only when \
       missing), Scenario.swift beside a single @main App file when it creates the config, \
       .swift-format, .swiftlint.yml (when swiftlint is installed), lefthook.yml, \
-      .gitignore entries and .harness/plans/index.json. With --apply it also registers the \
+      .gitignore entries and docs/index.md (only when missing). With --apply it also registers the \
       repository in ~/.swift-harness/projects.json, links ~/.local/bin/swiftgate to this \
       plugin's shim, and runs `lefthook install`. Run it from the repository root.
       """)
