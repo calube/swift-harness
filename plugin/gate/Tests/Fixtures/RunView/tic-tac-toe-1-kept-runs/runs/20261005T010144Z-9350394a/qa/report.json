@@ -8,7 +8,7 @@
       "failureScenario" : null,
       "file" : "validation.json",
       "line" : null,
-      "message" : "row 2 (req-status-text, acceptance) `test: InterviewStarterUITests/GameFlowUITests`: exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.Interview…",
+      "message" : "row 2 (req-status-text, acceptance) `test: TimedBuildStarterUITests/GameFlowUITests`: exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.TimedBuild…",
       "rule" : "qa.check-failed",
       "severity" : "major"
     }
@@ -20,7 +20,7 @@
   "plan" : "spec",
   "rows" : [
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/01-req-board-screen.acceptance.txt"
       ],
@@ -39,13 +39,13 @@
       ]
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/02-req-status-text.acceptance.txt"
       ],
       "exitStatus" : 65,
       "layer" : "acceptance",
-      "message" : "exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.Interview…",
+      "message" : "exit 65: Failed to install or launch the test runner. (Underlying Error: Simulator device failed to launch com.example.TimedBuild…",
       "ms" : 44970,
       "requirement" : "req-status-text",
       "result" : "red",
@@ -58,7 +58,7 @@
       ]
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "evidence" : [
         "qa/03-req-new-game.acceptance.txt"
       ],

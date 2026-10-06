@@ -39,7 +39,7 @@
           "deleting the posts `AppFeature`"
         ],
         "scope" : [
-          "`InterviewStarterApp` builds a `Store(initialState: WatchlistFeature.State()) { WatchlistFeature() }` and shows `WatchlistView`",
+          "`TimedBuildStarterApp` builds a `Store(initialState: WatchlistFeature.State()) { WatchlistFeature() }` and shows `WatchlistView`",
           "`LaunchFlowUITests` waits up to 20 s for either the `TrackerID.row(\"bitcoin\")` element or the `TrackerID.error` text, so it passes with or without the network, and asserts that \"Bitcoin\", \"Ethereum\" and \"Solana\" rows exist when the load succeeds"
         ],
         "title" : "Point the app's root scene at the tracker and rewrite the launch UI test for it.",
@@ -75,7 +75,7 @@
       },
       "tracker-ui" : {
         "acceptance" : [
-          "the InterviewStarter app and AppFeature build; slice is GREEN"
+          "the TimedBuildStarter app and AppFeature build; slice is GREEN"
         ],
         "outOfScope" : [
           "reducer logic, the app's root scene, UI tests"

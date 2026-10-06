@@ -22,7 +22,7 @@
     },
     {
       "check" : "qa/watchlist-refresh.flow.json",
-      "digest" : "9f828067a04528d41fef6b9b16362679561637976c986438baeeb8d2521e403d",
+      "digest" : "d7cc2615fe19632bfb1bfe0e3c74e9b9e7c30f5ba0345cb097ba13071250530b",
       "layer" : "flow",
       "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.price.bitcoin\" label=\"$64,000.00\"; sim verify RED: sim.no-steps: run 20261005T060353Z-bc8be357-row3 recorded no step: run sim snap at each checked point",
       "ms" : 19163,

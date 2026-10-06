@@ -85,7 +85,7 @@ struct GateBudgetTests {
       budget.areas == [
         GateBudget.Area(area: "APIClient", expectedSeconds: 13),
         GateBudget.Area(area: "AppFeature", expectedSeconds: 21),
-        GateBudget.Area(area: "InterviewStarter", expectedSeconds: 160),
+        GateBudget.Area(area: "TimedBuildStarter", expectedSeconds: 160),
       ])
   }
 
@@ -102,8 +102,8 @@ struct GateBudgetTests {
       merge.areas == [
         GateBudget.Area(area: "APIClient", expectedSeconds: 155),
         GateBudget.Area(area: "AppFeature", expectedSeconds: 273),
-        GateBudget.Area(area: "InterviewStarter", expectedSeconds: 399),
         GateBudget.Area(area: "LogClient", expectedSeconds: 206),
+        GateBudget.Area(area: "TimedBuildStarter", expectedSeconds: 399),
       ])
     let final = GateBudget.estimate(tier: .final, events: events)
     #expect(final.expectedSeconds == 399)

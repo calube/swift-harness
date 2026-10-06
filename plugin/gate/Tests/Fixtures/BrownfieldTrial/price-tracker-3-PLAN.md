@@ -15,7 +15,7 @@
 
 - APIClient (warm test unknown; the warm-up recorded no events)
 - AppFeature (warm test unknown)
-- InterviewStarter (xcode, warm test unknown; its UI test moves to the fake client)
+- TimedBuildStarter (xcode, warm test unknown; its UI test moves to the fake client)
 
 ## Assumptions
 
@@ -44,7 +44,7 @@ Declare the CoinGecko client endpoints, models, fake scenarios, feature and view
 - Out of scope:
   - any behaviour change of the running app
 - Covers: req-coingecko-client
-- Writes: Packages/APIClient/Sources/APIClient/, Packages/APIClient/Sources/APIClientLive/APIClientLive.swift, Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift, Packages/AppFeature/Sources/AppCore/DetailFeature.swift, Packages/AppFeature/Sources/AppUI/WatchlistView.swift, Packages/AppFeature/Sources/AppUI/DetailView.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, App/InterviewStarterApp.swift
+- Writes: Packages/APIClient/Sources/APIClient/, Packages/APIClient/Sources/APIClientLive/APIClientLive.swift, Packages/AppFeature/Sources/AppCore/WatchlistFeature.swift, Packages/AppFeature/Sources/AppCore/DetailFeature.swift, Packages/AppFeature/Sources/AppUI/WatchlistView.swift, Packages/AppFeature/Sources/AppUI/DetailView.swift, Packages/AppFeature/Sources/AppUI/AccessibilityID.swift, App/TimedBuildStarterApp.swift
 
 ### coingecko-client
 Implement the live CoinGecko quotes and market-chart requests in `APIClientLive`, tested against recorded JSON.

@@ -18,7 +18,7 @@
 
 - AppFeature (swiftpm, warm test unknown; `test_files` narrows slice to the changed tests)
 - APIClient (swiftpm, warm test 13 s)
-- InterviewStarter (xcode, root `.`, warm test 56.7 s, build-only: slice builds for testing, its UI tests run at merge and final)
+- TimedBuildStarter (xcode, root `.`, warm test 56.7 s, build-only: slice builds for testing, its UI tests run at merge and final)
 
 ## Assumptions
 
@@ -97,7 +97,7 @@ Replace the posts screen with the send-money screens and point the app at the ne
 - Out of scope:
   - reducer logic and keypad rules
 - Covers: req-contact-search, req-contact-select, req-keypad-entry, req-amount-format, req-confirm-screen, req-send-success, req-send-failure
-- Writes: Packages/AppFeature/Sources/AppUI/SendMoneyView.swift, Packages/AppFeature/Sources/AppUI/AmountView.swift, Packages/AppFeature/Sources/AppUI/ConfirmView.swift, Packages/AppFeature/Sources/AppUI/AppView.swift, Packages/AppFeature/Sources/AppCore/AppFeature.swift, Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift, App/InterviewStarterApp.swift, UITests/LaunchFlowUITests.swift
+- Writes: Packages/AppFeature/Sources/AppUI/SendMoneyView.swift, Packages/AppFeature/Sources/AppUI/AmountView.swift, Packages/AppFeature/Sources/AppUI/ConfirmView.swift, Packages/AppFeature/Sources/AppUI/AppView.swift, Packages/AppFeature/Sources/AppCore/AppFeature.swift, Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift, App/TimedBuildStarterApp.swift, UITests/LaunchFlowUITests.swift
 - Tests: UITests/LaunchFlowUITests.swift
 
 ### spec-validation

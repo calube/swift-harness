@@ -13,7 +13,7 @@
 
 ## Areas
 
-- InterviewStarter (xcode, root `.`; warm test time unknown: the warm-up recorded nothing, so slice builds only and tests run at merge)
+- TimedBuildStarter (xcode, root `.`; warm test time unknown: the warm-up recorded nothing, so slice builds only and tests run at merge)
 
 ## Assumptions
 
@@ -39,9 +39,9 @@
 | req-win-lines | | | | | GameTests in ttt-engine check all 8 lines for both players |
 | req-draw | | | | | GameTests in ttt-engine check a full board with no line |
 | req-rules-tested | | | | | TicTacToeTests import only TicTacToe, no UI module |
-| req-board-screen | acceptance | `test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
-| req-status-text | acceptance | `test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
-| req-new-game | acceptance | `test: InterviewStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
+| req-board-screen | acceptance | `test: TimedBuildStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
+| req-status-text | acceptance | `test: TimedBuildStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
+| req-new-game | acceptance | `test: TimedBuildStarterUITests/GameFlowUITests` | ttt-screen | ttt-screen | |
 
 ### ttt-contract
 Declare the TicTacToe engine types as stubs and run the package tests in the scheme.
@@ -55,7 +55,7 @@ Declare the TicTacToe engine types as stubs and run the package tests in the sch
 - Out of scope:
   - any rule behaviour
 - Covers: req-rules-tested
-- Writes: Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/TicTacToe/, Packages/AppFeature/Tests/TicTacToeTests/, InterviewStarter.xcodeproj/xcshareddata/xcschemes/InterviewStarter.xcscheme, .swiftgate.toml
+- Writes: Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/TicTacToe/, Packages/AppFeature/Tests/TicTacToeTests/, TimedBuildStarter.xcodeproj/xcshareddata/xcschemes/TimedBuildStarter.xcscheme, .swiftgate.toml
 
 ### ttt-engine
 Implement the tic-tac-toe rules in `Game.play(at:)`, test-first.
@@ -80,7 +80,7 @@ Make the app's root screen the tic-tac-toe board, driven by a TCA `GameFeature` 
 - Scope:
   - `GameFeature` reducer in `AppCore` (`Sources/AppCore/GameFeature.swift`): state holds a `Game`; actions `cellTapped(Int)` calls `game.play(at:)`, `newGameButtonTapped` resets to `Game()`
   - `GameView` in `AppUI` (`Sources/AppUI/GameView.swift`): a 3×3 grid of buttons with ids `game.cell.0`...`game.cell.8` and accessibility label "X", "O" or "Empty"; a `Text` with id `game.status` reading "X's turn", "O's turn", "X wins", "O wins" or "Draw"; a button titled "New game" with id `game.newGame`
-  - `App/InterviewStarterApp.swift` roots the app on `GameFeature`/`GameView` instead of `AppFeature`/`AppView`
+  - `App/TimedBuildStarterApp.swift` roots the app on `GameFeature`/`GameView` instead of `AppFeature`/`AppView`
   - `UITests/LaunchFlowUITests.swift` checks launch shows "X's turn" and 9 empty cells, in place of the posts check
 - Acceptance:
   - `GameFeatureTests` (Swift Testing, TestStore) in `Tests/AppCoreTests/` fail first, then pass: tapping a cell plays it, new game resets

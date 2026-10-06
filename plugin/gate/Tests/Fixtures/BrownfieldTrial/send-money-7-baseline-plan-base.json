@@ -55,8 +55,8 @@
       "step" : "build"
     },
     {
-      "area" : "InterviewStarter",
-      "command" : "xcodebuild test -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
+      "area" : "TimedBuildStarter",
+      "command" : "xcodebuild test -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
       "result" : "passed",
       "selection" : [
 
@@ -64,8 +64,8 @@
       "step" : "test"
     },
     {
-      "area" : "InterviewStarter",
-      "command" : "xcodebuild build -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'generic\/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation",
+      "area" : "TimedBuildStarter",
+      "command" : "xcodebuild build -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'generic\/platform=iOS Simulator' -skipMacroValidation -skipPackagePluginValidation",
       "result" : "passed",
       "selection" : [
 
@@ -73,8 +73,8 @@
       "step" : "build"
     },
     {
-      "area" : "InterviewStarter",
-      "command" : "xcodebuild build-for-testing -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
+      "area" : "TimedBuildStarter",
+      "command" : "xcodebuild build-for-testing -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
       "result" : "passed",
       "selection" : [
 

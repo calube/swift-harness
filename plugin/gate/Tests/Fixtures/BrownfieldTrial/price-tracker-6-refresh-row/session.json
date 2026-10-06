@@ -1,6 +1,6 @@
 {
   "agentDeviceVersion" : "0.21.18",
-  "bundleID" : "com.example.InterviewStarter",
+  "bundleID" : "com.example.TimedBuildStarter",
   "deviceType" : "iPhone 17",
   "headCommit" : "715eb260547009bf7da2f3b42fd1ba4e8e0c987b",
   "runtime" : "com.apple.CoreSimulator.SimRuntime.iOS-26-2",

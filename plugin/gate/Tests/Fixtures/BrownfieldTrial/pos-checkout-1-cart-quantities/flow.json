@@ -2,7 +2,7 @@
   {
     "command": "open",
     "input": {
-      "app": "com.example.InterviewStarter",
+      "app": "com.example.TimedBuildStarter",
       "relaunch": true
     }
   },

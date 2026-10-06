@@ -23,14 +23,14 @@
             "candidateCount": 1,
             "bootOccurred": false
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "startup": {
             "durationMs": 1618,
             "measuredAt": "2026-10-05T06:13:43.930Z",
             "method": "open-command-roundtrip",
-            "appTarget": "com.example.InterviewStarter",
-            "appBundleId": "com.example.InterviewStarter"
+            "appTarget": "com.example.TimedBuildStarter",
+            "appBundleId": "com.example.TimedBuildStarter"
           },
           "timing": {
             "runnerDemand": "required",
@@ -50,7 +50,7 @@
           "kind": "simulator",
           "device_udid": "3984D303-B7B2-44FC-8BA1-F0A5123EA285",
           "ios_simulator_device_set": null,
-          "message": "Opened: com.example.InterviewStarter"
+          "message": "Opened: com.example.TimedBuildStarter"
         },
         "durationMs": 1937
       },
@@ -75,7 +75,7 @@
               "type": "Other",
               "role": "_TtC7SwiftUIP33_ACC2C5639A7D76F611E170E831FCA49118SwiftUIApplication",
               "subrole": "UIApplication",
-              "label": "InterviewStarter",
+              "label": "TimedBuildStarter",
               "rect": {
                 "x": 0,
                 "y": 0,
@@ -729,8 +729,8 @@
               }
             }
           },
-          "appName": "com.example.InterviewStarter",
-          "appBundleId": "com.example.InterviewStarter",
+          "appName": "com.example.TimedBuildStarter",
+          "appBundleId": "com.example.TimedBuildStarter",
           "refsGeneration": 460445
         },
         "durationMs": 436

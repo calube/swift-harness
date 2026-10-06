@@ -234,7 +234,9 @@ struct BrownfieldSliceCheckTests {
 
     let parts = try await Self.run(
       clone,
-      areas: [Self.area("app", testFiles: nil), Self.area("api"), Self.area("cli", testFiles: nil)],
+      areas: [
+        Self.area("app", testFiles: nil), Self.area("api"), Self.area("cli", testFiles: nil),
+      ],
       changes: [
         Change(path: "app/src/load.py", text: "x = 1\n", added: [1...1]),
         Change(path: "app/tests/test_load.py", text: test, added: [2...2]),
@@ -975,7 +977,7 @@ extension BrownfieldSliceCheckTests {
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/price-tracker-1-config.toml"))
     try FileManager.default.createDirectory(
-      atPath: XcodeDerivedData.path(area: "InterviewStarter", layout: clone.layout) + "/Build",
+      atPath: XcodeDerivedData.path(area: "TimedBuildStarter", layout: clone.layout) + "/Build",
       withIntermediateDirectories: true)
     let context = GateRun.Context(runID: "run", directory: clone.base)
 
@@ -988,10 +990,12 @@ extension BrownfieldSliceCheckTests {
           text: "let list = 1\n", added: [1...1]),
       ],
       runner: FakeAreaCommandRunner { _ in .passed },
-      warm: ["InterviewStarter": 76_800, "AppFeature": 31_700], context: context)
+      warm: ["TimedBuildStarter": 76_800, "AppFeature": 31_700], context: context)
 
-    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
-    #expect(labels.contains("InterviewStarter area-build warm"), "\(labels)")
+    let labels = context.steps.steps.map {
+      "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)"
+    }
+    #expect(labels.contains("TimedBuildStarter area-build warm"), "\(labels)")
     #expect(labels.contains("AppFeature area-build cold"), "\(labels)")
     #expect(labels.contains("AppFeature neutral none"), "\(labels)")
   }
@@ -1006,10 +1010,10 @@ extension BrownfieldSliceCheckTests {
     defer { try? FileManager.default.removeItem(at: clone.base) }
     let config = try TOMLConfigDecoder().decodeBrownfield(
       try Fixture.text("BrownfieldTrial/send-money-3-config.toml"))
-    let areas = config.areas.filter { ["InterviewStarter", "AppFeature"].contains($0.name) }
+    let areas = config.areas.filter { ["TimedBuildStarter", "AppFeature"].contains($0.name) }
     let shared = ScratchTreeBuild.proveScratchPath(area: "AppFeature", layout: clone.layout)
     #expect(shared != ScratchTreeBuild.swiftPMScratchPath(area: "AppFeature", layout: clone.layout))
-    let prove = XcodeDerivedData.provePath(area: "InterviewStarter", layout: clone.layout)
+    let prove = XcodeDerivedData.provePath(area: "TimedBuildStarter", layout: clone.layout)
     if warm {
       for directory in [shared, prove + "/Build"] {
         try FileManager.default.createDirectory(
@@ -1032,7 +1036,7 @@ extension BrownfieldSliceCheckTests {
     _ = try await Self.run(
       clone, areas: areas,
       changes: [
-        Change(path: "App/InterviewStarterApp.swift", text: "let root = 1\n", added: [1...1]),
+        Change(path: "App/TimedBuildStarterApp.swift", text: "let root = 1\n", added: [1...1]),
         Change(
           path: "Packages/AppFeature/Sources/AppCore/AmountInput.swift",
           text: "let amount = 1\n", added: [1...1]),
@@ -1040,10 +1044,10 @@ extension BrownfieldSliceCheckTests {
           path: "Packages/AppFeature/Tests/AppCoreTests/AmountInputTests.swift", text: tests,
           added: [1...tests.split(separator: "\n", omittingEmptySubsequences: false).count - 1]),
       ],
-      runner: runner, warm: ["InterviewStarter": 56_700, "AppFeature": 10_000], context: context)
+      runner: runner, warm: ["TimedBuildStarter": 56_700, "AppFeature": 10_000], context: context)
 
     let scratch = runner.requests.filter { Self.inScratchTree($0, clone) }
-    let starter = scratch.filter { $0.area == "InterviewStarter" }
+    let starter = scratch.filter { $0.area == "TimedBuildStarter" }
     let feature = scratch.filter { $0.area == "AppFeature" }
     #expect(starter.map(\.step) == [.build], "the baseline reruns the failed build at the base")
     #expect(
@@ -1057,7 +1061,9 @@ extension BrownfieldSliceCheckTests {
       "\(feature.map(\.command))")
 
     let label = warm ? "warm" : "cold"
-    let labels = context.steps.steps.map { "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)" }
+    let labels = context.steps.steps.map {
+      "\($0.area ?? "-") \($0.step.rawValue) \($0.derivedData)"
+    }
     #expect(labels.contains("AppFeature prove \(label)"), "\(labels)")
     #expect(labels.contains("- baseline \(label)"), "\(labels)")
     let proved = feature.filter { $0.buildLock != nil }
@@ -1264,14 +1270,14 @@ extension BrownfieldSliceCheckTests {
 }
 
 extension BrownfieldSliceCheckTests {
-  /// send-money-7's InterviewStarter `build-for-testing` answer at its contract's tree: what a
+  /// send-money-7's TimedBuildStarter `build-for-testing` answer at its contract's tree: what a
   /// later slice's 111 s cold baseline rerun wrote there, after an earlier slice had passed the
   /// same step on that same clean tree.
   private static func contractBuildForTesting() throws -> BaselineRecord {
     let file = try BaselineFile.decode(
       try Fixture.data("BrownfieldTrial/send-money-7-baseline-contract.json"),
       tree: "bf8ec9fb54cc37235d92d4b06cd15cc7d11d55ca")
-    return try #require(file.records.first { $0.key.area == "InterviewStarter" })
+    return try #require(file.records.first { $0.key.area == "TimedBuildStarter" })
   }
 
   @Test(
@@ -1297,14 +1303,14 @@ extension BrownfieldSliceCheckTests {
     #expect(store.load(tree: "tree0").results[captured.key] == .passed)
 
     let broken = FakeAreaCommandRunner { request in
-      request.area == "InterviewStarter" && request.step == .build && !clone.inScratch(request)
+      request.area == "TimedBuildStarter" && request.step == .build && !clone.inScratch(request)
         ? .failed(exit: 65, tail: "error: cannot find 'AmountView' in scope", junit: nil)
         : .passed
     }
     let parts = try await Self.run(
       clone, areas: config.areas, changes: [change], runner: broken)
 
-    #expect(!broken.requests.contains { clone.inScratch($0) && $0.area == "InterviewStarter" })
+    #expect(!broken.requests.contains { clone.inScratch($0) && $0.area == "TimedBuildStarter" })
     #expect(
       parts.findings.contains {
         $0.ruleID == "area.build-failed" && $0.severity.failsGate

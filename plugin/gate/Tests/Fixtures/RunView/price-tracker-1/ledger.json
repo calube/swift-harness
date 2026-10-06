@@ -117,7 +117,7 @@
       ],
       "worktree" : "../repo-spec-launch-wiring",
       "writeSet" : [
-        "App/InterviewStarterApp.swift",
+        "App/TimedBuildStarterApp.swift",
         "UITests/LaunchFlowUITests.swift"
       ]
     },

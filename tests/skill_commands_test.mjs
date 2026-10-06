@@ -1970,7 +1970,7 @@ const tests = {
 
   'the ship and plan skills\' design-free text names no preset or captured page — catches a skill tuned to one preset or app'() {
     const words = nonGenericWords()
-    assert.ok(words.length >= 4 && words.includes('interview'), `the generic check reads only ${words.join(', ')}`)
+    assert.ok(words.length >= 4 && words.includes('timed'), `the generic check reads only ${words.join(', ')}`)
     const ship = readFileSync(join(root, 'skills/ship/SKILL.md'), 'utf8')
     const plan = readFileSync(join(root, 'skills/plan/SKILL.md'), 'utf8')
     const texts = {

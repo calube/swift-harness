@@ -1,8 +1,8 @@
 {
   "records" : [
     {
-      "area" : "InterviewStarter",
-      "command" : "xcodebuild build-for-testing -project InterviewStarter.xcodeproj -scheme InterviewStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
+      "area" : "TimedBuildStarter",
+      "command" : "xcodebuild build-for-testing -project TimedBuildStarter.xcodeproj -scheme TimedBuildStarter -destination 'platform=iOS Simulator,name=iPhone 17' -skipMacroValidation -skipPackagePluginValidation",
       "result" : "passed",
       "selection" : [
 

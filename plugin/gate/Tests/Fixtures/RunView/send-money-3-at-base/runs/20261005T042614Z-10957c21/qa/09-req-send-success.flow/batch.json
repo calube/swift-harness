@@ -111,14 +111,14 @@
               "candidateCount": 1,
               "bootOccurred": false
             },
-            "appName": "com.example.InterviewStarter",
-            "appBundleId": "com.example.InterviewStarter",
+            "appName": "com.example.TimedBuildStarter",
+            "appBundleId": "com.example.TimedBuildStarter",
             "startup": {
               "durationMs": 1309,
               "measuredAt": "2026-10-05T04:31:22.967Z",
               "method": "open-command-roundtrip",
-              "appTarget": "com.example.InterviewStarter",
-              "appBundleId": "com.example.InterviewStarter"
+              "appTarget": "com.example.TimedBuildStarter",
+              "appBundleId": "com.example.TimedBuildStarter"
             },
             "timing": {
               "runnerDemand": "required",
@@ -138,7 +138,7 @@
             "kind": "simulator",
             "device_udid": "D383575E-849D-424A-A6E2-112653AA197A",
             "ios_simulator_device_set": null,
-            "message": "Opened: com.example.InterviewStarter"
+            "message": "Opened: com.example.TimedBuildStarter"
           },
           "durationMs": 1567
         }

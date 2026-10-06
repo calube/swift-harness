@@ -126,7 +126,7 @@
         {
           "answered" : "a claim id starting ev-",
           "expected" : "a claim id starting ev-",
-          "probability" : 0.9797979797979798,
+          "probability" : 0.9696969696969697,
           "question" : "interval-tag"
         }
       ],
@@ -145,13 +145,13 @@
         {
           "answered" : "the UNVERIFIED tag",
           "expected" : "the UNVERIFIED tag",
-          "probability" : 0.98,
+          "probability" : 0.94,
           "question" : "interval-tag"
         },
         {
           "answered" : "Risks or Open questions",
           "expected" : "Risks or Open questions",
-          "probability" : 0.97,
+          "probability" : 0.95,
           "question" : "interval-repeated"
         }
       ],
@@ -446,6 +446,8 @@
         }
       ],
       "attempts" : [
+        "miss",
+        "pass",
         "pass"
       ],
       "case" : "uikit-in-core-module",
@@ -474,7 +476,7 @@
       ]
     }
   ],
-  "contentHash" : "07f8d927b128a0dbd5ee4a10a4e2a39e557a2a8fc9b80491cc7ee49cd2cf5817",
+  "contentHash" : "7a7707551eba61e582c159fe1e06544dd6878702af572038a087a505026f6369",
   "hashedFiles" : [
     "plugin/agents/design-challenger.md",
     "plugin/agents/design-claim-checker.md",
@@ -497,6 +499,6 @@
       "claude-sonnet-5-5"
     ]
   },
-  "passedAt" : "2026-10-05T00:29:08Z",
+  "passedAt" : "2026-10-06T00:18:36Z",
   "schemaVersion" : 4
 }

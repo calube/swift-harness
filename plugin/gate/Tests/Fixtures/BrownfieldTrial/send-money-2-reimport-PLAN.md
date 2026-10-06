@@ -16,7 +16,7 @@
 ## Areas
 
 - AppFeature (swiftpm, Packages/AppFeature): every source and unit test of the change; warm test time unknown, slice measures it
-- InterviewStarter (xcode, root `.`): the app target and UITests; build-only, since no warm-up measured its tests
+- TimedBuildStarter (xcode, root `.`): the app target and UITests; build-only, since no warm-up measured its tests
 
 ## Assumptions
 

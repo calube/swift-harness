@@ -210,7 +210,7 @@ struct LedgerRenderCommandTests {
       designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
       workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
     let store = try await BuildRunStore.create(
-      plan: LedgerRenderRepo.slug, presetName: "interview", preset: preset, startedAt: startedAt,
+      plan: LedgerRenderRepo.slug, presetName: "timed", preset: preset, startedAt: startedAt,
       git: repo.git, suffix: 7)
     for (stage, tier, run) in [
       (BuildEvent.Gate.Stage.merge(task: "queue-core"), CheckTier.push, "run-merge"),
@@ -230,7 +230,7 @@ struct LedgerRenderCommandTests {
     _ = await repo.renderLedger()
 
     let html = try String(contentsOf: repo.outputURL, encoding: .utf8)
-    for text in ["run-task", "run-merge", "run-final", store.runID, "interview"] {
+    for text in ["run-task", "run-merge", "run-final", store.runID, "timed"] {
       #expect(html.contains(text), "page lacks \(text)")
     }
   }
@@ -252,7 +252,7 @@ struct LedgerRenderCommandTests {
       designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
       workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block)
     _ = try await BuildRunStore.create(
-      plan: LedgerRenderRepo.slug, presetName: "interview", preset: preset,
+      plan: LedgerRenderRepo.slug, presetName: "timed", preset: preset,
       startedAt: Date(timeIntervalSince1970: 1_790_000_000), git: repo.git, suffix: 7)
 
     guard case .written(_, _, _, let notes) = await repo.renderLedger() else {

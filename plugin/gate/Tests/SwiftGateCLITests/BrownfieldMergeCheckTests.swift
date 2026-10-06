@@ -324,7 +324,8 @@ struct BrownfieldMergeCheckTests {
       reuse: AreaStepReuse(inputs: inputs, store: store, runID: "merge-run"))
 
     let priced = FinalGateReuse.areas(
-      config.areas, inputs: GateReuse.Inputs(
+      config.areas,
+      inputs: GateReuse.Inputs(
         tier: .final, treeHash: "tree1", mergeBase: "base0", sourceHash: "bin1",
         stateFiles: ["config": "c1"]),
       repositoryRoot: clone.root.path(percentEncoded: false), layout: clone.layout,
@@ -1072,20 +1073,21 @@ extension BrownfieldMergeCheckTests {
     let branch = try await SendMoneyPlanBranch(root: clone.root)
 
     let first = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.firstMerge)
-    let app = first.proofs.filter { $0.target == "InterviewStarter" }
+    let app = first.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!app.isEmpty, "\(first.parts.findings.map(\.message))")
     #expect(app.allSatisfy { $0.proofBase == branch.planBase && $0.outcome == .proven })
 
     let second = try await Self.sendMoneyRun(clone, branch, tier: .merge, at: branch.secondMerge)
-    #expect(second.proofs.filter { $0.target == "InterviewStarter" } == [])
+    #expect(second.proofs.filter { $0.target == "TimedBuildStarter" } == [])
   }
 
   @Test(
     "send-money-4's final, whose box left 96 s for the app target's measured 226 s prove while every area's tests passed, is GREEN with a prove.unproven note where the trial read BLOCKED — catches a final blocked by a prove there was no time to run"
   )
   func finalWithNoTimeToProveIsUnprovenNotBlocked() async throws {
-    let trial = try JSONSerialization.jsonObject(
-      with: try Fixture.data("BrownfieldTrial/send-money-4-final.json")) as? [String: Any]
+    let trial =
+      try JSONSerialization.jsonObject(
+        with: try Fixture.data("BrownfieldTrial/send-money-4-final.json")) as? [String: Any]
     let trialFindings = trial?["findings"] as? [[String: Any]] ?? []
     let skipped = try #require(trialFindings.first { $0["rule"] as? String == "prove.no-evidence" })
     #expect(trial?["verdict"] as? String == "BLOCKED")
@@ -1108,13 +1110,14 @@ extension BrownfieldMergeCheckTests {
     #expect(Self.verdict(final.parts) == .green)
     let unproven = final.parts.findings.filter { $0.ruleID == ProofRules.unprovenRuleID }
     #expect(unproven.count == 1)
-    #expect(unproven.allSatisfy { $0.severity == .nit && $0.message.contains("InterviewStarter") })
+    #expect(unproven.allSatisfy { $0.severity == .nit && $0.message.contains("TimedBuildStarter") })
     #expect(unproven.first?.message.contains(reason) == true)
     #expect(!final.parts.findings.contains { $0.ruleID == ProofRules.noEvidenceRuleID })
 
     let merge = try await Self.sendMoneyRun(
       clone, branch, tier: .merge, at: branch.firstMerge, bound: short)
-    #expect(Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
+    #expect(
+      Self.verdict(merge.parts) == .blocked, "a merge gate still blocks: a later gate can prove")
   }
 }
 
@@ -1160,7 +1163,7 @@ extension BrownfieldMergeCheckTests {
       clone, branch, tier: .merge, at: branch.firstMerge,
       proveReuse: Self.proveReuse(branch, store: store, runID: "merge-run", tier: .merge))
     #expect(merge.scratchRuns > 0)
-    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    let proved = merge.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
 
     let context = GateRun.Context(runID: "final-run", directory: clone.base)
@@ -1298,7 +1301,7 @@ extension BrownfieldMergeCheckTests {
       proveReuse: Self.proveReuse(
         branch, store: store, runID: "merge-run", tier: .merge, treeHash: tree))
     #expect(merge.scratchRuns > 0)
-    let proved = merge.proofs.filter { $0.target == "InterviewStarter" }
+    let proved = merge.proofs.filter { $0.target == "TimedBuildStarter" }
     #expect(!proved.isEmpty && proved.allSatisfy { $0.outcome == .proven })
     #expect(proved.allSatisfy { $0.proofBase == branch.secondMerge })
 

@@ -109,7 +109,7 @@
         "Packages/AppFeature/Sources/AppUI/AppView.swift",
         "Packages/AppFeature/Sources/AppCore/AppFeature.swift",
         "Packages/AppFeature/Tests/AppCoreTests/AppFeatureTests.swift",
-        "App/InterviewStarterApp.swift",
+        "App/TimedBuildStarterApp.swift",
         "UITests/LaunchFlowUITests.swift"
       ]
     },

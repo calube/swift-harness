@@ -112,7 +112,7 @@ struct ContractLandingTests {
 }
 
 /// The third price-tracker trial's contract `e54fcd53` on base `c1388265`, gated GREEN at `slice`
-/// as run `20261005T055628Z-0c95049d`. Its task's `Writes` named `App/InterviewStarterApp.swift`,
+/// as run `20261005T055628Z-0c95049d`. Its task's `Writes` named `App/TimedBuildStarterApp.swift`,
 /// the composition root that reads `-harness-scenario`, but the Bash call writing it was denied, so
 /// the commit left it as at the base. `seam/` holds that file as the fixer later wrote it.
 enum PriceTracker3 {
@@ -120,7 +120,7 @@ enum PriceTracker3 {
   static let tip = "e54fcd5341014acd58b264d16991ce817d4421e0"
   static let base = "c138826543e4cb838a6ea0ff3147225b164cb86f"
   static let runID = "20261005T055628Z-0c95049d"
-  static let appFile = "App/InterviewStarterApp.swift"
+  static let appFile = "App/TimedBuildStarterApp.swift"
   static let directory = Fixture.directory.appending(
     path: "BrownfieldTrial/price-tracker-3-contract", directoryHint: .isDirectory)
 

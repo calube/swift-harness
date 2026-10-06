@@ -48,8 +48,8 @@ const STATUSES = ['reviewed', 'not-reviewed', 'not-researched']
 const DISPOSITIONS = ['accepted', 'dismissed']
 // A section anchor as review-synth matches it: one token, no leading '#', no whitespace.
 const ANCHOR = /^[^\s#]+$/
-// At most this many reviewer chains (reviewer agent + its verifier) run at once, per spec §11's
-// ≤3-concurrent-agents-per-phase cap. Deep tier's fourth reviewer queues rather than adding a
+// At most this many reviewer chains (reviewer agent + its verifier) run at once, keeping each
+// phase to 3 concurrent agents. Deep tier's fourth reviewer queues rather than adding a
 // fourth agent to the phase.
 const MAX_IN_FLIGHT = 3
 // A revise round's previous is built from review-log.jsonl, not from the earlier round's full
@@ -428,7 +428,7 @@ if (inTier.length === 0) log('quick tier runs no review agents; the Artifact app
 
 // A fixed-size worker pool: each reviewer flows straight from its own agent call into its own
 // verifier with no barrier between the two, but at most MAX_IN_FLIGHT reviewer chains run at once
-// (spec §11), so deep tier's fourth reviewer queues for a slot instead of adding a fourth agent.
+// (3 agents per phase), so deep tier's fourth reviewer queues for a slot instead of adding a fourth agent.
 async function limited(items, fn) {
   let next = 0
   async function worker() {

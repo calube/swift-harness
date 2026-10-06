@@ -21,7 +21,7 @@ struct BrownfieldConfigTOMLTests {
   )
   func xcodePackagesRoundTrip() throws {
     let directory = Fixture.directory.appending(
-      path: "Discover/interview-starter", directoryHint: .isDirectory)
+      path: "Discover/timed-build-starter", directoryHint: .isDirectory)
     let listing = try String(
       contentsOf: directory.appending(path: "ls-files.txt"), encoding: .utf8)
     let tree = TrackedTreeSnapshot(
@@ -34,7 +34,9 @@ struct BrownfieldConfigTOMLTests {
       packages == ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"])
 
     let text = BrownfieldConfigTOML.render(config)
-    #expect(text.contains(#"packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]"#))
+    #expect(
+      text.contains(
+        #"packages = ["Packages/APIClient", "Packages/AppFeature", "Packages/LogClient"]"#))
     #expect(try TOMLConfigDecoder().decodeBrownfield(text) == config)
   }
 

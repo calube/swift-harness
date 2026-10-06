@@ -9,7 +9,7 @@
     "tier": "slice",
     "verdict": "GREEN"
   },
-  "notes": "AppView now shows CheckoutView(store: store.scope(state: \\.checkout, action: \\.checkout)) and no longer sends .task. CheckoutView shows the grid, cart, tip buttons, totals and Charge, all with CheckoutID ids. The receipt sheet is presented while store.receipt != nil, and ReceiptView's New sale button sends .newSaleTapped. LaunchFlowUITests.testLaunchShowsTheCheckoutCatalogue waits for the button catalogue.item.latte. The InterviewStarter UI test was not run: slice only builds that area, because its warm test run exceeds the slice budget.\nreview: classified at medium by swiftgate judge diff-risk",
+  "notes": "AppView now shows CheckoutView(store: store.scope(state: \\.checkout, action: \\.checkout)) and no longer sends .task. CheckoutView shows the grid, cart, tip buttons, totals and Charge, all with CheckoutID ids. The receipt sheet is presented while store.receipt != nil, and ReceiptView's New sale button sends .newSaleTapped. LaunchFlowUITests.testLaunchShowsTheCheckoutCatalogue waits for the button catalogue.item.latte. The TimedBuildStarter UI test was not run: slice only builds that area, because its warm test run exceeds the slice budget.\nreview: classified at medium by swiftgate judge diff-risk",
   "outcome": "ready-to-merge",
   "review": {
     "findings": [

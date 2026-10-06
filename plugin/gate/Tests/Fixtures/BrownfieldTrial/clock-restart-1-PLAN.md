@@ -17,7 +17,7 @@
 ## Areas
 
 - AppFeature (warm test 9 s)
-- InterviewStarter (xcode, warm test 71 s, build-only)
+- TimedBuildStarter (xcode, warm test 71 s, build-only)
 
 ## Assumptions
 
@@ -49,7 +49,7 @@ Declare the engine, feature, scenario and screen names every task builds against
 - Out of scope:
   - launch, cut, counting and drawing behaviour
 - Covers: req-launch
-- Writes: .swiftgate.toml, Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/EngineCore/, Packages/AppFeature/Sources/AppCore/, Packages/AppFeature/Sources/AppUI/TargetView.swift, Packages/AppFeature/Tests/EngineCoreTests/EngineConfigTests.swift, App/InterviewStarterApp.swift
+- Writes: .swiftgate.toml, Packages/AppFeature/Package.swift, Packages/AppFeature/Sources/EngineCore/, Packages/AppFeature/Sources/AppCore/, Packages/AppFeature/Sources/AppUI/TargetView.swift, Packages/AppFeature/Tests/EngineCoreTests/EngineConfigTests.swift, App/TimedBuildStarterApp.swift
 - Does: names fixed here: ids `session.field` (whole-screen gesture area), `session.count` (label `Count: <n>`), `session.chances` (label `Chances: <n>`), `session.clock` (accessibility value = step count), `session.object.<id>` (1 element per object at its frame), `session.edge` (1 pt element at the right edge, vertically centred), `session.ended` (label `Ended`), `session.finalCount` (label `Final count: <n>`), `session.startAgain` (button `Start again`).
 
 ### engine-cut

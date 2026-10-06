@@ -28,7 +28,7 @@ private enum TrialPlan {
     ).filter { $0.ruleID == PlanLintValidation.screenWithoutFlowRuleID }
   }
 
-  static let starter = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let starter = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
 }
 
 @Suite("plan-lint validation: a screen needs a flow row")
@@ -68,7 +68,7 @@ struct PlanLintScreenFlowTests {
   func reasonOrFlowClearsTheRequirement() throws {
     let text = try TrialPlan.text("tic-tac-toe-1-PLAN.md")
     let old =
-      "| req-new-game | acceptance | `test: InterviewStarterUITests/GameFlowUITests` "
+      "| req-new-game | acceptance | `test: TimedBuildStarterUITests/GameFlowUITests` "
       + "| ttt-screen | ttt-screen | |"
     #expect(text.contains(old))
     let reasoned = text.replacingOccurrences(

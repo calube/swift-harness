@@ -7,7 +7,7 @@ import Testing
 /// then rewrote it to get past the refusal.
 private enum SendMoneyPlan {
   static let contract = "send-money-contract"
-  static let appAreas = [PlanLintValidation.AppArea(name: "InterviewStarter", root: ".")]
+  static let appAreas = [PlanLintValidation.AppArea(name: "TimedBuildStarter", root: ".")]
   static let untagged =
     "| req-existing-tests | | | | | the final gate runs every area's whole suite, APIClient and "
     + "LogClient included |"
@@ -117,7 +117,8 @@ struct PlanLintGateReasonTests {
     #expect(!PlanLintValidation.isGateReason("gate:"))
     #expect(!PlanLintValidation.isGateReason("Gate: final runs it"))
     #expect(!PlanLintValidation.isGateReason("the final gate runs every suite"))
-    #expect(PlanLintValidation.namesTests("The existing APIClient and LogClient tests keep passing"))
+    #expect(
+      PlanLintValidation.namesTests("The existing APIClient and LogClient tests keep passing"))
     #expect(PlanLintValidation.namesTests("Existing test suites stay green"))
     #expect(!PlanLintValidation.namesTests("The confirmation screen shows the contact"))
     #expect(!PlanLintValidation.namesTests("A contest entry form"))

@@ -26,7 +26,7 @@ this repo's checkout, and it never touches the real `HOME`.
 | `Todos`, `VoiceMemos`, `Search` | TCA `Examples/` (MIT) | small | Cheap variety. `Search` hits the network, `VoiceMemos` hits audio and the clock, so each tempts a different nondeterminism rule. |
 | `Greenfield` | an empty repo plus a 1-page product brief (ours) | 0 files | Tests the path a new adopter takes: bootstrap, `architecture`, `design`, `plan`, then a first feature. |
 | `Brownfield` | a SwiftUI MVVM app we write with singletons, `Date()`, `print`, UIKit in shared code (ours) | about 20 files | Tests adoption on code that breaks the rules today: false-positive noise, whether the agent fixes only what it touched, whether hooks block unrelated work. |
-| `interview-starter` | `evals/apps/interview-starter` (ours) | 3 packages | A rehearsal fixture for timed `ship` runs, not a suite app: no hidden tests, no graded tasks. A warm, GREEN TCA starter plus 3 practice specs in `specs/`, for tuning the `interview` preset. |
+| `timed-build-starter` | `evals/apps/timed-build-starter` (ours) | 3 packages | A rehearsal fixture for timed `ship` runs, not a suite app: no hidden tests, no graded tasks. A warm, GREEN TCA starter plus 3 practice specs in `specs/`, for tuning the `timed` preset. |
 
 The TCA examples need a light port before they qualify: split the feature into a Core package and
 an app target, add `[[modules]]` entries, and route the clock and UUID through `@Dependency` where

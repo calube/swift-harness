@@ -5,7 +5,7 @@ public enum DesignTier: String, Sendable, Codable, CaseIterable {
   case quick
   case standard
   case deep
-  /// A spec that already states what to build, such as an interview README (spec §9). Never
+  /// A spec that already states what to build, such as a short spec README (spec §9). Never
   /// recommended by `design-scope`; only a preset or `--tier sketch` selects it.
   case sketch
 

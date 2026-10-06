@@ -1,7 +1,7 @@
 {
   "rows" : [
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "layer" : "acceptance",
       "requirement" : "req-board-screen",
       "runsAfter" : [
@@ -10,7 +10,7 @@
       "writer" : "ttt-screen"
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "layer" : "acceptance",
       "requirement" : "req-status-text",
       "runsAfter" : [
@@ -19,7 +19,7 @@
       "writer" : "ttt-screen"
     },
     {
-      "check" : "test: InterviewStarterUITests/GameFlowUITests",
+      "check" : "test: TimedBuildStarterUITests/GameFlowUITests",
       "layer" : "acceptance",
       "requirement" : "req-new-game",
       "runsAfter" : [

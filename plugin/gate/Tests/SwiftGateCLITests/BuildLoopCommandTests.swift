@@ -23,7 +23,7 @@ private struct BuildScenario {
     designTier: .standard, maxParallel: 3, review: .gate, taskGate: .tier(.push),
     mergeGate: .ready, workerModel: .sonnet, timeBudgetMin: 90, stopStartsBeforeMin: 15,
     onDesignConflict: .block)
-  static let presets = ["default": preset, "interview": preset]
+  static let presets = ["default": preset, "timed": preset]
 
   static let config = """
     schema = 1
@@ -190,7 +190,7 @@ struct BuildLoopCommandTests {
     try scenario.setIndex(.planned)
     try scenario.writeLedger([("a", .pending)])
 
-    let result = await scenario.start(preset: "interview")
+    let result = await scenario.start(preset: "timed")
 
     let report = try #require(result.report, "\(result.message)")
     #expect(result.verdict == .green)
@@ -200,7 +200,7 @@ struct BuildLoopCommandTests {
       plan: BuildScenario.plan, runID: report.runId, git: scenario.git
     ).record()
     #expect(record.startedAt == BuildScenario.startedAt)
-    #expect(record.presetName == "interview")
+    #expect(record.presetName == "timed")
     let entry = try #require(try scenario.index())
     #expect(entry.status == "building")
     #expect(entry.resume?.contains(report.runId) == true, "\(entry.resume ?? "nil")")
@@ -220,7 +220,7 @@ struct BuildLoopCommandTests {
 
     #expect(result.verdict == .blocked)
     #expect(result.message.contains("turbo"))
-    #expect(result.message.contains("default, interview"), "\(result.message)")
+    #expect(result.message.contains("default, timed"), "\(result.message)")
     #expect(try scenario.runDirectories().isEmpty)
     #expect(try scenario.index()?.status == "planned")
   }

@@ -20,13 +20,13 @@ struct BuildPresetTemplateTests {
     workerModel: .tagged, timeBudgetMin: 0, stopStartsBeforeMin: 0, onDesignConflict: .amend,
     taskProof: .perTask, simQA: .changed)
 
-  private static let interviewPreset = BuildPreset(
+  private static let timedPreset = BuildPreset(
     designTier: .sketch, maxParallel: 3, review: .gate, taskGate: .tier(.fast), mergeGate: .push,
     workerModel: .tagged, timeBudgetMin: 38, stopStartsBeforeMin: 8, onDesignConflict: .block,
     taskProof: .final, simQA: .changed)
 
   @Test(
-    "the stamped default and interview presets parse to exactly the §5.1/§10 values, per-task and final proof and sim_qa changed included — catches a template that no longer loads or drifts from the spec"
+    "the stamped default and timed presets parse to exactly the §5.1/§10 values, per-task and final proof and sim_qa changed included — catches a template that no longer loads or drifts from the spec"
   )
   func stampedPresetsMatchSpec() throws {
     let templateText = try String(contentsOf: Self.templatePath, encoding: .utf8)
@@ -39,7 +39,7 @@ struct BuildPresetTemplateTests {
     let config = try TOMLConfigDecoder().decode(rendered)
     #expect(
       config.buildPresets == [
-        "default": Self.defaultPreset, "interview": Self.interviewPreset,
+        "default": Self.defaultPreset, "timed": Self.timedPreset,
       ])
   }
 }

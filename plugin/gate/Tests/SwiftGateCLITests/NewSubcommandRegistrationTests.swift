@@ -108,7 +108,7 @@ struct NewSubcommandRegistrationTests {
     ),
     (
       "build start",
-      ["build", "start", "example-plan", "--preset", "interview", "--session", "session-123"],
+      ["build", "start", "example-plan", "--preset", "timed", "--session", "session-123"],
       "start"
     ),
     ("build next", ["build", "next", "example-plan", "--session", "session-123"], "next"),

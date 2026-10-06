@@ -124,13 +124,16 @@ struct MeasuredCutoffCostsTests {
         .gate(.init(stage: .final, tier: .final, verdict: .green, runID: "f1", at: at)),
       ], damage: [])
 
-    #expect(CutoffCosts.measured(log: BuildEventLog(events: [], damage: []), milliseconds: [:]) == .estimated)
+    #expect(
+      CutoffCosts.measured(log: BuildEventLog(events: [], damage: []), milliseconds: [:])
+        == .estimated)
     #expect(
       CutoffCosts.measured(log: fast, milliseconds: ["m1": 4_200, "f1": 41_001])
         == CutoffCosts(
           mergeGateSeconds: CutoffCosts.floorSeconds, mergeGateSource: .measured,
           finalSeconds: 42, finalSource: .measured))
-    #expect(CutoffCosts.estimated.mergeGateSeconds + CutoffCosts.estimated.finalAndReportSeconds == 300)
+    #expect(
+      CutoffCosts.estimated.mergeGateSeconds + CutoffCosts.estimated.finalAndReportSeconds == 300)
   }
 }
 
@@ -281,7 +284,7 @@ struct ReusedFinalCutoffCostsTests {
     #expect(
       seconds([
         FinalGateArea(name: "LogClient", unreused: [.build, .test]),
-        FinalGateArea(name: "InterviewStarter", unreused: [.test]),
+        FinalGateArea(name: "TimedBuildStarter", unreused: [.test]),
       ]) == 56)
     #expect(seconds([FinalGateArea(name: "LogClient", unreused: [.e2e])]) == 227)
     #expect(seconds([FinalGateArea(name: "Unmeasured", unreused: [.build])]) == 227)

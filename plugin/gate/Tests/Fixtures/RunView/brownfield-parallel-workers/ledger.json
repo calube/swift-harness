@@ -25,7 +25,7 @@
         "Packages/AppFeature/Sources/AppCore/",
         "Packages/AppFeature/Sources/AppUI/",
         "Packages/AppFeature/Tests/AppCoreTests/",
-        "App/InterviewStarterApp.swift",
+        "App/TimedBuildStarterApp.swift",
         ".swiftgate.toml"
       ]
     },

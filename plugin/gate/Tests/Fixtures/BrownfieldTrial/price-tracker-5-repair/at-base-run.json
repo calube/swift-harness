@@ -4,7 +4,7 @@
   "rows" : [
     {
       "check" : "qa/watchlist-launch.flow.json",
-      "digest" : "853848cec1655f64e7fa8bae0ed1b7881e66a2facd756fa99260b1d3e09a1b78",
+      "digest" : "6dd1249a488465ef4cb1d99895d8ff94fb93272f4f1e476efa38cfa2a0b56dc5",
       "layer" : "flow",
       "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.list\". Current surface: Posts, 0 posts available.; sim verify RED: sim.no-steps: run 20261005T093511Z-8bbf0462-row1 recorded no step: run sim snap at each checked point",
       "ms" : 114433,
@@ -22,7 +22,7 @@
     },
     {
       "check" : "qa/watchlist-retry.flow.json",
-      "digest" : "7084ff7f49fde0f07f969cfd9d548030beba269fac7995e964db1bb8f40f5373",
+      "digest" : "346e8113ee49f498cd68f18136f725985ad88814873f9e9d2f1b24c044fc1fc5",
       "layer" : "flow",
       "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.error\". Current surface: Posts, 0 posts available.; sim verify RED: sim.no-steps: run 20261005T093511Z-8bbf0462-row3 recorded no step: run sim snap at each checked point",
       "ms" : 20892,
@@ -31,7 +31,7 @@
     },
     {
       "check" : "qa/detail-chart.flow.json",
-      "digest" : "ac61db55c881b15d66b6b9266586e757105b45db90fc9fbc361e5936699276fb",
+      "digest" : "d4b455cf1cb0ca7ebec18dde608128c29f3d46ae1430defbebe29a9daf269b5a",
       "layer" : "flow",
       "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\"; sim verify RED: sim.no-steps: run 20261005T093511Z-8bbf0462-row4 recorded no step: run sim snap at each checked point",
       "ms" : 19324,
@@ -40,7 +40,7 @@
     },
     {
       "check" : "qa/detail-chart-failure.flow.json",
-      "digest" : "c841e203d510459b07be2c365ca95207f0c08c4f8fbb9c1853066b12713c1c07",
+      "digest" : "749dcc0ff662d24a9041d1e2dc884f9478725d0ae9b6753869575384b3a53e35",
       "layer" : "flow",
       "message" : "step 2 `wait` failed: Batch failed at step 2 (wait): wait timed out for selector: id=\"watchlist.row.bitcoin\". Current surface: Posts, 0 posts available.; sim verify RED: sim.no-steps: run 20261005T093511Z-8bbf0462-row5 recorded no step: run sim snap at each checked point",
       "ms" : 21090,

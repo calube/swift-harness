@@ -66,7 +66,7 @@ struct LedgerRenderTests {
     -> LedgerRender.BuildView
   {
     LedgerRender.BuildView(
-      runID: "20260927T183225Z-b36f002c", presetName: "interview", timeBudgetMin: 38,
+      runID: "20260927T183225Z-b36f002c", presetName: "timed", timeBudgetMin: 38,
       totalWallMilliseconds: 1_415_000,
       taskGates: ["task-a": TaskReturn.Gate(tier: .fast, verdict: .green, runID: "run-task-a")],
       log: BuildEventLog(
@@ -94,7 +94,7 @@ struct LedgerRenderTests {
     ).html
 
     for text in [
-      "run-task-a", "run-merge-a2", "run-final", "20260927T183225Z-b36f002c", "interview",
+      "run-task-a", "run-merge-a2", "run-final", "20260927T183225Z-b36f002c", "timed",
       "23m 35s", "38 min",
     ] {
       #expect(html.contains(text), "page lacks \(text)")
